@@ -1,0 +1,47 @@
+# ===============================
+# GLOBAL
+# ===============================
+.env
+.env.*
+*.log
+.DS_Store
+Thumbs.db
+
+# ===============================
+# NODE
+# ===============================
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# ===============================
+# BACKEND
+# ===============================
+backend/node_modules/
+backend/dist/
+backend/.env
+# Generated artifacts from TypeScript builds (keep src/ clean)
+backend/src/**/*.js
+backend/src/**/*.js.map
+backend/src/**/*.d.ts
+backend/src/**/*.d.ts.map
+
+# ===============================
+# FRONTEND
+# ===============================
+frontend/node_modules/
+frontend/build/
+frontend/dist/
+
+# ===============================
+# TYPESCRIPT
+# ===============================
+*.tsbuildinfo
+
+# ===============================
+# IDE
+# ===============================
+.vscode/
+.idea/
+*.suo
+*.ntvs*
