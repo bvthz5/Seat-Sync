@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon --watch src --ext ts,js --exec \"cross-env DOTENV_DEBUG=false NODE_OPTIONS=--no-deprecation node -r ts-node/register src/server.ts\"",
+    "dev": "nodemon --watch src --ext ts,js --exec \"cross-env DOTENV_DEBUG=false NODE_OPTIONS=--no-deprecation tsx src/server.ts\"",
     "clean": "del-cli \"dist\" \"src/**/*.js\" \"src/**/*.js.map\" \"src/**/*.d.ts\" \"src/**/*.d.ts.map\"",
     "prebuild": "npm run clean",
     "build": "tsc -p tsconfig.json",
