@@ -11,16 +11,17 @@ app.use(cors());
 app.use(express.json());
 
 // Health check route
-app.get("/", (req, res) => {
+app.get("/", (req: express.Request, res: express.Response) => {
     res.send("SeatSync Backend Running");
 });
 
-app.get("/health", async (req, res) => {
+app.get("/health", async (req: express.Request, res: express.Response) => {
     try {
-        await sequelize.authenticate();
-        res.status(200).json({ status: "ok", db: "connected" });
-    } catch {
-        res.status(503).json({ status: "degraded", db: "disconnected" });
+        // Lightweight check using a simple query
+        const [result] = await sequelize.query("SELECT 1 AS result");
+        res.status(200).json({ status: "ok", db: "connected", result });
+    } catch (err: any) {
+        res.status(503).json({ status: "degraded", db: "disconnected", message: err.message });
     }
 });
 

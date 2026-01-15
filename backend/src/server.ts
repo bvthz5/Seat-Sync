@@ -1,5 +1,5 @@
 import app from "./app.js";
-import { sequelize } from "./config/database.js";
+import { connectDB } from "./config/database.js";
 
 const PORT = 5000;
 
@@ -12,22 +12,26 @@ process.on("uncaughtException", (err) => {
 });
 
 const startServer = async () => {
-    // Attempt to authenticate with DB but don't block startup on failure.
+    // Attempt to establish DB connection. In production we abort on failure.
     try {
-        await sequelize.authenticate();
+        await connectDB();
         console.log("Connected to database");
     } catch (error) {
-        console.warn("Database connection failed:", error);
+        console.error("Database connection failed:", error);
+        if (process.env.NODE_ENV === "production") {
+            console.error("Shutting down: DB connection is required in production.");
+            process.exit(1);
+        }
         console.warn("Continuing to start the HTTP server in degraded mode.");
     }
 
-    // Start server regardless of DB availability so endpoints and health checks work
+    // Start server (keeps health endpoints available in degraded mode)
     const server = app.listen(PORT, () => {
         console.log(`SeatSync API running at http://localhost:${PORT}`);
     });
 
     // Handle server errors explicitly
-    server.on("error", (err) => {
+    server.on("error", (err: Error) => {
         console.error("HTTP server error:", err);
     });
 
