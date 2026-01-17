@@ -1,25 +1,28 @@
 import React from 'react';
-import logo from './logo.svg';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import { AuthProvider } from './hooks/useAuth';
+import AdminApp from './apps/admin/AdminApp';
 import './App.css';
 
 function App() {
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route path="/" element={<Navigate to="/admin" replace />} /> {/* Redirect root to admin for now */}
+
+          <Route path="/admin/*" element={<AdminApp />} />
+
+          {/* Placeholders for other apps */}
+          <Route path="/student/*" element={<div>Student App Placeholder</div>} />
+          <Route path="/invigilator/*" element={<div>Invigilator App Placeholder</div>} />
+
+          <Route path="*" element={<div>404 Not Found</div>} />
+        </Routes>
+        <Toaster position="top-right" />
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 

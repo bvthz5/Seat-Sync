@@ -67,7 +67,18 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 // Allow frontend to talk to backend
 // Configure CORS to allow credentials (cookies) and specific origins
 app.use(cors({
-    origin: ["http://localhost:3000", "http://localhost:5000"], // Allow Frontend and Swagger UI
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+
+        // Allow any localhost origin
+        if (/^http:\/\/localhost:\d+$/.test(origin)) {
+            return callback(null, true);
+        }
+
+        // Block other origins
+        callback(new Error('Not allowed by CORS'));
+    },
     credentials: true, // Allow cookies to be sent/received
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"]

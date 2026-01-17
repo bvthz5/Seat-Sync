@@ -52,8 +52,7 @@ export const verifyRefreshToken = (token: string): RefreshTokenPayload => {
 
   try {
     return jwt.verify(token, secret) as RefreshTokenPayload;
-  } catch (error: any) {
-    console.error("[JWT] Verification failed:", error.message);
+  } catch (error) {
     throw new Error("Invalid or expired refresh token");
   }
 }

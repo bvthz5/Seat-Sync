@@ -27,7 +27,7 @@ export class AuthController {
             res.cookie("refreshToken", result.refreshToken, {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === "production",
-                sameSite: "strict",
+                sameSite: "lax",
                 path: "/api/auth/refresh",
                 maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
             });
@@ -48,11 +48,11 @@ export class AuthController {
      */
     static async refresh(req: Request, res: Response): Promise<void> {
         try {
+            console.log("Refresh request cookies:", req.cookies); // Debugging
             const refreshToken = req.cookies.refreshToken;
-            console.log("[Auth] Refresh request cookies:", JSON.stringify(req.cookies));
-            console.log("[Auth] Received refreshToken:", refreshToken);
 
             if (!refreshToken) {
+                console.log("No refresh token found in cookies");
                 res.status(401).json({
                     error: "Refresh token not found",
                 });
@@ -66,7 +66,7 @@ export class AuthController {
             res.cookie("refreshToken", newRefreshToken, {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === "production",
-                sameSite: "strict",
+                sameSite: "lax",
                 path: "/api/auth/refresh",
                 maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
             });
@@ -91,7 +91,7 @@ export class AuthController {
             res.clearCookie("refreshToken", {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === "production",
-                sameSite: "strict",
+                sameSite: "lax",
                 path: "/api/auth/refresh",
             });
 
