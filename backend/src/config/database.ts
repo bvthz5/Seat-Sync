@@ -47,7 +47,7 @@ const NODE_ENV = process.env.NODE_ENV || "development";
 /* ────────────────────────────────────────────── */
 
 function createSQLite() {
-    console.warn("⚠️ Using SQLite fallback (MSSQL not available)");
+    console.warn("Using SQLite fallback (MSSQL not available)");
     return new Sequelize({
         dialect: "sqlite",
         storage: ":memory:",
@@ -113,15 +113,23 @@ if (!hasMSSQLConfig) {
 export async function connectDB() {
     try {
         await sequelize.authenticate();
-        console.log("✅ MSSQL Connected:", sequelize.getDatabaseName());
+        console.log("MSSQL Connected:", sequelize.getDatabaseName());
+
+        // Import all models to ensure they are registered
+        await import("../models/index.js");
+
+        // Sync all models with the database
+        await sequelize.sync({ alter: true }); // Use alter: true for development, force: false for production
+        console.log("Database synchronized");
+
         return true;
     } catch (err: any) {
-        console.error("❌ MSSQL Connection Failed:", err.message);
+        console.error("MSSQL Connection Failed:", err.message);
 
         // Optionally attempt Windows Authentication (msnodesqlv8) if explicitly enabled via env
         if (process.env.DB_USE_WINDOWS_AUTH === "true") {
             try {
-                console.log("ℹ️ Attempting MSSQL Windows Authentication (msnodesqlv8)...");
+                console.log("Attempting MSSQL Windows Authentication (msnodesqlv8)...");
 
                 // dynamic import works under ESM
                 let msnodesqlv8: any;
@@ -152,30 +160,30 @@ export async function connectDB() {
                 });
 
                 await winSequelize.authenticate();
-                console.log("✅ MSSQL Connected (Windows Authentication)");
+                console.log("MSSQL Connected (Windows Authentication)");
                 sequelize = winSequelize;
                 return true;
             } catch (winErr: any) {
-                console.warn("⚠️ Windows Auth failed or not available:", winErr?.message ?? winErr);
+                console.warn("Windows Auth failed or not available:", winErr?.message ?? winErr);
             }
         } else {
-            console.log("ℹ️ Skipping Windows Authentication (DB_USE_WINDOWS_AUTH!=true)");
+            console.log("Skipping Windows Authentication (DB_USE_WINDOWS_AUTH!=true)");
         }
 
         if (DB_FALLBACK) {
-            console.warn("🔁 Falling back to SQLite (DB_FALLBACK_TO_SQLITE=true)");
+            console.warn("Falling back to SQLite (DB_FALLBACK_TO_SQLITE=true)");
             sequelize = createSQLite();
 
             try {
                 await sequelize.authenticate();
-                console.log("✅ SQLite fallback active");
+                console.log("SQLite fallback active");
                 return true;
             } catch {
-                console.error("💀 Critical: SQLite fallback failed");
+                console.error("Critical: SQLite fallback failed");
                 throw err;
             }
         } else {
-            console.error("💥 Startup aborted: database connection failed and fallback is disabled");
+            console.error("Startup aborted: database connection failed and fallback is disabled");
             throw err;
         }
     }
