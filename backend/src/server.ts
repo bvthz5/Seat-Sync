@@ -1,5 +1,6 @@
 import app from "./app.js";
 import { connectDB } from "./config/database.js";
+import open from "open";
 
 const PORT = 5000;
 
@@ -28,6 +29,9 @@ const startServer = async () => {
     // Start server (keeps health endpoints available in degraded mode)
     const server = app.listen(PORT, () => {
         console.log(`SeatSync API running at http://localhost:${PORT}`);
+        console.log(`Swagger UI available at http://localhost:${PORT}/api-docs`);
+        // Automatically open Swagger UI in the default browser
+        open(`http://localhost:${PORT}/api-docs`);
     });
 
     // Handle server errors explicitly

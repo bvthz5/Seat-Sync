@@ -42,7 +42,7 @@ User.init(
     Email: {
       type: DataTypes.STRING(150),
       allowNull: false,
-      unique: true,
+      // unique: true, // Removed to avoid MSSQL syntax issues
     },
 
     PasswordHash: {
@@ -51,8 +51,11 @@ User.init(
     },
 
     Role: {
-      type: DataTypes.ENUM("exam_admin", "invigilator", "student"),
+      type: DataTypes.STRING(20),
       allowNull: false,
+      validate: {
+        isIn: [['exam_admin', 'invigilator', 'student']]
+      }
     },
 
     IsRootAdmin: {
@@ -77,6 +80,12 @@ User.init(
     sequelize,
     tableName: "Users",
     timestamps: false, // we are manually controlling CreatedAt
+    indexes: [
+      {
+        unique: true,
+        fields: ['Email']
+      }
+    ]
   }
 );
 

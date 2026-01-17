@@ -119,7 +119,7 @@ export async function connectDB() {
         await import("../models/index.js");
 
         // Sync all models with the database
-        await sequelize.sync({ alter: true }); // Use alter: true for development, force: false for production
+        await sequelize.sync({ force: true }); // Drop and recreate tables for development
         console.log("Database synchronized");
 
         return true;
