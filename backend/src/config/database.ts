@@ -119,7 +119,10 @@ export async function connectDB() {
         await import("../models/index.js");
 
         // Sync all models with the database
-        await sequelize.sync({ force: true }); // Drop and recreate tables for development
+        // Using force: true to reset the database schema and avoid ALTER COLUMN errors in MSSQL.
+        // This is acceptable because we rely on the auto-seeder to restore the admin account.
+        await sequelize.sync({ force: true });
+
         console.log("Database synchronized");
 
         return true;

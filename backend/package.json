@@ -10,7 +10,8 @@
     "build": "tsc -p tsconfig.json",
     "prestart": "npm run build",
     "start": "node dist/server.js",
-    "db-check": "cross-env DOTENV_DEBUG=false NODE_OPTIONS=--no-deprecation tsx src/scripts/db-check.ts"
+    "db-check": "cross-env DOTENV_DEBUG=false NODE_OPTIONS=--no-deprecation tsx src/scripts/db-check.ts",
+    "seed:admin": "cross-env DOTENV_DEBUG=false NODE_OPTIONS=--no-deprecation tsx src/scripts/seed-admin.ts"
   },
   "keywords": [],
   "author": "",
@@ -23,6 +24,7 @@
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
@@ -38,6 +40,7 @@
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
+    "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",

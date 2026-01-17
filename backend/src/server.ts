@@ -1,3 +1,4 @@
+import "./config/env.js";
 import app from "./app.js";
 import { connectDB } from "./config/database.js";
 import open from "open";
@@ -17,6 +18,10 @@ const startServer = async () => {
     try {
         await connectDB();
         console.log("Connected to database");
+
+        // Auto-seed admin user
+        const { seedExamsAdmin } = await import("./utils/seeder.js");
+        await seedExamsAdmin();
     } catch (error) {
         console.error("Database connection failed:", error);
         if (process.env.NODE_ENV === "production") {
