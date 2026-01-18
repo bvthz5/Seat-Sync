@@ -19,3 +19,4 @@ export { default as InvigilatorAvailability } from "./InvigilatorAvailability.js
 export { default as InvigilatorAssignment } from "./InvigilatorAssignment.js";
 export { default as Attendance } from "./Attendance.js";
 export { default as ActivityLog } from "./ActivityLog.js";
+export { default as PasswordReset } from "./PasswordReset.model.js";

@@ -9,12 +9,17 @@ import Invigilators from './pages/Invigilators';
 import Attendance from './pages/Attendance';
 import Reports from './pages/Reports';
 import ManageAdmins from './pages/ManageAdmins';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
+import ChangePassword from './pages/ChangePassword';
 import RequireAuth from '../../components/RequireAuth';
 
 const AdminApp: React.FC = () => {
     return (
         <Routes>
             <Route path="login" element={<Login />} />
+            <Route path="forgot-password" element={<ForgotPassword />} />
+            <Route path="reset-password" element={<ResetPassword />} />
 
             <Route element={<RequireAuth />}>
                 <Route element={<AdminLayout />}>
@@ -26,6 +31,7 @@ const AdminApp: React.FC = () => {
                     <Route path="attendance" element={<Attendance />} />
                     <Route path="reports" element={<Reports />} />
                     <Route path="manage-admins" element={<ManageAdmins />} />
+                    <Route path="change-password" element={<ChangePassword />} />
                     {/* Add other protected routes here */}
                 </Route>
             </Route>

@@ -121,7 +121,9 @@ export async function connectDB() {
         // Sync all models with the database
         // Using force: true to reset the database schema and avoid ALTER COLUMN errors in MSSQL.
         // This is acceptable because we rely on the auto-seeder to restore the admin account.
-        await sequelize.sync({ force: true });
+        // Using sync() without options creates tables if they don't exist, but doesn't alter existing ones.
+        // This avoids the 'Incorrect syntax near DEFAULT' error in MSSQL with alter:true.
+        await sequelize.sync();
 
         console.log("Database synchronized");
 

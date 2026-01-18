@@ -22,9 +22,9 @@ const LockIcon = () => (
 
 const SeatSyncLogo = () => (
     <img
-        src="/uploads/images/logo.png"
+        src="/uploads/images/logo_uploaded_0.png"
         alt="SeatSync"
-        className="w-12 h-12 object-contain bg-white rounded-xl shadow-lg p-1"
+        className="w-12 h-12 object-contain bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-2 shadow-lg"
     />
 );
 
@@ -436,7 +436,7 @@ const AdminLogin: React.FC = () => {
                             />
                             {/* Forgot Password Link - Precisely placed */}
                             <div className="flex justify-end mt-2">
-                                <Link href="#" className="text-xs font-bold text-slate-400 hover:text-slate-800 transition-colors uppercase tracking-wider">
+                                <Link onPress={() => navigate('/admin/forgot-password')} className="text-xs font-bold text-slate-400 hover:text-slate-800 transition-colors uppercase tracking-wider cursor-pointer">
                                     Forgot Password?
                                 </Link>
                             </div>

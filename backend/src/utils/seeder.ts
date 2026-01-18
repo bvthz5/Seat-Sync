@@ -1,7 +1,7 @@
 import { User } from "../models/User.js";
 import { AuthService } from "../services/auth.service.js";
 
-const DEFAULT_ADMIN_EMAIL = "admin@seatsync.com";
+const DEFAULT_ADMIN_EMAIL = "root.seatsync@gmail.com";
 const DEFAULT_ADMIN_PASSWORD = "Admin@123";
 
 export async function seedExamsAdmin() {

@@ -106,4 +106,84 @@ export class AuthController {
             });
         }
     }
+
+    /**
+     * POST /api/auth/forgot-password
+     */
+    static async forgotPassword(req: Request, res: Response): Promise<void> {
+        try {
+            const { email } = req.body;
+
+            if (!email) {
+                res.status(400).json({ error: "Email is required" });
+                return;
+            }
+
+            await AuthService.forgotPassword(email);
+
+            // Always return success to prevent email enumeration
+            res.json({ message: "If an account exists, a reset link has been sent." });
+        } catch (error: any) {
+            console.error("Forgot password error:", error.message);
+            res.status(500).json({ error: error.message || "Internal server error" });
+        }
+    }
+
+    /**
+     * POST /api/auth/reset-password
+     */
+    static async resetPassword(req: Request, res: Response): Promise<void> {
+        try {
+            const { token, newPassword } = req.body;
+
+            if (!token || !newPassword) {
+                res.status(400).json({ error: "Token and new password are required" });
+                return;
+            }
+
+            if (newPassword.length < 6) {
+                res.status(400).json({ error: "Password must be at least 6 characters" });
+                return;
+            }
+
+            await AuthService.resetPassword(token, newPassword);
+
+            res.json({ message: "Password reset successful" });
+        } catch (error: any) {
+            console.error("Reset password error:", error.message);
+            res.status(400).json({ error: error.message });
+        }
+    }
+
+    /**
+     * POST /api/auth/change-password
+     */
+    static async changePassword(req: Request, res: Response): Promise<void> {
+        try {
+            const { currentPassword, newPassword } = req.body;
+            const userId = req.user?.UserID;
+
+            if (!userId) {
+                res.status(401).json({ error: "Unauthorized" });
+                return;
+            }
+
+            if (!currentPassword || !newPassword) {
+                res.status(400).json({ error: "Current and new password are required" });
+                return;
+            }
+
+            if (newPassword.length < 6) {
+                res.status(400).json({ error: "Password must be at least 6 characters" });
+                return;
+            }
+
+            await AuthService.changePassword(userId, currentPassword, newPassword);
+
+            res.json({ message: "Password changed successfully" });
+        } catch (error: any) {
+            console.error("Change password error:", error.message);
+            res.status(400).json({ error: error.message });
+        }
+    }
 }

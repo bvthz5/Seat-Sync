@@ -1,9 +1,11 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button, Card, CardHeader, CardBody, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Tooltip } from '@heroui/react';
 import { DashboardCards } from '../components/DashboardCards';
 import { motion } from 'framer-motion';
 
 const Dashboard: React.FC = () => {
+    const navigate = useNavigate();
     const containerVariants = {
         hidden: { opacity: 0 },
         visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
@@ -40,6 +42,7 @@ const Dashboard: React.FC = () => {
                         variant="bordered"
                         size="md"
                         startContent={<span>⚙️</span>}
+                        onPress={() => navigate('change-password')}
                     >
                         Settings
                     </Button>
