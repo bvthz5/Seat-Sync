@@ -3,10 +3,32 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import swaggerJsdoc from "swagger-jsdoc";
 import swaggerUi from "swagger-ui-express";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+import hpp from "hpp";
 import { sequelize } from "./config/database.js";
 import authRoutes from "./routes/auth.routes.js";
 
 const app = express();
+
+// --- Security Middleware: Helmet ---
+// Sets various HTTP headers to secure the app (e.g. X-Content-Type-Options, X-Frame-Options)
+app.use(helmet());
+
+// --- Security Middleware: Rate Limiter ---
+// Limit repeated requests to public APIs to prevent brute-force attacks/DoS
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+    message: "Too many requests from this IP, please try again later."
+});
+app.use("/api", limiter);
+
+// --- Security Middleware: HPP ---
+// Prevent HTTP Parameter Pollution attacks
+app.use(hpp());
 
 // Swagger definition
 const swaggerDefinition = {

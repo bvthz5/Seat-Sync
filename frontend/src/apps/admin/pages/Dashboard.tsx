@@ -3,18 +3,21 @@ import { useNavigate } from 'react-router-dom';
 import { Button, Card, CardHeader, CardBody, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Tooltip } from '@heroui/react';
 import { DashboardCards } from '../components/DashboardCards';
 import { motion } from 'framer-motion';
+import { useAuth } from '../../../hooks/useAuth';
 
 const Dashboard: React.FC = () => {
     const navigate = useNavigate();
-    const containerVariants = {
+    const { canAccess } = useAuth();
+
+    const containerVariants = React.useMemo(() => ({
         hidden: { opacity: 0 },
         visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
-    };
+    }), []);
 
-    const itemVariants = {
+    const itemVariants = React.useMemo(() => ({
         hidden: { opacity: 0, y: 20 },
         visible: { opacity: 1, y: 0 }
-    };
+    }), []);
 
     return (
         <motion.div
@@ -159,18 +162,23 @@ const Dashboard: React.FC = () => {
                             <QuickActionButton label="Generate Seating Plan" icon="🪑" />
                             <QuickActionButton label="Assign New Invigilator" icon="👨‍🏫" />
                             <QuickActionButton label="Download Attendance Sheet" icon="📄" />
-                            <QuickActionButton label="System Health Check" icon="💓" />
+                            {canAccess('system_logs') && (
+                                <QuickActionButton label="System Health Check" icon="💓" />
+                            )}
                         </CardBody>
                     </Card>
 
-                    {/* Recent Alerts or Notifications */}
-                    <div className="flex-1 bg-white/50 backdrop-blur-sm rounded-2xl border border-white/40 p-6">
-                        <h4 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Live Alerts</h4>
-                        <div className="flex flex-col gap-4">
-                            <AlertItem title="Server maintenance scheduled" time="2h ago" type="info" />
-                            <AlertItem title="Room 101 capacity reached" time="4h ago" type="warning" />
+                    {/* System Insights (Root Only) */}
+                    {canAccess('system_logs') && (
+                        <div className="flex-1 bg-white/50 backdrop-blur-sm rounded-2xl border border-white/40 p-6">
+                            <h4 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">System Insights</h4>
+                            <div className="flex flex-col gap-4">
+                                <AlertItem title="Admin 'Sarah' published Exam #402" time="10m ago" type="info" />
+                                <AlertItem title="Seating plan regenerated for Hall B" time="45m ago" type="warning" />
+                                <AlertItem title="System Backup Completed" time="1h ago" type="info" />
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </motion.div>
             </div>
         </motion.div>

@@ -4,7 +4,7 @@ import { useAuth } from '../../../hooks/useAuth';
 import { motion } from 'framer-motion';
 
 const Sidebar: React.FC<{ isOpen: boolean }> = ({ isOpen }) => {
-    const { user } = useAuth();
+    const { user, canAccess } = useAuth();
 
     // Animation variants for sidebar width
     const sidebarVariants = {
@@ -28,7 +28,7 @@ const Sidebar: React.FC<{ isOpen: boolean }> = ({ isOpen }) => {
         <motion.aside
             initial={false}
             animate={isOpen ? "open" : "closed"}
-            variants={sidebarVariants}
+            variants={sidebarVariants as any}
             className="h-screen sticky top-0 bg-gradient-to-b from-primary via-primary-800 to-primary-900 border-r border-white/5 shadow-2xl z-50 flex flex-col overflow-hidden backdrop-blur-xl"
         >
             {/* Logo Area */}
@@ -50,13 +50,17 @@ const Sidebar: React.FC<{ isOpen: boolean }> = ({ isOpen }) => {
                 <SidebarItem to="/admin/attendance" icon="✅" label="Attendance" isOpen={isOpen} variants={textVariants} getLinkClass={getLinkClass} />
                 <SidebarItem to="/admin/reports" icon="📊" label="Reports" isOpen={isOpen} variants={textVariants} getLinkClass={getLinkClass} />
 
-                {user?.IsRootAdmin && (
+                {canAccess('admin_management') && (
                     <>
                         <motion.div variants={textVariants} className="mt-6 mb-2 px-4 text-[10px] font-bold text-accent uppercase tracking-widest opacity-80">
                             Administration
                         </motion.div>
-                        <SidebarItem to="/admin/manage-admins" icon="🛡️" label="Access Control" isOpen={isOpen} variants={textVariants} getLinkClass={getLinkClass} />
-                        <SidebarItem to="/admin/setup" icon="⚙️" label="System Setup" isOpen={isOpen} variants={textVariants} getLinkClass={getLinkClass} />
+                        {canAccess('admin_management') && (
+                            <SidebarItem to="/admin/manage-admins" icon="🛡️" label="Access Control" isOpen={isOpen} variants={textVariants} getLinkClass={getLinkClass} />
+                        )}
+                        {canAccess('college_structure') && (
+                            <SidebarItem to="/admin/setup" icon="⚙️" label="System Setup" isOpen={isOpen} variants={textVariants} getLinkClass={getLinkClass} />
+                        )}
                     </>
                 )}
             </nav>

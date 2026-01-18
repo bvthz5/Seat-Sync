@@ -3,10 +3,13 @@ import { User, AuthState } from '../types/auth';
 import { AuthService } from '../services/auth.service';
 import { AccessTokenStore } from '../services/api';
 import { toast } from 'react-hot-toast';
+import { checkPermission } from '../utils/permissions';
+import { FeatureKey } from '../types/permission.types';
 
 interface AuthContextType extends AuthState {
     login: (email: string, password: string) => Promise<void>;
     logout: () => Promise<void>;
+    canAccess: (feature: FeatureKey) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -93,8 +96,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         toast.success('Logged out successfully');
     };
 
+    const canAccess = React.useCallback((feature: FeatureKey) => {
+        return checkPermission(user, feature);
+    }, [user]);
+
+    const value = React.useMemo(() => ({
+        user,
+        accessToken,
+        isAuthenticated,
+        isLoading,
+        login,
+        logout,
+        canAccess
+    }), [user, accessToken, isAuthenticated, isLoading, login, logout, canAccess]);
+
     return (
-        <AuthContext.Provider value={{ user, accessToken, isAuthenticated, isLoading, login, logout }}>
+        <AuthContext.Provider value={value}>
             {children}
         </AuthContext.Provider>
     );

@@ -48,11 +48,9 @@ export class AuthController {
      */
     static async refresh(req: Request, res: Response): Promise<void> {
         try {
-            console.log("Refresh request cookies:", req.cookies); // Debugging
             const refreshToken = req.cookies.refreshToken;
 
             if (!refreshToken) {
-                console.log("No refresh token found in cookies");
                 res.status(401).json({
                     error: "Refresh token not found",
                 });
