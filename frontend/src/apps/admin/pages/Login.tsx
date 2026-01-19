@@ -280,8 +280,14 @@ const AdminLogin: React.FC = () => {
     const [formError, setFormError] = useState('');
     const [loading, setLoading] = useState(false);
 
-    const { login } = useAuth();
+    const { login, logout } = useAuth();
     const navigate = useNavigate();
+
+    // Challenge: "If back from dashboard to login page, automatic logout"
+    // Solution: We force a logout whenever this component mounts.
+    useEffect(() => {
+        logout({ silent: true });
+    }, []);
 
     const validate = () => {
         let isValid = true;

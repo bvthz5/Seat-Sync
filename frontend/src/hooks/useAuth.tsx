@@ -2,13 +2,17 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { User, AuthState } from '../types/auth';
 import { AuthService } from '../services/auth.service';
 import { AccessTokenStore } from '../services/api';
-import { toast } from 'react-hot-toast';
+import { toast } from '../utils/toast';
 import { checkPermission } from '../utils/permissions';
 import { FeatureKey } from '../types/permission.types';
 
+interface LogoutOptions {
+    silent?: boolean;
+}
+
 interface AuthContextType extends AuthState {
     login: (email: string, password: string) => Promise<void>;
-    logout: () => Promise<void>;
+    logout: (options?: LogoutOptions) => Promise<void>;
     canAccess: (feature: FeatureKey) => boolean;
 }
 
@@ -25,7 +29,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const initAuth = async () => {
             // Optimization: Don't attempt refresh if we know user isn't logged in
             // This prevents the scary "401 Unauthorized" console error on fresh loads
-            if (localStorage.getItem('seatSync_isLoggedIn') !== 'true') {
+            if (sessionStorage.getItem('seatSync_isLoggedIn') !== 'true') {
                 setIsLoading(false);
                 return;
             }
@@ -59,7 +63,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 setIsAuthenticated(true);
             } catch (error) {
                 // Not authenticated or token expired
-                localStorage.removeItem('seatSync_isLoggedIn'); // Clean up invalid state
+                sessionStorage.removeItem('seatSync_isLoggedIn'); // Clean up invalid state
                 setIsAuthenticated(false);
             } finally {
                 setIsLoading(false);
@@ -74,7 +78,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setUser(data.user);
             setAccessToken(data.accessToken);
             AccessTokenStore.setToken(data.accessToken);
-            localStorage.setItem('seatSync_isLoggedIn', 'true'); // Mark as logged in
+            sessionStorage.setItem('seatSync_isLoggedIn', 'true'); // Mark as logged in (Session only)
             setIsAuthenticated(true);
             toast.success(`Welcome, ${data.user.Email}`);
         } catch (error: any) {
@@ -84,7 +88,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
-    const logout = async () => {
+    const logout = async (options?: LogoutOptions) => {
         try {
             await AuthService.logout();
         } catch (e) { /* ignore */ }
@@ -92,8 +96,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setAccessToken(null);
         setIsAuthenticated(false);
         AccessTokenStore.clear();
-        localStorage.removeItem('seatSync_isLoggedIn'); // Mark as logged out
-        toast.success('Logged out successfully');
+        sessionStorage.removeItem('seatSync_isLoggedIn'); // Mark as logged out
+
+        if (!options?.silent) {
+            toast.success('Logged out successfully');
+        }
     };
 
     const canAccess = React.useCallback((feature: FeatureKey) => {
