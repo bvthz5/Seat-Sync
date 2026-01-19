@@ -1,5 +1,5 @@
 import { User } from "../models/User.js";
-import { sequelize } from "../config/database.js";
+import { sequelize, connectDB } from "../config/database.js";
 import { AuthService } from "../services/auth.service.js";
 
 const DEFAULT_ADMIN_EMAIL = "root.seatsync@gmail.com"
@@ -7,8 +7,8 @@ const DEFAULT_ADMIN_PASSWORD = "Admin@123";
 
 async function seedAdmin() {
     try {
-        // Connect to database
-        await sequelize.authenticate();
+        // Connect to database using the robust connection handler
+        await connectDB();
         console.log("Database connection established successfully.");
 
         // Sync models (optional, usually handled by migrations or server startup)
