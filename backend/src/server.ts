@@ -1,5 +1,7 @@
-import app from "./app";
-import { connectDB } from "./config/database";
+import "./config/env.js";
+import app from "./app.js";
+import { connectDB } from "./config/database.js";
+import open from "open";
 
 const PORT = 5000;
 
@@ -16,6 +18,10 @@ const startServer = async () => {
     try {
         await connectDB();
         console.log("Connected to database");
+
+        // Auto-seed admin user
+        const { seedExamsAdmin } = await import("./utils/seeder.js");
+        await seedExamsAdmin();
     } catch (error) {
         console.error("Database connection failed:", error);
         if (process.env.NODE_ENV === "production") {
@@ -28,6 +34,9 @@ const startServer = async () => {
     // Start server (keeps health endpoints available in degraded mode)
     const server = app.listen(PORT, () => {
         console.log(`SeatSync API running at http://localhost:${PORT}`);
+        console.log(`Swagger UI available at http://localhost:${PORT}/api-docs`);
+        // Automatically open Swagger UI in the default browser
+        open(`http://localhost:${PORT}/api-docs`);
     });
 
     // Handle server errors explicitly
