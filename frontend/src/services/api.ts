@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
-import { toast } from 'react-hot-toast';
+import { toast } from '../utils/toast';
 
 // Create Axios instance
 const api: AxiosInstance = axios.create({
