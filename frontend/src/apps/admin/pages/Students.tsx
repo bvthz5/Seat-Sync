@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Card, CardBody, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip, Pagination, Input, User as UserAvatar, Tooltip, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Popover, PopoverTrigger, PopoverContent, Select, SelectItem, Badge } from '@heroui/react';
-import { Plus, Search, FileSpreadsheet, MoreVertical, Filter, Download, Pencil, Trash2, AlertTriangle, X, Check, Building2, GraduationCap, BookOpen } from 'lucide-react';
+import { Plus, Search, FileSpreadsheet, MoreVertical, Filter, Download, Pencil, Trash2, AlertTriangle, X, Check, Building2, GraduationCap, BookOpen, Calendar } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import api from '../../../services/api';
 import { BulkImportModal } from '../components/students/BulkImportModal';
@@ -26,6 +26,13 @@ const Students: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
+    const [totalStudents, setTotalStudents] = useState(0);
+    const [stats, setStats] = useState({
+        activeDepartments: 0,
+        activeBatches: 0,
+        incompleteProfiles: 0,
+        totalDatabaseCount: 0
+    });
 
     // Search & Filter State
     const [searchQuery, setSearchQuery] = useState("");
@@ -83,6 +90,8 @@ const Students: React.FC = () => {
             const response = await api.get(`/students?${params.toString()}`);
             setStudents(response.data.students);
             setTotalPages(response.data.totalPages);
+            setTotalStudents(response.data.totalItems);
+            if (response.data.stats) setStats(response.data.stats);
         } catch (error) {
             console.error("Failed to fetch students", error);
             toast.error("Failed to load students");

@@ -107,17 +107,34 @@ export const getAllStudents = async (req: Request, res: Response) => {
             // subQuery: false // Required for $Association$ where clauses with limits to work correctly often
         });
 
-        // Note: findAndCountAll with include + limit + where on include sometimes counts wrong or fails. 
-        // We might need `subQuery: false` if we are filtering by associated columns?
-        // Actually, with standard limit/offset, Sequelize tries to be smart.
-        // Let's verify if $User.FullName$ works. It generally implies subQuery: false is needed if 1:N but 1:1 is easier.
-        // Student->User is 1:1.
+        // Calculate Stats (Parallel for performance)
+        const [activeDepartments, activeBatches, incompleteProfiles, totalDatabaseCount] = await Promise.all([
+            Student.count({ where: studentWhere, distinct: true, col: 'DepartmentID' }),
+            Student.count({ where: studentWhere, distinct: true, col: 'BatchYear' }),
+            Student.count({
+                where: {
+                    ...studentWhere,
+                    [Op.or]: [
+                        { DepartmentID: null },
+                        { ProgramID: null },
+                        { SemesterID: null }
+                    ]
+                }
+            }),
+            Student.count()
+        ]);
 
         res.json({
             totalItems: count,
             totalPages: Math.ceil(count / limit),
             currentPage: page,
-            students: rows
+            students: rows,
+            stats: {
+                activeDepartments,
+                activeBatches,
+                incompleteProfiles,
+                totalDatabaseCount
+            }
         });
     } catch (error) {
         console.error("Error fetching students:", error);
