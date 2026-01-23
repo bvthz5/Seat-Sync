@@ -11,7 +11,6 @@ import * as XLSX from 'xlsx';
 
 export const getAllStudents = async (req: Request, res: Response) => {
     try {
-        console.log("Fetching students params:", req.query);
         const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 10;
         const offset = (page - 1) * limit;
@@ -108,9 +107,9 @@ export const getAllStudents = async (req: Request, res: Response) => {
         });
 
         // Calculate Stats (Parallel for performance)
-        const [activeDepartments, activeBatches, incompleteProfiles, totalDatabaseCount] = await Promise.all([
-            Student.count({ where: studentWhere, distinct: true, col: 'DepartmentID' }),
-            Student.count({ where: studentWhere, distinct: true, col: 'BatchYear' }),
+        const [deptResults, batchResults, incompleteProfiles, totalDatabaseCount] = await Promise.all([
+            Student.findAll({ where: studentWhere, attributes: [[sequelize.fn('DISTINCT', sequelize.col('DepartmentID')), 'DepartmentID']], raw: true }),
+            Student.findAll({ where: studentWhere, attributes: [[sequelize.fn('DISTINCT', sequelize.col('BatchYear')), 'BatchYear']], raw: true }),
             Student.count({
                 where: {
                     ...studentWhere,
@@ -124,17 +123,18 @@ export const getAllStudents = async (req: Request, res: Response) => {
             Student.count()
         ]);
 
+        const stats = {
+            activeDepartments: deptResults.length,
+            activeBatches: batchResults.length,
+            incompleteProfiles,
+            totalDatabaseCount
+        };
         res.json({
             totalItems: count,
             totalPages: Math.ceil(count / limit),
             currentPage: page,
             students: rows,
-            stats: {
-                activeDepartments,
-                activeBatches,
-                incompleteProfiles,
-                totalDatabaseCount
-            }
+            stats
         });
     } catch (error) {
         console.error("Error fetching students:", error);
