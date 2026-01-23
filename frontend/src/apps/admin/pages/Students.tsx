@@ -205,6 +205,66 @@ const Students: React.FC = () => {
                 </div>
             </div>
 
+            {/* Stats Overview */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Card className="border border-gray-100 dark:border-zinc-800 shadow-sm bg-white dark:bg-zinc-900">
+                    <CardBody className="flex flex-row items-center gap-4 p-4">
+                        <div className="p-3 rounded-xl bg-primary/10 text-primary">
+                            <Building2 size={24} strokeWidth={2.5} />
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Departments</p>
+                            <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                                {stats.activeDepartments}
+                            </div>
+                        </div>
+                    </CardBody>
+                </Card>
+
+                <Card className="border border-gray-100 dark:border-zinc-800 shadow-sm bg-white dark:bg-zinc-900">
+                    <CardBody className="flex flex-row items-center gap-4 p-4">
+                        <div className="p-3 rounded-xl bg-secondary/10 text-secondary">
+                            <Calendar size={24} strokeWidth={2.5} />
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Active Batches</p>
+                            <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                                {stats.activeBatches}
+                            </div>
+                        </div>
+                    </CardBody>
+                </Card>
+
+                <Card className="border border-gray-100 dark:border-zinc-800 shadow-sm bg-white dark:bg-zinc-900">
+                    <CardBody className="flex flex-row items-center gap-4 p-4">
+                        <div className="p-3 rounded-xl bg-warning/10 text-warning">
+                            <AlertTriangle size={24} strokeWidth={2.5} />
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Incomplete</p>
+                            <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                                {stats.incompleteProfiles}
+                            </div>
+                        </div>
+                    </CardBody>
+                </Card>
+
+                <Card className="border border-green-200 dark:border-green-900/50 shadow-sm bg-green-50 dark:bg-green-900/20">
+                    <CardBody className="flex flex-row items-center gap-4 p-4">
+                        <div className="p-3 rounded-xl bg-white/60 dark:bg-black/20 text-green-600 dark:text-green-400">
+                            <Check size={24} strokeWidth={2.5} />
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-green-800/70 dark:text-green-300">Eligible</p>
+                            <div className="flex items-baseline gap-1">
+                                <span className="text-2xl font-bold text-green-900 dark:text-green-100">{totalStudents}</span>
+                                <span className="text-sm font-medium text-green-700/60 dark:text-green-400/60">/ {stats.totalDatabaseCount}</span>
+                            </div>
+                        </div>
+                    </CardBody>
+                </Card>
+            </div>
+
             {/* Filters & Actions Bar */}
             <div className="flex flex-col sm:flex-row justify-between gap-4 items-center bg-white dark:bg-zinc-900/50 p-4 rounded-2xl border border-gray-100 dark:border-zinc-800 shadow-sm">
                 <div className="w-full sm:w-96">
