@@ -8,6 +8,7 @@ import rateLimit from "express-rate-limit";
 import hpp from "hpp";
 import { sequelize } from "./config/database.js";
 import authRoutes from "./routes/auth.routes.js";
+import studentRoutes from "./routes/student.routes.js";
 
 const app = express();
 
@@ -114,6 +115,7 @@ app.use(cookieParser());
 
 // Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/students", studentRoutes);
 
 // Health check route
 app.get("/", (req: express.Request, res: express.Response) => {

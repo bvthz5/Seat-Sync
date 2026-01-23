@@ -12,6 +12,7 @@ import ManageAdmins from './pages/ManageAdmins';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import ChangePassword from './pages/ChangePassword';
+import Students from './pages/Students';
 import RequireAuth from '../../components/RequireAuth';
 
 const AdminApp: React.FC = () => {
@@ -25,6 +26,7 @@ const AdminApp: React.FC = () => {
                 <Route element={<AdminLayout />}>
                     <Route index element={<Navigate to="dashboard" replace />} />
                     <Route path="dashboard" element={<Dashboard />} />
+                    <Route path="students" element={<Students />} />
                     <Route path="exams" element={<Exams />} />
                     <Route path="seating" element={<SeatingPlans />} />
                     <Route path="invigilators" element={<Invigilators />} />

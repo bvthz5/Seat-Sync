@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Card, CardBody } from '@heroui/react';
 import { motion, useSpring, useTransform } from 'framer-motion';
+import { Users, FileText, Layout, UserCheck } from 'lucide-react';
 
 // CountUp Component for animated numbers
 const CountUp = ({ value }: { value: number }) => {
@@ -18,44 +19,40 @@ interface SummaryCardProps {
     title: string;
     value: number | string;
     icon?: React.ReactNode;
-    gradient: string; // Tailwind gradient classes
-    delay?: number;
+    change?: string;
+    iconColor: string; // Tailwind text color class
+    iconBg: string; // Tailwind bg color class
 }
 
-export const SummaryCard: React.FC<SummaryCardProps> = ({ title, value, icon, gradient, delay = 0 }) => {
-    // Parse value to number if possible for animation, else string
+export const SummaryCard: React.FC<SummaryCardProps> = ({ title, value, icon, change, iconColor, iconBg }) => {
     const numValue = typeof value === 'string' ? parseInt(value.replace(/,/g, '')) : value;
     const isNumber = !isNaN(numValue as number);
 
     return (
         <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay, duration: 0.5 }}
-            whileHover={{ y: -5, transition: { duration: 0.2 } }}
+            whileHover={{ y: -3 }}
+            transition={{ type: 'spring', stiffness: 300 }}
         >
-            <Card className="border-none bg-white/60 backdrop-blur-md shadow-[0_4px_20px_rgba(0,0,0,0.05)] hover:shadow-[0_10px_30px_rgba(0,0,0,0.1)] overflow-visible">
-                <CardBody className="p-0 relative overflow-hidden">
-                    {/* Decorative Gradient Background */}
-                    <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${gradient} opacity-20 rounded-full blur-2xl transform translate-x-10 -translate-y-10`} />
-
-                    <div className="p-6 relative z-10 flex flex-col justify-between h-full min-h-[140px]">
-                        <div className="flex justify-between items-start">
-                            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">{title}</p>
-                            <div className={`p-2 rounded-lg bg-gradient-to-br ${gradient} text-white shadow-md`}>
-                                {icon}
-                            </div>
-                        </div>
-
-                        <div className="mt-4">
-                            <h3 className="text-4xl font-extrabold text-slate-800 tracking-tight">
+            <Card className="border-none shadow-sm hover:shadow-md transition-shadow duration-300 rounded-2xl bg-white overflow-visible h-full">
+                <CardBody className="p-6 flex flex-row items-center gap-4">
+                    <div className={`p-4 rounded-xl ${iconBg} ${iconColor}`}>
+                        {icon}
+                    </div>
+                    <div className="flex flex-col">
+                        <p className="text-[#5f6368] text-sm font-medium tracking-wide pb-1">{title}</p>
+                        <div className="flex items-baseline gap-2">
+                            <h3 className="text-3xl font-normal text-[#202124]">
                                 {isNumber ? <CountUp value={numValue as number} /> : value}
                             </h3>
+                            {change && (
+                                <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md">
+                                    {change}
+                                </span>
+                            )}
                         </div>
                     </div>
-
-                    {/* Bottom accent line */}
-                    <div className={`h-1 w-full bg-gradient-to-r ${gradient} opacity-80`} />
                 </CardBody>
             </Card>
         </motion.div>
@@ -68,30 +65,32 @@ export const DashboardCards = () => {
             <SummaryCard
                 title="Total Students"
                 value="1,245"
-                gradient="from-blue-600 to-blue-400"
-                icon={<span className="text-lg">👨‍🎓</span>}
-                delay={0.1}
+                change="+12%"
+                icon={<Users size={24} />}
+                iconColor="text-blue-600"
+                iconBg="bg-blue-50"
             />
             <SummaryCard
                 title="Active Exams"
                 value="3"
-                gradient="from-amber-500 to-yellow-400"
-                icon={<span className="text-lg">📝</span>}
-                delay={0.2}
+                icon={<FileText size={24} />}
+                iconColor="text-orange-600"
+                iconBg="bg-orange-50"
             />
             <SummaryCard
                 title="Exam Rooms"
                 value="12"
-                gradient="from-emerald-500 to-teal-400"
-                icon={<span className="text-lg">🏫</span>}
-                delay={0.3}
+                icon={<Layout size={24} />}
+                iconColor="text-purple-600"
+                iconBg="bg-purple-50"
             />
             <SummaryCard
                 title="Invigilators"
                 value="24"
-                gradient="from-purple-600 to-indigo-400"
-                icon={<span className="text-lg">👨‍🏫</span>}
-                delay={0.4}
+                change="+2"
+                icon={<UserCheck size={24} />}
+                iconColor="text-teal-600"
+                iconBg="bg-teal-50"
             />
         </div>
     );

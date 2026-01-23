@@ -7,32 +7,39 @@ export default {
         "./src/**/*.{js,ts,jsx,tsx}",
         "./node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}"
     ],
+    darkMode: "class",
     theme: {
         extend: {
             colors: {
+                // Stark Modern Palette (Vercel/Linear inspired)
+                background: "#09090b", // Zinc 950
+                surface: "#18181b",    // Zinc 900
+                border: "#27272a",     // Zinc 800
+
                 primary: {
-                    DEFAULT: "#0056D2", // Academic Royal Blue
-                    foreground: "#FFFFFF",
-                    50: "#F0F7FF",
-                    100: "#E0F0FF",
-                    200: "#B8DBFF",
-                    300: "#8AC2FF",
-                    400: "#57A0FF",
-                    500: "#2B7FFF",
-                    600: "#0056D2", // Main
-                    700: "#0043A6",
-                    800: "#003482",
-                    900: "#002766",
+                    DEFAULT: "#fafafa", // Zinc 50 (White-ish)
+                    foreground: "#09090b",
+                    50: "#fafafa",
+                    100: "#f4f4f5",
+                    200: "#e4e4e7",
+                    300: "#d4d4d8",
+                    400: "#a1a1aa",
+                    500: "#71717a",
+                    600: "#52525b",
+                    700: "#3f3f46",
+                    800: "#27272a",
+                    900: "#18181b",
+                    950: "#09090b",
                 },
                 secondary: {
-                    DEFAULT: "#0F172A", // Slate Navy
-                    foreground: "#FFFFFF",
+                    DEFAULT: "#27272a", // Zinc 800
+                    foreground: "#fafafa",
                 },
-                academic: {
-                    sky: "#E0F2FE",    // Light Sky
-                    cyan: "#A5F3FC",   // Soft Cyan
-                    blue: "#38BDF8",   // Bright Blue
-                }
+                // Functional Status Colors (Muted)
+                success: "#22c55e",
+                warning: "#eab308",
+                danger: "#ef4444",
+                info: "#3b82f6",
             },
             fontFamily: {
                 sans: ["Inter", "system-ui", "sans-serif"],

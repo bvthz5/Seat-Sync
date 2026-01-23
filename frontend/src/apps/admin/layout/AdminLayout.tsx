@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
-import { Navbar, NavbarBrand, NavbarContent, NavbarItem, Button, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Avatar } from '@heroui/react';
+import { Navbar, NavbarBrand, NavbarContent, NavbarItem, Button, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Avatar, Badge } from '@heroui/react';
 import Sidebar from './Sidebar';
 import { useAuth } from '../../../hooks/useAuth';
 import { motion } from 'framer-motion';
+import { Menu, Bell, Settings, LogOut, Search, Grip, HelpCircle } from 'lucide-react';
 
 const AdminLayout: React.FC = () => {
     const { logout, user } = useAuth();
@@ -11,81 +12,94 @@ const AdminLayout: React.FC = () => {
     const navigate = useNavigate();
 
     return (
-        <div className="flex h-screen w-full bg-slate-50 overflow-hidden font-sans text-slate-900">
-            {/* Sidebar */}
-            <Sidebar isOpen={sidebarOpen} />
+        <div className="flex h-screen w-full bg-[#f0f2f5] dark:bg-black overflow-hidden font-sans text-[#202124] dark:text-gray-100 selection:bg-blue-100 dark:selection:bg-blue-900/40">
+            {/* Top App Bar */}
+            <div className="fixed top-0 left-0 right-0 h-16 bg-white dark:bg-zinc-900 shadow-sm dark:border-b dark:border-zinc-800 z-50 flex items-center px-4 justify-between transition-colors">
+                <div className="flex items-center gap-4">
+                    <Button
+                        isIconOnly
+                        variant="light"
+                        radius="full"
+                        onPress={() => setSidebarOpen(!sidebarOpen)}
+                        className="text-[#5f6368] dark:text-gray-400 hover:bg-[#3c4043]/10 dark:hover:bg-zinc-800"
+                    >
+                        <Menu size={24} />
+                    </Button>
+                    <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                            <span className="text-white font-bold text-lg">S</span>
+                        </div>
+                        <span className="text-[22px] font-normal text-[#5f6368] dark:text-gray-300 hidden md:block" style={{ fontFamily: 'Product Sans, sans-serif' }}>
+                            Seat<span className="font-medium text-[#202124] dark:text-white">Sync</span>
+                        </span>
+                    </div>
+                </div>
+
+                {/* Omni-Search Box */}
+                <div className="hidden md:flex max-w-2xl w-full mx-auto relative bg-[#f1f3f4] dark:bg-zinc-800 rounded-lg h-12 items-center px-4 focus-within:bg-white dark:focus-within:bg-zinc-900 focus-within:shadow-md transition-all duration-200">
+                    <Button isIconOnly size="sm" variant="light" radius="full" className="text-[#5f6368] dark:text-gray-400">
+                        <Search size={20} />
+                    </Button>
+                    <input
+                        type="text"
+                        placeholder="Search student, rooms, or exams"
+                        className="bg-transparent border-none outline-none w-full ml-2 text-[#202124] dark:text-gray-200 placeholder-[#5f6368] dark:placeholder-gray-500 text-base"
+                    />
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <Button isIconOnly variant="light" radius="full" className="text-[#5f6368] dark:text-gray-400 hover:bg-[#3c4043]/10 dark:hover:bg-zinc-800">
+                        <HelpCircle size={24} />
+                    </Button>
+                    <Button isIconOnly variant="light" radius="full" className="text-[#5f6368] dark:text-gray-400 hover:bg-[#3c4043]/10 dark:hover:bg-zinc-800">
+                        <Settings size={24} />
+                    </Button>
+                    <Button isIconOnly variant="light" radius="full" className="text-[#5f6368] dark:text-gray-400 hover:bg-[#3c4043]/10 dark:hover:bg-zinc-800">
+                        <Grip size={24} />
+                    </Button>
+
+                    {/* Profile Avatar */}
+                    <Dropdown placement="bottom-end" classNames={{ content: "dark:bg-zinc-900 dark:border-zinc-800" }}>
+                        <DropdownTrigger>
+                            <div className="ml-2 cursor-pointer p-1 rounded-full hover:bg-[#f1f3f4] dark:hover:bg-zinc-800 transition-colors">
+                                <Avatar
+                                    className="w-8 h-8 bg-blue-600 text-white text-sm font-medium"
+                                    name={user?.Email?.[0].toUpperCase()}
+                                    src={undefined}
+                                />
+                            </div>
+                        </DropdownTrigger>
+                        <DropdownMenu
+                            aria-label="Profile Actions"
+                            variant="flat"
+                            className="w-64 z-[9999] bg-white dark:bg-zinc-900 shadow-xl rounded-xl border border-gray-100 dark:border-zinc-800 p-2"
+                        >
+                            <DropdownItem key="profile" className="h-16 gap-2 dark:text-gray-200 dark:hover:bg-zinc-800" textValue="Signed in as">
+                                <div className="flex flex-col">
+                                    <p className="font-semibold">{user?.Email}</p>
+                                    <p className="text-xs text-gray-500">{user?.IsRootAdmin ? 'Administrator' : 'User'}</p>
+                                </div>
+                            </DropdownItem>
+                            <DropdownItem key="logout" className="text-danger dark:hover:bg-zinc-800" onPress={() => logout()} startContent={<LogOut size={18} />}>
+                                Sign out
+                            </DropdownItem>
+                        </DropdownMenu>
+                    </Dropdown>
+                </div>
+            </div>
+
+            {/* Sidebar (Light, Floating or Fixed) */}
+            <div className={`fixed left-0 top-16 bottom-0 z-40 bg-white dark:bg-zinc-900 transition-all duration-200 ease-in-out ${sidebarOpen ? 'w-[256px]' : 'w-0 overflow-hidden'}`}>
+                <Sidebar isOpen={true} />
+            </div>
 
             {/* Main Content Area */}
-            <div className="flex-1 flex flex-col h-full relative z-0">
-                {/* Glassmorphic Header */}
-                <Navbar
-                    maxWidth="full"
-                    className="bg-white/70 backdrop-blur-md border-b border-white/50 shadow-sm sticky top-0 z-40 h-16"
-                    isBordered={false}
-                >
-                    <NavbarContent justify="start">
-                        <Button
-                            isIconOnly
-                            variant="light"
-                            onPress={() => setSidebarOpen(!sidebarOpen)}
-                            className="mr-2 text-slate-600 hover:bg-slate-100 rounded-full"
-                        >
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
-                        </Button>
-                        <NavbarBrand>
-                            <div className="flex flex-col">
-                                <p className="font-bold text-lg text-primary tracking-tight">SeatSync Portal</p>
-                                <p className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">{user?.IsRootAdmin ? 'Central Administration' : 'Department Admin'}</p>
-                            </div>
-                        </NavbarBrand>
-                    </NavbarContent>
-
-                    <NavbarContent justify="end">
-                        <NavbarItem className="flex items-center gap-4">
-                            {/* Role Badge */}
-                            <div className={`px-3 py-1 rounded-full text-xs font-bold border shadow-sm ${user?.IsRootAdmin
-                                    ? 'bg-amber-50 text-amber-700 border-amber-200 shadow-amber-100'
-                                    : 'bg-blue-50 text-blue-700 border-blue-200 shadow-blue-100'
-                                }`}>
-                                {user?.IsRootAdmin ? '★ Super Admin' : '• Exam Admin'}
-                            </div>
-
-                            {/* Use Dropdown for better UX */}
-                            <Dropdown placement="bottom-end">
-                                <DropdownTrigger>
-                                    <Avatar
-                                        as="button"
-                                        className="transition-transform w-8 h-8 text-xs font-bold ring-2 ring-primary/20 hover:ring-primary/40"
-                                        name={user?.Email?.[0].toUpperCase()}
-                                        color={user?.IsRootAdmin ? "warning" : "primary"}
-                                    />
-                                </DropdownTrigger>
-                                <DropdownMenu aria-label="Profile Actions" variant="flat">
-                                    <DropdownItem key="profile" className="h-14 gap-2">
-                                        <p className="font-semibold">Signed in as</p>
-                                        <p className="font-semibold">{user?.Email}</p>
-                                    </DropdownItem>
-                                    <DropdownItem key="settings">My Settings</DropdownItem>
-                                    <DropdownItem key="help_and_feedback">Help & Feedback</DropdownItem>
-                                    <DropdownItem key="logout" color="danger" onPress={() => logout()}>
-                                        Log Out
-                                    </DropdownItem>
-                                </DropdownMenu>
-                            </Dropdown>
-                        </NavbarItem>
-                    </NavbarContent>
-                </Navbar>
-
-                {/* Page Content */}
-                <main className="flex-1 overflow-auto p-0 relative scroll-smooth bg-transparent">
-                    {/* Subtle animated background elements for depth */}
-                    <div className="fixed top-0 left-0 w-full h-[500px] bg-gradient-to-b from-blue-50/50 to-transparent pointer-events-none -z-10" />
-
+            <div className={`flex-1 flex flex-col h-full relative z-0 min-w-0 pt-16 transition-all duration-200 ${sidebarOpen ? 'ml-[256px]' : 'ml-0'}`}>
+                <main className="flex-1 overflow-auto bg-[#f0f2f5] dark:bg-black p-8 transition-colors">
                     <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.4 }}
-                        className="h-full"
+                        transition={{ duration: 0.3 }}
                     >
                         <Outlet />
                     </motion.div>

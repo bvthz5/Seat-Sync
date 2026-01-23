@@ -6,12 +6,17 @@
   "dependencies": {
     "@heroui/react": "^2.8.7",
     "axios": "^1.13.2",
+    "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
     "framer-motion": "^12.26.2",
     "lottie-react": "^2.4.1",
+    "lucide-react": "^0.562.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-hot-toast": "^2.6.0",
     "react-router-dom": "^7.12.0",
+    "recharts": "^3.6.0",
+    "tailwind-merge": "^3.4.0",
     "three": "^0.182.0",
     "vanta": "^0.5.24",
     "web-vitals": "^2.1.4"

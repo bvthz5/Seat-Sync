@@ -105,7 +105,7 @@ export async function connectDB() {
 
         await import("../models/index.js");
 
-        await sequelize.sync();
+        await sequelize.sync({ alter: true });
         console.log("Database synchronized");
 
         return true;
