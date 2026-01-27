@@ -7,17 +7,19 @@ import { sequelize } from "../config/database.js";
 interface BlockAttributes {
   BlockID: number;
   BlockName: string;
+  Status: "Active" | "Inactive";
 }
 
 /**
  * Attributes required when creating a block
  */
-interface BlockCreationAttributes extends Optional<BlockAttributes, "BlockID"> {}
+interface BlockCreationAttributes extends Optional<BlockAttributes, "BlockID"> { }
 
 export class Block extends Model<BlockAttributes, BlockCreationAttributes>
   implements BlockAttributes {
   declare BlockID: number;
   declare BlockName: string;
+  declare Status: "Active" | "Inactive";
 }
 
 Block.init(
@@ -30,6 +32,11 @@ Block.init(
     BlockName: {
       type: DataTypes.STRING(50),
       allowNull: false,
+    },
+    Status: {
+      type: DataTypes.ENUM("Active", "Inactive"),
+      allowNull: false,
+      defaultValue: "Active",
     },
   },
   {

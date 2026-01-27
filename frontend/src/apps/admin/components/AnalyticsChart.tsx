@@ -24,22 +24,24 @@ export const AnalyticsChart: React.FC = () => {
                 <CardHeader className="px-6 py-5 border-b border-gray-100">
                     <h3 className="font-normal text-lg text-[#202124]">Student Distribution</h3>
                 </CardHeader>
-                <CardBody className="p-4 h-[250px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={data} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                            <XAxis type="number" hide />
-                            <YAxis dataKey="name" type="category" tick={{ fontSize: 12, fill: '#5f6368' }} width={40} axisLine={false} tickLine={false} />
-                            <Tooltip
-                                cursor={{ fill: 'transparent' }}
-                                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}
-                            />
-                            <Bar dataKey="students" radius={[0, 4, 4, 0]} barSize={20}>
-                                {data.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                ))}
-                            </Bar>
-                        </BarChart>
-                    </ResponsiveContainer>
+                <CardBody className="p-4 h-[250px] overflow-hidden">
+                    <div className="w-full h-[250px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={data} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                                <XAxis type="number" hide />
+                                <YAxis dataKey="name" type="category" tick={{ fontSize: 12, fill: '#5f6368' }} width={40} axisLine={false} tickLine={false} />
+                                <Tooltip
+                                    cursor={{ fill: 'transparent' }}
+                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}
+                                />
+                                <Bar dataKey="students" radius={[0, 4, 4, 0]} barSize={20}>
+                                    {data.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
                 </CardBody>
             </Card>
 
@@ -48,24 +50,26 @@ export const AnalyticsChart: React.FC = () => {
                 <CardHeader className="px-6 py-5 border-b border-gray-100">
                     <h3 className="font-normal text-lg text-[#202124]">Allocation Status</h3>
                 </CardHeader>
-                <CardBody className="p-4 h-[250px] flex items-center justify-center relative">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                            <Pie
-                                data={pieData}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={60}
-                                outerRadius={80}
-                                paddingAngle={5}
-                                dataKey="value"
-                            >
-                                <Cell fill="#1a73e8" />
-                                <Cell fill="#e8f0fe" />
-                            </Pie>
-                            <Tooltip />
-                        </PieChart>
-                    </ResponsiveContainer>
+                <CardBody className="p-4 h-[250px] relative overflow-hidden">
+                    <div className="w-full h-[250px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={pieData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={60}
+                                    outerRadius={80}
+                                    paddingAngle={5}
+                                    dataKey="value"
+                                >
+                                    <Cell fill="#1a73e8" />
+                                    <Cell fill="#e8f0fe" />
+                                </Pie>
+                                <Tooltip />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </div>
                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                         <span className="text-3xl font-bold text-[#202124]">68%</span>
                         <span className="text-xs text-[#5f6368] uppercase tracking-wide">Done</span>

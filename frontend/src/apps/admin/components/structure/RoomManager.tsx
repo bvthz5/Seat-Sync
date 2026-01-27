@@ -1,0 +1,501 @@
+import React, { useEffect, useState } from 'react';
+import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip, Button, useDisclosure, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Input, Select, SelectItem, Checkbox, Tooltip, Autocomplete, AutocompleteItem } from '@heroui/react';
+import { Plus, Edit, Ban, DoorOpen, Search, Building2, Layers, AlertCircle, AlertTriangle, CheckSquare, Copy } from 'lucide-react';
+import { structureService } from '../../services/structureService';
+import { Block, Floor, Room } from '../../types/collegeStructure';
+import { toast } from '../../../../utils/toast';
+
+interface RoomManagerProps {
+    readOnly?: boolean;
+}
+
+export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) => {
+    // --- Data State ---
+    const [blocks, setBlocks] = useState<Block[]>([]);
+    const [floors, setFloors] = useState<Floor[]>([]);
+    const [rooms, setRooms] = useState<Room[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    // --- Selection State ---
+    const [selectedBlockId, setSelectedBlockId] = useState<string>("");
+    const [selectedFloorId, setSelectedFloorId] = useState<string>("");
+
+    // --- Modal State ---
+    const { isOpen, onOpen, onOpenChange } = useDisclosure();
+    const [isBulkMode, setIsBulkMode] = useState(false);
+    const [editingRoom, setEditingRoom] = useState<Room | null>(null);
+
+    // Form Data (Single)
+    const [singleData, setSingleData] = useState({
+        roomCode: '',
+        capacity: 0,
+        examUsable: true
+    });
+
+    // Form Data (Bulk)
+    const [bulkData, setBulkData] = useState({
+        prefix: 'LH',
+        startNumber: 101,
+        count: 5,
+        capacity: 40
+    });
+
+    // --- Data Loading ---
+
+    useEffect(() => {
+        loadBlocks();
+    }, []);
+
+    useEffect(() => {
+        if (selectedBlockId) {
+            loadFloors(Number(selectedBlockId));
+            setFloors([]);
+            setSelectedFloorId("");
+            setRooms([]);
+        }
+    }, [selectedBlockId]);
+
+    useEffect(() => {
+        if (selectedFloorId && selectedBlockId) {
+            loadRooms(Number(selectedBlockId), Number(selectedFloorId));
+        } else {
+            setRooms([]);
+        }
+    }, [selectedFloorId, selectedBlockId]);
+
+    const loadBlocks = async () => {
+        try {
+            const data = await structureService.getBlocks();
+            setBlocks(data);
+            if (data.length > 0 && !selectedBlockId) setSelectedBlockId(data[0].BlockID.toString());
+        } catch (e) {
+            console.error("Failed to load blocks", e);
+        }
+    };
+
+    const loadFloors = async (blockId: number) => {
+        try {
+            const data = await structureService.getFloors(blockId);
+            setFloors(data);
+        } catch (e) {
+            console.error("Failed to load floors", e);
+        }
+    };
+
+    const loadRooms = async (blockId: number, floorId: number) => {
+        setLoading(true);
+        try {
+            // Updated service signature requires floorId, blockId
+            const data = await structureService.getRooms(floorId, blockId);
+            setRooms(data);
+        } catch (e) {
+            toast.error("Failed to load rooms");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // --- Handlers ---
+
+    const handleOpen = (room?: Room) => {
+        if (readOnly) return;
+        if (room) {
+            // Edit Mode
+            setEditingRoom(room);
+            setSingleData({
+                roomCode: room.RoomCode || room.RoomName || '',
+                capacity: room.Capacity || (room.TotalRows * room.BenchesPerRow * room.SeatsPerBench) || 0,
+                examUsable: room.ExamUsable
+            });
+            setIsBulkMode(false);
+        } else {
+            // Create Mode
+            setEditingRoom(null);
+            setSingleData({ roomCode: '', capacity: 40, examUsable: true });
+            setBulkData({ prefix: 'LH', startNumber: 101, count: 5, capacity: 40 });
+            setIsBulkMode(false);
+        }
+        onOpen();
+    };
+
+    const handleDisable = async (id: number) => {
+        if (readOnly) return;
+        if (!confirm("Are you sure you want to disable this room? It will be hidden from new allocations.")) return;
+
+        try {
+            await structureService.disableRoom(id);
+            toast.success("Room disabled successfully");
+            loadRooms(Number(selectedBlockId), Number(selectedFloorId));
+        } catch (error: any) {
+            toast.error(error.response?.data?.message || "Operation failed");
+        }
+    };
+
+
+
+    // --- Columns ---
+    const columns = [
+        { name: "ROOM CODE", uid: "code" },
+        { name: "CAPACITY", uid: "capacity" },
+        { name: "EXAM READY", uid: "usable" },
+        { name: "STATUS", uid: "status" },
+        { name: "ACTIONS", uid: "actions" },
+    ];
+
+    // --- Advanced Bulk State ---
+    type BulkModeType = 'auto' | 'list' | 'manual';
+    const [bulkModeType, setBulkModeType] = useState<BulkModeType>('auto');
+    const [listInput, setListInput] = useState(""); // For 'list' mode: "101, 102, 104"
+    const [manualRooms, setManualRooms] = useState<{ code: string; capacity: number }[]>([
+        { code: "", capacity: 60 }
+    ]);
+    const [previewRooms, setPreviewRooms] = useState<{ code: string; capacity: number }[]>([]);
+
+    // --- Preview Generator ---
+    useEffect(() => {
+        if (!isOpen) return;
+        if (!isBulkMode) {
+            setPreviewRooms([]);
+            return;
+        }
+
+        let generated: { code: string; capacity: number }[] = [];
+
+        if (bulkModeType === 'auto') {
+            for (let i = 0; i < bulkData.count; i++) {
+                generated.push({
+                    code: `${bulkData.prefix}-${bulkData.startNumber + i}`,
+                    capacity: bulkData.capacity
+                });
+            }
+        } else if (bulkModeType === 'list') {
+            const numbers = listInput.split(',').map(s => s.trim()).filter(s => s);
+            generated = numbers.map(num => ({
+                code: `${bulkData.prefix}-${num}`,
+                capacity: bulkData.capacity
+            }));
+        } else if (bulkModeType === 'manual') {
+            generated = manualRooms.filter(r => r.code).map(r => ({
+                code: r.code.startsWith(bulkData.prefix) ? r.code : `${bulkData.prefix}-${r.code}`,
+                capacity: r.capacity
+            }));
+        }
+        setPreviewRooms(generated);
+    }, [bulkModeType, bulkData, listInput, manualRooms, isBulkMode, isOpen]);
+
+    const handleManualRowChange = (index: number, field: 'code' | 'capacity', value: string | number) => {
+        const newRows = [...manualRooms];
+        newRows[index] = { ...newRows[index], [field]: value };
+        setManualRooms(newRows);
+    };
+
+    const addManualRow = () => {
+        setManualRooms([...manualRooms, { code: "", capacity: 60 }]);
+    };
+
+    const removeManualRow = (index: number) => {
+        const newRows = manualRooms.filter((_, i) => i !== index);
+        setManualRooms(newRows);
+    };
+
+    const handleSubmit = async (onClose: () => void) => {
+        if (!selectedBlockId || !selectedFloorId) {
+            toast.error("Location context missing");
+            return;
+        }
+
+        try {
+            if (isBulkMode && !editingRoom) {
+                // Validate Preview
+                if (previewRooms.length === 0) {
+                    toast.error("No valid rooms to create");
+                    return;
+                }
+
+                // Construct Payload from Preview
+                const roomsPayload = previewRooms.map(r => ({
+                    roomCode: r.code,
+                    capacity: r.capacity
+                }));
+
+                await structureService.bulkCreateRooms({
+                    blockId: Number(selectedBlockId),
+                    floorId: Number(selectedFloorId),
+                    rooms: roomsPayload
+                });
+                toast.success(`${roomsPayload.length} rooms created successfully`);
+
+            } else {
+                // SINGLE CREATE / UPDATE
+                if (editingRoom) {
+                    await structureService.updateRoom(editingRoom.RoomID, {
+                        RoomCode: singleData.roomCode,
+                        Capacity: singleData.capacity,
+                        ExamUsable: singleData.examUsable
+                    });
+                    toast.success("Room updated");
+                } else {
+                    await structureService.createRoom({
+                        BlockID: Number(selectedBlockId),
+                        FloorID: Number(selectedFloorId),
+                        RoomCode: singleData.roomCode,
+                        Capacity: singleData.capacity,
+                        ExamUsable: singleData.examUsable,
+                        Status: 'Active'
+                    });
+                    toast.success("Room created");
+                }
+            }
+            // Refresh
+            loadRooms(Number(selectedBlockId), Number(selectedFloorId));
+            onClose();
+        } catch (error: any) {
+            toast.error(error.response?.data?.message || "Operation failed");
+        }
+    };
+
+
+    return (
+        <div className="flex flex-col gap-6">
+            {/* Top Filter Section */}
+            <div className={`p-6 rounded-2xl border flex flex-col md:flex-row gap-6 justify-between items-end transition-all ${!selectedFloorId ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200 shadow-sm'}`}>
+                {/* ... (Existing Filter UI) ... */}
+                <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto flex-1">
+                    <div className="flex flex-col gap-3 w-full md:w-72">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                            <Building2 size={14} /> Select Block
+                        </label>
+                        <Autocomplete
+                            aria-label="Select Block"
+                            placeholder="Choose a block..."
+                            variant="bordered"
+                            selectedKey={selectedBlockId}
+                            onSelectionChange={(key) => setSelectedBlockId(key ? key.toString() : "")}
+                            classNames={{ base: "max-w-full", listboxWrapper: "max-h-[320px]", selectorButton: "text-slate-500" }}
+                            inputProps={{ classNames: { input: "text-base font-medium text-slate-700 placeholder:text-slate-400", inputWrapper: "bg-white h-12 min-h-12 rounded-xl border-1 border-slate-300 shadow-sm transition-all" } }}
+                        >
+                            {blocks.map((b) => <AutocompleteItem key={b.BlockID} textValue={b.BlockName}>{b.BlockName}</AutocompleteItem>)}
+                        </Autocomplete>
+                    </div>
+                    <div className="flex flex-col gap-3 w-full md:w-72">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                            <Layers size={14} /> Select Floor
+                        </label>
+                        <Autocomplete
+                            aria-label="Select Floor"
+                            placeholder="Choose a floor..."
+                            isDisabled={!selectedBlockId}
+                            variant="bordered"
+                            selectedKey={selectedFloorId}
+                            onSelectionChange={(key) => setSelectedFloorId(key ? key.toString() : "")}
+                            classNames={{ base: "max-w-full", listboxWrapper: "max-h-[320px]", selectorButton: "text-slate-500" }}
+                            inputProps={{
+                                classNames: {
+                                    input: "text-base font-medium text-slate-700 placeholder:text-slate-400",
+                                    inputWrapper: `h-12 min-h-12 rounded-xl border-1 border-slate-300 shadow-sm transition-all ${!selectedBlockId ? 'bg-slate-100' : 'bg-white'}`
+                                }
+                            }}
+                        >
+                            {floors.map((f) => <AutocompleteItem key={f.FloorID} textValue={`Floor ${f.FloorNumber}`}>{`Floor ${f.FloorNumber}`}</AutocompleteItem>)}
+                        </Autocomplete>
+                    </div>
+                </div>
+                {!readOnly && selectedFloorId && (
+                    <Button onPress={() => handleOpen()} color="primary" size="lg" startContent={<Plus size={20} strokeWidth={2.5} />} className="font-bold shadow-lg shadow-blue-500/20 rounded-xl h-12 px-8">Add Room</Button>
+                )}
+            </div>
+
+            {/* Content Area */}
+            {!selectedFloorId ? (
+                <div className="flex flex-col items-center justify-center py-20 bg-slate-50 rounded-2xl border border-dashed border-slate-300">
+                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
+                        <AlertCircle className="text-slate-400" size={28} />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-700">Select Location</h3>
+                    <p className="text-slate-500 max-w-sm text-center">Select a block and floor to manage rooms.</p>
+                </div>
+            ) : (
+                <Table aria-label="Rooms table" classNames={{ wrapper: "bg-white shadow-sm border border-slate-200 rounded-2xl p-0 overflow-hidden", th: "bg-slate-50 text-slate-600 font-bold text-xs py-4 px-6 border-b border-slate-200 uppercase tracking-wider", td: "py-4 px-6 border-b border-slate-100 group-last:border-0", tr: "hover:bg-slate-50/80 transition-colors cursor-default" }}>
+                    <TableHeader columns={columns}>{(column) => <TableColumn key={column.uid} align={column.uid === "actions" ? "end" : "start"}>{column.name}</TableColumn>}</TableHeader>
+                    <TableBody items={rooms} isLoading={loading} emptyContent={<div className="py-12 flex flex-col items-center text-center"><Search className="text-slate-300 mb-3" size={32} /><p className="text-slate-500 font-medium">No rooms found.</p></div>}>
+                        {(room) => (
+                            <TableRow key={room.RoomID}>
+                                <TableCell>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center"><DoorOpen size={20} /></div>
+                                        <div><p className="font-bold text-slate-700 text-base">{room.RoomCode || room.RoomName}</p><p className="text-xs text-slate-400 font-mono">ID: {room.RoomID}</p></div>
+                                    </div>
+                                </TableCell>
+                                <TableCell><span className="font-bold text-slate-700">{room.Capacity}</span></TableCell>
+                                <TableCell><Chip size="sm" variant="flat" color={room.ExamUsable ? "success" : "default"} startContent={room.ExamUsable ? <CheckSquare size={14} /> : undefined} classNames={{ content: "font-semibold" }}>{room.ExamUsable ? "Yes" : "No"}</Chip></TableCell>
+                                <TableCell><Chip size="sm" variant="dot" color={room.Status === 'Active' ? "success" : "danger"}>{room.Status}</Chip></TableCell>
+                                <TableCell>{!readOnly && (<div className="flex justify-end gap-2"><Tooltip content="Edit Room"><Button isIconOnly size="sm" variant="light" onPress={() => handleOpen(room)}><Edit size={18} className="text-slate-400 hover:text-blue-600" /></Button></Tooltip><Tooltip content="Disable Room"><Button isIconOnly size="sm" variant="light" color="danger" onPress={() => handleDisable(room.RoomID)}><Ban size={18} className="text-slate-400 hover:text-red-600" /></Button></Tooltip></div>)}</TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            )}
+
+            {/* Modal */}
+            <Modal isOpen={isOpen} onOpenChange={onOpenChange} size="3xl" backdrop="blur" scrollBehavior="inside">
+                <ModalContent>
+                    {(onClose) => (
+                        <>
+                            <ModalHeader className="flex flex-col gap-1 border-b border-slate-100 px-8 py-6">
+                                <h2 className="text-2xl font-bold text-slate-800 tracking-tight">{editingRoom ? "Edit Room Details" : "Add New Rooms"}</h2>
+                                <p className="text-sm text-slate-500 font-normal">{editingRoom ? "Update capacity for this room." : "Configure advanced room generation options."}</p>
+                            </ModalHeader>
+                            <ModalBody className="px-8 py-8 gap-8">
+                                {!editingRoom && (
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        {/* Mode Selectors */}
+                                        {[
+                                            { id: 'auto', label: 'Auto Sequence', desc: 'Generate continuous range', icon: Layers },
+                                            { id: 'list', label: 'Custom List', desc: 'Paste specific numbers', icon: CheckSquare },
+                                            { id: 'manual', label: 'Manual Entry', desc: 'Full control per row', icon: Edit }
+                                        ].map((m) => (
+                                            <div
+                                                key={m.id}
+                                                onClick={() => { setIsBulkMode(true); setBulkModeType(m.id as any); }}
+                                                className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${isBulkMode && bulkModeType === m.id ? 'bg-blue-50 border-blue-500 shadow-sm' : 'bg-white border-slate-200 hover:border-blue-200'}`}
+                                            >
+                                                <div className="flex items-center gap-3 mb-2">
+                                                    <div className={`p-2 rounded-lg ${isBulkMode && bulkModeType === m.id ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                                        <m.icon size={18} />
+                                                    </div>
+                                                    <span className={`font-bold ${isBulkMode && bulkModeType === m.id ? 'text-blue-700' : 'text-slate-700'}`}>{m.label}</span>
+                                                </div>
+                                                <p className="text-xs text-slate-500">{m.desc}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {!isBulkMode ? (
+                                    // Single Room Form
+                                    <div className="space-y-6 max-w-lg mx-auto w-full">
+                                        <div className="flex flex-col gap-1.5">
+                                            <label className="text-sm font-semibold text-slate-700 ml-1">Room Code</label>
+                                            <Input autoFocus placeholder="e.g. LH-201" variant="bordered" classNames={{ inputWrapper: "h-12 bg-white border-1 border-slate-300 rounded-xl shadow-sm px-4", input: "text-base font-medium text-slate-800" }} value={singleData.roomCode} onValueChange={(v) => setSingleData({ ...singleData, roomCode: v })} />
+                                        </div>
+                                        <div className="flex flex-col gap-1.5">
+                                            <label className="text-sm font-semibold text-slate-700 ml-1">Capacity</label>
+                                            <Input type="number" placeholder="60" variant="bordered" classNames={{ inputWrapper: "h-12 bg-white border-1 border-slate-300 rounded-xl shadow-sm px-4", input: "text-base font-medium text-slate-800" }} value={singleData.capacity.toString()} onValueChange={(v) => setSingleData({ ...singleData, capacity: Number(v) })} />
+                                        </div>
+                                        <div className="flex flex-col gap-3 pt-2">
+                                            <span className="text-sm font-semibold text-slate-700 ml-1">Exam Compatibility</span>
+                                            <div className="flex gap-2 p-1.5 bg-slate-100 rounded-xl border border-slate-200">
+                                                <button type="button" onClick={() => setSingleData({ ...singleData, examUsable: true })} className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-sm font-bold transition-all ${singleData.examUsable ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500'}`}>Exam Ready</button>
+                                                <button type="button" onClick={() => setSingleData({ ...singleData, examUsable: false })} className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-sm font-bold transition-all ${!singleData.examUsable ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500'}`}>Not Suitable</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    // Bulk Modes
+                                    <div className="flex flex-col lg:flex-row gap-8">
+                                        {/* Left: Check Controls */}
+                                        <div className="flex-1 space-y-6">
+                                            {/* Common Prefix & Capacity */}
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="flex flex-col gap-1.5">
+                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Prefix</label>
+                                                    <Input placeholder="LH" variant="bordered" classNames={{ inputWrapper: "h-10 bg-white border-slate-300 rounded-lg", input: "font-mono font-bold" }} value={bulkData.prefix} onValueChange={(v) => setBulkData({ ...bulkData, prefix: v })} />
+                                                </div>
+                                                <div className="flex flex-col gap-1.5">
+                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Default Cap</label>
+                                                    <Input type="number" placeholder="60" variant="bordered" classNames={{ inputWrapper: "h-10 bg-white border-slate-300 rounded-lg", input: "font-mono font-bold" }} value={bulkData.capacity.toString()} onValueChange={(v) => setBulkData({ ...bulkData, capacity: Number(v) })} />
+                                                </div>
+                                            </div>
+
+                                            {/* Mode Specific Inputs */}
+                                            {bulkModeType === 'auto' && (
+                                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+                                                    <div className="flex flex-col gap-1.5">
+                                                        <label className="text-sm font-semibold text-slate-700">Start Number</label>
+                                                        <Input type="number" placeholder="101" variant="bordered" classNames={{ inputWrapper: "bg-white border-slate-300 rounded-lg" }} value={bulkData.startNumber.toString()} onValueChange={(v) => setBulkData({ ...bulkData, startNumber: Number(v) })} />
+                                                    </div>
+                                                    <div className="flex flex-col gap-1.5">
+                                                        <label className="text-sm font-semibold text-slate-700">Count (How many?)</label>
+                                                        <Input type="number" placeholder="5" variant="bordered" classNames={{ inputWrapper: "bg-white border-slate-300 rounded-lg" }} value={bulkData.count.toString()} onValueChange={(v) => setBulkData({ ...bulkData, count: Number(v) })} />
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {bulkModeType === 'list' && (
+                                                <div className="flex flex-col gap-1.5">
+                                                    <label className="text-sm font-semibold text-slate-700 flex justify-between">
+                                                        Room Numbers
+                                                        <span className="text-xs font-normal text-slate-500">Comma separated</span>
+                                                    </label>
+                                                    <textarea
+                                                        className="w-full h-32 p-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-mono text-sm resize-none"
+                                                        placeholder="101, 102, 105, 108"
+                                                        value={listInput}
+                                                        onChange={(e) => setListInput(e.target.value)}
+                                                    />
+                                                </div>
+                                            )}
+
+                                            {bulkModeType === 'manual' && (
+                                                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                                                    {manualRooms.map((row, idx) => (
+                                                        <div key={idx} className="flex gap-2 items-center">
+                                                            <div className="w-8 text-xs text-slate-400 font-mono text-center">{idx + 1}</div>
+                                                            <Input size="sm" placeholder="101" variant="bordered" classNames={{ inputWrapper: "bg-white border-slate-300" }} value={row.code} onValueChange={(v) => handleManualRowChange(idx, 'code', v)} />
+                                                            <Input type="number" size="sm" placeholder="Cap" variant="bordered" classNames={{ base: "w-24", inputWrapper: "bg-white border-slate-300" }} value={row.capacity.toString()} onValueChange={(v) => handleManualRowChange(idx, 'capacity', Number(v))} />
+                                                            <button onClick={() => removeManualRow(idx)} className="text-slate-400 hover:text-red-500"><Ban size={16} /></button>
+                                                        </div>
+                                                    ))}
+                                                    <Button size="sm" variant="flat" fullWidth onPress={addManualRow} startContent={<Plus size={16} />}>Add Row</Button>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Right: Preview Terminal */}
+                                        <div className="flex-1 flex flex-col">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Live Preview</span>
+                                                <Chip size="sm" color={previewRooms.length > 0 ? "success" : "default"} variant="flat" className="h-6 gap-1 font-mono text-xs">
+                                                    {previewRooms.length} Rooms
+                                                </Chip>
+                                            </div>
+                                            <div className="flex-1 bg-slate-900 rounded-2xl p-4 shadow-inner ring-4 ring-slate-100 overflow-hidden flex flex-col">
+                                                <div className="flex items-center gap-2 mb-3 text-slate-500 text-xs border-b border-slate-800 pb-2 font-mono">
+                                                    <div className="w-8">#</div>
+                                                    <div className="flex-1">CODE</div>
+                                                    <div className="w-16 text-right">CAP</div>
+                                                </div>
+                                                <div className="overflow-y-auto flex-1 custom-scrollbar space-y-1">
+                                                    {previewRooms.length > 0 ? (
+                                                        previewRooms.map((r, i) => (
+                                                            <div key={i} className="flex items-center gap-2 font-mono text-sm group hover:bg-slate-800/50 rounded px-1 transition-colors">
+                                                                <span className="w-8 text-slate-600 text-xs select-none">{String(i + 1).padStart(2, '0')}</span>
+                                                                <span className="flex-1 text-emerald-400 font-semibold">{r.code}</span>
+                                                                <span className="w-16 text-right text-blue-300">{r.capacity}</span>
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <div className="h-full flex flex-col items-center justify-center text-slate-600 text-xs text-center p-4">
+                                                            <Search size={24} className="mb-2 opacity-50" />
+                                                            Configure settings to generate preview
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </ModalBody>
+                            <ModalFooter className="border-t border-slate-100 px-8 py-6">
+                                <Button color="danger" variant="light" onPress={onClose} className="font-semibold text-slate-500">Cancel</Button>
+                                <Button color="primary" className="font-bold shadow-lg shadow-blue-500/20 rounded-xl h-11 px-6" onPress={() => handleSubmit(onClose)} isDisabled={loading || (isBulkMode && previewRooms.length === 0)}>
+                                    {editingRoom ? "Update Room" : (isBulkMode ? `Create ${previewRooms.length} Rooms` : "Create Room")}
+                                </Button>
+                            </ModalFooter>
+                        </>
+                    )}
+                </ModalContent>
+            </Modal>
+        </div>
+    );
+};

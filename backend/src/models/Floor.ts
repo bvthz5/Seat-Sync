@@ -9,18 +9,20 @@ interface FloorAttributes {
   FloorID: number;
   BlockID: number;
   FloorNumber: number;
+  Status: "Active" | "Inactive";
 }
 
 /**
  * Attributes required when creating a floor
  */
-interface FloorCreationAttributes extends Optional<FloorAttributes, "FloorID"> {}
+interface FloorCreationAttributes extends Optional<FloorAttributes, "FloorID"> { }
 
 export class Floor extends Model<FloorAttributes, FloorCreationAttributes>
   implements FloorAttributes {
   declare FloorID: number;
   declare BlockID: number;
   declare FloorNumber: number;
+  declare Status: "Active" | "Inactive";
 }
 
 Floor.init(
@@ -41,6 +43,11 @@ Floor.init(
     FloorNumber: {
       type: DataTypes.INTEGER,
       allowNull: false,
+    },
+    Status: {
+      type: DataTypes.ENUM("Active", "Inactive"),
+      allowNull: false,
+      defaultValue: "Active",
     },
   },
   {

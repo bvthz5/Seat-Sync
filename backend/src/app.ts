@@ -9,8 +9,12 @@ import hpp from "hpp";
 import { sequelize } from "./config/database.js";
 import authRoutes from "./routes/auth.routes.js";
 import studentRoutes from "./routes/student.routes.js";
+import collegeStructureRoutes from "./routes/collegeStructure.routes.js";
+
+import roomRoutes from "./routes/room.routes.js";
 
 const app = express();
+
 
 // --- Security Middleware: Helmet ---
 // Sets various HTTP headers to secure the app (e.g. X-Content-Type-Options, X-Frame-Options)
@@ -72,6 +76,10 @@ const swaggerDefinition = {
             name: "Student",
             description: "Student related endpoints",
         },
+        {
+            name: "Structure",
+            description: "College structure management (Blocks, Floors, Rooms)",
+        },
     ],
 };
 
@@ -113,9 +121,14 @@ app.use(express.json());
 // Enable cookie parsing for refresh tokens
 app.use(cookieParser());
 
+import structureImportRoutes from "./routes/structureImport.routes.js";
+
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/students", studentRoutes);
+app.use("/api/admin/college-structure", collegeStructureRoutes);
+app.use("/api/college-structure/import", structureImportRoutes);
+app.use("/api/rooms", roomRoutes);
 
 // Health check route
 app.get("/", (req: express.Request, res: express.Response) => {

@@ -13,7 +13,14 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import ChangePassword from './pages/ChangePassword';
 import Students from './pages/Students';
+import CollegeStructure from './pages/CollegeStructure';
+import ExamControl from './pages/ExamControl';
+import SystemSettings from './pages/SystemSettings';
+import ActivityLogs from './pages/ActivityLogs';
+import Notifications from './pages/Notifications';
+import Security from './pages/Security';
 import RequireAuth from '../../components/RequireAuth';
+import RequireRoot from './components/RequireRoot';
 
 const AdminApp: React.FC = () => {
     return (
@@ -32,9 +39,18 @@ const AdminApp: React.FC = () => {
                     <Route path="invigilators" element={<Invigilators />} />
                     <Route path="attendance" element={<Attendance />} />
                     <Route path="reports" element={<Reports />} />
-                    <Route path="manage-admins" element={<ManageAdmins />} />
                     <Route path="change-password" element={<ChangePassword />} />
-                    {/* Add other protected routes here */}
+
+                    {/* Root Admin Only Routes */}
+                    <Route element={<RequireRoot />}>
+                        <Route path="manage-admins" element={<ManageAdmins />} />
+                        <Route path="structure" element={<CollegeStructure />} />
+                        <Route path="control" element={<ExamControl />} />
+                        <Route path="settings" element={<SystemSettings />} />
+                        <Route path="logs" element={<ActivityLogs />} />
+                        <Route path="notifications" element={<Notifications />} />
+                        <Route path="security" element={<Security />} />
+                    </Route>
                 </Route>
             </Route>
 
