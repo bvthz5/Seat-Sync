@@ -74,31 +74,31 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClos
             size="2xl"
             backdrop="blur"
             classNames={{
-                base: "bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 shadow-2xl rounded-2xl",
-                header: "border-b border-gray-100 dark:border-zinc-800 p-6",
-                footer: "bg-gray-50/50 dark:bg-zinc-800/50 border-t border-gray-100 dark:border-zinc-800 p-4"
+                base: "bg-white  border border-gray-100  shadow-2xl rounded-2xl",
+                header: "border-b border-gray-100  p-6",
+                footer: "bg-gray-50/50  border-t border-gray-100  p-4"
             }}
         >
             <ModalContent>
                 <ModalHeader className="flex flex-row gap-4 items-start">
-                    <div className="p-3 bg-gray-100 dark:bg-zinc-800 rounded-xl text-gray-600 dark:text-gray-300">
+                    <div className="p-3 bg-gray-100  rounded-xl text-gray-600 ">
                         <FileSpreadsheet size={24} strokeWidth={1.5} />
                     </div>
                     <div className="flex flex-col gap-1">
-                        <span className="text-xl font-semibold text-gray-900 dark:text-gray-100 tracking-tight">Import Students</span>
-                        <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Upload an Excel file to bulk add student records.</span>
+                        <span className="text-xl font-semibold text-gray-900  tracking-tight">Import Students</span>
+                        <span className="text-sm font-medium text-gray-500 ">Upload an Excel file to bulk add student records.</span>
                     </div>
                 </ModalHeader>
                 <ModalBody className="p-6">
                     <div className="flex flex-col gap-6">
                         {/* File Selection State */}
                         {!file ? (
-                            <div className="relative group border-2 border-dashed border-gray-200 dark:border-zinc-700 hover:border-gray-400 dark:hover:border-zinc-500 rounded-xl p-10 flex flex-col items-center justify-center gap-4 transition-all cursor-pointer bg-gray-50/30 dark:bg-zinc-800/20 hover:bg-white dark:hover:bg-zinc-800">
-                                <div className="p-4 bg-white dark:bg-zinc-800 rounded-full shadow-sm border border-gray-100 dark:border-zinc-700">
-                                    <Upload className="text-gray-400 dark:text-gray-500" size={28} strokeWidth={1.5} />
+                            <div className="relative group border-2 border-dashed border-gray-200  hover:border-gray-400  rounded-xl p-10 flex flex-col items-center justify-center gap-4 transition-all cursor-pointer bg-gray-50/30  hover:bg-white ">
+                                <div className="p-4 bg-white  rounded-full shadow-sm border border-gray-100 ">
+                                    <Upload className="text-gray-400 " size={28} strokeWidth={1.5} />
                                 </div>
                                 <div className="text-center">
-                                    <p className="font-medium text-gray-700 dark:text-gray-200 text-lg">
+                                    <p className="font-medium text-gray-700  text-lg">
                                         <span className="text-primary font-semibold hover:underline">Click to upload</span> or drag and drop
                                     </p>
                                     <p className="text-sm text-gray-400 mt-1">.xlsx or .xls files (max 5MB)</p>
@@ -113,13 +113,13 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClos
                             </div>
                         ) : (
                             // File Selected View
-                            <div className="border border-gray-200 dark:border-zinc-700 rounded-xl p-4 bg-white dark:bg-zinc-900 shadow-sm flex items-center justify-between group">
+                            <div className="border border-gray-200  rounded-xl p-4 bg-white  shadow-sm flex items-center justify-between group">
                                 <div className="flex items-center gap-4">
-                                    <div className="p-3 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg">
+                                    <div className="p-3 bg-green-50  text-green-600  rounded-lg">
                                         <FileSpreadsheet size={24} />
                                     </div>
                                     <div className="flex flex-col">
-                                        <span className="font-medium text-gray-900 dark:text-gray-100">{file.name}</span>
+                                        <span className="font-medium text-gray-900 ">{file.name}</span>
                                         <span className="text-xs text-gray-500">{(file.size / 1024).toFixed(2)} KB • Ready to import</span>
                                     </div>
                                 </div>
@@ -144,20 +144,20 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClos
 
                         {/* Import Summary Report */}
                         {uploadStatus === 'success' && summary && (
-                            <div className="bg-emerald-50/50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/30 rounded-xl p-5 fade-in slide-in-from-bottom-2 duration-300">
-                                <div className="flex items-center gap-3 text-emerald-800 dark:text-emerald-400 font-semibold text-lg mb-1">
-                                    <CheckCircle size={20} className="fill-emerald-100 dark:fill-emerald-900 text-emerald-600 dark:text-emerald-400" />
+                            <div className="bg-emerald-50/50  border border-emerald-100  rounded-xl p-5 fade-in slide-in-from-bottom-2 duration-300">
+                                <div className="flex items-center gap-3 text-emerald-800  font-semibold text-lg mb-1">
+                                    <CheckCircle size={20} className="fill-emerald-100  text-emerald-600 " />
                                     Import Complete
                                 </div>
-                                <p className="text-gray-600 dark:text-gray-400 ml-8 text-sm">
-                                    Successfully processed data from <span className="font-medium text-gray-900 dark:text-white">{file?.name}</span>.
+                                <p className="text-gray-600  ml-8 text-sm">
+                                    Successfully processed data from <span className="font-medium text-gray-900 ">{file?.name}</span>.
                                 </p>
                                 <div className="ml-8 mt-3 flex gap-4 text-sm">
-                                    <div className="px-3 py-1 bg-white dark:bg-zinc-900 border border-emerald-200 dark:border-emerald-800 rounded-md text-emerald-700 dark:text-emerald-400 font-medium shadow-sm">
+                                    <div className="px-3 py-1 bg-white  border border-emerald-200  rounded-md text-emerald-700  font-medium shadow-sm">
                                         {summary.success} Students Added
                                     </div>
                                     {summary.errors.length > 0 && (
-                                        <div className="px-3 py-1 bg-white dark:bg-zinc-900 border border-red-200 dark:border-red-800 rounded-md text-red-600 dark:text-red-400 font-medium shadow-sm">
+                                        <div className="px-3 py-1 bg-white  border border-red-200  rounded-md text-red-600  font-medium shadow-sm">
                                             {summary.errors.length} Errors Found
                                         </div>
                                     )}
@@ -166,7 +166,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClos
                                 {summary.errors.length > 0 && (
                                     <div className="ml-8 mt-4">
                                         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Error Log</p>
-                                        <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-lg p-3 max-h-40 overflow-y-auto custom-scrollbar">
+                                        <div className="bg-white  border border-gray-200  rounded-lg p-3 max-h-40 overflow-y-auto custom-scrollbar">
                                             <ul className="text-xs text-red-500 space-y-1.5">
                                                 {summary.errors.map((err, idx) => (
                                                     <li key={idx} className="flex gap-2 items-start">
@@ -189,7 +189,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClos
                         </Button>
                         <Button
                             color="primary"
-                            className="bg-gray-900 dark:bg-white text-white dark:text-black font-medium px-6 shadow-md shadow-gray-200 dark:shadow-none"
+                            className="bg-gray-900  text-white  font-medium px-6 shadow-md shadow-gray-200 "
                             onPress={handleUpload}
                             isLoading={isUploading}
                             isDisabled={!file || uploadStatus === 'success'}

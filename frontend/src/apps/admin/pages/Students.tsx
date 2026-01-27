@@ -181,14 +181,14 @@ const Students: React.FC = () => {
     return (
         <div className="flex flex-col gap-8 max-w-[1600px] mx-auto">
             {/* Header Section */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-gray-100 dark:border-zinc-800 pb-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-gray-100  pb-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">Students</h1>
-                    <p className="text-gray-500 dark:text-gray-400 mt-1">Manage student records, enrollments, and academic details.</p>
+                    <h1 className="text-3xl font-bold text-gray-900  tracking-tight">Students</h1>
+                    <p className="text-gray-500  mt-1">Manage student records, enrollments, and academic details.</p>
                 </div>
                 <div className="flex gap-3">
                     <Button
-                        className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 text-gray-700 dark:text-gray-200 font-medium shadow-sm hover:bg-gray-50 dark:hover:bg-zinc-800"
+                        className="bg-white  border border-gray-200  text-gray-700  font-medium shadow-sm hover:bg-gray-50 "
                         variant="light"
                         startContent={<FileSpreadsheet size={18} className="text-gray-500" />}
                         onPress={() => setIsImportOpen(true)}
@@ -196,7 +196,7 @@ const Students: React.FC = () => {
                         Import from Excel
                     </Button>
                     <Button
-                        className="bg-gray-900 dark:bg-white text-white dark:text-black font-medium shadow-md shadow-gray-200 dark:shadow-none"
+                        className="bg-gray-900  text-white  font-medium shadow-md shadow-gray-200 "
                         startContent={<Plus size={18} />}
                         onPress={() => setIsAddOpen(true)}
                     >
@@ -207,58 +207,58 @@ const Students: React.FC = () => {
 
             {/* Stats Overview */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card className="border border-gray-100 dark:border-zinc-800 shadow-sm bg-white dark:bg-zinc-900">
+                <Card className="border border-gray-100  shadow-sm bg-white ">
                     <CardBody className="flex flex-row items-center gap-4 p-4">
                         <div className="p-3 rounded-xl bg-primary/10 text-primary">
                             <Building2 size={24} strokeWidth={2.5} />
                         </div>
                         <div>
-                            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Departments</p>
-                            <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                            <p className="text-sm font-medium text-gray-500 ">Departments</p>
+                            <div className="text-2xl font-bold text-gray-900 ">
                                 {stats.activeDepartments}
                             </div>
                         </div>
                     </CardBody>
                 </Card>
 
-                <Card className="border border-gray-100 dark:border-zinc-800 shadow-sm bg-white dark:bg-zinc-900">
+                <Card className="border border-gray-100  shadow-sm bg-white ">
                     <CardBody className="flex flex-row items-center gap-4 p-4">
                         <div className="p-3 rounded-xl bg-secondary/10 text-secondary">
                             <Calendar size={24} strokeWidth={2.5} />
                         </div>
                         <div>
-                            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Active Batches</p>
-                            <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                            <p className="text-sm font-medium text-gray-500 ">Active Batches</p>
+                            <div className="text-2xl font-bold text-gray-900 ">
                                 {stats.activeBatches}
                             </div>
                         </div>
                     </CardBody>
                 </Card>
 
-                <Card className="border border-gray-100 dark:border-zinc-800 shadow-sm bg-white dark:bg-zinc-900">
+                <Card className="border border-gray-100  shadow-sm bg-white ">
                     <CardBody className="flex flex-row items-center gap-4 p-4">
                         <div className="p-3 rounded-xl bg-warning/10 text-warning">
                             <AlertTriangle size={24} strokeWidth={2.5} />
                         </div>
                         <div>
-                            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Incomplete</p>
-                            <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                            <p className="text-sm font-medium text-gray-500 ">Incomplete</p>
+                            <div className="text-2xl font-bold text-gray-900 ">
                                 {stats.incompleteProfiles}
                             </div>
                         </div>
                     </CardBody>
                 </Card>
 
-                <Card className="border border-green-200 dark:border-green-900/50 shadow-sm bg-green-50 dark:bg-green-900/20">
+                <Card className="border border-green-200  shadow-sm bg-green-50 ">
                     <CardBody className="flex flex-row items-center gap-4 p-4">
-                        <div className="p-3 rounded-xl bg-white/60 dark:bg-black/20 text-green-600 dark:text-green-400">
+                        <div className="p-3 rounded-xl bg-white/60  text-green-600 ">
                             <Check size={24} strokeWidth={2.5} />
                         </div>
                         <div>
-                            <p className="text-sm font-medium text-green-800/70 dark:text-green-300">Eligible</p>
+                            <p className="text-sm font-medium text-green-800/70 ">Eligible</p>
                             <div className="flex items-baseline gap-1">
-                                <span className="text-2xl font-bold text-green-900 dark:text-green-100">{totalStudents}</span>
-                                <span className="text-sm font-medium text-green-700/60 dark:text-green-400/60">/ {stats.totalDatabaseCount}</span>
+                                <span className="text-2xl font-bold text-green-900 ">{totalStudents}</span>
+                                <span className="text-sm font-medium text-green-700/60 ">/ {stats.totalDatabaseCount}</span>
                             </div>
                         </div>
                     </CardBody>
@@ -266,14 +266,14 @@ const Students: React.FC = () => {
             </div>
 
             {/* Filters & Actions Bar */}
-            <div className="flex flex-col sm:flex-row justify-between gap-4 items-center bg-white dark:bg-zinc-900/50 p-4 rounded-2xl border border-gray-100 dark:border-zinc-800 shadow-sm">
+            <div className="flex flex-col sm:flex-row justify-between gap-4 items-center bg-white  p-4 rounded-2xl border border-gray-100  shadow-sm">
                 <div className="w-full sm:w-96">
                     <Input
                         classNames={{
                             base: "max-w-full sm:max-w-md h-10",
                             mainWrapper: "h-full",
                             input: "text-small",
-                            inputWrapper: "h-full font-normal text-default-500 bg-gray-50 dark:bg-zinc-800 border-none group-data-[focus=true]:bg-white dark:group-data-[focus=true]:bg-zinc-900 ring-1 ring-transparent group-data-[focus=true]:ring-gray-200 dark:group-data-[focus=true]:ring-zinc-700 transition-all",
+                            inputWrapper: "h-full font-normal text-default-500 bg-gray-50  border-none group-data-[focus=true]:bg-white  ring-1 ring-transparent group-data-[focus=true]:ring-gray-200  transition-all",
                         }}
                         placeholder="Search by name, email, or register no..."
                         startContent={<Search size={18} className="text-gray-400" />}
@@ -290,7 +290,7 @@ const Students: React.FC = () => {
                     <Button
                         variant={activeFiltersCount > 0 ? "flat" : "light"}
                         color={activeFiltersCount > 0 ? "primary" : "default"}
-                        className={`font-medium ${activeFiltersCount > 0 ? "bg-primary/10 text-primary" : "text-gray-600 dark:text-gray-400"}`}
+                        className={`font-medium ${activeFiltersCount > 0 ? "bg-primary/10 text-primary" : "text-gray-600 "}`}
                         startContent={<Filter size={18} />}
                         onPress={openFilters}
                     >
@@ -306,11 +306,11 @@ const Students: React.FC = () => {
                         onClose={() => setIsFilterOpen(false)}
                         size="sm"
                         classNames={{
-                            base: "bg-white dark:bg-zinc-950 border border-gray-100 dark:border-zinc-800 shadow-2xl rounded-2xl",
-                            header: "border-b border-gray-100 dark:border-zinc-800 p-6",
+                            base: "bg-white  border border-gray-100  shadow-2xl rounded-2xl",
+                            header: "border-b border-gray-100  p-6",
                             body: "p-6",
-                            footer: "border-t border-gray-100 dark:border-zinc-800 p-6 bg-gray-50/50 dark:bg-zinc-900/50",
-                            closeButton: "hover:bg-gray-100 dark:hover:bg-zinc-800 active:bg-gray-200 dark:active:bg-zinc-700 p-2 rounded-full transition-colors right-4 top-4"
+                            footer: "border-t border-gray-100  p-6 bg-gray-50/50 ",
+                            closeButton: "hover:bg-gray-100  active:bg-gray-200  p-2 rounded-full transition-colors right-4 top-4"
                         }}
                     >
                         <ModalContent>
@@ -319,7 +319,7 @@ const Students: React.FC = () => {
                                     <div className="p-2 rounded-lg bg-primary/10 text-primary">
                                         <Filter size={18} />
                                     </div>
-                                    <span className="text-lg font-bold text-gray-900 dark:text-gray-100">Filter Students</span>
+                                    <span className="text-lg font-bold text-gray-900 ">Filter Students</span>
                                 </div>
                                 <p className="text-xs font-normal text-gray-500">Refine the student list by selecting criteria below.</p>
                             </ModalHeader>
@@ -335,9 +335,9 @@ const Students: React.FC = () => {
                                             startContent={<Building2 size={18} className="text-gray-400 group-hover:text-primary transition-colors" />}
                                             classNames={{
                                                 mainWrapper: "w-full",
-                                                trigger: "bg-gray-50 dark:bg-zinc-900 border-none hover:bg-gray-100 dark:hover:bg-zinc-800 shadow-none data-[hover=true]:bg-gray-100 dark:data-[hover=true]:bg-zinc-800 transition-colors h-12 rounded-xl",
-                                                popoverContent: "bg-white dark:bg-zinc-950 border border-gray-100 dark:border-zinc-800 shadow-xl w-full",
-                                                value: "text-small text-gray-700 dark:text-gray-300 group-data-[has-value=true]:text-gray-900 dark:group-data-[has-value=true]:text-gray-100 font-medium pl-1",
+                                                trigger: "bg-gray-50  border-none hover:bg-gray-100  shadow-none data-[hover=true]:bg-gray-100  transition-colors h-12 rounded-xl",
+                                                popoverContent: "bg-white  border border-gray-100  shadow-xl w-full",
+                                                value: "text-small text-gray-700  group-data-[has-value=true]:text-gray-900  font-medium pl-1",
                                                 selectorIcon: "hidden"
                                             }}
                                         >
@@ -358,9 +358,9 @@ const Students: React.FC = () => {
                                             startContent={<GraduationCap size={18} className="text-gray-400 group-hover:text-primary transition-colors" />}
                                             classNames={{
                                                 mainWrapper: "w-full",
-                                                trigger: "bg-gray-50 dark:bg-zinc-900 border-none hover:bg-gray-100 dark:hover:bg-zinc-800 shadow-none data-[hover=true]:bg-gray-100 dark:data-[hover=true]:bg-zinc-800 transition-colors h-12 rounded-xl",
-                                                popoverContent: "bg-white dark:bg-zinc-950 border border-gray-100 dark:border-zinc-800 shadow-xl w-full",
-                                                value: "text-small text-gray-700 dark:text-gray-300 group-data-[has-value=true]:text-gray-900 dark:group-data-[has-value=true]:text-gray-100 font-medium pl-1",
+                                                trigger: "bg-gray-50  border-none hover:bg-gray-100  shadow-none data-[hover=true]:bg-gray-100  transition-colors h-12 rounded-xl",
+                                                popoverContent: "bg-white  border border-gray-100  shadow-xl w-full",
+                                                value: "text-small text-gray-700  group-data-[has-value=true]:text-gray-900  font-medium pl-1",
                                                 selectorIcon: "hidden"
                                             }}
                                         >
@@ -382,9 +382,9 @@ const Students: React.FC = () => {
                                             startContent={<BookOpen size={18} className="text-gray-400 group-hover:text-primary transition-colors" />}
                                             classNames={{
                                                 mainWrapper: "w-full",
-                                                trigger: "bg-gray-50 dark:bg-zinc-900 border-none hover:bg-gray-100 dark:hover:bg-zinc-800 shadow-none data-[hover=true]:bg-gray-100 dark:data-[hover=true]:bg-zinc-800 transition-colors h-12 rounded-xl",
-                                                popoverContent: "bg-white dark:bg-zinc-950 border border-gray-100 dark:border-zinc-800 shadow-xl w-full",
-                                                value: "text-small text-gray-700 dark:text-gray-300 group-data-[has-value=true]:text-gray-900 dark:group-data-[has-value=true]:text-gray-100 font-medium pl-1",
+                                                trigger: "bg-gray-50  border-none hover:bg-gray-100  shadow-none data-[hover=true]:bg-gray-100  transition-colors h-12 rounded-xl",
+                                                popoverContent: "bg-white  border border-gray-100  shadow-xl w-full",
+                                                value: "text-small text-gray-700  group-data-[has-value=true]:text-gray-900  font-medium pl-1",
                                                 selectorIcon: "hidden"
                                             }}
                                         >
@@ -401,7 +401,7 @@ const Students: React.FC = () => {
                                 <Button
                                     variant="flat"
                                     color="danger"
-                                    className="bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 font-medium"
+                                    className="bg-red-50 text-red-600   font-medium"
                                     onPress={clearFilters}
                                 >
                                     Reset
@@ -411,7 +411,7 @@ const Students: React.FC = () => {
                                         Cancel
                                     </Button>
                                     <Button
-                                        className="bg-black dark:bg-white text-white dark:text-black font-bold shadow-lg shadow-black/20 dark:shadow-white/20"
+                                        className="bg-black  text-white  font-bold shadow-lg shadow-black/20 "
                                         onPress={applyFilters}
                                     >
                                         Apply Filters
@@ -423,7 +423,7 @@ const Students: React.FC = () => {
                     <Button
                         isIconOnly
                         variant="flat"
-                        className="bg-gray-50 dark:bg-zinc-800 text-gray-600 dark:text-gray-400"
+                        className="bg-gray-50  text-gray-600 "
                         onPress={handleExport}
                     >
                         <Download size={18} />
@@ -432,20 +432,20 @@ const Students: React.FC = () => {
             </div>
 
             {/* Table Card */}
-            <Card className="border border-gray-100 dark:border-zinc-800 shadow-sm rounded-2xl overflow-hidden bg-white dark:bg-zinc-900">
+            <Card className="border border-gray-100  shadow-sm rounded-2xl overflow-hidden bg-white ">
                 <CardBody className="p-0">
                     <Table
                         aria-label="Students Table"
                         shadow="none"
                         classNames={{
                             wrapper: "p-0",
-                            th: "bg-gray-50/50 dark:bg-zinc-800/50 text-gray-500 font-medium text-xs uppercase tracking-wider h-12 border-b border-gray-100 dark:border-zinc-800",
-                            td: "py-4 border-b border-gray-50 dark:border-zinc-800/50 group-last:border-none",
+                            th: "bg-gray-50/50  text-gray-500 font-medium text-xs uppercase tracking-wider h-12 border-b border-gray-100 ",
+                            td: "py-4 border-b border-gray-50  group-last:border-none",
                             table: "min-h-[400px]"
                         }}
                         bottomContent={
                             totalPages > 1 && (
-                                <div className="flex w-full justify-center items-center px-6 py-4 border-t border-gray-100 dark:border-zinc-800">
+                                <div className="flex w-full justify-center items-center px-6 py-4 border-t border-gray-100 ">
                                     <Pagination
                                         showControls
                                         disableCursorAnimation
@@ -456,9 +456,9 @@ const Students: React.FC = () => {
                                         radius="md"
                                         classNames={{
                                             wrapper: "gap-2",
-                                            item: "w-8 h-8 text-small font-medium text-gray-500 rounded-lg transition-colors data-[active=true]:bg-gray-100 dark:data-[active=true]:bg-zinc-800 data-[active=true]:text-gray-900 dark:data-[active=true]:text-white data-[active=true]:font-bold hover:bg-gray-50 dark:hover:bg-zinc-800",
-                                            prev: "hover:bg-gray-50 dark:hover:bg-zinc-800 rounded-lg",
-                                            next: "hover:bg-gray-50 dark:hover:bg-zinc-800 rounded-lg",
+                                            item: "w-8 h-8 text-small font-medium text-gray-500 rounded-lg transition-colors data-[active=true]:bg-gray-100  data-[active=true]:text-gray-900  data-[active=true]:font-bold hover:bg-gray-50 ",
+                                            prev: "hover:bg-gray-50  rounded-lg",
+                                            next: "hover:bg-gray-50  rounded-lg",
                                         }}
                                     />
                                 </div>
@@ -477,10 +477,10 @@ const Students: React.FC = () => {
                         <TableBody
                             emptyContent={
                                 <div className="flex flex-col items-center justify-center p-12 text-center text-gray-400">
-                                    <div className="p-6 bg-gray-50 dark:bg-zinc-800/50 rounded-full mb-4">
-                                        <FileSpreadsheet size={48} className="text-gray-300 dark:text-zinc-600" />
+                                    <div className="p-6 bg-gray-50  rounded-full mb-4">
+                                        <FileSpreadsheet size={48} className="text-gray-300 " />
                                     </div>
-                                    <p className="text-lg font-semibold text-gray-700 dark:text-gray-200">No students found</p>
+                                    <p className="text-lg font-semibold text-gray-700 ">No students found</p>
                                     <p className="text-sm text-gray-500 max-w-xs mt-1">Try adjusting your search or add new students to the system.</p>
                                 </div>
                             }
@@ -488,7 +488,7 @@ const Students: React.FC = () => {
                             isLoading={isLoading}
                         >
                             {(item) => (
-                                <TableRow key={item.StudentID} className="hover:bg-gray-50/50 dark:hover:bg-zinc-800/30 transition-colors group">
+                                <TableRow key={item.StudentID} className="hover:bg-gray-50/50  transition-colors group">
                                     <TableCell>
                                         <UserAvatar
                                             name={item.User?.FullName || item.User?.Email?.split('@')[0] || "Student"}
@@ -501,24 +501,24 @@ const Students: React.FC = () => {
                                         />
                                     </TableCell>
                                     <TableCell>
-                                        <div className="font-semibold text-gray-700 dark:text-gray-300 font-mono text-sm">{item.RegisterNumber}</div>
+                                        <div className="font-semibold text-gray-700  font-mono text-sm">{item.RegisterNumber}</div>
                                     </TableCell>
                                     <TableCell>
-                                        <Chip size="sm" variant="dot" color="primary" classNames={{ content: "font-semibold text-gray-600 dark:text-gray-300" }}>
+                                        <Chip size="sm" variant="dot" color="primary" classNames={{ content: "font-semibold text-gray-600 " }}>
                                             {item.Department?.DepartmentCode}
                                         </Chip>
                                     </TableCell>
                                     <TableCell>
-                                        <span className="text-gray-600 dark:text-gray-400">{item.Program?.ProgramName}</span>
+                                        <span className="text-gray-600 ">{item.Program?.ProgramName}</span>
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex items-center gap-1">
                                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                                            <span className="text-gray-600 dark:text-gray-400 font-medium">Sem {item.Semester?.SemesterNumber}</span>
+                                            <span className="text-gray-600  font-medium">Sem {item.Semester?.SemesterNumber}</span>
                                         </div>
                                     </TableCell>
                                     <TableCell>
-                                        <span className="px-2 py-1 rounded-md bg-gray-100 dark:bg-zinc-800 text-xs font-semibold text-gray-500">
+                                        <span className="px-2 py-1 rounded-md bg-gray-100  text-xs font-semibold text-gray-500">
                                             {item.BatchYear}
                                         </span>
                                     </TableCell>
@@ -537,9 +537,9 @@ const Students: React.FC = () => {
                                                 </DropdownTrigger>
                                                 <DropdownMenu
                                                     aria-label="Student Actions"
-                                                    className="bg-white dark:bg-zinc-950 border border-gray-100 dark:border-zinc-800 rounded-xl shadow-xl p-1"
+                                                    className="bg-white  border border-gray-100  rounded-xl shadow-xl p-1"
                                                     itemClasses={{
-                                                        base: "rounded-lg data-[hover=true]:bg-gray-100 dark:data-[hover=true]:bg-zinc-800"
+                                                        base: "rounded-lg data-[hover=true]:bg-gray-100 "
                                                     }}
                                                 >
                                                     <DropdownItem
@@ -551,7 +551,7 @@ const Students: React.FC = () => {
                                                     </DropdownItem>
                                                     <DropdownItem
                                                         key="delete"
-                                                        className="text-red-600 dark:text-red-500"
+                                                        className="text-red-600 "
                                                         color="danger"
                                                         startContent={<Trash2 size={16} />}
                                                         onPress={() => confirmDelete(item)}
@@ -601,21 +601,21 @@ const Students: React.FC = () => {
                 backdrop="blur"
                 size="sm"
                 classNames={{
-                    base: "bg-white dark:bg-zinc-950 border border-gray-100 dark:border-zinc-800",
+                    base: "bg-white  border border-gray-100 ",
                 }}
             >
                 <ModalContent>
                     {(onClose) => (
                         <>
                             <ModalHeader className="flex flex-col gap-1 items-center justify-center pt-8">
-                                <div className="h-12 w-12 rounded-full bg-red-50 dark:bg-red-500/10 flex items-center justify-center text-red-500 mb-2">
+                                <div className="h-12 w-12 rounded-full bg-red-50  flex items-center justify-center text-red-500 mb-2">
                                     <AlertTriangle size={24} />
                                 </div>
-                                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Delete Student?</h3>
+                                <h3 className="text-lg font-bold text-gray-900 ">Delete Student?</h3>
                             </ModalHeader>
                             <ModalBody className="text-center px-8">
-                                <p className="text-gray-500 dark:text-gray-400">
-                                    Are you sure you want to delete <span className="font-semibold text-gray-900 dark:text-gray-100">{selectedStudent?.User?.FullName}</span>?
+                                <p className="text-gray-500 ">
+                                    Are you sure you want to delete <span className="font-semibold text-gray-900 ">{selectedStudent?.User?.FullName}</span>?
                                     This action cannot be undone and will remove all associated data.
                                 </p>
                             </ModalBody>

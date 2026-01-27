@@ -105,8 +105,14 @@ export async function connectDB() {
 
         await import("../models/index.js");
 
-        await sequelize.sync({ alter: true });
-        console.log("Database synchronized");
+        try {
+            await sequelize.sync({ alter: true });
+            console.log("Database synchronized with alter");
+        } catch (syncErr: any) {
+            console.warn("Database alter sync failed, falling back to standard sync:", syncErr.message);
+            await sequelize.sync();
+            console.log("Database synchronized (standard)");
+        }
 
         return true;
     } catch (err: any) {

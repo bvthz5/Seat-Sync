@@ -12,9 +12,9 @@ export default {
         extend: {
             colors: {
                 // Stark Modern Palette (Vercel/Linear inspired)
-                background: "#09090b", // Zinc 950
-                surface: "#18181b",    // Zinc 900
-                border: "#27272a",     // Zinc 800
+                background: "#ffffff",
+                surface: "#f9fafb",
+                border: "#e5e7eb",
 
                 primary: {
                     DEFAULT: "#fafafa", // Zinc 50 (White-ish)

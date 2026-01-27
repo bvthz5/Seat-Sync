@@ -133,11 +133,11 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
             backdrop="blur"
             size="2xl"
             classNames={{
-                base: "bg-white dark:bg-zinc-950 border border-white/20 dark:border-zinc-800 shadow-2xl rounded-3xl",
-                header: "border-b border-gray-100 dark:border-zinc-900 p-6 pb-4",
+                base: "bg-white  border border-white/20  shadow-2xl rounded-3xl",
+                header: "border-b border-gray-100  p-6 pb-4",
                 body: "p-0",
-                footer: "border-t border-gray-100 dark:border-zinc-900 p-6 pt-4 bg-gray-50/50 dark:bg-zinc-900/20",
-                closeButton: "hover:bg-gray-100 dark:hover:bg-zinc-800 active:bg-gray-200 dark:active:bg-zinc-700 p-2 rounded-full transition-colors right-4 top-4"
+                footer: "border-t border-gray-100  p-6 pt-4 bg-gray-50/50 ",
+                closeButton: "hover:bg-gray-100  active:bg-gray-200  p-2 rounded-full transition-colors right-4 top-4"
             }}
             motionProps={{
                 variants: {
@@ -147,12 +147,12 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
             }}
         >
             <ModalContent>
-                <ModalHeader className="flex flex-col gap-1 items-center justify-center pt-8 pb-6 bg-gradient-to-b from-white to-gray-50 dark:from-zinc-950 dark:to-zinc-900/50">
+                <ModalHeader className="flex flex-col gap-1 items-center justify-center pt-8 pb-6 bg-gradient-to-b from-white to-gray-50  ">
                     <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mb-3 shadow-sm ring-4 ring-primary/5">
                         <User size={24} strokeWidth={2.5} />
                     </div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">Edit Student</h2>
-                    <p className="text-sm font-medium text-gray-400 dark:text-gray-500 text-center max-w-xs">
+                    <h2 className="text-2xl font-bold text-gray-900  tracking-tight">Edit Student</h2>
+                    <p className="text-sm font-medium text-gray-400  text-center max-w-xs">
                         Update {formData.FullName || "student"}'s profile details below.
                     </p>
                 </ModalHeader>
@@ -160,7 +160,7 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                     <div className="p-6 space-y-8">
                         {/* Section 1: Personal Info */}
                         <div className="space-y-4">
-                            <div className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                            <div className="flex items-center gap-2 text-sm font-semibold text-gray-900 ">
                                 <div className="h-1.5 w-1.5 rounded-full bg-primary" />
                                 Personal Information
                             </div>
@@ -171,7 +171,7 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                                     value={formData.RegisterNumber}
                                     onValueChange={(v) => handleChange("RegisterNumber", v)}
                                     classNames={{
-                                        inputWrapper: "h-12 bg-gray-50 dark:bg-zinc-900 border-0 shadow-none hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors data-[hover=true]:bg-gray-100 dark:data-[hover=true]:bg-zinc-800 group-data-[focus=true]:bg-white dark:group-data-[focus=true]:bg-black group-data-[focus=true]:ring-2 ring-primary/20",
+                                        inputWrapper: "h-12 bg-gray-50  border-0 shadow-none hover:bg-gray-100  transition-colors data-[hover=true]:bg-gray-100  group-data-[focus=true]:bg-white  group-data-[focus=true]:ring-2 ring-primary/20",
                                         input: "text-small",
                                     }}
                                 />
@@ -181,7 +181,7 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                                     value={formData.FullName}
                                     onValueChange={(v) => handleChange("FullName", v)}
                                     classNames={{
-                                        inputWrapper: "h-12 bg-gray-50 dark:bg-zinc-900 border-0 shadow-none hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors data-[hover=true]:bg-gray-100 dark:data-[hover=true]:bg-zinc-800 group-data-[focus=true]:bg-white dark:group-data-[focus=true]:bg-black group-data-[focus=true]:ring-2 ring-primary/20",
+                                        inputWrapper: "h-12 bg-gray-50  border-0 shadow-none hover:bg-gray-100  transition-colors data-[hover=true]:bg-gray-100  group-data-[focus=true]:bg-white  group-data-[focus=true]:ring-2 ring-primary/20",
                                         input: "text-small",
                                     }}
                                 />
@@ -193,18 +193,18 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                                     value={formData.Email}
                                     onValueChange={(v) => handleChange("Email", v)}
                                     classNames={{
-                                        inputWrapper: "h-12 bg-gray-50 dark:bg-zinc-900 border-0 shadow-none hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors data-[hover=true]:bg-gray-100 dark:data-[hover=true]:bg-zinc-800 group-data-[focus=true]:bg-white dark:group-data-[focus=true]:bg-black group-data-[focus=true]:ring-2 ring-primary/20",
+                                        inputWrapper: "h-12 bg-gray-50  border-0 shadow-none hover:bg-gray-100  transition-colors data-[hover=true]:bg-gray-100  group-data-[focus=true]:bg-white  group-data-[focus=true]:ring-2 ring-primary/20",
                                         input: "text-small",
                                     }}
                                 />
                             </div>
                         </div>
 
-                        <div className="h-px bg-gray-100 dark:bg-zinc-900" />
+                        <div className="h-px bg-gray-100 " />
 
                         {/* Section 2: Academic Info */}
                         <div className="space-y-4">
-                            <div className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                            <div className="flex items-center gap-2 text-sm font-semibold text-gray-900 ">
                                 <div className="h-1.5 w-1.5 rounded-full bg-primary" />
                                 Academic Details
                             </div>
@@ -216,9 +216,9 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                                     onChange={(e) => handleChange("DepartmentID", e.target.value)}
                                     aria-label="Department"
                                     classNames={{
-                                        trigger: "h-12 bg-gray-50 dark:bg-zinc-900 border-0 shadow-none hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors data-[hover=true]:bg-gray-100 dark:data-[hover=true]:bg-zinc-800",
-                                        popoverContent: "bg-white dark:bg-zinc-950 border border-gray-100 dark:border-zinc-800 shadow-xl",
-                                        value: "text-small group-data-[has-value=true]:text-gray-900 dark:group-data-[has-value=true]:text-gray-100",
+                                        trigger: "h-12 bg-gray-50  border-0 shadow-none hover:bg-gray-100  transition-colors data-[hover=true]:bg-gray-100 ",
+                                        popoverContent: "bg-white  border border-gray-100  shadow-xl",
+                                        value: "text-small group-data-[has-value=true]:text-gray-900 ",
                                         selectorIcon: "hidden"
                                     }}
                                 >
@@ -236,9 +236,9 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                                     onChange={(e) => handleChange("ProgramID", e.target.value)}
                                     aria-label="Program"
                                     classNames={{
-                                        trigger: "h-12 bg-gray-50 dark:bg-zinc-900 border-0 shadow-none hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors data-[hover=true]:bg-gray-100 dark:data-[hover=true]:bg-zinc-800",
-                                        popoverContent: "bg-white dark:bg-zinc-950 border border-gray-100 dark:border-zinc-800 shadow-xl",
-                                        value: "text-small group-data-[has-value=true]:text-gray-900 dark:group-data-[has-value=true]:text-gray-100",
+                                        trigger: "h-12 bg-gray-50  border-0 shadow-none hover:bg-gray-100  transition-colors data-[hover=true]:bg-gray-100 ",
+                                        popoverContent: "bg-white  border border-gray-100  shadow-xl",
+                                        value: "text-small group-data-[has-value=true]:text-gray-900 ",
                                         selectorIcon: "hidden"
                                     }}
                                 >
@@ -257,8 +257,8 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                                     isDisabled={!formData.ProgramID}
                                     aria-label="Semester"
                                     classNames={{
-                                        trigger: "h-12 bg-gray-50 dark:bg-zinc-900 border-0 shadow-none hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors data-[hover=true]:bg-gray-100 dark:data-[hover=true]:bg-zinc-800",
-                                        popoverContent: "bg-white dark:bg-zinc-950 border border-gray-100 dark:border-zinc-800 shadow-xl",
+                                        trigger: "h-12 bg-gray-50  border-0 shadow-none hover:bg-gray-100  transition-colors data-[hover=true]:bg-gray-100 ",
+                                        popoverContent: "bg-white  border border-gray-100  shadow-xl",
                                         selectorIcon: "hidden"
                                     }}
                                 >
@@ -276,7 +276,7 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                                     value={formData.BatchYear}
                                     onValueChange={(v) => handleChange("BatchYear", v)}
                                     classNames={{
-                                        inputWrapper: "h-12 bg-gray-50 dark:bg-zinc-900 border-0 shadow-none hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors data-[hover=true]:bg-gray-100 dark:data-[hover=true]:bg-zinc-800 group-data-[focus=true]:bg-white dark:group-data-[focus=true]:bg-black group-data-[focus=true]:ring-2 ring-primary/20",
+                                        inputWrapper: "h-12 bg-gray-50  border-0 shadow-none hover:bg-gray-100  transition-colors data-[hover=true]:bg-gray-100  group-data-[focus=true]:bg-white  group-data-[focus=true]:ring-2 ring-primary/20",
                                         input: "text-small",
                                     }}
                                 />
@@ -284,7 +284,7 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                         </div>
                     </div>
                 </ModalBody>
-                <ModalFooter className="flex justify-between items-center bg-gray-50/50 dark:bg-zinc-900/50 p-6">
+                <ModalFooter className="flex justify-between items-center bg-gray-50/50  p-6">
                     <div className="text-xs text-gray-400 font-medium">
                         * All fields are required
                     </div>
@@ -292,12 +292,12 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                         <Button
                             variant="light"
                             onPress={onClose}
-                            className="font-semibold text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                            className="font-semibold text-gray-500 hover:text-gray-700  "
                         >
                             Cancel
                         </Button>
                         <Button
-                            className="bg-black dark:bg-white text-white dark:text-black font-bold shadow-lg shadow-black/20 dark:shadow-white/20 px-8"
+                            className="bg-black  text-white  font-bold shadow-lg shadow-black/20  px-8"
                             onPress={handleSubmit}
                             isLoading={loading}
                         >
