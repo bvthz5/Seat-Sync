@@ -52,6 +52,7 @@
     "@types/express": "^5.0.6",
     "@types/hpp": "^0.2.7",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.0.0",
     "@types/node": "^25.0.7",
     "@types/nodemailer": "^7.0.5",
     "@types/swagger-jsdoc": "^6.0.4",

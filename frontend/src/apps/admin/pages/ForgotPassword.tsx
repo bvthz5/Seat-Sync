@@ -13,11 +13,9 @@ const EmailIcon = () => (
 );
 
 const SeatSyncLogo = () => (
-    <img
-        src="/uploads/images/logo_uploaded_0.png"
-        alt="SeatSync"
-        className="w-12 h-12 object-contain bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-2 shadow-lg"
-    />
+    <div className="w-12 h-12 flex items-center justify-center bg-white/10 backdrop-blur-md border border-white/20 rounded-xl shadow-lg text-white font-bold text-xl">
+        S
+    </div>
 );
 
 // --- Reuse CustomInput (Simplified for brevity, or export it from Login if possible. For now, duplication is safer to avoid breaking Login) ---
