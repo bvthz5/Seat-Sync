@@ -59,7 +59,7 @@ const AdminLayout: React.FC = () => {
                     </Button>
 
                     {/* Profile Avatar */}
-                    <Dropdown placement="bottom-end" classNames={{ content: " " }}>
+                    <Dropdown placement="bottom-end" classNames={{ content: " " }} disableAnimation>
                         <DropdownTrigger>
                             <div className="ml-2 cursor-pointer p-1 rounded-full hover:bg-[#f1f3f4]  transition-colors">
                                 <Avatar

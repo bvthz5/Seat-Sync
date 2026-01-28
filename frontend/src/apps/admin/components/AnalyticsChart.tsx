@@ -24,9 +24,9 @@ export const AnalyticsChart: React.FC = () => {
                 <CardHeader className="px-6 py-5 border-b border-gray-100">
                     <h3 className="font-normal text-lg text-[#202124]">Student Distribution</h3>
                 </CardHeader>
-                <CardBody className="p-4 h-[250px] overflow-hidden">
+                <CardBody className="p-4 overflow-hidden">
                     <div className="w-full h-[250px]">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height={250}>
                             <BarChart data={data} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                                 <XAxis type="number" hide />
                                 <YAxis dataKey="name" type="category" tick={{ fontSize: 12, fill: '#5f6368' }} width={40} axisLine={false} tickLine={false} />
@@ -50,9 +50,9 @@ export const AnalyticsChart: React.FC = () => {
                 <CardHeader className="px-6 py-5 border-b border-gray-100">
                     <h3 className="font-normal text-lg text-[#202124]">Allocation Status</h3>
                 </CardHeader>
-                <CardBody className="p-4 h-[250px] relative overflow-hidden">
+                <CardBody className="p-4 relative overflow-hidden">
                     <div className="w-full h-[250px]">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height={250}>
                             <PieChart>
                                 <Pie
                                     data={pieData}

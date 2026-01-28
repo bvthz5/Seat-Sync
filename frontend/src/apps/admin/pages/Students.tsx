@@ -524,7 +524,7 @@ const Students: React.FC = () => {
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex justify-end items-center gap-2">
-                                            <Dropdown placement="bottom-end">
+                                            <Dropdown placement="bottom-end" disableAnimation>
                                                 <DropdownTrigger>
                                                     <Button
                                                         size="sm"
