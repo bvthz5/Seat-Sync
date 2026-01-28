@@ -3,10 +3,17 @@ import api from "../../../services/api"; // Correct path to shared api instance
 
 const PREFIX = '/admin/college-structure';
 
+export interface PaginatedResponse<T> {
+    total: number;
+    pages: number;
+    currentPage: number;
+    data: T[];
+}
+
 export const structureService = {
     // --- BLOCKS ---
-    getBlocks: async () => {
-        const response = await api.get<Block[]>(`${PREFIX}/blocks`);
+    getBlocks: async (params?: { page?: number, limit?: number, search?: string, status?: string }) => {
+        const response = await api.get<PaginatedResponse<Block>>(`${PREFIX}/blocks`, { params });
         return response.data;
     },
     createBlock: async (data: Partial<Block>) => {
@@ -22,9 +29,8 @@ export const structureService = {
     },
 
     // --- FLOORS ---
-    getFloors: async (blockId?: number) => {
-        // Query param blockId optional
-        const response = await api.get<Floor[]>(`${PREFIX}/floors`, { params: { blockId } });
+    getFloors: async (params?: { blockId?: number, page?: number, limit?: number, search?: string, status?: string }) => {
+        const response = await api.get<PaginatedResponse<Floor>>(`${PREFIX}/floors`, { params });
         return response.data;
     },
     createFloor: async (data: Partial<Floor>) => {
@@ -40,10 +46,8 @@ export const structureService = {
     },
 
     // --- ROOMS ---
-    // --- ROOMS ---
-    getRooms: async (floorId?: number, blockId?: number) => {
-        // Updated to new endpoint /api/rooms
-        const response = await api.get<Room[]>(`/rooms`, { params: { floorId, blockId } });
+    getRooms: async (params: { floorId?: number, blockId?: number, page?: number, limit?: number, search?: string, status?: string }) => {
+        const response = await api.get<PaginatedResponse<Room>>(`/rooms`, { params });
         return response.data;
     },
     createRoom: async (data: Partial<Room>) => {

@@ -21,9 +21,9 @@ interface BulkCreateRoomDTO {
 }
 
 export class RoomService {
-    async getRooms(blockId: number, floorId: number) {
+    async getRooms(blockId: number, floorId: number, options: { page?: number, limit?: number, search?: string, status?: string } = {}) {
         if (!blockId || !floorId) throw new Error("Block and Floor are required");
-        return roomRepo.findByLocation(blockId, floorId);
+        return roomRepo.findByLocation(blockId, floorId, options);
     }
 
     async createRoom(data: CreateRoomDTO) {
@@ -60,13 +60,14 @@ export class RoomService {
             throw new Error("No rooms provided in payload");
         }
 
-        if (!blockId || !floorId) {
-            throw new Error(`Missing blockId (${blockId}) or floorId (${floorId}) context`);
+        if (isNaN(blockId) || isNaN(floorId) || !blockId || !floorId) {
+            throw new Error(`Invalid location context: blockId=${blockId}, floorId=${floorId}`);
         }
 
-        // 1. Validate Floor belongs to Block
-        const floor = await Floor.findOne({ where: { FloorID: floorId, BlockID: blockId } });
-        if (!floor) throw new Error("Invalid floor for selected block");
+        // 1. Validate Floor exists
+        const floor = await Floor.findByPk(floorId);
+        if (!floor) throw new Error(`Floor ID ${floorId} not found`);
+        if (floor.BlockID !== blockId) throw new Error(`Floor ${floorId} does not belong to block ${blockId}`);
 
         const transaction = await sequelize.transaction();
         try {
@@ -74,18 +75,20 @@ export class RoomService {
             const codesInPayload = new Set<string>();
 
             for (const r of data.rooms) {
-                const code = r.roomCode?.toString().trim();
-                const capacity = Number(r.capacity);
+                const code = (r.roomCode || r.RoomCode || r.code)?.toString().trim();
+                const capacity = Number(r.capacity || r.Capacity);
 
                 if (!code) throw new Error("Room code cannot be empty");
-                if (isNaN(capacity) || capacity <= 0) throw new Error(`Invalid capacity (${r.capacity}) for room '${code}'`);
+                if (isNaN(capacity) || capacity <= 0) {
+                    throw new Error(`Invalid capacity (${r.capacity || r.Capacity}) for room '${code}'`);
+                }
 
                 if (codesInPayload.has(code.toLowerCase())) {
                     throw new Error(`Duplicate room code '${code}' in your list`);
                 }
                 codesInPayload.add(code.toLowerCase());
 
-                // Check DB for each (could be optimized with Op.in, but this is clearer for errors)
+                // Check DB for each (could be optimized with Op.in)
                 const existing = await roomRepo.findByCode(code, floorId);
                 if (existing) {
                     throw new Error(`Room '${code}' already exists on this floor`);

@@ -5,13 +5,27 @@ const roomService = new RoomService();
 
 export const getRooms = async (req: Request, res: Response) => {
     try {
-        const { blockId, floorId } = req.query;
+        const { blockId, floorId, page, limit, search, status } = req.query;
         if (!blockId || !floorId) {
             return res.status(400).json({ message: "blockId and floorId are required" });
         }
 
-        const rooms = await roomService.getRooms(Number(blockId), Number(floorId));
-        res.json(rooms);
+        const p = Number(page) || 1;
+        const l = Number(limit) || 10;
+
+        const result = await roomService.getRooms(Number(blockId), Number(floorId), {
+            page: p,
+            limit: l,
+            search: search as string,
+            status: status as string
+        });
+
+        res.json({
+            total: result.count,
+            pages: Math.ceil(result.count / l),
+            currentPage: p,
+            data: result.rows
+        });
     } catch (error: any) {
         console.error("GET ROOMS ERROR:", error);
         res.status(500).json({ message: error.message || "Internal Server Error" });

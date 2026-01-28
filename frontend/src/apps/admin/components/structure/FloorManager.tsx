@@ -15,6 +15,14 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
     const [floors, setFloors] = useState<Floor[]>([]);
     const [loading, setLoading] = useState(false);
 
+    // --- Pagination & Filter State ---
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalItems, setTotalItems] = useState(0);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [statusFilter, setStatusFilter] = useState("all");
+    const [limit] = useState(10);
+
     // Modal state
     const { isOpen, onOpen, onOpenChange } = useDisclosure();
     const [editingFloor, setEditingFloor] = useState<Floor | null>(null);
@@ -30,15 +38,16 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
 
     useEffect(() => {
         if (selectedBlockId) {
-            loadFloors(Number(selectedBlockId));
+            loadFloors(Number(selectedBlockId), page, searchQuery, statusFilter);
         } else {
             setFloors([]);
         }
-    }, [selectedBlockId]);
+    }, [selectedBlockId, page, searchQuery, statusFilter]);
 
     const loadBlocks = async () => {
         try {
-            const data = await structureService.getBlocks();
+            const response = await structureService.getBlocks({ limit: 100 });
+            const data = response && response.data ? response.data : (Array.isArray(response) ? response : []);
             setBlocks(data);
             if (data.length > 0 && !selectedBlockId) {
                 // Auto-select first block for better UX
@@ -46,14 +55,35 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
             }
         } catch (error) {
             console.error(error);
+            setBlocks([]);
         }
     };
 
-    const loadFloors = async (blockId: number) => {
+    const loadFloors = async (blockId: number, currentPage = 1, search = "", status = "all") => {
         setLoading(true);
         try {
-            const data = await structureService.getFloors(blockId);
-            setFloors(data);
+            const params: any = {
+                blockId,
+                page: currentPage,
+                limit,
+            };
+            if (search) params.search = search;
+            if (status !== "all") params.status = status;
+
+            const response = await structureService.getFloors(params);
+            if (response && response.data && Array.isArray(response.data)) {
+                setFloors(response.data);
+                setTotalPages(response.pages || 1);
+                setTotalItems(response.total || response.data.length);
+            } else if (Array.isArray(response)) {
+                setFloors(response);
+                setTotalPages(1);
+                setTotalItems(response.length);
+            } else {
+                setFloors([]);
+                setTotalPages(1);
+                setTotalItems(0);
+            }
         } catch (error) {
             toast.error("Failed to load floors");
         } finally {
@@ -74,7 +104,7 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
             setEditingFloor(null);
             setFormData({
                 BlockID: Number(selectedBlockId),
-                FloorNumber: (floors.length > 0 ? Math.max(...floors.map(f => f.FloorNumber)) + 1 : 1), // Suggest next floor
+                FloorNumber: ((floors?.length || 0) > 0 ? Math.max(...floors.map(f => f.FloorNumber)) + 1 : 1), // Suggest next floor
                 Status: 'Active'
             });
         }
@@ -95,7 +125,7 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                 await structureService.createFloor(formData);
                 toast.success("Floor created");
             }
-            loadFloors(Number(selectedBlockId));
+            loadFloors(Number(selectedBlockId), page, searchQuery, statusFilter);
             onClose();
         } catch (error: any) {
             toast.error(error.response?.data?.message || "Operation failed");
@@ -108,7 +138,7 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
         try {
             await structureService.deleteFloor(id);
             toast.success("Floor deleted");
-            loadFloors(Number(selectedBlockId));
+            loadFloors(Number(selectedBlockId), page, searchQuery, statusFilter);
         } catch (error: any) {
             toast.error(error.response?.data?.message || "Delete failed");
         }
@@ -128,10 +158,12 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                 {selectedBlockId && <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50/50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />}
 
                 <div className="flex flex-col gap-3 w-full md:w-1/2 z-10">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                    <label htmlFor="block-select-input" className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
                         <Building2 size={14} /> Select Building Block
                     </label>
                     <Autocomplete
+                        id="block-select"
+                        name="block-select"
                         aria-label="Select Block"
                         placeholder="Choose a building block..."
                         className="max-w-md w-full"
@@ -144,6 +176,7 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                             selectorButton: "text-slate-500"
                         }}
                         inputProps={{
+                            id: "block-select-input",
                             classNames: {
                                 input: "text-base font-medium text-slate-700 placeholder:text-slate-400",
                                 inputWrapper: "bg-white h-12 min-h-12 rounded-xl border-1 border-slate-300 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-500 shadow-sm transition-all"
@@ -164,7 +197,7 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                             }
                         }}
                     >
-                        {blocks.map((b) => (
+                        {(blocks || []).map((b) => (
                             <AutocompleteItem key={b.BlockID} textValue={b.BlockName} description={`${b.floorCount || 0} floors available`} startContent={<Building2 size={18} className="text-slate-400" />}>
                                 {b.BlockName}
                             </AutocompleteItem>
@@ -172,18 +205,65 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                     </Autocomplete>
                 </div>
 
-                {!readOnly && selectedBlockId && (
-                    <Button
-                        onPress={() => handleOpen()}
-                        color="primary"
-                        size="lg"
-                        startContent={<Plus size={20} strokeWidth={2.5} />}
-                        className="font-bold shadow-lg shadow-blue-500/20 rounded-xl h-12 px-8 text-white z-10"
-                    >
-                        Add Floor
-                    </Button>
-                )}
+                <div className="flex flex-col md:flex-row gap-4 items-center z-10 w-full md:w-auto">
+                    <div className="flex items-center gap-3 w-full md:w-auto">
+                        <Input
+                            id="floor-search"
+                            name="floor-search"
+                            placeholder="Find floor..."
+                            aria-label="Search floors"
+                            size="sm"
+                            startContent={<Search size={18} className="text-slate-400" />}
+                            className="max-w-[200px]"
+                            variant="bordered"
+                            value={searchQuery}
+                            onValueChange={(v) => { setSearchQuery(v); setPage(1); }}
+                            classNames={{
+                                inputWrapper: "bg-white border-slate-200 shadow-sm rounded-xl h-11"
+                            }}
+                        />
+                        <Select
+                            id="floor-status-filter"
+                            name="floor-status-filter"
+                            placeholder="Status"
+                            aria-label="Filter by status"
+                            size="sm"
+                            className="w-[120px]"
+                            variant="bordered"
+                            selectedKeys={[statusFilter]}
+                            onSelectionChange={(keys) => { setStatusFilter(Array.from(keys)[0] as string); setPage(1); }}
+                            classNames={{
+                                trigger: "bg-white border-slate-200 shadow-sm rounded-xl h-11"
+                            }}
+                        >
+                            <SelectItem key="all" textValue="All">All</SelectItem>
+                            <SelectItem key="Active" textValue="Active">Active</SelectItem>
+                            <SelectItem key="Inactive" textValue="Inactive">Inactive</SelectItem>
+                        </Select>
+                    </div>
+
+                    {!readOnly && selectedBlockId && (
+                        <Button
+                            onPress={() => handleOpen()}
+                            color="primary"
+                            size="lg"
+                            startContent={<Plus size={20} strokeWidth={2.5} />}
+                            className="font-bold shadow-lg shadow-blue-500/20 rounded-xl h-12 px-8 text-white"
+                        >
+                            Add Floor
+                        </Button>
+                    )}
+                </div>
             </div>
+
+            {/* Pagination Info */}
+            {selectedBlockId && (
+                <div className="flex justify-between items-center px-4 -mb-2">
+                    <div className="text-sm font-medium text-slate-500">
+                        Showing <span className="text-slate-900 font-bold">{(floors?.length || 0) === 0 ? 0 : (page - 1) * limit + 1}</span> - <span className="text-slate-900 font-bold">{Math.min(page * limit, totalItems)}</span> of <span className="text-slate-900 font-bold">{totalItems}</span>
+                    </div>
+                </div>
+            )}
 
             {!selectedBlockId ? (
                 // Empty State
@@ -198,84 +278,126 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                 </div>
             ) : (
                 // Table
-                <Table
-                    aria-label="Floors table"
-                    classNames={{
-                        wrapper: "bg-white shadow-sm border border-slate-200 rounded-2xl p-0 overflow-hidden",
-                        th: "bg-slate-50 text-slate-600 font-bold text-xs py-4 px-6 border-b border-slate-200 uppercase tracking-wider",
-                        td: "py-4 px-6 border-b border-slate-100 group-last:border-0",
-                        tr: "hover:bg-slate-50/80 transition-colors cursor-default"
-                    }}
-                >
-                    <TableHeader columns={columns}>
-                        {(column) => (
-                            <TableColumn key={column.uid} align={column.uid === "actions" ? "end" : "start"}>
-                                {column.name}
-                            </TableColumn>
-                        )}
-                    </TableHeader>
-                    <TableBody
-                        items={floors}
-                        isLoading={loading}
-                        emptyContent={
-                            <div className="py-20 flex flex-col items-center text-center">
-                                <Search className="text-slate-300 mb-4" size={48} strokeWidth={1} />
-                                <p className="text-slate-600 font-semibold text-lg">No floors found</p>
-                                <p className="text-slate-400 text-sm mt-1">This block doesn't have any floors yet.</p>
-                                {!readOnly && <Button variant="light" color="primary" className="mt-4 font-semibold" onPress={() => handleOpen()}>Create First Floor</Button>}
-                            </div>
-                        }
+                <>
+                    <Table
+                        aria-label="Floors table"
+                        classNames={{
+                            wrapper: "bg-white shadow-sm border border-slate-200 rounded-2xl p-0 overflow-hidden",
+                            th: "bg-slate-50 text-slate-600 font-bold text-xs py-4 px-6 border-b border-slate-200 uppercase tracking-wider",
+                            td: "py-4 px-6 border-b border-slate-100 group-last:border-0",
+                            tr: "hover:bg-slate-50/80 transition-colors cursor-default"
+                        }}
                     >
-                        {(floor) => (
-                            <TableRow key={floor.FloorID}>
-                                <TableCell>
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 ring-1 ring-blue-100">
-                                            <Layers size={22} strokeWidth={2} />
-                                        </div>
-                                        <div>
-                                            <p className="font-bold text-slate-800 text-lg">Floor {floor.FloorNumber}</p>
-                                            <div className="flex items-center gap-2 mt-0.5">
-                                                <span className="text-xs font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200">ID: {floor.FloorID}</span>
+                        <TableHeader columns={columns}>
+                            {(column) => (
+                                <TableColumn key={column.uid} align={column.uid === "actions" ? "end" : "start"}>
+                                    {column.name}
+                                </TableColumn>
+                            )}
+                        </TableHeader>
+                        <TableBody
+                            items={floors}
+                            isLoading={loading}
+                            emptyContent={
+                                <div className="py-20 flex flex-col items-center text-center">
+                                    <Search className="text-slate-300 mb-4" size={48} strokeWidth={1} />
+                                    <p className="text-slate-600 font-semibold text-lg">No floors found</p>
+                                    <p className="text-slate-400 text-sm mt-1">This block doesn't have any floors yet.</p>
+                                    {!readOnly && <Button variant="light" color="primary" className="mt-4 font-semibold" onPress={() => handleOpen()}>Create First Floor</Button>}
+                                </div>
+                            }
+                        >
+                            {(floor) => (
+                                <TableRow key={floor.FloorID}>
+                                    <TableCell>
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 ring-1 ring-blue-100">
+                                                <Layers size={22} strokeWidth={2} />
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-slate-800 text-lg">Floor {floor.FloorNumber}</p>
+                                                <div className="flex items-center gap-2 mt-0.5">
+                                                    <span className="text-xs font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200">ID: {floor.FloorID}</span>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                </TableCell>
-                                <TableCell>
-                                    <div className="flex items-center gap-2">
-                                        <Building2 size={14} className="text-slate-400" />
-                                        <span className="text-slate-700 font-semibold">
-                                            {blocks.find(b => b.BlockID === floor.BlockID)?.BlockName}
-                                        </span>
-                                    </div>
-                                </TableCell>
-                                <TableCell>
-                                    <Chip
-                                        size="md"
-                                        variant="flat"
-                                        color={floor.Status === 'Active' ? "success" : "default"}
-                                        startContent={<div className={`w-2 h-2 rounded-full mr-1 ${floor.Status === 'Active' ? 'bg-success-500' : 'bg-slate-400'}`} />}
-                                        classNames={{ content: "font-semibold text-slate-700" }}
-                                    >
-                                        {floor.Status}
-                                    </Chip>
-                                </TableCell>
-                                <TableCell>
-                                    {!readOnly && (
-                                        <div className="flex justify-end gap-2">
-                                            <Button isIconOnly size="sm" variant="light" onPress={() => handleOpen(floor)} className="text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
-                                                <Edit size={18} strokeWidth={2.5} />
-                                            </Button>
-                                            <Button isIconOnly size="sm" variant="light" color="danger" onPress={() => handleDelete(floor.FloorID)} className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
-                                                <Trash2 size={18} strokeWidth={2.5} />
-                                            </Button>
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center gap-2">
+                                            <Building2 size={14} className="text-slate-400" />
+                                            <span className="text-slate-700 font-semibold">
+                                                {blocks.find(b => b.BlockID === floor.BlockID)?.BlockName}
+                                            </span>
                                         </div>
-                                    )}
-                                </TableCell>
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Chip
+                                            size="md"
+                                            variant="flat"
+                                            color={floor.Status === 'Active' ? "success" : "default"}
+                                            startContent={<div className={`w-2 h-2 rounded-full mr-1 ${floor.Status === 'Active' ? 'bg-success-500' : 'bg-slate-400'}`} />}
+                                            classNames={{ content: "font-semibold text-slate-700" }}
+                                        >
+                                            {floor.Status}
+                                        </Chip>
+                                    </TableCell>
+                                    <TableCell>
+                                        {!readOnly && (
+                                            <div className="flex justify-end gap-2">
+                                                <Button isIconOnly size="sm" variant="light" onPress={() => handleOpen(floor)} className="text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
+                                                    <Edit size={18} strokeWidth={2.5} />
+                                                </Button>
+                                                <Button isIconOnly size="sm" variant="light" color="danger" onPress={() => handleDelete(floor.FloorID)} className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+                                                    <Trash2 size={18} strokeWidth={2.5} />
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+
+                    {/* Table Pagination */}
+                    {totalPages > 1 && (
+                        <div className="flex justify-center p-4 bg-white border border-slate-200 rounded-2xl shadow-sm mt-4">
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    size="sm"
+                                    variant="flat"
+                                    isDisabled={page === 1}
+                                    onPress={() => setPage(page - 1)}
+                                    className="rounded-lg font-bold"
+                                >
+                                    Previous
+                                </Button>
+                                <div className="flex gap-1">
+                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                                        <Button
+                                            key={p}
+                                            size="sm"
+                                            variant={page === p ? "solid" : "light"}
+                                            color={page === p ? "primary" : "default"}
+                                            onPress={() => setPage(p)}
+                                            className={`w-8 h-8 min-w-0 rounded-lg font-bold transition-all ${page === p ? 'shadow-md shadow-blue-500/20' : ''}`}
+                                        >
+                                            {p}
+                                        </Button>
+                                    ))}
+                                </div>
+                                <Button
+                                    size="sm"
+                                    variant="flat"
+                                    isDisabled={page === totalPages}
+                                    onPress={() => setPage(page + 1)}
+                                    className="rounded-lg font-bold"
+                                >
+                                    Next
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </>
             )}
 
             {/* Modal */}
@@ -299,8 +421,10 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                             </ModalHeader>
                             <ModalBody className="space-y-6">
                                 <div className="flex flex-col gap-1.5">
-                                    <label className="text-sm font-semibold text-slate-700 ml-1">Building Block</label>
+                                    <label htmlFor="modal-floor-block-input" className="text-sm font-semibold text-slate-700 ml-1">Building Block</label>
                                     <Autocomplete
+                                        id="modal-floor-block"
+                                        name="BlockID"
                                         placeholder="Search and select a block..."
                                         selectedKey={formData.BlockID ? formData.BlockID.toString() : ""}
                                         onSelectionChange={(key) => setFormData({ ...formData, BlockID: Number(key) })}
@@ -311,6 +435,8 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                                             selectorButton: "text-slate-500"
                                         }}
                                         inputProps={{
+                                            id: "modal-floor-block-input",
+                                            name: "BlockID",
                                             classNames: {
                                                 input: "text-base font-medium text-slate-800 placeholder:text-slate-400",
                                                 inputWrapper: "h-12 bg-white border-1 border-slate-300 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-500 rounded-xl shadow-sm px-4 transition-all"
@@ -332,7 +458,7 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                                             }
                                         }}
                                     >
-                                        {blocks.map((b) => (
+                                        {(blocks || []).map((b) => (
                                             <AutocompleteItem key={b.BlockID} textValue={b.BlockName} description={`${b.floorCount || 0} floors available`} startContent={<Building2 size={20} className="text-slate-400" />}>
                                                 {b.BlockName}
                                             </AutocompleteItem>
@@ -341,11 +467,14 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                                 </div>
 
                                 <div className="flex flex-col gap-1.5">
-                                    <label className="text-sm font-semibold text-slate-700 ml-1">Floor Number</label>
+                                    <label htmlFor="modal-floor-number" className="text-sm font-semibold text-slate-700 ml-1">Floor Number</label>
                                     <Input
+                                        id="modal-floor-number"
+                                        name="FloorNumber"
                                         type="number"
                                         autoFocus
                                         placeholder="e.g. 1"
+                                        aria-label="Floor Number"
                                         variant="bordered"
                                         classNames={{
                                             inputWrapper: "h-12 bg-white border-1 border-slate-300 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-500 rounded-xl shadow-sm px-4 transition-all",

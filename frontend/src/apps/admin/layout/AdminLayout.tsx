@@ -35,17 +35,8 @@ const AdminLayout: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Omni-Search Box */}
-                <div className="hidden md:flex max-w-2xl w-full mx-auto relative bg-[#f1f3f4]  rounded-lg h-12 items-center px-4 focus-within:bg-white  focus-within:shadow-md transition-all duration-200">
-                    <Button isIconOnly size="sm" variant="light" radius="full" className="text-[#5f6368] ">
-                        <Search size={20} />
-                    </Button>
-                    <input
-                        type="text"
-                        placeholder="Search student, rooms, or exams"
-                        className="bg-transparent border-none outline-none w-full ml-2 text-[#202124]  placeholder-[#5f6368]  text-base"
-                    />
-                </div>
+                {/* Omni-Search Box Removed per USER request */}
+
 
                 <div className="flex items-center gap-2">
                     <Button isIconOnly variant="light" radius="full" className="text-[#5f6368]  hover:bg-[#3c4043]/10 ">

@@ -2,16 +2,30 @@ import { Room } from "../models/Room.js";
 import { Block } from "../models/Block.js";
 import { Floor } from "../models/Floor.js";
 import { sequelize } from "../config/database.js";
-import { Transaction } from "sequelize";
+import { Transaction, Op } from "sequelize";
 
 export class RoomRepository {
-    async findByLocation(blockId: number, floorId: number) {
-        return Room.findAll({
-            where: {
-                BlockID: blockId,
-                FloorID: floorId,
-            },
-            order: [[sequelize.col("RoomName"), "ASC"]],
+    async findByLocation(blockId: number, floorId: number, options: { page?: number, limit?: number, search?: string, status?: string } = {}) {
+        const { page = 1, limit = 10, search, status } = options;
+        const offset = (page - 1) * limit;
+
+        const whereClause: any = {
+            BlockID: blockId,
+            FloorID: floorId,
+        };
+
+        if (search) {
+            whereClause.RoomCode = { [Op.like]: `%${search}%` };
+        }
+        if (status) {
+            whereClause.Status = status;
+        }
+
+        return Room.findAndCountAll({
+            where: whereClause,
+            order: [['RoomCode', 'ASC']],
+            limit,
+            offset,
         });
     }
 

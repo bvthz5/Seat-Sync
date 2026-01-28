@@ -12,28 +12,52 @@ import studentRoutes from "./routes/student.routes.js";
 import collegeStructureRoutes from "./routes/collegeStructure.routes.js";
 
 import roomRoutes from "./routes/room.routes.js";
+import structureImportRoutes from "./routes/structureImport.routes.js";
 
 const app = express();
 
 
+// --- CORS Configuration ---
+app.use(cors({
+    origin: (origin, callback) => {
+        // Allow same-origin (origin is undefined)
+        if (!origin) return callback(null, true);
+
+        // Allow any localhost or loopback origin during development
+        if (
+            origin.startsWith('http://localhost') ||
+            origin.startsWith('http://127.0.0.1') ||
+            origin.startsWith('http://[::1]')
+        ) {
+            return callback(null, true);
+        }
+
+        callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"]
+}));
+
 // --- Security Middleware: Helmet ---
-// Sets various HTTP headers to secure the app (e.g. X-Content-Type-Options, X-Frame-Options)
-app.use(helmet());
+app.use(helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" } // Allow cross-origin resources
+}));
+
+// Accept JSON body & Cookies early
+app.use(express.json());
+app.use(cookieParser());
+app.use(hpp());
 
 // --- Security Middleware: Rate Limiter ---
-// Limit repeated requests to public APIs to prevent brute-force attacks/DoS
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per windowMs
-    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+    windowMs: 15 * 60 * 1000,
+    max: 1000, // Increased for development
+    standardHeaders: true,
+    legacyHeaders: false,
     message: "Too many requests from this IP, please try again later."
 });
 app.use("/api", limiter);
-
-// --- Security Middleware: HPP ---
-// Prevent HTTP Parameter Pollution attacks
-app.use(hpp());
 
 // Swagger definition
 const swaggerDefinition = {
@@ -95,40 +119,21 @@ const swaggerSpec = swaggerJsdoc(options);
 // Use swagger-ui-express for your app documentation endpoint
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-// Allow frontend to talk to backend
-// Configure CORS to allow credentials (cookies) and specific origins
-app.use(cors({
-    origin: (origin, callback) => {
-        // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
-
-        // Allow any localhost origin
-        if (/^http:\/\/localhost:\d+$/.test(origin)) {
-            return callback(null, true);
-        }
-
-        // Block other origins
-        callback(new Error('Not allowed by CORS'));
-    },
-    credentials: true, // Allow cookies to be sent/received
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"]
-}));
-
-// Accept JSON body
-app.use(express.json());
-
-// Enable cookie parsing for refresh tokens
-app.use(cookieParser());
-
-import structureImportRoutes from "./routes/structureImport.routes.js";
-
-// Routes
+// Routes (Body parsers already applied)
 app.use("/api/auth", authRoutes);
 app.use("/api/students", studentRoutes);
 app.use("/api/admin/college-structure", collegeStructureRoutes);
 app.use("/api/college-structure/import", structureImportRoutes);
 app.use("/api/rooms", roomRoutes);
+
+// --- Error Handling Middleware ---
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error("GLOBAL ERROR:", err);
+    res.status(err.status || 500).json({
+        message: err.message || "Internal Server Error",
+        error: process.env.NODE_ENV === "development" ? err : {}
+    });
+});
 
 // Health check route
 app.get("/", (req: express.Request, res: express.Response) => {

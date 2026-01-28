@@ -11,9 +11,29 @@ import { Op } from "sequelize";
 
 export const getBlocks = async (req: Request, res: Response) => {
     try {
-        const blocks = await Block.findAll();
+        const page = Number(req.query.page) || 1;
+        const limit = Number(req.query.limit) || 10;
+        const search = req.query.search as string;
+        const status = req.query.status as string;
 
-        const responseData = await Promise.all(blocks.map(async (block) => {
+        const offset = (page - 1) * limit;
+
+        const whereClause: any = {};
+        if (search) {
+            whereClause.BlockName = { [Op.like]: `%${search}%` };
+        }
+        if (status) {
+            whereClause.Status = status;
+        }
+
+        const { count, rows } = await Block.findAndCountAll({
+            where: whereClause,
+            limit,
+            offset,
+            order: [['BlockName', 'ASC']]
+        });
+
+        const responseData = await Promise.all(rows.map(async (block) => {
             const floorCount = await Floor.count({ where: { BlockID: block.BlockID } });
             return {
                 ...block.toJSON(),
@@ -21,8 +41,14 @@ export const getBlocks = async (req: Request, res: Response) => {
             };
         }));
 
-        res.json(responseData);
+        res.json({
+            total: count,
+            pages: Math.ceil(count / limit),
+            currentPage: page,
+            data: responseData
+        });
     } catch (error: any) {
+        console.error("GET BLOCKS ERROR:", error);
         res.status(500).json({ message: error.message });
     }
 };
@@ -36,6 +62,7 @@ export const createBlock = async (req: Request, res: Response) => {
         const block = await Block.create({ BlockName, Status: Status || 'Active' });
         res.status(201).json(block);
     } catch (error: any) {
+        console.error("CREATE BLOCK ERROR:", error);
         res.status(500).json({ message: error.message });
     }
 };
@@ -61,6 +88,7 @@ export const updateBlock = async (req: Request, res: Response) => {
         res.json(block);
 
     } catch (error: any) {
+        console.error("UPDATE BLOCK ERROR:", error);
         res.status(500).json({ message: error.message });
     }
 };
@@ -85,14 +113,39 @@ export const deleteBlock = async (req: Request, res: Response) => {
 
 export const getFloors = async (req: Request, res: Response) => {
     try {
+        const page = Number(req.query.page) || 1;
+        const limit = Number(req.query.limit) || 10;
+        const search = req.query.search as string;
+        const status = req.query.status as string;
         const blockId = req.query.blockId ? Number(req.query.blockId) : undefined;
-        const whereClause = blockId ? { BlockID: blockId } : {};
 
-        const floors = await Floor.findAll({
+        const offset = (page - 1) * limit;
+
+        const whereClause: any = {};
+        if (blockId) whereClause.BlockID = blockId;
+        if (status) whereClause.Status = status;
+        if (search) {
+            // Searching by floor number is tricky with LIKE if it's Int, 
+            // but we can try to cast or just do exact match if it looks like a number
+            if (!isNaN(Number(search))) {
+                whereClause.FloorNumber = Number(search);
+            }
+        }
+
+        const { count, rows } = await Floor.findAndCountAll({
             where: whereClause,
-            include: [{ model: Block, attributes: ['BlockName'] }]
+            include: [{ model: Block, attributes: ['BlockName'] }],
+            limit,
+            offset,
+            order: [['BlockID', 'ASC'], ['FloorNumber', 'ASC']]
         });
-        res.json(floors);
+
+        res.json({
+            total: count,
+            pages: Math.ceil(count / limit),
+            currentPage: page,
+            data: rows
+        });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
     }

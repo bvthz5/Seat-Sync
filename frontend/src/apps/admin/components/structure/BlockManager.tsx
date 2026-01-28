@@ -19,11 +19,39 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
         Status: 'Active'
     });
 
-    const fetchBlocks = async () => {
+    // --- Pagination & Filter State ---
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalItems, setTotalItems] = useState(0);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [statusFilter, setStatusFilter] = useState("all");
+    const [limit] = useState(10);
+
+    const fetchBlocks = async (currentPage = 1, search = "", status = "all") => {
         try {
             setLoading(true);
-            const data = await structureService.getBlocks();
-            setBlocks(data);
+            const params: any = {
+                page: currentPage,
+                limit
+            };
+            if (search) params.search = search;
+            if (status !== "all") params.status = status;
+
+            const response = await structureService.getBlocks(params);
+            if (response && response.data && Array.isArray(response.data)) {
+                setBlocks(response.data);
+                setTotalPages(response.pages || 1);
+                setTotalItems(response.total || response.data.length);
+            } else if (Array.isArray(response)) {
+                // Fallback for old unpaginated API
+                setBlocks(response);
+                setTotalPages(1);
+                setTotalItems(response.length);
+            } else {
+                setBlocks([]);
+                setTotalPages(1);
+                setTotalItems(0);
+            }
         } catch (error) {
             console.error("Failed to fetch blocks", error);
         } finally {
@@ -32,8 +60,8 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
     };
 
     useEffect(() => {
-        fetchBlocks();
-    }, []);
+        fetchBlocks(page, searchQuery, statusFilter);
+    }, [page, searchQuery, statusFilter]);
 
     const handleOpen = (block?: Block) => {
         if (readOnly) return;
@@ -61,7 +89,7 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
                 await structureService.createBlock(formData);
                 toast.success("Block created successfully");
             }
-            await fetchBlocks();
+            await fetchBlocks(page, searchQuery, statusFilter);
             onClose();
         } catch (error: any) {
             toast.error(error.response?.data?.message || "Operation failed");
@@ -75,7 +103,7 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
         try {
             await structureService.deleteBlock(id);
             toast.success("Block deleted");
-            fetchBlocks();
+            await fetchBlocks(page, searchQuery, statusFilter);
         } catch (error: any) {
             toast.error(error.response?.data?.message || "Delete failed");
         }
@@ -103,17 +131,41 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
                         <p className="text-slate-500 font-medium">Define major campus buildings & structures</p>
                     </div>
                 </div>
-                {!readOnly && (
-                    <Button
-                        onPress={() => handleOpen()}
-                        color="primary"
-                        size="md"
-                        startContent={<Plus size={18} strokeWidth={2.5} />}
-                        className="font-semibold shadow-lg shadow-blue-600/20 text-white z-10"
-                    >
-                        Add Block
-                    </Button>
-                )}
+                <div className="flex flex-col md:flex-row items-center gap-4 z-10 w-full md:w-auto">
+                    <Input
+                        id="block-search"
+                        name="block-search"
+                        placeholder="Search blocks..."
+                        aria-label="Search blocks"
+                        size="sm"
+                        startContent={<Search size={18} className="text-slate-400" />}
+                        className="max-w-xs"
+                        variant="bordered"
+                        value={searchQuery}
+                        onValueChange={(v) => { setSearchQuery(v); setPage(1); }}
+                        classNames={{
+                            inputWrapper: "bg-white border-slate-200 shadow-sm rounded-xl h-11"
+                        }}
+                    />
+                    {!readOnly && (
+                        <Button
+                            onPress={() => handleOpen()}
+                            color="primary"
+                            size="md"
+                            startContent={<Plus size={18} strokeWidth={2.5} />}
+                            className="font-semibold shadow-lg shadow-blue-600/20 text-white"
+                        >
+                            Add Block
+                        </Button>
+                    )}
+                </div>
+            </div>
+
+            {/* Pagination Info */}
+            <div className="flex justify-between items-center px-4 -mb-2">
+                <div className="text-sm font-medium text-slate-500">
+                    Showing <span className="text-slate-900 font-bold">{(blocks?.length || 0) === 0 ? 0 : (page - 1) * limit + 1}</span> - <span className="text-slate-900 font-bold">{Math.min(page * limit, totalItems)}</span> of <span className="text-slate-900 font-bold">{totalItems}</span>
+                </div>
             </div>
 
             {/* Table */}
@@ -188,6 +240,46 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
                 </TableBody>
             </Table>
 
+            {/* Table Pagination */}
+            {totalPages > 1 && (
+                <div className="flex justify-center p-4 bg-white border border-slate-200 rounded-2xl shadow-sm">
+                    <div className="flex items-center gap-2">
+                        <Button
+                            size="sm"
+                            variant="flat"
+                            isDisabled={page === 1}
+                            onPress={() => setPage(page - 1)}
+                            className="rounded-lg font-bold"
+                        >
+                            Previous
+                        </Button>
+                        <div className="flex gap-1">
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                                <Button
+                                    key={p}
+                                    size="sm"
+                                    variant={page === p ? "solid" : "light"}
+                                    color={page === p ? "primary" : "default"}
+                                    onPress={() => setPage(p)}
+                                    className={`w-8 h-8 min-w-0 rounded-lg font-bold transition-all ${page === p ? 'shadow-md shadow-blue-500/20' : ''}`}
+                                >
+                                    {p}
+                                </Button>
+                            ))}
+                        </div>
+                        <Button
+                            size="sm"
+                            variant="flat"
+                            isDisabled={page === totalPages}
+                            onPress={() => setPage(page + 1)}
+                            className="rounded-lg font-bold"
+                        >
+                            Next
+                        </Button>
+                    </div>
+                </div>
+            )}
+
             {/* Modal */}
             <Modal
                 isOpen={isOpen}
@@ -211,10 +303,13 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
                             </ModalHeader>
                             <ModalBody className="py-6">
                                 <div className="flex flex-col gap-2">
-                                    <label className="text-sm font-medium text-slate-700">Block Name</label>
+                                    <label htmlFor="modal-block-name" className="text-sm font-medium text-slate-700">Block Name</label>
                                     <Input
+                                        id="modal-block-name"
+                                        name="BlockName"
                                         autoFocus
                                         placeholder="e.g. Science Block, Main Building"
+                                        aria-label="Block Name"
                                         variant="bordered"
                                         classNames={{
                                             inputWrapper: "h-12 bg-white border-1 border-slate-300 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-500 rounded-xl shadow-sm px-4 transition-all"
