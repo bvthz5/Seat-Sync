@@ -53,47 +53,50 @@ export class RoomService {
     }
 
     async bulkCreateRooms(data: any) {
-        console.log("Service Bulk Data:", JSON.stringify(data));
-        const blockId = data.blockId || data.BlockID;
-        const floorId = data.floorId || data.FloorID;
+        const blockId = Number(data.blockId || data.BlockID);
+        const floorId = Number(data.floorId || data.FloorID);
 
-        if (!data.rooms || data.rooms.length === 0) {
+        if (!data.rooms || !Array.isArray(data.rooms) || data.rooms.length === 0) {
             throw new Error("No rooms provided in payload");
         }
 
+        if (!blockId || !floorId) {
+            throw new Error(`Missing blockId (${blockId}) or floorId (${floorId}) context`);
+        }
+
+        // 1. Validate Floor belongs to Block
+        const floor = await Floor.findOne({ where: { FloorID: floorId, BlockID: blockId } });
+        if (!floor) throw new Error("Invalid floor for selected block");
+
         const transaction = await sequelize.transaction();
         try {
-            // 1. Validate Floor belongs to Block
-            if (!blockId || !floorId) throw new Error(`Missing blockId (${blockId}) or floorId (${floorId})`);
-
-            const floor = await Floor.findOne({ where: { FloorID: floorId, BlockID: blockId }, transaction });
-            if (!floor) throw new Error("Invalid floor for selected block");
-
-            // 2. Normalize and check duplicates in payload
-            const codesSeen = new Set<string>();
             const roomsToCreate = [];
+            const codesInPayload = new Set<string>();
 
             for (const r of data.rooms) {
-                const code = r.roomCode.trim();
-                const capacity = r.capacity; // Capacity is per-room now
+                const code = r.roomCode?.toString().trim();
+                const capacity = Number(r.capacity);
 
-                // Basic validation
                 if (!code) throw new Error("Room code cannot be empty");
-                if (!capacity || capacity <= 0) throw new Error(`Invalid capacity for room '${code}'`);
+                if (isNaN(capacity) || capacity <= 0) throw new Error(`Invalid capacity (${r.capacity}) for room '${code}'`);
 
-                // Payload duplicate check
-                if (codesSeen.has(code.toLowerCase())) {
-                    throw new Error(`Duplicate room code '${code}' in payload`);
+                if (codesInPayload.has(code.toLowerCase())) {
+                    throw new Error(`Duplicate room code '${code}' in your list`);
                 }
-                codesSeen.add(code.toLowerCase());
+                codesInPayload.add(code.toLowerCase());
 
-                // Prepare object
+                // Check DB for each (could be optimized with Op.in, but this is clearer for errors)
+                const existing = await roomRepo.findByCode(code, floorId);
+                if (existing) {
+                    throw new Error(`Room '${code}' already exists on this floor`);
+                }
+
                 roomsToCreate.push({
                     RoomCode: code,
                     BlockID: blockId,
                     FloorID: floorId,
                     Capacity: capacity,
-                    ExamUsable: true, // Default to true for bulk
+                    ExamUsable: true,
                     Status: "Active",
                     TotalRows: 0,
                     BenchesPerRow: 0,
@@ -101,21 +104,7 @@ export class RoomService {
                 });
             }
 
-            // 3. DB Duplicate Check (Check all at once or one by one)
-            // Checking one by one in repository is safer to catch specific conflicts
-            for (const r of roomsToCreate) {
-                const existing = await roomRepo.findByCode(r.RoomCode, floorId); // This needs to be transaction aware if possible, but findByCode is read-only.
-                // ideally roomRepo.findByCode should accept transaction or we just trust the read. 
-                // For stricter safety, we can rely on unique constraint violation from catch block, 
-                // but checking here gives better error message.
-                if (existing) {
-                    throw new Error(`Room code '${r.RoomCode}' already exists on this floor`);
-                }
-            }
-
-            // 4. Bulk Insert
             const created = await roomRepo.bulkCreate(roomsToCreate, transaction);
-
             await transaction.commit();
             return created;
 
@@ -126,17 +115,26 @@ export class RoomService {
     }
 
     async updateRoom(roomId: number, updates: any) {
-        // TODO: If changing Capacity, warn/check usage?
-        // For now, allow update.
-        return roomRepo.update(roomId, updates);
+        const room = await roomRepo.findById(roomId);
+        if (!room) throw new Error("Room not found");
+
+        // Map frontend fields to backend model if needed
+        const data: any = {};
+        if (updates.roomCode !== undefined) data.RoomCode = updates.roomCode;
+        if (updates.RoomCode !== undefined) data.RoomCode = updates.RoomCode;
+        if (updates.capacity !== undefined) data.Capacity = Number(updates.capacity);
+        if (updates.Capacity !== undefined) data.Capacity = Number(updates.Capacity);
+        if (updates.examUsable !== undefined) data.ExamUsable = !!updates.examUsable;
+        if (updates.ExamUsable !== undefined) data.ExamUsable = !!updates.ExamUsable;
+        if (updates.status !== undefined) data.Status = updates.status;
+        if (updates.Status !== undefined) data.Status = updates.Status;
+
+        return room.update(data);
     }
 
     async disableRoom(roomId: number) {
         const room = await roomRepo.findById(roomId);
         if (!room) throw new Error("Room not found");
-
-        // Check if room is in use (Mock implementation, requires Seat/Exam/Allocation models)
-        // For now, we update status
         return room.update({ Status: "Inactive" });
     }
 }

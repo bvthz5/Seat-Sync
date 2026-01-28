@@ -11,11 +11,10 @@ export const getRooms = async (req: Request, res: Response) => {
         }
 
         const rooms = await roomService.getRooms(Number(blockId), Number(floorId));
-        res.json(rooms); // Returns mapped data if repo maps it, currently repo returns Room instances
-        // The repo findByLocation returns Room instances with Block/Floor included. 
-        // We can just return it or transform it. The prompt didn't specify strict response shape separate from DB.
+        res.json(rooms);
     } catch (error: any) {
-        res.status(500).json({ message: error.message });
+        console.error("GET ROOMS ERROR:", error);
+        res.status(500).json({ message: error.message || "Internal Server Error" });
     }
 };
 
@@ -37,8 +36,6 @@ export const createRoom = async (req: Request, res: Response) => {
 };
 
 export const bulkCreateRooms = async (req: Request, res: Response) => {
-    console.log("--- BULK CREATE HIT ---");
-    console.log("BODY:", JSON.stringify(req.body));
     try {
         const { blockId, BlockID, floorId, FloorID, rooms } = req.body;
         // Construct clean payload to avoid any hidden prop issues
@@ -47,7 +44,6 @@ export const bulkCreateRooms = async (req: Request, res: Response) => {
             floorId: floorId || FloorID,
             rooms: rooms
         };
-        console.log("Clean Payload:", JSON.stringify(cleanPayload));
 
         const result = await roomService.bulkCreateRooms(cleanPayload);
         res.status(201).json(result);

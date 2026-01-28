@@ -11,13 +11,12 @@ export class RoomRepository {
                 BlockID: blockId,
                 FloorID: floorId,
             },
-            order: [["RoomCode", "ASC"]],
+            order: [[sequelize.col("RoomName"), "ASC"]],
         });
     }
 
     async findByCode(roomCode: string, floorId: number) {
-        // console.log(`Repo: findByCode code=${roomCode} floor=${floorId} type=${typeof floorId}`);
-        if (floorId === undefined) console.error("Repo: floorId IS UNDEFINED");
+        if (!floorId) return null;
         return Room.findOne({
             where: {
                 RoomCode: roomCode,
