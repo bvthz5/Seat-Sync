@@ -21,7 +21,14 @@ export const getRooms = async (req: Request, res: Response) => {
 
 export const createRoom = async (req: Request, res: Response) => {
     try {
-        const newRoom = await roomService.createRoom(req.body);
+        const { BlockID, FloorID, RoomCode, Capacity, ExamUsable } = req.body;
+        const newRoom = await roomService.createRoom({
+            blockId: BlockID,
+            floorId: FloorID,
+            roomCode: RoomCode,
+            capacity: Capacity,
+            isExamUsable: ExamUsable
+        });
         res.status(201).json(newRoom);
     } catch (error: any) {
         // Simple error handling, could be improved with custom error classes
@@ -30,11 +37,28 @@ export const createRoom = async (req: Request, res: Response) => {
 };
 
 export const bulkCreateRooms = async (req: Request, res: Response) => {
+    console.log("--- BULK CREATE HIT ---");
+    console.log("BODY:", JSON.stringify(req.body));
     try {
-        const result = await roomService.bulkCreateRooms(req.body);
+        const { blockId, BlockID, floorId, FloorID, rooms } = req.body;
+        // Construct clean payload to avoid any hidden prop issues
+        const cleanPayload = {
+            blockId: blockId || BlockID,
+            floorId: floorId || FloorID,
+            rooms: rooms
+        };
+        console.log("Clean Payload:", JSON.stringify(cleanPayload));
+
+        const result = await roomService.bulkCreateRooms(cleanPayload);
         res.status(201).json(result);
     } catch (error: any) {
-        res.status(400).json({ message: error.message });
+        console.error("BULK FAIL TRACE:", error);
+        res.status(400).json({
+            message: error?.message || "Unknown Error",
+            name: error?.name,
+            str: String(error),
+            stack: error?.stack
+        });
     }
 };
 

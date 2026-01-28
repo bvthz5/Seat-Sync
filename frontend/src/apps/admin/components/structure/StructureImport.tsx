@@ -243,10 +243,10 @@ export const StructureImport: React.FC<{ onChange?: () => void }> = ({ onChange 
                                 <Button variant="light" onPress={onClose} className="font-semibold text-slate-500">Cancel</Button>
                                 <Button
                                     color="primary"
-                                    className="font-bold shadow-lg shadow-blue-500/20"
                                     isDisabled={!file || errors.length > 0 || loading}
                                     isLoading={loading}
                                     onPress={() => handleUpload(onClose)}
+                                    className="font-bold shadow-lg shadow-blue-500/20 text-white"
                                 >
                                     Confirm Import
                                 </Button>

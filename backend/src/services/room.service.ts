@@ -52,7 +52,11 @@ export class RoomService {
         });
     }
 
-    async bulkCreateRooms(data: BulkCreateRoomDTO) {
+    async bulkCreateRooms(data: any) {
+        console.log("Service Bulk Data:", JSON.stringify(data));
+        const blockId = data.blockId || data.BlockID;
+        const floorId = data.floorId || data.FloorID;
+
         if (!data.rooms || data.rooms.length === 0) {
             throw new Error("No rooms provided in payload");
         }
@@ -60,7 +64,9 @@ export class RoomService {
         const transaction = await sequelize.transaction();
         try {
             // 1. Validate Floor belongs to Block
-            const floor = await Floor.findOne({ where: { FloorID: data.floorId, BlockID: data.blockId }, transaction });
+            if (!blockId || !floorId) throw new Error(`Missing blockId (${blockId}) or floorId (${floorId})`);
+
+            const floor = await Floor.findOne({ where: { FloorID: floorId, BlockID: blockId }, transaction });
             if (!floor) throw new Error("Invalid floor for selected block");
 
             // 2. Normalize and check duplicates in payload
@@ -84,8 +90,8 @@ export class RoomService {
                 // Prepare object
                 roomsToCreate.push({
                     RoomCode: code,
-                    BlockID: data.blockId,
-                    FloorID: data.floorId,
+                    BlockID: blockId,
+                    FloorID: floorId,
                     Capacity: capacity,
                     ExamUsable: true, // Default to true for bulk
                     Status: "Active",
@@ -98,7 +104,7 @@ export class RoomService {
             // 3. DB Duplicate Check (Check all at once or one by one)
             // Checking one by one in repository is safer to catch specific conflicts
             for (const r of roomsToCreate) {
-                const existing = await roomRepo.findByCode(r.RoomCode, data.floorId); // This needs to be transaction aware if possible, but findByCode is read-only.
+                const existing = await roomRepo.findByCode(r.RoomCode, floorId); // This needs to be transaction aware if possible, but findByCode is read-only.
                 // ideally roomRepo.findByCode should accept transaction or we just trust the read. 
                 // For stricter safety, we can rely on unique constraint violation from catch block, 
                 // but checking here gives better error message.

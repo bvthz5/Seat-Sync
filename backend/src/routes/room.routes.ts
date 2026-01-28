@@ -98,6 +98,8 @@ router.get("/", AuthMiddleware.requireAuth, getRooms);
  *     responses:
  *       201:
  *         description: Room created
+ *       400:
+ *         description: Error creating room (e.g. duplicate code)
  *       403:
  *         description: Root Admin required
  */
@@ -130,6 +132,9 @@ router.post("/", AuthMiddleware.requireRootAuth, createRoom);
  *                 type: array
  *                 items:
  *                   type: object
+ *                   required:
+ *                     - roomCode
+ *                     - capacity
  *                   properties:
  *                     roomCode:
  *                       type: string
@@ -176,6 +181,9 @@ router.post("/bulk", AuthMiddleware.requireRootAuth, bulkCreateRooms);
  *                 type: integer
  *               ExamUsable:
  *                 type: boolean
+ *               Status:
+ *                 type: string
+ *                 enum: [Active, Inactive]
  *     responses:
  *       200:
  *         description: Room updated

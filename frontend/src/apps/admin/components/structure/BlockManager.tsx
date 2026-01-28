@@ -91,14 +91,16 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
     return (
         <div className="flex flex-col gap-6">
             {/* Header Card */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
-                <div className="flex items-center gap-4">
-                    <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
-                        <Building2 size={24} strokeWidth={2} />
+            <div className="bg-gradient-to-br from-white to-blue-50/20 p-6 rounded-2xl border border-slate-100 shadow-lg shadow-slate-100/50 flex flex-col md:flex-row justify-between items-center gap-4 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-blue-100/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+
+                <div className="flex items-center gap-5 z-10">
+                    <div className="p-3.5 bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-xl shadow-lg shadow-blue-500/20 ring-4 ring-blue-50">
+                        <Building2 size={26} strokeWidth={2} />
                     </div>
                     <div>
                         <h3 className="text-xl font-bold text-slate-800 tracking-tight">Block Management</h3>
-                        <p className="text-slate-500 font-medium">Define major campus buildings</p>
+                        <p className="text-slate-500 font-medium">Define major campus buildings & structures</p>
                     </div>
                 </div>
                 {!readOnly && (
@@ -107,7 +109,7 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
                         color="primary"
                         size="md"
                         startContent={<Plus size={18} strokeWidth={2.5} />}
-                        className="font-semibold shadow-md shadow-blue-500/20"
+                        className="font-semibold shadow-lg shadow-blue-600/20 text-white z-10"
                     >
                         Add Block
                     </Button>
@@ -121,7 +123,7 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
                     wrapper: "bg-white shadow-sm border border-slate-200 rounded-2xl p-0 overflow-hidden",
                     th: "bg-slate-50 text-slate-600 font-semibold text-xs py-4 px-6 border-b border-slate-200",
                     td: "py-4 px-6 border-b border-slate-100 group-last:border-0",
-                    tr: "hover:bg-slate-50/50 transition-colors"
+                    tr: "hover:bg-slate-50/80 transition-colors cursor-default"
                 }}
             >
                 <TableHeader columns={columns}>
@@ -215,7 +217,7 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
                                         placeholder="e.g. Science Block, Main Building"
                                         variant="bordered"
                                         classNames={{
-                                            inputWrapper: "bg-white border-1 border-slate-300 shadow-sm hover:border-blue-400 focus-within:!border-blue-500 rounded-xl transition-all"
+                                            inputWrapper: "h-12 bg-white border-1 border-slate-300 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-500 rounded-xl shadow-sm px-4 transition-all"
                                         }}
                                         value={formData.BlockName}
                                         onValueChange={(val) => setFormData({ ...formData, BlockName: val })}
@@ -249,7 +251,7 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
                                 <Button color="danger" variant="light" onPress={onClose} className="font-medium">
                                     Cancel
                                 </Button>
-                                <Button color="primary" onPress={() => handleSubmit(onClose)} className="font-semibold shadow-lg shadow-blue-500/20">
+                                <Button color="primary" onPress={() => handleSubmit(onClose)} className="font-semibold shadow-lg shadow-blue-500/20 text-white">
                                     {editingBlock ? "Update Block" : "Create Block"}
                                 </Button>
                             </ModalFooter>

@@ -33,7 +33,7 @@ export const createBlock = async (req: Request, res: Response) => {
         const existing = await Block.findOne({ where: { BlockName } });
         if (existing) return res.status(400).json({ message: "Block Name must be unique" });
 
-        const block = await Block.create({ BlockName, Status });
+        const block = await Block.create({ BlockName, Status: Status || 'Active' });
         res.status(201).json(block);
     } catch (error: any) {
         res.status(500).json({ message: error.message });
@@ -53,11 +53,13 @@ export const updateBlock = async (req: Request, res: Response) => {
             if (existing) return res.status(400).json({ message: "Block Name already taken" });
         }
 
+
         block.BlockName = BlockName;
-        block.Status = Status;
+        block.Status = Status || block.Status;
         await block.save();
 
         res.json(block);
+
     } catch (error: any) {
         res.status(500).json({ message: error.message });
     }
@@ -103,7 +105,7 @@ export const createFloor = async (req: Request, res: Response) => {
         const existing = await Floor.findOne({ where: { BlockID, FloorNumber } });
         if (existing) return res.status(400).json({ message: "Floor Number already exists in this block" });
 
-        const floor = await Floor.create({ BlockID, FloorNumber, Status });
+        const floor = await Floor.create({ BlockID, FloorNumber, Status: Status || 'Active' });
         res.status(201).json(floor);
     } catch (error: any) {
         res.status(500).json({ message: error.message });
@@ -130,9 +132,11 @@ export const updateFloor = async (req: Request, res: Response) => {
             }
         }
 
-        floor.FloorNumber = FloorNumber;
-        floor.Status = Status;
+
+        if (FloorNumber !== undefined) floor.FloorNumber = FloorNumber;
+        if (Status !== undefined) floor.Status = Status;
         await floor.save();
+
 
         res.json(floor);
     } catch (error: any) {

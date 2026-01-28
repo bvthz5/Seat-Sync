@@ -64,6 +64,7 @@ Room.init(
     RoomCode: {
       type: DataTypes.STRING(50),
       allowNull: false,
+      field: 'RoomName'
     },
     Capacity: {
       type: DataTypes.INTEGER,
@@ -106,7 +107,7 @@ Room.init(
     indexes: [
       {
         unique: true,
-        fields: ['RoomCode', 'FloorID']
+        fields: ['RoomName', 'FloorID'] // Using actual DB column name since RoomCode maps to RoomName
       }
     ]
   }

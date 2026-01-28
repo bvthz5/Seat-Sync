@@ -124,8 +124,10 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
     return (
         <div className="flex flex-col gap-6">
             {/* Control Panel */}
-            <div className={`p-6 rounded-2xl border flex flex-col md:flex-row gap-6 justify-between items-end transition-all ${!selectedBlockId ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200 shadow-sm'}`}>
-                <div className="flex flex-col gap-3 w-full md:w-1/2">
+            <div className={`p-6 rounded-2xl border flex flex-col md:flex-row gap-6 justify-between items-end transition-all relative overflow-hidden ${!selectedBlockId ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200 shadow-lg shadow-slate-100/50'}`}>
+                {selectedBlockId && <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50/50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />}
+
+                <div className="flex flex-col gap-3 w-full md:w-1/2 z-10">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
                         <Building2 size={14} /> Select Building Block
                     </label>
@@ -176,7 +178,7 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                         color="primary"
                         size="lg"
                         startContent={<Plus size={20} strokeWidth={2.5} />}
-                        className="font-bold shadow-lg shadow-blue-500/20 rounded-xl h-12 px-8"
+                        className="font-bold shadow-lg shadow-blue-500/20 rounded-xl h-12 px-8 text-white z-10"
                     >
                         Add Floor
                     </Button>
@@ -378,7 +380,7 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                             </ModalBody>
                             <ModalFooter>
                                 <Button color="danger" variant="light" onPress={onClose} className="font-medium">Cancel</Button>
-                                <Button color="primary" onPress={() => handleSubmit(onClose)} className="font-semibold shadow-lg shadow-blue-500/20">
+                                <Button color="primary" onPress={() => handleSubmit(onClose)} className="font-semibold shadow-lg shadow-blue-500/20 text-white">
                                     {editingFloor ? "Update Floor" : "Create Floor"}
                                 </Button>
                             </ModalFooter>

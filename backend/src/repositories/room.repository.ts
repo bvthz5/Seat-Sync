@@ -11,15 +11,13 @@ export class RoomRepository {
                 BlockID: blockId,
                 FloorID: floorId,
             },
-            include: [
-                { model: Block, attributes: ["BlockName"] },
-                { model: Floor, attributes: ["FloorNumber"] },
-            ],
             order: [["RoomCode", "ASC"]],
         });
     }
 
     async findByCode(roomCode: string, floorId: number) {
+        // console.log(`Repo: findByCode code=${roomCode} floor=${floorId} type=${typeof floorId}`);
+        if (floorId === undefined) console.error("Repo: floorId IS UNDEFINED");
         return Room.findOne({
             where: {
                 RoomCode: roomCode,

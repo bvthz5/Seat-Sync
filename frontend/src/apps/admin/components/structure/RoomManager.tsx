@@ -258,61 +258,136 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
     return (
         <div className="flex flex-col gap-6">
             {/* Top Filter Section */}
-            <div className={`p-6 rounded-2xl border flex flex-col md:flex-row gap-6 justify-between items-end transition-all ${!selectedFloorId ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200 shadow-sm'}`}>
-                {/* ... (Existing Filter UI) ... */}
-                <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto flex-1">
-                    <div className="flex flex-col gap-3 w-full md:w-72">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                            <Building2 size={14} /> Select Block
-                        </label>
-                        <Autocomplete
-                            aria-label="Select Block"
-                            placeholder="Choose a block..."
-                            variant="bordered"
-                            selectedKey={selectedBlockId}
-                            onSelectionChange={(key) => setSelectedBlockId(key ? key.toString() : "")}
-                            classNames={{ base: "max-w-full", listboxWrapper: "max-h-[320px]", selectorButton: "text-slate-500" }}
-                            inputProps={{ classNames: { input: "text-base font-medium text-slate-700 placeholder:text-slate-400", inputWrapper: "bg-white h-12 min-h-12 rounded-xl border-1 border-slate-300 shadow-sm transition-all" } }}
-                        >
-                            {blocks.map((b) => <AutocompleteItem key={b.BlockID} textValue={b.BlockName}>{b.BlockName}</AutocompleteItem>)}
-                        </Autocomplete>
+            <div className="p-1 rounded-3xl bg-gradient-to-b from-white to-slate-50 border border-slate-200 shadow-sm relative overflow-visible z-20">
+                <div className="bg-white/50 backdrop-blur-xl rounded-[20px] p-5 flex flex-col md:flex-row gap-6 justify-between items-end">
+
+                    {/* Visual Decor */}
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50/50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 -z-10" />
+
+                    <div className="flex flex-col md:flex-row gap-5 w-full md:w-auto flex-1 z-10">
+                        {/* Block Selector */}
+                        <div className="flex flex-col gap-2 w-full md:w-72">
+                            <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
+                                <Building2 size={12} strokeWidth={2.5} /> Building Block
+                            </label>
+                            <Autocomplete
+                                aria-label="Select Block"
+                                placeholder="Select building..."
+                                variant="bordered"
+                                selectedKey={selectedBlockId}
+                                onSelectionChange={(key) => setSelectedBlockId(key ? key.toString() : "")}
+                                classNames={{
+                                    base: "max-w-full",
+                                    selectorButton: "text-slate-400 hover:text-blue-600 transition-colors"
+                                }}
+                                inputProps={{
+                                    classNames: {
+                                        input: "text-base font-semibold text-slate-700 placeholder:text-slate-400",
+                                        inputWrapper: "bg-white h-[52px] rounded-xl border-1 border-slate-200 data-[hover=true]:border-blue-300 group-data-[focus=true]:border-blue-500 group-data-[focus=true]:shadow-md shadow-sm transition-all duration-200"
+                                    }
+                                }}
+                                listboxProps={{
+                                    itemClasses: {
+                                        base: "rounded-lg data-[hover=true]:bg-blue-50 data-[hover=true]:text-blue-600 px-3 py-2.5 transition-colors mb-0.5",
+                                        title: "font-bold text-slate-700",
+                                        description: "text-xs font-medium text-slate-400"
+                                    }
+                                }}
+                                popoverProps={{
+                                    offset: 10,
+                                    classNames: {
+                                        content: "bg-white p-1.5 border border-slate-100 shadow-2xl rounded-2xl min-w-[300px]"
+                                    }
+                                }}
+                            >
+                                {blocks.map((b) => (
+                                    <AutocompleteItem
+                                        key={b.BlockID}
+                                        textValue={b.BlockName}
+                                        description={`${b.floorCount || 0} floors configured`}
+                                        startContent={<Building2 size={18} className="text-slate-300 group-data-[hover=true]:text-blue-400" />}
+                                    >
+                                        {b.BlockName}
+                                    </AutocompleteItem>
+                                ))}
+                            </Autocomplete>
+                        </div>
+
+                        {/* Floor Selector */}
+                        <div className="flex flex-col gap-2 w-full md:w-72">
+                            <label className={`text-[11px] font-bold uppercase tracking-widest flex items-center gap-1.5 ml-1 ${!selectedBlockId ? 'text-slate-300' : 'text-slate-400'}`}>
+                                <Layers size={12} strokeWidth={2.5} /> Floor Level
+                            </label>
+                            <Autocomplete
+                                aria-label="Select Floor"
+                                placeholder="Select floor..."
+                                isDisabled={!selectedBlockId}
+                                variant="bordered"
+                                selectedKey={selectedFloorId}
+                                onSelectionChange={(key) => setSelectedFloorId(key ? key.toString() : "")}
+                                classNames={{
+                                    base: "max-w-full",
+                                    selectorButton: "text-slate-400 hover:text-blue-600 transition-colors"
+                                }}
+                                inputProps={{
+                                    classNames: {
+                                        input: "text-base font-semibold text-slate-700 placeholder:text-slate-400",
+                                        inputWrapper: `h-[52px] rounded-xl border-1 transition-all duration-200 ${!selectedBlockId ? 'bg-slate-50 border-slate-100 text-slate-300' : 'bg-white border-slate-200 hover:border-blue-300 group-data-[focus=true]:border-blue-500 group-data-[focus=true]:shadow-md shadow-sm'}`
+                                    }
+                                }}
+                                listboxProps={{
+                                    itemClasses: {
+                                        base: "rounded-lg data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-600 px-3 py-2.5 transition-colors mb-0.5",
+                                        title: "font-bold text-slate-700",
+                                    }
+                                }}
+                                popoverProps={{
+                                    offset: 10,
+                                    classNames: {
+                                        content: "bg-white p-1.5 border border-slate-100 shadow-2xl rounded-2xl min-w-[240px]"
+                                    }
+                                }}
+                            >
+                                {floors.map((f) => (
+                                    <AutocompleteItem
+                                        key={f.FloorID}
+                                        textValue={`Floor ${f.FloorNumber}`}
+                                        startContent={<Layers size={18} className="text-slate-300 group-data-[hover=true]:text-indigo-400" />}
+                                    >
+                                        {`Floor ${f.FloorNumber}`}
+                                    </AutocompleteItem>
+                                ))}
+                            </Autocomplete>
+                        </div>
                     </div>
-                    <div className="flex flex-col gap-3 w-full md:w-72">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                            <Layers size={14} /> Select Floor
-                        </label>
-                        <Autocomplete
-                            aria-label="Select Floor"
-                            placeholder="Choose a floor..."
-                            isDisabled={!selectedBlockId}
-                            variant="bordered"
-                            selectedKey={selectedFloorId}
-                            onSelectionChange={(key) => setSelectedFloorId(key ? key.toString() : "")}
-                            classNames={{ base: "max-w-full", listboxWrapper: "max-h-[320px]", selectorButton: "text-slate-500" }}
-                            inputProps={{
-                                classNames: {
-                                    input: "text-base font-medium text-slate-700 placeholder:text-slate-400",
-                                    inputWrapper: `h-12 min-h-12 rounded-xl border-1 border-slate-300 shadow-sm transition-all ${!selectedBlockId ? 'bg-slate-100' : 'bg-white'}`
-                                }
-                            }}
+
+                    {!readOnly && selectedFloorId && (
+                        <Button
+                            onPress={() => handleOpen()}
+                            color="primary"
+                            size="lg"
+                            startContent={<Plus size={20} strokeWidth={2.5} />}
+                            className="font-bold shadow-lg shadow-blue-600/20 rounded-xl h-[52px] px-8 text-white z-10 bg-gradient-to-r from-blue-600 to-indigo-600 hover:scale-[1.02] transition-transform"
                         >
-                            {floors.map((f) => <AutocompleteItem key={f.FloorID} textValue={`Floor ${f.FloorNumber}`}>{`Floor ${f.FloorNumber}`}</AutocompleteItem>)}
-                        </Autocomplete>
-                    </div>
+                            Add Room
+                        </Button>
+                    )}
                 </div>
-                {!readOnly && selectedFloorId && (
-                    <Button onPress={() => handleOpen()} color="primary" size="lg" startContent={<Plus size={20} strokeWidth={2.5} />} className="font-bold shadow-lg shadow-blue-500/20 rounded-xl h-12 px-8">Add Room</Button>
-                )}
             </div>
 
             {/* Content Area */}
             {!selectedFloorId ? (
-                <div className="flex flex-col items-center justify-center py-20 bg-slate-50 rounded-2xl border border-dashed border-slate-300">
-                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
-                        <AlertCircle className="text-slate-400" size={28} />
+                <div className="flex flex-col items-center justify-center py-24 bg-gradient-to-b from-white to-slate-50/50 rounded-3xl border border-dashed border-slate-300 relative overflow-hidden group">
+                    <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10" />
+                    <div className="w-24 h-24 bg-white rounded-3xl flex items-center justify-center shadow-xl shadow-indigo-100 mb-6 ring-4 ring-slate-50 z-10 group-hover:scale-105 transition-transform duration-300">
+                        <div className="w-16 h-16 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center">
+                            <Building2 size={32} strokeWidth={1.5} />
+                        </div>
                     </div>
-                    <h3 className="text-lg font-bold text-slate-700">Select Location</h3>
-                    <p className="text-slate-500 max-w-sm text-center">Select a block and floor to manage rooms.</p>
+                    <h3 className="text-xl font-bold text-slate-800 mb-2 z-10">Select Location Context</h3>
+                    <p className="text-slate-500 max-w-sm text-center font-medium px-4 z-10">
+                        Choose a <span className="text-blue-600 font-bold">Building Block</span> and <span className="text-indigo-600 font-bold">Floor Level</span> above to begin managing rooms.
+                    </p>
                 </div>
             ) : (
                 <Table aria-label="Rooms table" classNames={{ wrapper: "bg-white shadow-sm border border-slate-200 rounded-2xl p-0 overflow-hidden", th: "bg-slate-50 text-slate-600 font-bold text-xs py-4 px-6 border-b border-slate-200 uppercase tracking-wider", td: "py-4 px-6 border-b border-slate-100 group-last:border-0", tr: "hover:bg-slate-50/80 transition-colors cursor-default" }}>
@@ -376,11 +451,11 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                     <div className="space-y-6 max-w-lg mx-auto w-full">
                                         <div className="flex flex-col gap-1.5">
                                             <label className="text-sm font-semibold text-slate-700 ml-1">Room Code</label>
-                                            <Input autoFocus placeholder="e.g. LH-201" variant="bordered" classNames={{ inputWrapper: "h-12 bg-white border-1 border-slate-300 rounded-xl shadow-sm px-4", input: "text-base font-medium text-slate-800" }} value={singleData.roomCode} onValueChange={(v) => setSingleData({ ...singleData, roomCode: v })} />
+                                            <Input autoFocus placeholder="e.g. LH-201" variant="bordered" classNames={{ inputWrapper: "h-12 bg-white border-1 border-slate-300 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-500 rounded-xl shadow-sm px-4 transition-all", input: "text-base font-medium text-slate-800" }} value={singleData.roomCode} onValueChange={(v) => setSingleData({ ...singleData, roomCode: v })} />
                                         </div>
                                         <div className="flex flex-col gap-1.5">
                                             <label className="text-sm font-semibold text-slate-700 ml-1">Capacity</label>
-                                            <Input type="number" placeholder="60" variant="bordered" classNames={{ inputWrapper: "h-12 bg-white border-1 border-slate-300 rounded-xl shadow-sm px-4", input: "text-base font-medium text-slate-800" }} value={singleData.capacity.toString()} onValueChange={(v) => setSingleData({ ...singleData, capacity: Number(v) })} />
+                                            <Input type="number" placeholder="60" variant="bordered" classNames={{ inputWrapper: "h-12 bg-white border-1 border-slate-300 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-500 rounded-xl shadow-sm px-4 transition-all", input: "text-base font-medium text-slate-800" }} value={singleData.capacity.toString()} onValueChange={(v) => setSingleData({ ...singleData, capacity: Number(v) })} />
                                         </div>
                                         <div className="flex flex-col gap-3 pt-2">
                                             <span className="text-sm font-semibold text-slate-700 ml-1">Exam Compatibility</span>
@@ -412,11 +487,11 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
                                                     <div className="flex flex-col gap-1.5">
                                                         <label className="text-sm font-semibold text-slate-700">Start Number</label>
-                                                        <Input type="number" placeholder="101" variant="bordered" classNames={{ inputWrapper: "bg-white border-slate-300 rounded-lg" }} value={bulkData.startNumber.toString()} onValueChange={(v) => setBulkData({ ...bulkData, startNumber: Number(v) })} />
+                                                        <Input type="number" placeholder="101" variant="bordered" classNames={{ inputWrapper: "bg-white border-slate-300 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-500 rounded-lg transition-all" }} value={bulkData.startNumber.toString()} onValueChange={(v) => setBulkData({ ...bulkData, startNumber: Number(v) })} />
                                                     </div>
                                                     <div className="flex flex-col gap-1.5">
                                                         <label className="text-sm font-semibold text-slate-700">Count (How many?)</label>
-                                                        <Input type="number" placeholder="5" variant="bordered" classNames={{ inputWrapper: "bg-white border-slate-300 rounded-lg" }} value={bulkData.count.toString()} onValueChange={(v) => setBulkData({ ...bulkData, count: Number(v) })} />
+                                                        <Input type="number" placeholder="5" variant="bordered" classNames={{ inputWrapper: "bg-white border-slate-300 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-500 rounded-lg transition-all" }} value={bulkData.count.toString()} onValueChange={(v) => setBulkData({ ...bulkData, count: Number(v) })} />
                                                     </div>
                                                 </div>
                                             )}
@@ -441,8 +516,8 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                                     {manualRooms.map((row, idx) => (
                                                         <div key={idx} className="flex gap-2 items-center">
                                                             <div className="w-8 text-xs text-slate-400 font-mono text-center">{idx + 1}</div>
-                                                            <Input size="sm" placeholder="101" variant="bordered" classNames={{ inputWrapper: "bg-white border-slate-300" }} value={row.code} onValueChange={(v) => handleManualRowChange(idx, 'code', v)} />
-                                                            <Input type="number" size="sm" placeholder="Cap" variant="bordered" classNames={{ base: "w-24", inputWrapper: "bg-white border-slate-300" }} value={row.capacity.toString()} onValueChange={(v) => handleManualRowChange(idx, 'capacity', Number(v))} />
+                                                            <Input size="sm" placeholder="101" variant="bordered" classNames={{ inputWrapper: "bg-white border-slate-300 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-500 transition-all" }} value={row.code} onValueChange={(v) => handleManualRowChange(idx, 'code', v)} />
+                                                            <Input type="number" size="sm" placeholder="Cap" variant="bordered" classNames={{ base: "w-24", inputWrapper: "bg-white border-slate-300 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-500 transition-all" }} value={row.capacity.toString()} onValueChange={(v) => handleManualRowChange(idx, 'capacity', Number(v))} />
                                                             <button onClick={() => removeManualRow(idx)} className="text-slate-400 hover:text-red-500"><Ban size={16} /></button>
                                                         </div>
                                                     ))}
@@ -488,7 +563,7 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                             </ModalBody>
                             <ModalFooter className="border-t border-slate-100 px-8 py-6">
                                 <Button color="danger" variant="light" onPress={onClose} className="font-semibold text-slate-500">Cancel</Button>
-                                <Button color="primary" className="font-bold shadow-lg shadow-blue-500/20 rounded-xl h-11 px-6" onPress={() => handleSubmit(onClose)} isDisabled={loading || (isBulkMode && previewRooms.length === 0)}>
+                                <Button color="primary" className="font-bold shadow-lg shadow-blue-500/20 rounded-xl h-11 px-6 text-white" onPress={() => handleSubmit(onClose)} isDisabled={loading || (isBulkMode && previewRooms.length === 0)}>
                                     {editingRoom ? "Update Room" : (isBulkMode ? `Create ${previewRooms.length} Rooms` : "Create Room")}
                                 </Button>
                             </ModalFooter>
