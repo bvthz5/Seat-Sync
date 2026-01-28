@@ -166,35 +166,35 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <Input
-                                    startContent={<Hash className="text-gray-400" size={16} />}
+                                    startContent={<Hash className="text-gray-400 mr-2" size={16} />}
                                     placeholder="Register Number"
                                     value={formData.RegisterNumber}
                                     onValueChange={(v) => handleChange("RegisterNumber", v)}
                                     classNames={{
-                                        inputWrapper: "h-12 bg-gray-50  border-0 shadow-none hover:bg-gray-100  transition-colors data-[hover=true]:bg-gray-100  group-data-[focus=true]:bg-white  group-data-[focus=true]:ring-2 ring-primary/20",
-                                        input: "text-small",
+                                        inputWrapper: "h-12 bg-white border-1 border-slate-200 shadow-sm hover:border-blue-400 focus-within:border-blue-600 focus-within:shadow-md rounded-xl transition-all",
+                                        input: "text-small bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0",
                                     }}
                                 />
                                 <Input
-                                    startContent={<User className="text-gray-400" size={16} />}
+                                    startContent={<User className="text-gray-400 mr-2" size={16} />}
                                     placeholder="Full Name"
                                     value={formData.FullName}
                                     onValueChange={(v) => handleChange("FullName", v)}
                                     classNames={{
-                                        inputWrapper: "h-12 bg-gray-50  border-0 shadow-none hover:bg-gray-100  transition-colors data-[hover=true]:bg-gray-100  group-data-[focus=true]:bg-white  group-data-[focus=true]:ring-2 ring-primary/20",
-                                        input: "text-small",
+                                        inputWrapper: "h-12 bg-white border-1 border-slate-200 shadow-sm hover:border-blue-400 focus-within:border-blue-600 focus-within:shadow-md rounded-xl transition-all",
+                                        input: "text-small bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0",
                                     }}
                                 />
                                 <Input
-                                    startContent={<Mail className="text-gray-400" size={16} />}
+                                    startContent={<Mail className="text-gray-400 mr-2" size={16} />}
                                     placeholder="Email Address"
                                     type="email"
                                     className="md:col-span-2"
                                     value={formData.Email}
                                     onValueChange={(v) => handleChange("Email", v)}
                                     classNames={{
-                                        inputWrapper: "h-12 bg-gray-50  border-0 shadow-none hover:bg-gray-100  transition-colors data-[hover=true]:bg-gray-100  group-data-[focus=true]:bg-white  group-data-[focus=true]:ring-2 ring-primary/20",
-                                        input: "text-small",
+                                        inputWrapper: "h-12 bg-white border-1 border-slate-200 shadow-sm hover:border-blue-400 focus-within:border-blue-600 focus-within:shadow-md rounded-xl transition-all",
+                                        input: "text-small bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0",
                                     }}
                                 />
                             </div>
@@ -210,15 +210,15 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <Select
-                                    startContent={<Building2 className="text-gray-400" size={16} />}
+                                    startContent={<Building2 className="text-gray-400 mr-2" size={16} />}
                                     placeholder="Select Department"
                                     selectedKeys={formData.DepartmentID ? [formData.DepartmentID] : []}
                                     onChange={(e) => handleChange("DepartmentID", e.target.value)}
                                     aria-label="Department"
                                     classNames={{
-                                        trigger: "h-12 bg-gray-50  border-0 shadow-none hover:bg-gray-100  transition-colors data-[hover=true]:bg-gray-100 ",
-                                        popoverContent: "bg-white  border border-gray-100  shadow-xl",
-                                        value: "text-small group-data-[has-value=true]:text-gray-900 ",
+                                        trigger: "h-12 bg-white border-1 border-slate-200 shadow-sm data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 rounded-xl transition-all",
+                                        popoverContent: "bg-white border border-gray-100 shadow-xl",
+                                        value: "text-small group-data-[has-value=true]:text-gray-900",
                                         selectorIcon: "hidden"
                                     }}
                                 >
@@ -230,15 +230,15 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                                 </Select>
 
                                 <Select
-                                    startContent={<GraduationCap className="text-gray-400" size={16} />}
+                                    startContent={<GraduationCap className="text-gray-400 mr-2" size={16} />}
                                     placeholder="Select Program"
                                     selectedKeys={formData.ProgramID ? [formData.ProgramID] : []}
                                     onChange={(e) => handleChange("ProgramID", e.target.value)}
                                     aria-label="Program"
                                     classNames={{
-                                        trigger: "h-12 bg-gray-50  border-0 shadow-none hover:bg-gray-100  transition-colors data-[hover=true]:bg-gray-100 ",
-                                        popoverContent: "bg-white  border border-gray-100  shadow-xl",
-                                        value: "text-small group-data-[has-value=true]:text-gray-900 ",
+                                        trigger: "h-12 bg-white border-1 border-slate-200 shadow-sm data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 rounded-xl transition-all",
+                                        popoverContent: "bg-white border border-gray-100 shadow-xl",
+                                        value: "text-small group-data-[has-value=true]:text-gray-900",
                                         selectorIcon: "hidden"
                                     }}
                                 >
@@ -250,15 +250,15 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                                 </Select>
 
                                 <Select
-                                    startContent={<BookOpen className="text-gray-400" size={16} />}
+                                    startContent={<BookOpen className="text-gray-400 mr-2" size={16} />}
                                     placeholder="Select Semester"
                                     selectedKeys={formData.SemesterID ? [formData.SemesterID] : []}
                                     onChange={(e) => handleChange("SemesterID", e.target.value)}
                                     isDisabled={!formData.ProgramID}
                                     aria-label="Semester"
                                     classNames={{
-                                        trigger: "h-12 bg-gray-50  border-0 shadow-none hover:bg-gray-100  transition-colors data-[hover=true]:bg-gray-100 ",
-                                        popoverContent: "bg-white  border border-gray-100  shadow-xl",
+                                        trigger: "h-12 bg-white border-1 border-slate-200 shadow-sm data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 rounded-xl transition-all",
+                                        popoverContent: "bg-white border border-gray-100 shadow-xl",
                                         selectorIcon: "hidden"
                                     }}
                                 >
@@ -270,14 +270,14 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                                 </Select>
 
                                 <Input
-                                    startContent={<Calendar className="text-gray-400" size={16} />}
+                                    startContent={<Calendar className="text-gray-400 mr-2" size={16} />}
                                     placeholder="Batch Year"
                                     type="number"
                                     value={formData.BatchYear}
                                     onValueChange={(v) => handleChange("BatchYear", v)}
                                     classNames={{
-                                        inputWrapper: "h-12 bg-gray-50  border-0 shadow-none hover:bg-gray-100  transition-colors data-[hover=true]:bg-gray-100  group-data-[focus=true]:bg-white  group-data-[focus=true]:ring-2 ring-primary/20",
-                                        input: "text-small",
+                                        inputWrapper: "h-12 bg-white border-1 border-slate-200 shadow-sm hover:border-blue-400 focus-within:border-blue-600 focus-within:shadow-md rounded-xl transition-all",
+                                        input: "text-small bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0",
                                     }}
                                 />
                             </div>

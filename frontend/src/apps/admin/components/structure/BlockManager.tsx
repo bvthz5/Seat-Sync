@@ -138,13 +138,14 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
                         placeholder="Search blocks..."
                         aria-label="Search blocks"
                         size="sm"
-                        startContent={<Search size={18} className="text-slate-400" />}
+                        startContent={<Search size={18} className="text-slate-400 mr-2" />}
                         className="max-w-xs"
                         variant="bordered"
                         value={searchQuery}
                         onValueChange={(v) => { setSearchQuery(v); setPage(1); }}
                         classNames={{
-                            inputWrapper: "bg-white border-slate-200 shadow-sm rounded-xl h-11"
+                            inputWrapper: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 shadow-sm rounded-xl h-11 transition-all",
+                            input: "bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
                         }}
                     />
                     {!readOnly && (
@@ -312,7 +313,8 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
                                         aria-label="Block Name"
                                         variant="bordered"
                                         classNames={{
-                                            inputWrapper: "h-12 bg-white border-1 border-slate-300 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-500 rounded-xl shadow-sm px-4 transition-all"
+                                            inputWrapper: "h-12 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl shadow-sm px-4 transition-all",
+                                            input: "text-base font-medium text-slate-800 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
                                         }}
                                         value={formData.BlockName}
                                         onValueChange={(val) => setFormData({ ...formData, BlockName: val })}

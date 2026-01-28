@@ -272,11 +272,11 @@ const Students: React.FC = () => {
                         classNames={{
                             base: "max-w-full sm:max-w-md h-10",
                             mainWrapper: "h-full",
-                            input: "text-small",
-                            inputWrapper: "h-full font-normal text-default-500 bg-gray-50  border-none group-data-[focus=true]:bg-white  ring-1 ring-transparent group-data-[focus=true]:ring-gray-200  transition-all",
+                            inputWrapper: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 shadow-sm rounded-xl h-10 transition-all",
+                            input: "bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
                         }}
                         placeholder="Search by name, email, or register no..."
-                        startContent={<Search size={18} className="text-gray-400" />}
+                        startContent={<Search size={18} className="text-gray-400 mr-2" />}
                         value={searchQuery}
                         onValueChange={(val) => {
                             setSearchQuery(val);
@@ -332,12 +332,12 @@ const Students: React.FC = () => {
                                             size="md"
                                             selectedKeys={tempFilters.dept ? [tempFilters.dept] : []}
                                             onChange={(e) => setTempFilters(prev => ({ ...prev, dept: e.target.value }))}
-                                            startContent={<Building2 size={18} className="text-gray-400 group-hover:text-primary transition-colors" />}
+                                            startContent={<Building2 size={18} className="text-gray-400 mr-2 group-hover:text-primary transition-colors" />}
                                             classNames={{
                                                 mainWrapper: "w-full",
-                                                trigger: "bg-gray-50  border-none hover:bg-gray-100  shadow-none data-[hover=true]:bg-gray-100  transition-colors h-12 rounded-xl",
-                                                popoverContent: "bg-white  border border-gray-100  shadow-xl w-full",
-                                                value: "text-small text-gray-700  group-data-[has-value=true]:text-gray-900  font-medium pl-1",
+                                                trigger: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 shadow-sm rounded-xl h-12 transition-all",
+                                                popoverContent: "bg-white border border-gray-100 shadow-xl w-full",
+                                                value: "text-small text-gray-700 group-data-[has-value=true]:text-gray-900 font-medium pl-1",
                                                 selectorIcon: "hidden"
                                             }}
                                         >
@@ -355,12 +355,12 @@ const Students: React.FC = () => {
                                             size="md"
                                             selectedKeys={tempFilters.program ? [tempFilters.program] : []}
                                             onChange={(e) => setTempFilters(prev => ({ ...prev, program: e.target.value }))}
-                                            startContent={<GraduationCap size={18} className="text-gray-400 group-hover:text-primary transition-colors" />}
+                                            startContent={<GraduationCap size={18} className="text-gray-400 mr-2 group-hover:text-primary transition-colors" />}
                                             classNames={{
                                                 mainWrapper: "w-full",
-                                                trigger: "bg-gray-50  border-none hover:bg-gray-100  shadow-none data-[hover=true]:bg-gray-100  transition-colors h-12 rounded-xl",
-                                                popoverContent: "bg-white  border border-gray-100  shadow-xl w-full",
-                                                value: "text-small text-gray-700  group-data-[has-value=true]:text-gray-900  font-medium pl-1",
+                                                trigger: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 shadow-sm rounded-xl h-12 transition-all",
+                                                popoverContent: "bg-white border border-gray-100 shadow-xl w-full",
+                                                value: "text-small text-gray-700 group-data-[has-value=true]:text-gray-900 font-medium pl-1",
                                                 selectorIcon: "hidden"
                                             }}
                                         >
@@ -379,12 +379,12 @@ const Students: React.FC = () => {
                                             selectedKeys={tempFilters.semester ? [tempFilters.semester] : []}
                                             onChange={(e) => setTempFilters(prev => ({ ...prev, semester: e.target.value }))}
                                             isDisabled={!tempFilters.program}
-                                            startContent={<BookOpen size={18} className="text-gray-400 group-hover:text-primary transition-colors" />}
+                                            startContent={<BookOpen size={18} className="text-gray-400 mr-2 group-hover:text-primary transition-colors" />}
                                             classNames={{
                                                 mainWrapper: "w-full",
-                                                trigger: "bg-gray-50  border-none hover:bg-gray-100  shadow-none data-[hover=true]:bg-gray-100  transition-colors h-12 rounded-xl",
-                                                popoverContent: "bg-white  border border-gray-100  shadow-xl w-full",
-                                                value: "text-small text-gray-700  group-data-[has-value=true]:text-gray-900  font-medium pl-1",
+                                                trigger: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 shadow-sm rounded-xl h-12 transition-all",
+                                                popoverContent: "bg-white border border-gray-100 shadow-xl w-full",
+                                                value: "text-small text-gray-700 group-data-[has-value=true]:text-gray-900 font-medium pl-1",
                                                 selectorIcon: "hidden"
                                             }}
                                         >

@@ -84,7 +84,7 @@ const CustomInput = ({
                     onChange={onChange}
                     placeholder={placeholder}
                     className={`
-                    flex-1 h-full px-4 outline-none bg-transparent font-medium text-lg placeholder:text-slate-300
+                    flex-1 h-full px-4 outline-none bg-transparent font-medium text-lg placeholder:text-slate-300 !border-none !ring-0 !shadow-none focus:!ring-0
                     ${error ? 'text-red-900' : 'text-slate-800'}
                 `}
                 />

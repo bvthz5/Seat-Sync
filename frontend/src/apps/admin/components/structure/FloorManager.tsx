@@ -178,8 +178,8 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                         inputProps={{
                             id: "block-select-input",
                             classNames: {
-                                input: "text-base font-medium text-slate-700 placeholder:text-slate-400",
-                                inputWrapper: "bg-white h-12 min-h-12 rounded-xl border-1 border-slate-300 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-500 shadow-sm transition-all"
+                                input: "text-base font-medium text-slate-700 placeholder:text-slate-400 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0",
+                                inputWrapper: "bg-white h-12 min-h-12 rounded-xl border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 shadow-sm transition-all"
                             }
                         }}
                         listboxProps={{
@@ -213,13 +213,14 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                             placeholder="Find floor..."
                             aria-label="Search floors"
                             size="sm"
-                            startContent={<Search size={18} className="text-slate-400" />}
+                            startContent={<Search size={18} className="text-slate-400 mr-2" />}
                             className="max-w-[200px]"
                             variant="bordered"
                             value={searchQuery}
                             onValueChange={(v) => { setSearchQuery(v); setPage(1); }}
                             classNames={{
-                                inputWrapper: "bg-white border-slate-200 shadow-sm rounded-xl h-11"
+                                inputWrapper: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 shadow-sm rounded-xl h-11 transition-all",
+                                input: "bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
                             }}
                         />
                         <Select
@@ -233,7 +234,7 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                             selectedKeys={[statusFilter]}
                             onSelectionChange={(keys) => { setStatusFilter(Array.from(keys)[0] as string); setPage(1); }}
                             classNames={{
-                                trigger: "bg-white border-slate-200 shadow-sm rounded-xl h-11"
+                                trigger: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 shadow-sm rounded-xl h-11 transition-all"
                             }}
                         >
                             <SelectItem key="all" textValue="All">All</SelectItem>
@@ -438,8 +439,8 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                                             id: "modal-floor-block-input",
                                             name: "BlockID",
                                             classNames: {
-                                                input: "text-base font-medium text-slate-800 placeholder:text-slate-400",
-                                                inputWrapper: "h-12 bg-white border-1 border-slate-300 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-500 rounded-xl shadow-sm px-4 transition-all"
+                                                input: "text-base font-medium text-slate-800 placeholder:text-slate-400 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0",
+                                                inputWrapper: "h-12 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl shadow-sm px-4 transition-all"
                                             }
                                         }}
                                         listboxProps={{
@@ -477,8 +478,8 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                                         aria-label="Floor Number"
                                         variant="bordered"
                                         classNames={{
-                                            inputWrapper: "h-12 bg-white border-1 border-slate-300 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-500 rounded-xl shadow-sm px-4 transition-all",
-                                            input: "text-base font-medium text-slate-800"
+                                            inputWrapper: "h-12 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl shadow-sm px-4 transition-all",
+                                            input: "text-base font-medium text-slate-800 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
                                         }}
                                         value={formData.FloorNumber?.toString()}
                                         onValueChange={(val) => setFormData({ ...formData, FloorNumber: Number(val) })}
