@@ -4,6 +4,7 @@ import { UploadCloud, FileText, CheckCircle, AlertTriangle, XCircle, ArrowRight,
 import Papa from 'papaparse';
 import { structureService } from '../../services/structureService';
 import { toast } from 'react-hot-toast';
+import { Spinner } from '../../../../components/GlobalLoader';
 
 interface CSVData {
     BlockName: string;
@@ -214,7 +215,7 @@ export const StructureImport: React.FC<{ onChange?: () => void }> = ({ onChange 
                                                     <TableColumn>CAP</TableColumn>
                                                     <TableColumn>EXAM</TableColumn>
                                                 </TableHeader>
-                                                <TableBody loadingContent={"Loading..."}>
+                                                <TableBody loadingContent={<div className="flex justify-center py-4"><Spinner size={40} /></div>}>
                                                     {previewData.slice(0, 100).map((row, i) => (
                                                         <TableRow key={i}>
                                                             <TableCell>{row.BlockName}</TableCell>

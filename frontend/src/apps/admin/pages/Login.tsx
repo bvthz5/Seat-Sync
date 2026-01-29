@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { Button, Link } from '@heroui/react';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
+import { Spinner } from '../../../components/GlobalLoader';
 
 
 // --- Icons ---
@@ -481,10 +482,11 @@ const AdminLogin: React.FC = () => {
                             <Button
                                 type="submit"
                                 size="lg"
-                                isLoading={loading}
-                                className="w-full h-14 bg-slate-900 text-white font-bold text-lg rounded-xl shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all duration-300"
+                                isLoading={false} // Disable default loader to use custom one
+                                className="w-full h-14 bg-slate-900 text-white font-bold text-lg rounded-xl shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 flex items-center justify-center gap-2"
+                                disabled={loading}
                             >
-                                {loading ? 'VERIFYING...' : 'ACCESS DASHBOARD'}
+                                {loading ? <Spinner size={24} color="#ffffff" /> : 'ACCESS DASHBOARD'}
                             </Button>
                         </motion.div>
 

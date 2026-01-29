@@ -5,6 +5,9 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { HeroUIProvider } from "@heroui/react";
 
+const bootLoader = document.getElementById("boot-loader");
+if (bootLoader) bootLoader.remove();
+
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );
