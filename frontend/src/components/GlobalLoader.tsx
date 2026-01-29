@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { HashLoader } from 'react-spinners';
 
-export const Spinner = ({ size = 60, color = "#0c3df8", className = "" }: { size?: number, color?: string, className?: string }) => (
+export const Spinner = ({ size = 60, color = "#132ef1", className = "" }: { size?: number, color?: string, className?: string }) => (
     <div className={`flex justify-center items-center ${className}`}>
         <HashLoader color={color} size={size} speedMultiplier={1.5} />
     </div>
@@ -22,7 +22,7 @@ const GlobalLoader = () => {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
-                className="mt-6 text-lg font-medium text-[#0c3df8] tracking-wide"
+                className="mt-6 text-lg font-medium text-[#132ef1] tracking-wide"
             >
                 Loading...
             </motion.p>
