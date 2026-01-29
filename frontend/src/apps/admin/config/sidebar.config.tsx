@@ -13,7 +13,9 @@ import {
     Settings,
     Activity,
     Bell,
-    Lock
+    Lock,
+    BookOpen,
+    Calendar
 } from 'lucide-react';
 
 export interface SidebarItem {
@@ -25,7 +27,8 @@ export interface SidebarItem {
 }
 
 export const sidebarConfig: SidebarItem[] = [
-    // Standard Exam Admin Items
+    // ==================== PRIMARY OPERATIONS ====================
+    // Visible to ALL Exam Admins
     {
         label: "Dashboard",
         icon: <LayoutDashboard size={20} />,
@@ -69,48 +72,47 @@ export const sidebarConfig: SidebarItem[] = [
         requiresRoot: false
     },
 
-    // Root Admin "Administration" Section
-    // We treat this logic slightly differently in rendering (as a section), 
-    // but here we define the children that belong to it.
+    // ==================== ADMINISTRATION SECTION ====================
+    // Root Admin Only - Expandable Section
     {
         label: "Administration",
-        icon: <ShieldAlert size={20} />, // Icon for the section header if needed
+        icon: <ShieldAlert size={20} />,
         requiresRoot: true,
         children: [
             {
                 label: "Admin Management",
                 icon: <ShieldAlert size={18} />,
-                path: "/admin/manage-admins",
+                path: "/admin/admin-management",
                 requiresRoot: true
             },
             {
                 label: "College Structure",
                 icon: <Building2 size={18} />,
-                path: "/admin/structure",
+                path: "/admin/college-structure",
+                requiresRoot: true
+            },
+            {
+                label: "Academic Setup",
+                icon: <BookOpen size={18} />,
+                path: "/admin/academic-setup",
                 requiresRoot: true
             },
             {
                 label: "Exam Control",
                 icon: <Siren size={18} />,
-                path: "/admin/control",
-                requiresRoot: true
-            },
-            {
-                label: "System Configuration",
-                icon: <Settings size={18} />,
-                path: "/admin/settings",
-                requiresRoot: true
-            },
-            {
-                label: "Audit & Logs",
-                icon: <Activity size={18} />,
-                path: "/admin/logs",
+                path: "/admin/exam-control",
                 requiresRoot: true
             },
             {
                 label: "Notifications",
                 icon: <Bell size={18} />,
                 path: "/admin/notifications",
+                requiresRoot: true
+            },
+            {
+                label: "Audit & Logs",
+                icon: <Activity size={18} />,
+                path: "/admin/audit-logs",
                 requiresRoot: true
             },
             {
@@ -122,3 +124,4 @@ export const sidebarConfig: SidebarItem[] = [
         ]
     }
 ];
+

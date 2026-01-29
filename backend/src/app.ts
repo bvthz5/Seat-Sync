@@ -14,6 +14,13 @@ import collegeStructureRoutes from "./routes/collegeStructure.routes.js";
 import roomRoutes from "./routes/room.routes.js";
 import structureImportRoutes from "./routes/structureImport.routes.js";
 
+// New ERP routes
+import adminManagementRoutes from "./routes/adminManagement.routes.js";
+import academicSetupRoutes from "./routes/academicSetup.routes.js";
+import notificationRoutes from "./routes/notification.routes.js";
+import securityRoutes from "./routes/security.routes.js";
+import examControlRoutes from "./routes/examControl.routes.js";
+
 const app = express();
 
 
@@ -125,6 +132,13 @@ app.use("/api/students", studentRoutes);
 app.use("/api/admin/college-structure", collegeStructureRoutes);
 app.use("/api/college-structure/import", structureImportRoutes);
 app.use("/api/rooms", roomRoutes);
+
+// New ERP Routes (Root Admin Only)
+app.use("/api/admin-management", adminManagementRoutes);
+app.use("/api/academic-setup", academicSetupRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/security", securityRoutes);
+app.use("/api/exam-control", examControlRoutes);
 
 // --- Error Handling Middleware ---
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

@@ -20,3 +20,6 @@ export { default as InvigilatorAssignment } from "./InvigilatorAssignment.js";
 export { default as Attendance } from "./Attendance.js";
 export { default as ActivityLog } from "./ActivityLog.js";
 export { default as PasswordReset } from "./PasswordReset.model.js";
+export { default as AcademicYear } from "./AcademicYear.js";
+export { default as Notification } from "./Notification.js";
+export { default as ActiveSession } from "./ActiveSession.js";
