@@ -97,7 +97,7 @@ export const setCurrentAcademicYear = async (req: Request, res: Response): Promi
         );
 
         // Set new current year
-        const year = await AcademicYear.findByPk(yearId);
+        const year = await AcademicYear.findByPk(parseInt(yearId as string));
         if (!year) {
             res.status(404).json({
                 success: false,
@@ -206,7 +206,6 @@ export const createDepartment = async (req: Request, res: Response): Promise<voi
 export const getAllPrograms = async (req: Request, res: Response): Promise<void> => {
     try {
         const programs = await Program.findAll({
-            include: [{ model: Department, as: 'department' }],
             order: [['ProgramName', 'ASC']]
         });
 
@@ -226,13 +225,13 @@ export const getAllPrograms = async (req: Request, res: Response): Promise<void>
 
 export const createProgram = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { ProgramName, ProgramCode, DepartmentID, DurationYears } = req.body;
+        const { ProgramName, ProgramCode, DurationYears } = req.body;
         const currentUser = (req as any).user;
 
-        if (!ProgramName || !ProgramCode || !DepartmentID) {
+        if (!ProgramName || !ProgramCode) {
             res.status(400).json({
                 success: false,
-                message: "ProgramName, ProgramCode, and DepartmentID are required"
+                message: "ProgramName and ProgramCode are required"
             });
             return;
         }
@@ -240,7 +239,6 @@ export const createProgram = async (req: Request, res: Response): Promise<void> 
         const program = await Program.create({
             ProgramName,
             ProgramCode,
-            DepartmentID,
             DurationYears: DurationYears || 4
         });
 
@@ -294,13 +292,13 @@ export const getAllSemesters = async (req: Request, res: Response): Promise<void
 
 export const createSemester = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { SemesterNumber, SemesterName, StartDate, EndDate } = req.body;
+        const { SemesterNumber, SemesterName, ProgramID } = req.body;
         const currentUser = (req as any).user;
 
-        if (!SemesterNumber || !SemesterName) {
+        if (!SemesterNumber || !SemesterName || !ProgramID) {
             res.status(400).json({
                 success: false,
-                message: "SemesterNumber and SemesterName are required"
+                message: "SemesterNumber, SemesterName, and ProgramID are required"
             });
             return;
         }
@@ -308,8 +306,7 @@ export const createSemester = async (req: Request, res: Response): Promise<void>
         const semester = await Semester.create({
             SemesterNumber,
             SemesterName,
-            StartDate: StartDate || null,
-            EndDate: EndDate || null
+            ProgramID
         });
 
         // Log activity
@@ -343,10 +340,6 @@ export const createSemester = async (req: Request, res: Response): Promise<void>
 export const getAllSubjects = async (req: Request, res: Response): Promise<void> => {
     try {
         const subjects = await Subject.findAll({
-            include: [
-                { model: Department, as: 'department' },
-                { model: Semester, as: 'semester' }
-            ],
             order: [['SubjectName', 'ASC']]
         });
 
@@ -366,7 +359,7 @@ export const getAllSubjects = async (req: Request, res: Response): Promise<void>
 
 export const createSubject = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { SubjectCode, SubjectName, Credits, DepartmentID, SemesterID } = req.body;
+        const { SubjectCode, SubjectName, DepartmentID, SemesterID } = req.body;
         const currentUser = (req as any).user;
 
         if (!SubjectCode || !SubjectName || !DepartmentID || !SemesterID) {
@@ -380,7 +373,6 @@ export const createSubject = async (req: Request, res: Response): Promise<void> 
         const subject = await Subject.create({
             SubjectCode,
             SubjectName,
-            Credits: Credits || 3,
             DepartmentID,
             SemesterID
         });

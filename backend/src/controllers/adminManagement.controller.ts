@@ -116,7 +116,7 @@ export const toggleAdminStatus = async (req: Request, res: Response): Promise<vo
         const currentUser = (req as any).user;
 
         // Cannot disable yourself
-        if (parseInt(adminId) === currentUser.UserID) {
+        if (parseInt(adminId as string) === currentUser.UserID) {
             res.status(403).json({
                 success: false,
                 message: "You cannot disable your own account"
@@ -124,7 +124,7 @@ export const toggleAdminStatus = async (req: Request, res: Response): Promise<vo
             return;
         }
 
-        const admin = await User.findByPk(adminId);
+        const admin = await User.findByPk(parseInt(adminId as string));
         if (!admin || admin.Role !== 'exam_admin') {
             res.status(404).json({
                 success: false,
@@ -191,7 +191,7 @@ export const resetAdminPassword = async (req: Request, res: Response): Promise<v
             return;
         }
 
-        const admin = await User.findByPk(adminId);
+        const admin = await User.findByPk(parseInt(adminId as string));
         if (!admin || admin.Role !== 'exam_admin') {
             res.status(404).json({
                 success: false,
@@ -245,7 +245,7 @@ export const getAdminActivity = async (req: Request, res: Response): Promise<voi
         const { limit = 50 } = req.query;
 
         const logs = await ActivityLog.findAll({
-            where: { UserID: adminId },
+            where: { UserID: parseInt(adminId as string) },
             order: [['Timestamp', 'DESC']],
             limit: parseInt(limit as string)
         });
@@ -273,7 +273,7 @@ export const deleteAdmin = async (req: Request, res: Response): Promise<void> =>
         const currentUser = (req as any).user;
 
         // Cannot delete yourself
-        if (parseInt(adminId) === currentUser.UserID) {
+        if (parseInt(adminId as string) === currentUser.UserID) {
             res.status(403).json({
                 success: false,
                 message: "You cannot delete your own account"
@@ -281,7 +281,7 @@ export const deleteAdmin = async (req: Request, res: Response): Promise<void> =>
             return;
         }
 
-        const admin = await User.findByPk(adminId);
+        const admin = await User.findByPk(parseInt(adminId as string));
         if (!admin || admin.Role !== 'exam_admin') {
             res.status(404).json({
                 success: false,

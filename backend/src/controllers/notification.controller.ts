@@ -21,13 +21,6 @@ export const getAllNotifications = async (req: Request, res: Response): Promise<
 
         const notifications = await Notification.findAll({
             where,
-            include: [
-                {
-                    model: User,
-                    as: 'sender',
-                    attributes: ['UserID', 'Email', 'FullName']
-                }
-            ],
             order: [['SentAt', 'DESC']],
             limit: parseInt(limit as string)
         });
@@ -115,7 +108,7 @@ export const deleteNotification = async (req: Request, res: Response): Promise<v
         const { notificationId } = req.params;
         const currentUser = (req as any).user;
 
-        const notification = await Notification.findByPk(notificationId);
+        const notification = await Notification.findByPk(parseInt(notificationId as string));
         if (!notification) {
             res.status(404).json({
                 success: false,
@@ -131,7 +124,7 @@ export const deleteNotification = async (req: Request, res: Response): Promise<v
             UserID: currentUser.UserID,
             Action: 'DELETE_NOTIFICATION',
             EntityType: 'Notification',
-            EntityID: parseInt(notificationId),
+            EntityID: parseInt(notificationId as string),
             Details: `Deleted notification: ${notification.Title}`,
             IPAddress: req.ip || 'unknown',
             UserAgent: req.get('user-agent') || 'unknown'
@@ -163,13 +156,6 @@ export const getScheduledNotifications = async (req: Request, res: Response): Pr
                     [Op.gt]: new Date()
                 }
             },
-            include: [
-                {
-                    model: User,
-                    as: 'sender',
-                    attributes: ['UserID', 'Email', 'FullName']
-                }
-            ],
             order: [['ScheduledFor', 'ASC']]
         });
 
