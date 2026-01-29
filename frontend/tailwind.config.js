@@ -11,31 +11,34 @@ export default {
     theme: {
         extend: {
             colors: {
-                // Stark Modern Palette (Vercel/Linear inspired)
-                background: "#ffffff",
-                surface: "#f9fafb",
-                border: "#e5e7eb",
+                // SeatSync Brand Palette
+                background: "#F5F8FC",
+                surface: "#ffffff",
+                border: "#cbd5e1",
 
                 primary: {
-                    DEFAULT: "#fafafa", // Zinc 50 (White-ish)
-                    foreground: "#09090b",
-                    50: "#fafafa",
-                    100: "#f4f4f5",
-                    200: "#e4e4e7",
-                    300: "#d4d4d8",
-                    400: "#a1a1aa",
-                    500: "#71717a",
-                    600: "#52525b",
-                    700: "#3f3f46",
-                    800: "#27272a",
-                    900: "#18181b",
-                    950: "#09090b",
+                    DEFAULT: "#0A1F44", // SeatSync Navy
+                    foreground: "#FFFFFF", // White text
+                    50: "#e6e9ef",
+                    100: "#c1c9d6",
+                    200: "#9ba8bd",
+                    300: "#7488a4",
+                    400: "#4e678b",
+                    500: "#0A1F44", // Main
+                    600: "#081936",
+                    700: "#061329",
+                    800: "#040c1b",
+                    900: "#02060e",
                 },
                 secondary: {
-                    DEFAULT: "#27272a", // Zinc 800
-                    foreground: "#fafafa",
+                    DEFAULT: "#1F4E79", // SeatSync Blue
+                    foreground: "#FFFFFF",
                 },
-                // Functional Status Colors (Muted)
+                accent: {
+                    DEFAULT: "#D4AF37", // SeatSync Gold
+                    foreground: "#000000",
+                },
+                // Functional Status Colors
                 success: "#22c55e",
                 warning: "#eab308",
                 danger: "#ef4444",

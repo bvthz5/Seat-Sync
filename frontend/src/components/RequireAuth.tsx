@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { Spinner } from './GlobalLoader';
 
 const RequireAuth: React.FC = () => {
     const { isAuthenticated, isLoading } = useAuth();
@@ -8,7 +9,7 @@ const RequireAuth: React.FC = () => {
 
     if (isLoading) {
         // Can return a loading spinner here
-        return <div className="flex bg-gray-100 h-screen w-full items-center justify-center">Loading...</div>;
+        return <div className="flex bg-gray-100 h-screen w-full items-center justify-center"><Spinner /></div>;
     }
 
     if (!isAuthenticated) {
