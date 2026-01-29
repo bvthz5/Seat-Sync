@@ -83,6 +83,43 @@ const AdminManagement: React.FC = () => {
                 </button>
             </div>
 
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-6 border border-blue-200">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-blue-600 font-medium">Total Admins</p>
+                            <p className="text-3xl font-bold text-blue-900 mt-2">{admins.length}</p>
+                        </div>
+                        <Users className="w-12 h-12 text-blue-600 opacity-50" />
+                    </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-2xl p-6 border border-green-200">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-green-600 font-medium">Active</p>
+                            <p className="text-3xl font-bold text-green-900 mt-2">
+                                {admins.filter(a => a.IsActive).length}
+                            </p>
+                        </div>
+                        <Shield className="w-12 h-12 text-green-600 opacity-50" />
+                    </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl p-6 border border-purple-200">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-purple-600 font-medium">Root Admins</p>
+                            <p className="text-3xl font-bold text-purple-900 mt-2">
+                                {admins.filter(a => a.IsRootAdmin).length}
+                            </p>
+                        </div>
+                        <Shield className="w-12 h-12 text-purple-600 opacity-50" />
+                    </div>
+                </div>
+            </div>
+
             {/* Search & Filter */}
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
                 <div className="flex gap-4">
@@ -198,43 +235,6 @@ const AdminManagement: React.FC = () => {
                             )}
                         </tbody>
                     </table>
-                </div>
-            </div>
-
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-6 border border-blue-200">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-blue-600 font-medium">Total Admins</p>
-                            <p className="text-3xl font-bold text-blue-900 mt-2">{admins.length}</p>
-                        </div>
-                        <Users className="w-12 h-12 text-blue-600 opacity-50" />
-                    </div>
-                </div>
-
-                <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-2xl p-6 border border-green-200">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-green-600 font-medium">Active</p>
-                            <p className="text-3xl font-bold text-green-900 mt-2">
-                                {admins.filter(a => a.IsActive).length}
-                            </p>
-                        </div>
-                        <Shield className="w-12 h-12 text-green-600 opacity-50" />
-                    </div>
-                </div>
-
-                <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl p-6 border border-purple-200">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-purple-600 font-medium">Root Admins</p>
-                            <p className="text-3xl font-bold text-purple-900 mt-2">
-                                {admins.filter(a => a.IsRootAdmin).length}
-                            </p>
-                        </div>
-                        <Shield className="w-12 h-12 text-purple-600 opacity-50" />
-                    </div>
                 </div>
             </div>
         </div>
