@@ -9,6 +9,10 @@ interface ActivityLogAttributes {
   LogID: number;
   UserID: number;
   Action: string;
+  EntityType?: string;
+  EntityID?: number;
+  IPAddress?: string;
+  UserAgent?: string;
   Timestamp: Date;
   Details?: string;
 }
@@ -17,15 +21,18 @@ interface ActivityLogAttributes {
  * Attributes required when creating an activity log
  */
 interface ActivityLogCreationAttributes
-  extends Optional<ActivityLogAttributes, "LogID" | "Timestamp"> {}
+  extends Optional<ActivityLogAttributes, "LogID" | "Timestamp" | "EntityType" | "EntityID" | "IPAddress" | "UserAgent"> { }
 
 export class ActivityLog
   extends Model<ActivityLogAttributes, ActivityLogCreationAttributes>
-  implements ActivityLogAttributes
-{
+  implements ActivityLogAttributes {
   declare LogID: number;
   declare UserID: number;
   declare Action: string;
+  declare EntityType?: string;
+  declare EntityID?: number;
+  declare IPAddress?: string;
+  declare UserAgent?: string;
   declare Timestamp: Date;
   declare Details?: string;
 }
@@ -48,6 +55,22 @@ ActivityLog.init(
     Action: {
       type: DataTypes.STRING(200),
       allowNull: false,
+    },
+    EntityType: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    EntityID: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    IPAddress: {
+      type: DataTypes.STRING(45),
+      allowNull: true,
+    },
+    UserAgent: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
     },
     Timestamp: {
       type: DataTypes.DATE,

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Autocomplete, AutocompleteItem, Input, Button, Card, CardBody, CardHeader, Divider, Tooltip, Chip } from '@heroui/react';
-import { Armchair, Save, RotateCcw, MonitorPlay, AlertTriangle, Grid3X3, Building2, Layers, Layout, MapPin, ChevronRight, Hash } from 'lucide-react';
+import { Armchair, Save, RotateCcw, MonitorPlay, AlertTriangle, Grid3X3, Building2, Layers, Layout, MapPin, ChevronRight, Hash, Maximize2, Minimize2 } from 'lucide-react';
 import { structureService } from '../../services/structureService';
 import { Block, Floor, Room } from '../../types/collegeStructure';
 import { toast } from '../../../../utils/toast';
@@ -28,8 +28,41 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
 
     const [loading, setLoading] = useState(false);
     const [initialConfig, setInitialConfig] = useState<any>(null); // To detect changes
+    const [isFullScreen, setIsFullScreen] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
 
     // --- Loading Effects ---
+
+    // Handle Full Screen Changes
+    useEffect(() => {
+        const handleFullScreenChange = () => {
+            if (!document.fullscreenElement) {
+                setIsFullScreen(false);
+            }
+        };
+
+        document.addEventListener('fullscreenchange', handleFullScreenChange);
+        return () => document.removeEventListener('fullscreenchange', handleFullScreenChange);
+    }, []);
+
+    const toggleFullScreen = () => {
+        if (!isFullScreen) {
+            setIsFullScreen(true);
+            // Request full screen on the specific element to bypass parent transforms
+            if (containerRef.current) {
+                containerRef.current.requestFullscreen().catch((err) => {
+                    console.warn("Error attempting to enable full-screen mode:", err);
+                });
+            }
+        } else {
+            setIsFullScreen(false);
+            if (document.fullscreenElement) {
+                document.exitFullscreen().catch((err) => {
+                    console.warn("Error attempting to exit full-screen mode:", err);
+                });
+            }
+        }
+    };
 
     useEffect(() => {
         loadBlocks();
@@ -160,7 +193,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
     );
 
     return (
-        <div className="flex flex-col gap-6 h-full pb-8">
+        <div className="flex flex-col gap-8 pb-12 relative">
             {/* Page Title / Header */}
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
@@ -176,11 +209,11 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                 </div>
             </div>
 
-            <div className="flex flex-col xl:flex-row gap-6 h-full min-h-[700px]">
-                {/* Left Panel: Configuration */}
-                <div className="w-full xl:w-[400px] flex flex-col gap-6 shrink-0">
-                    <Card className="border border-slate-200 shadow-lg bg-white/90 backdrop-blur-xl h-full">
-                        <CardHeader className="flex gap-3 bg-slate-50/80 border-b border-slate-100 p-6">
+            <div className="flex flex-col xl:flex-row gap-8 items-start relative">
+                {/* Left Panel: Configuration (Sticky) */}
+                <div className="w-full xl:w-[400px] shrink-0 xl:sticky xl:top-[140px] transition-all z-10">
+                    <Card className="border border-slate-200 shadow-xl shadow-slate-200/50 bg-white/95 backdrop-blur-xl">
+                        <CardHeader className="flex gap-3 bg-slate-50/50 border-b border-slate-100 p-6">
                             <div className="p-2 bg-white rounded-lg border border-slate-200 shadow-sm text-indigo-600">
                                 <MonitorPlay size={20} />
                             </div>
@@ -195,7 +228,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                             {/* 1. Location Selection */}
                             <div className="space-y-5">
                                 <div className="flex items-center gap-2 mb-2">
-                                    <div className="flex flex-col gap-2">
+                                    <div className="flex flex-col gap-2 w-full">
                                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1 flex items-center gap-1.5">
                                             <Building2 size={12} /> Building Block
                                         </label>
@@ -346,7 +379,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                     <div className="space-y-4">
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="space-y-1.5">
-                                                <label htmlFor="config-rows" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Rows</label>
+                                                <label htmlFor="config-rows" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Columns (A, B...)</label>
                                                 <Input
                                                     id="config-rows"
                                                     name="config-rows"
@@ -362,7 +395,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                                 />
                                             </div>
                                             <div className="space-y-1.5">
-                                                <label htmlFor="config-benches" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Cols / Row</label>
+                                                <label htmlFor="config-benches" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Benches / Column</label>
                                                 <Input
                                                     id="config-benches"
                                                     name="config-benches"
@@ -460,105 +493,133 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                     </Card>
                 </div>
 
-                {/* Right Panel: Preview */}
-                <div className="flex-1 h-full min-h-[600px] flex flex-col rounded-3xl overflow-hidden shadow-2xl shadow-slate-900/10 border border-slate-200 bg-slate-900 ring-1 ring-slate-900/5">
+                {/* Right Panel: Preview (Redesigned) */}
+                <div
+                    ref={containerRef}
+                    className={`${isFullScreen ? 'fixed inset-0 z-[100] rounded-none h-screen w-screen' : 'flex-1 min-h-[800px] rounded-3xl border border-slate-200 shadow-2xl shadow-slate-900/10 ring-1 ring-slate-900/5'} flex flex-col bg-[#0B0F19] relative transition-all duration-500`}
+                >
+                    {/* Background Grid Effect */}
+                    <div className="absolute inset-0 bg-[linear-gradient(rgba(30,41,59,0.2)_1px,transparent_1px),linear-gradient(90deg,rgba(30,41,59,0.2)_1px,transparent_1px)] bg-[length:40px_40px] pointer-events-none" />
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(99,102,241,0.15),transparent_50%)] pointer-events-none" />
+
                     {/* Preview Navbar */}
-                    <div className="bg-slate-900/90 backdrop-blur-md p-4 px-6 flex justify-between items-center border-b border-slate-800/50 sticky top-0 z-20">
+                    <div className="relative z-20 flex justify-between items-center p-6 border-b border-white/5 bg-[#0B0F19]/80 backdrop-blur-xl">
                         <div className="flex items-center gap-4">
-                            <div className="relative flex h-3 w-3">
-                                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${selectedRoomId ? 'bg-emerald-400' : 'bg-slate-500'}`}></span>
-                                <span className={`relative inline-flex rounded-full h-3 w-3 ${selectedRoomId ? 'bg-emerald-500' : 'bg-slate-600'}`}></span>
-                            </div>
+                            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] animate-pulse" />
                             <div>
-                                <span className="text-white font-bold tracking-wide text-sm block leading-none">Live Simulation</span>
-                                <span className="text-[10px] text-slate-500 font-mono mt-1 block tracking-wider uppercase">
-                                    {selectedRoomId ? `Monitoring: Room ${selectedRoomId}` : 'Standby Mode'}
-                                </span>
+                                <h3 className="text-white font-bold tracking-tight text-sm">Live Simulation</h3>
+                                <p className="text-[10px] text-slate-400 font-mono tracking-wider uppercase mt-0.5">
+                                    {selectedRoomId ? `Monitoring: Room ${rooms.find(r => r.RoomID === Number(selectedRoomId))?.RoomCode || 'Unknown'}` : 'Offline'}
+                                </p>
                             </div>
                         </div>
 
-                        {/* Legend */}
-                        <div className="bg-slate-800/50 rounded-full px-4 py-1.5 border border-slate-700/50 flex gap-6">
-                            <div className="flex items-center gap-2">
-                                <div className="w-2.5 h-2.5 bg-slate-700 rounded-sm border border-slate-600" />
-                                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Desk</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <div className="w-2.5 h-2.5 bg-indigo-500/20 rounded-sm border border-indigo-500/50" />
-                                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Seat</span>
+                        <div className="flex items-center gap-4">
+                            {/* Full Screen Toggle */}
+                            <Tooltip content={isFullScreen ? "Exit Full Screen (Esc)" : "Enter Full Screen"} closeDelay={0}>
+                                <button
+                                    onClick={toggleFullScreen}
+                                    className="p-2 rounded-full bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/20 text-slate-400 hover:text-white transition-all outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                >
+                                    {isFullScreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                                </button>
+                            </Tooltip>
+
+                            {/* Legend */}
+                            <div className="bg-slate-800/50 rounded-full px-4 py-1.5 border border-slate-700/50 flex gap-6">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-2.5 h-2.5 bg-slate-700 rounded-sm border border-slate-600" />
+                                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Desk</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="w-2.5 h-2.5 bg-indigo-500/20 rounded-sm border border-indigo-500/50" />
+                                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Seat</span>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Canvas */}
-                    <div className="flex-1 bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:20px_20px] relative overflow-hidden flex flex-col">
-                        <div className="absolute inset-0 bg-gradient-to-b from-slate-900 via-slate-900/95 to-[#0B0F19]" />
+                    {/* Canvas Area */}
+                    <div className="flex-1 relative flex flex-col z-10 p-12 overflow-x-auto custom-scrollbar">
+                        <div className="w-full h-full flex flex-col min-w-min">
 
-                        <div className="relative z-10 flex-1 overflow-auto p-12 custom-scrollbar flex flex-col items-center">
-                            {/* Front of Room Indicator */}
-                            <div className="w-full max-w-2xl flex flex-col items-center mb-16 relative shrink-0">
-                                <div className="w-48 h-12 bg-gradient-to-b from-slate-800 to-slate-900 rounded-lg border border-slate-700/50 shadow-xl flex items-center justify-center mb-2 relative group cursor-help">
-                                    <div className="absolute inset-x-4 top-0 h-[1px] bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent" />
-                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest group-hover:text-indigo-400 transition-colors">Teacher's Desk</span>
-                                    <div className="absolute -bottom-1 w-24 h-1 bg-slate-800/50 blur-sm rounded-full" />
+                            {/* Teacher's Desk & Front Indicator */}
+                            <div className="mb-16 flex flex-col items-center gap-4 shrink-0 mx-auto">
+                                <div className="w-64 h-16 rounded-2xl bg-gradient-to-b from-[#1E293B] to-[#0F172A] border border-white/10 shadow-2xl flex items-center justify-center relative overflow-hidden group">
+                                    <div className="absolute inset-0 bg-indigo-500/5 group-hover:bg-indigo-500/10 transition-colors" />
+                                    <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent" />
+                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest group-hover:text-indigo-400 transition-colors">Teacher's Desk</span>
                                 </div>
-                                <div className="flex items-center gap-2 opacity-30 text-slate-500">
-                                    <ChevronRight size={14} className="rotate-90" />
-                                    <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Front of Room</span>
-                                    <ChevronRight size={14} className="rotate-90" />
+                                <div className="flex items-center gap-3 opacity-40">
+                                    <ChevronRight className="rotate-90 text-slate-500" size={14} />
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em]">Front of Room</span>
+                                    <ChevronRight className="rotate-90 text-slate-500" size={14} />
                                 </div>
                             </div>
 
+                            {/* Seating Grid */}
                             {!selectedRoomId || totalSeats === 0 ? (
-                                <div className="flex-1 flex flex-col items-center justify-center text-slate-700 gap-6 opacity-30 animate-pulse">
-                                    <Grid3X3 size={80} strokeWidth={0.5} />
-                                    <p className="text-sm font-bold tracking-widest uppercase">Grid System Offline</p>
+                                <div className="flex flex-col items-center justify-center py-20 opacity-30 gap-6 mx-auto">
+                                    <div className="p-6 rounded-3xl bg-white/5 border border-white/5">
+                                        <Grid3X3 size={64} className="text-slate-400" strokeWidth={1} />
+                                    </div>
+                                    <p className="text-sm font-medium text-slate-500 uppercase tracking-widest">No Layout Configured</p>
                                 </div>
                             ) : (
-                                <div className="flex flex-col gap-8 items-center justify-start pb-24 w-full">
-                                    {/* Render Rows */}
-                                    {Array.from({ length: config.rows }).map((_, rIndex) => {
-                                        const rowLabel = String.fromCharCode(65 + rIndex);
+                                <div className="flex flex-row gap-12 items-start mx-auto pb-24">
+                                    {/* Render COLUMNS (Based on config.rows which generates A, B, C...) */}
+                                    {Array.from({ length: config.rows }).map((_, colIndex) => {
+                                        const colLabel = String.fromCharCode(65 + colIndex); // A, B, C...
+
                                         return (
-                                            <div key={rIndex} className="flex gap-4 md:gap-8 items-center animate-in zoom-in slide-in-from-bottom-4 duration-500 fill-mode-backwards w-full justify-center group/row" style={{ animationDelay: `${rIndex * 50}ms` }}>
+                                            <div key={colIndex} className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700" style={{ animationDelay: `${colIndex * 100}ms` }}>
 
-                                                {/* Row Label (Left) */}
-                                                <div className="w-8 h-8 rounded-full bg-slate-800/50 flex items-center justify-center border border-slate-700/30 shadow-lg shrink-0 group-hover/row:bg-indigo-500/10 group-hover/row:border-indigo-500/30 transition-all">
-                                                    <span className="text-slate-500 text-xs font-bold font-mono group-hover/row:text-indigo-400">{rowLabel}</span>
-                                                </div>
+                                                {/* Column Container */}
+                                                <div className="relative p-2 pb-6 rounded-[2rem] border border-dashed border-white/10 bg-white/[0.02]">
+                                                    {/* Column Label */}
+                                                    <div className="absolute -left-10 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-[#1E293B] border border-white/10 flex items-center justify-center text-xs font-bold text-slate-500 shadow-xl">
+                                                        {colLabel}
+                                                    </div>
 
-                                                {/* Benches in Row */}
-                                                <div className="flex gap-4 md:gap-8 px-6 py-4 bg-slate-800/20 rounded-2xl border border-white/5 hover:border-white/10 hover:bg-slate-800/40 transition-all duration-300 backdrop-blur-sm shadow-md">
-                                                    {Array.from({ length: config.benchesPerRow }).map((_, bIndex) => (
-                                                        <div key={bIndex} className="flex flex-col gap-2 items-center">
-                                                            {/* Desk Surface */}
-                                                            <div className="w-full h-1.5 bg-slate-700/80 rounded-full mb-1 shadow-sm" />
+                                                    <div className="flex flex-col gap-4 px-2">
+                                                        {/* Render BENCHES Vertically (Based on config.benchesPerRow) */}
+                                                        {Array.from({ length: config.benchesPerRow }).map((_, benchIndex) => (
+                                                            <div key={benchIndex} className="relative group/bench">
+                                                                {/* Bench Shape */}
+                                                                <div className="bg-[#1E293B] border border-white/5 rounded-2xl p-2.5 shadow-lg group-hover/bench:border-indigo-500/30 group-hover/bench:shadow-indigo-500/10 transition-all duration-300">
+                                                                    {/* Desk Surface Visual */}
+                                                                    <div className="h-1.5 w-full bg-[#334155] rounded-full mb-2 opacity-50" />
 
-                                                            <div className="flex gap-2 p-1.5 bg-slate-900/40 rounded-xl shadow-inner border border-white/5">
-                                                                {/* Seats in Bench */}
-                                                                {Array.from({ length: config.seatsPerBench }).map((_, sIndex) => {
-                                                                    const seatNumber = sIndex + 1;
-                                                                    const fullSeatCode = `${rowLabel}${seatNumber}`;
-                                                                    return (
-                                                                        <Tooltip key={sIndex} content={`Row ${rowLabel} - Seat ${seatNumber}`} size="sm" color="foreground" delay={0} closeDelay={0}>
-                                                                            <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-indigo-500/5 border border-indigo-500/10 flex items-center justify-center hover:bg-indigo-600 hover:text-white hover:border-indigo-500 hover:scale-110 hover:shadow-[0_0_20px_rgba(99,102,241,0.4)] transition-all cursor-pointer group/seat relative select-none">
-                                                                                <span className="text-[10px] md:text-xs font-bold font-mono text-indigo-400 group-hover/seat:text-white transition-colors">
-                                                                                    {fullSeatCode}
-                                                                                </span>
-                                                                                {/* Status Dot */}
-                                                                                <div className="absolute top-1 right-1 w-1 h-1 rounded-full bg-indigo-500/30 group-hover/seat:bg-white/50" />
-                                                                            </div>
-                                                                        </Tooltip>
-                                                                    );
-                                                                })}
+                                                                    <div className="flex gap-2.5">
+                                                                        {/* Seats */}
+                                                                        {Array.from({ length: config.seatsPerBench }).map((_, seatIndex) => {
+                                                                            // Calculate continuous seat number for this column
+                                                                            // Previous benches in this column * seats per bench + current seat index + 1
+                                                                            const seatNum = (benchIndex * config.seatsPerBench) + seatIndex + 1;
+                                                                            const seatCode = `${colLabel}${seatNum}`;
+
+                                                                            return (
+                                                                                <Tooltip key={seatIndex} content={`Seat ${seatCode}`} closeDelay={0}>
+                                                                                    <div className="w-10 h-10 rounded-lg bg-[#0F172A] border border-indigo-500/20 flex items-center justify-center hover:bg-indigo-600 hover:border-indigo-500 hover:scale-110 cursor-pointer transition-all group/seat shadow-inner relative overflow-hidden">
+                                                                                        <span className="text-[10px] font-bold font-mono text-indigo-400 group-hover/seat:text-white transition-colors relative z-10">
+                                                                                            {seatCode}
+                                                                                        </span>
+                                                                                        {/* Glow effect */}
+                                                                                        <div className="absolute inset-0 bg-indigo-500/10 opacity-0 group-hover/seat:opacity-100 transition-opacity" />
+                                                                                    </div>
+                                                                                </Tooltip>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
+                                                        ))}
+                                                    </div>
 
-                                                {/* Row Label (Right) */}
-                                                <div className="w-8 h-8 rounded-full bg-slate-800/50 flex items-center justify-center border border-slate-700/30 shadow-lg shrink-0 opacity-50 group-hover/row:opacity-100 transition-opacity">
-                                                    <span className="text-slate-500 text-xs font-bold font-mono">{rowLabel}</span>
+                                                    {/* Bottom Column Label */}
+                                                    <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-[#1E293B] border border-white/10 flex items-center justify-center text-xs font-bold text-slate-500 shadow-xl">
+                                                        {colLabel}
+                                                    </div>
                                                 </div>
                                             </div>
                                         );

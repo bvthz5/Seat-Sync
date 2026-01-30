@@ -287,9 +287,9 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
 
 
     return (
-        <div className="flex flex-col gap-6">
+        <div className="h-full flex flex-col gap-6">
             {/* Top Filter Section */}
-            <div className="p-1 rounded-3xl bg-gradient-to-b from-white to-slate-50 border border-slate-200 shadow-sm relative overflow-visible z-20">
+            <div className="flex-none p-1 rounded-3xl bg-gradient-to-b from-white to-slate-50 border border-slate-200 shadow-sm relative overflow-visible z-20">
                 <div className="bg-white/50 backdrop-blur-xl rounded-[20px] p-5 flex flex-col md:flex-row gap-6 justify-between items-end">
 
                     {/* Visual Decor */}
@@ -418,7 +418,7 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
 
             {/* Pagination & Filter Info */}
             {selectedFloorId && (
-                <div className="flex flex-col md:flex-row justify-between items-center gap-4 px-2">
+                <div className="flex-none flex flex-col md:flex-row justify-between items-center gap-4 px-2">
                     <div className="flex items-center gap-4 w-full md:w-auto flex-1">
                         <Input
                             id="rooms-search"
@@ -447,7 +447,8 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                             selectedKeys={[statusFilter]}
                             onSelectionChange={(keys) => { setStatusFilter(Array.from(keys)[0] as string); setPage(1); }}
                             classNames={{
-                                trigger: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 shadow-sm rounded-xl h-11 transition-all"
+                                trigger: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 shadow-sm rounded-xl h-11 transition-all",
+                                selectorIcon: "right-3"
                             }}
                         >
                             <SelectItem key="all" textValue="All Status">All Status</SelectItem>
@@ -462,22 +463,23 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
             )}
 
             {/* Content Area */}
-            {!selectedFloorId ? (
-                <div className="flex flex-col items-center justify-center py-24 bg-gradient-to-b from-white to-slate-50/50 rounded-3xl border border-dashed border-slate-300 relative overflow-hidden group">
-                    <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10" />
-                    <div className="w-24 h-24 bg-white rounded-3xl flex items-center justify-center shadow-xl shadow-indigo-100 mb-6 ring-4 ring-slate-50 z-10 group-hover:scale-105 transition-transform duration-300">
-                        <div className="w-16 h-16 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center">
-                            <Building2 size={32} strokeWidth={1.5} />
+            <div className="flex-1 min-h-0 relative">
+                {!selectedFloorId ? (
+                    <div className="h-full flex flex-col items-center justify-center py-24 bg-gradient-to-b from-white to-slate-50/50 rounded-3xl border border-dashed border-slate-300 relative overflow-hidden group">
+                        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10" />
+                        <div className="w-24 h-24 bg-white rounded-3xl flex items-center justify-center shadow-xl shadow-indigo-100 mb-6 ring-4 ring-slate-50 z-10 group-hover:scale-105 transition-transform duration-300">
+                            <div className="w-16 h-16 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center">
+                                <Building2 size={32} strokeWidth={1.5} />
+                            </div>
                         </div>
+                        <h3 className="text-xl font-bold text-slate-800 mb-2 z-10">Select Location Context</h3>
+                        <p className="text-slate-500 max-w-sm text-center font-medium px-4 z-10">
+                            Choose a <span className="text-blue-600 font-bold">Building Block</span> and <span className="text-indigo-600 font-bold">Floor Level</span> above to begin managing rooms.
+                        </p>
                     </div>
-                    <h3 className="text-xl font-bold text-slate-800 mb-2 z-10">Select Location Context</h3>
-                    <p className="text-slate-500 max-w-sm text-center font-medium px-4 z-10">
-                        Choose a <span className="text-blue-600 font-bold">Building Block</span> and <span className="text-indigo-600 font-bold">Floor Level</span> above to begin managing rooms.
-                    </p>
-                </div>
-            ) : (
-                <div className="flex flex-col gap-4">
-                    <Table aria-label="Rooms table" classNames={{ wrapper: "bg-white shadow-sm border border-slate-200 rounded-2xl p-0 overflow-hidden", th: "bg-slate-50 text-slate-600 font-bold text-xs py-4 px-6 border-b border-slate-200 uppercase tracking-wider", td: "py-4 px-6 border-b border-slate-100 group-last:border-0", tr: "hover:bg-slate-50/80 transition-colors cursor-default" }}>
+                ) : (
+                    // Table
+                    <Table isHeaderSticky aria-label="Rooms table" classNames={{ base: "h-full", wrapper: "bg-white shadow-sm border border-slate-200 rounded-2xl p-0 h-full overflow-auto custom-scrollbar", th: "bg-slate-50 text-slate-600 font-bold text-xs py-4 px-6 border-b border-slate-200 uppercase tracking-wider", td: "py-4 px-6 border-b border-slate-100 group-last:border-0", tr: "hover:bg-slate-50/80 transition-colors cursor-default" }}>
                         <TableHeader columns={columns}>{(column) => <TableColumn key={column.uid} align={column.uid === "actions" ? "end" : "start"}>{column.name}</TableColumn>}</TableHeader>
                         <TableBody items={rooms} isLoading={loading} emptyContent={<div className="py-12 flex flex-col items-center text-center"><Search className="text-slate-300 mb-3" size={32} /><p className="text-slate-500 font-medium">No rooms found.</p></div>}>
                             {(room) => (
@@ -496,46 +498,46 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                             )}
                         </TableBody>
                     </Table>
+                )}
+            </div>
 
-                    {/* Table Pagination */}
-                    {totalPages > 1 && (
-                        <div className="flex justify-center p-4 bg-white border border-slate-200 rounded-2xl shadow-sm">
-                            <div className="flex items-center gap-2">
+            {/* Table Pagination */}
+            {selectedFloorId && totalPages > 1 && (
+                <div className="flex-none flex justify-center p-4 bg-white border border-slate-200 rounded-2xl shadow-sm mb-1">
+                    <div className="flex items-center gap-2">
+                        <Button
+                            size="sm"
+                            variant="flat"
+                            isDisabled={page === 1}
+                            onPress={() => setPage(page - 1)}
+                            className="rounded-lg font-bold"
+                        >
+                            Previous
+                        </Button>
+                        <div className="flex gap-1">
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
                                 <Button
+                                    key={p}
                                     size="sm"
-                                    variant="flat"
-                                    isDisabled={page === 1}
-                                    onPress={() => setPage(page - 1)}
-                                    className="rounded-lg font-bold"
+                                    variant={page === p ? "solid" : "light"}
+                                    color={page === p ? "primary" : "default"}
+                                    onPress={() => setPage(p)}
+                                    className={`w-8 h-8 min-w-0 rounded-lg font-bold transition-all ${page === p ? 'shadow-md shadow-blue-500/20 text-white' : ''}`}
                                 >
-                                    Previous
+                                    {p}
                                 </Button>
-                                <div className="flex gap-1">
-                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                                        <Button
-                                            key={p}
-                                            size="sm"
-                                            variant={page === p ? "solid" : "light"}
-                                            color={page === p ? "primary" : "default"}
-                                            onPress={() => setPage(p)}
-                                            className={`w-8 h-8 min-w-0 rounded-lg font-bold transition-all ${page === p ? 'shadow-md shadow-blue-500/20' : ''}`}
-                                        >
-                                            {p}
-                                        </Button>
-                                    ))}
-                                </div>
-                                <Button
-                                    size="sm"
-                                    variant="flat"
-                                    isDisabled={page === totalPages}
-                                    onPress={() => setPage(page + 1)}
-                                    className="rounded-lg font-bold"
-                                >
-                                    Next
-                                </Button>
-                            </div>
+                            ))}
                         </div>
-                    )}
+                        <Button
+                            size="sm"
+                            variant="flat"
+                            isDisabled={page === totalPages}
+                            onPress={() => setPage(page + 1)}
+                            className="rounded-lg font-bold"
+                        >
+                            Next
+                        </Button>
+                    </div>
                 </div>
             )}
 
