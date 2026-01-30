@@ -229,10 +229,13 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                             <div className="space-y-5">
                                 <div className="flex items-center gap-2 mb-2">
                                     <div className="flex flex-col gap-2 w-full">
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1 flex items-center gap-1.5">
-                                            <Building2 size={12} /> Building Block
-                                        </label>
                                         <Autocomplete
+                                            label={
+                                                <span className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">
+                                                    <Building2 size={12} /> Building Block
+                                                </span>
+                                            }
+                                            labelPlacement="outside"
                                             aria-label="Select Building Block"
                                             placeholder="Search building..."
                                             selectedKey={selectedBlockId}
@@ -276,10 +279,13 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="flex flex-col gap-2">
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1 flex items-center gap-1.5">
-                                            <Layers size={12} /> Floor
-                                        </label>
                                         <Autocomplete
+                                            label={
+                                                <span className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">
+                                                    <Layers size={12} /> Floor
+                                                </span>
+                                            }
+                                            labelPlacement="outside"
                                             aria-label="Select Floor"
                                             placeholder="Search floor..."
                                             isDisabled={!selectedBlockId}
@@ -318,10 +324,13 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                         </Autocomplete>
                                     </div>
                                     <div className="flex flex-col gap-2">
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1 flex items-center gap-1.5">
-                                            <Armchair size={12} /> Room
-                                        </label>
                                         <Autocomplete
+                                            label={
+                                                <span className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">
+                                                    <Armchair size={12} /> Room
+                                                </span>
+                                            }
+                                            labelPlacement="outside"
                                             aria-label="Select Room"
                                             placeholder="Search room..."
                                             isDisabled={!selectedFloorId}
@@ -379,9 +388,10 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                     <div className="space-y-4">
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="space-y-1.5">
-                                                <label htmlFor="config-rows" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Columns (A, B...)</label>
                                                 <Input
                                                     id="config-rows"
+                                                    label="Columns (A, B...)"
+                                                    labelPlacement="outside"
                                                     name="config-rows"
                                                     type="number"
                                                     placeholder="0"
@@ -389,15 +399,17 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                                     value={config.rows.toString()}
                                                     onValueChange={(v) => setConfig({ ...config, rows: Number(v) })}
                                                     classNames={{
+                                                        label: "text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1 mb-1.5",
                                                         inputWrapper: "h-12 bg-white border-1 border-slate-200 hover:border-blue-400 focus-within:border-blue-600 rounded-xl shadow-sm transition-all",
                                                         input: "text-lg font-bold text-slate-800 text-center bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
                                                     }}
                                                 />
                                             </div>
                                             <div className="space-y-1.5">
-                                                <label htmlFor="config-benches" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Benches / Column</label>
                                                 <Input
                                                     id="config-benches"
+                                                    label="Benches / Column"
+                                                    labelPlacement="outside"
                                                     name="config-benches"
                                                     type="number"
                                                     placeholder="0"
@@ -405,6 +417,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                                     value={config.benchesPerRow.toString()}
                                                     onValueChange={(v) => setConfig({ ...config, benchesPerRow: Number(v) })}
                                                     classNames={{
+                                                        label: "text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1 mb-1.5",
                                                         inputWrapper: "h-12 bg-white border-1 border-slate-200 hover:border-blue-400 focus-within:border-blue-600 rounded-xl shadow-sm transition-all",
                                                         input: "text-lg font-bold text-slate-800 text-center bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
                                                     }}
@@ -412,25 +425,23 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                             </div>
                                         </div>
                                         <div className="space-y-1.5">
-                                            <label htmlFor="config-seats" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Seats Per Bench</label>
-                                            <div className="relative">
-                                                <Input
-                                                    id="config-seats"
-                                                    name="config-seats"
-                                                    type="number"
-                                                    placeholder="0"
-                                                    min={1}
-                                                    value={config.seatsPerBench.toString()}
-                                                    onValueChange={(v) => setConfig({ ...config, seatsPerBench: Number(v) })}
-                                                    classNames={{
-                                                        inputWrapper: "h-12 bg-white border-1 border-slate-200 hover:border-blue-400 focus-within:border-blue-600 rounded-xl shadow-sm transition-all pl-12",
-                                                        input: "text-lg font-bold text-slate-800 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
-                                                    }}
-                                                />
-                                                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                                                    <Hash size={16} />
-                                                </div>
-                                            </div>
+                                            <Input
+                                                id="config-seats"
+                                                label="Seats Per Bench"
+                                                labelPlacement="outside"
+                                                name="config-seats"
+                                                type="number"
+                                                placeholder="0"
+                                                min={1}
+                                                value={config.seatsPerBench.toString()}
+                                                onValueChange={(v) => setConfig({ ...config, seatsPerBench: Number(v) })}
+                                                startContent={<Hash size={16} className="text-slate-400 pointer-events-none" />}
+                                                classNames={{
+                                                    label: "text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1 mb-1.5",
+                                                    inputWrapper: "h-12 bg-white border-1 border-slate-200 hover:border-blue-400 focus-within:border-blue-600 rounded-xl shadow-sm transition-all pl-2",
+                                                    input: "text-lg font-bold text-slate-800 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
+                                                }}
+                                            />
                                         </div>
                                     </div>
 
@@ -630,6 +641,6 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };

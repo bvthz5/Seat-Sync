@@ -158,11 +158,14 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                 {selectedBlockId && <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50/50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />}
 
                 <div className="flex flex-col gap-3 w-full md:w-1/2 z-10">
-                    <label htmlFor="block-select-input" className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                        <Building2 size={14} /> Select Building Block
-                    </label>
                     <Autocomplete
                         id="block-select"
+                        label={
+                            <span className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                <Building2 size={14} /> Select Building Block
+                            </span>
+                        }
+                        labelPlacement="outside"
                         name="block-select"
                         aria-label="Select Block"
                         placeholder="Choose a building block..."
@@ -425,9 +428,10 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                             </ModalHeader>
                             <ModalBody className="space-y-6">
                                 <div className="flex flex-col gap-1.5">
-                                    <label htmlFor="modal-floor-block-input" className="text-sm font-semibold text-slate-700 ml-1">Building Block</label>
                                     <Autocomplete
                                         id="modal-floor-block"
+                                        label={<span className="text-sm font-semibold text-slate-700 ml-1">Building Block</span>}
+                                        labelPlacement="outside"
                                         name="BlockID"
                                         placeholder="Search and select a block..."
                                         selectedKey={formData.BlockID ? formData.BlockID.toString() : ""}
@@ -471,9 +475,10 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                                 </div>
 
                                 <div className="flex flex-col gap-1.5">
-                                    <label htmlFor="modal-floor-number" className="text-sm font-semibold text-slate-700 ml-1">Floor Number</label>
                                     <Input
                                         id="modal-floor-number"
+                                        label="Floor Number"
+                                        labelPlacement="outside"
                                         name="FloorNumber"
                                         type="number"
                                         autoFocus
@@ -481,6 +486,7 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                                         aria-label="Floor Number"
                                         variant="bordered"
                                         classNames={{
+                                            label: "text-sm font-semibold text-slate-700 ml-1 mb-1.5",
                                             inputWrapper: "h-12 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl shadow-sm px-4 transition-all",
                                             input: "text-base font-medium text-slate-800 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
                                         }}

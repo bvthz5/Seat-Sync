@@ -308,15 +308,17 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
                             </ModalHeader>
                             <ModalBody className="py-6">
                                 <div className="flex flex-col gap-2">
-                                    <label htmlFor="modal-block-name" className="text-sm font-medium text-slate-700">Block Name</label>
                                     <Input
                                         id="modal-block-name"
+                                        label="Block Name"
+                                        labelPlacement="outside"
                                         name="BlockName"
                                         autoFocus
                                         placeholder="e.g. Science Block, Main Building"
                                         aria-label="Block Name"
                                         variant="bordered"
                                         classNames={{
+                                            label: "text-sm font-medium text-slate-700 mb-1",
                                             inputWrapper: "h-12 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl shadow-sm px-4 transition-all",
                                             input: "text-base font-medium text-slate-800 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
                                         }}
