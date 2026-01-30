@@ -10,6 +10,8 @@ interface SemesterAttributes {
   SemesterNumber?: number;
   SemesterName?: string;
   ProgramID: number;
+  AcademicYearID?: number;
+  IsActive?: boolean;
 }
 
 /**
@@ -23,6 +25,8 @@ export class Semester extends Model<SemesterAttributes, SemesterCreationAttribut
   declare SemesterNumber?: number;
   declare SemesterName?: string;
   declare ProgramID: number;
+  declare AcademicYearID?: number;
+  declare IsActive?: boolean;
 }
 
 Semester.init(
@@ -48,6 +52,14 @@ Semester.init(
         key: "ProgramID",
       },
     },
+    AcademicYearID: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    IsActive: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
+    }
   },
   {
     sequelize,

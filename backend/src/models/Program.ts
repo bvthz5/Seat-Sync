@@ -9,6 +9,9 @@ interface ProgramAttributes {
   ProgramName: string;
   ProgramCode?: string;
   DurationYears?: number;
+  DepartmentID?: number;
+  AcademicYearID?: number;
+  IsActive?: boolean;
 }
 
 /**
@@ -22,6 +25,9 @@ export class Program extends Model<ProgramAttributes, ProgramCreationAttributes>
   declare ProgramName: string;
   declare ProgramCode?: string;
   declare DurationYears?: number;
+  declare DepartmentID?: number;
+  declare AcademicYearID?: number;
+  declare IsActive?: boolean;
 }
 
 Program.init(
@@ -43,6 +49,18 @@ Program.init(
       type: DataTypes.INTEGER,
       allowNull: true,
     },
+    DepartmentID: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    AcademicYearID: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    IsActive: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
+    }
   },
   {
     sequelize,

@@ -158,6 +158,14 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
         const room = rooms.find(r => r.RoomID === Number(selectedRoomId));
         if (!room) return;
 
+        const maxCapacity = room.Capacity || 0;
+        const totalConfigured = config.rows * config.benchesPerRow * config.seatsPerBench;
+
+        if (totalConfigured > maxCapacity) {
+            toast.error(`Configuration exceeds room capacity (${maxCapacity} seats). Please increase room capacity first.`);
+            return;
+        }
+
         setLoading(true);
         try {
             await structureService.updateRoomLayout(Number(selectedRoomId), {
@@ -229,24 +237,22 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                             <div className="space-y-5">
                                 <div className="flex items-center gap-2 mb-2">
                                     <div className="flex flex-col gap-2 w-full">
+                                        <label htmlFor="block-select" className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1 flex items-center gap-1.5">
+                                            <Building2 size={12} /> Building Block
+                                        </label>
                                         <Autocomplete
-                                            label={
-                                                <span className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">
-                                                    <Building2 size={12} /> Building Block
-                                                </span>
-                                            }
-                                            labelPlacement="outside"
-                                            aria-label="Select Building Block"
-                                            placeholder="Search building..."
-                                            selectedKey={selectedBlockId}
-                                            onSelectionChange={(key: React.Key | null) => setSelectedBlockId(key as string)}
-                                            variant="bordered"
                                             inputProps={{
+                                                id: "block-select",
                                                 classNames: {
                                                     inputWrapper: "h-14 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl transition-all pl-4",
                                                     input: "text-slate-800 font-bold text-sm bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0",
                                                 }
                                             }}
+                                            aria-label="Select Building Block"
+                                            placeholder="Search building..."
+                                            selectedKey={selectedBlockId}
+                                            onSelectionChange={(key: React.Key | null) => setSelectedBlockId(key as string)}
+                                            variant="bordered"
                                             listboxProps={{
                                                 itemClasses: {
                                                     base: "rounded-lg data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-600 px-3 py-2 my-1 gap-3",
@@ -279,25 +285,23 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="flex flex-col gap-2">
+                                        <label htmlFor="floor-select" className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1 flex items-center gap-1.5">
+                                            <Layers size={12} /> Floor
+                                        </label>
                                         <Autocomplete
-                                            label={
-                                                <span className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">
-                                                    <Layers size={12} /> Floor
-                                                </span>
-                                            }
-                                            labelPlacement="outside"
+                                            inputProps={{
+                                                id: "floor-select",
+                                                classNames: {
+                                                    inputWrapper: "h-14 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl transition-all pl-4",
+                                                    input: "text-slate-800 font-bold text-sm bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0",
+                                                }
+                                            }}
                                             aria-label="Select Floor"
                                             placeholder="Search floor..."
                                             isDisabled={!selectedBlockId}
                                             selectedKey={selectedFloorId}
                                             onSelectionChange={(key: React.Key | null) => setSelectedFloorId(key as string)}
                                             variant="bordered"
-                                            inputProps={{
-                                                classNames: {
-                                                    inputWrapper: "h-14 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl transition-all pl-4",
-                                                    input: "text-slate-800 font-bold text-sm bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0",
-                                                }
-                                            }}
                                             listboxProps={{
                                                 itemClasses: {
                                                     base: "rounded-lg data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-600 px-3 py-2 my-1 gap-3",
@@ -324,25 +328,23 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                         </Autocomplete>
                                     </div>
                                     <div className="flex flex-col gap-2">
+                                        <label htmlFor="room-select" className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1 flex items-center gap-1.5">
+                                            <Armchair size={12} /> Room
+                                        </label>
                                         <Autocomplete
-                                            label={
-                                                <span className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">
-                                                    <Armchair size={12} /> Room
-                                                </span>
-                                            }
-                                            labelPlacement="outside"
+                                            inputProps={{
+                                                id: "room-select",
+                                                classNames: {
+                                                    inputWrapper: `h-14 rounded-xl transition-all pl-4 border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 ${selectedRoomId ? 'bg-blue-50 border-blue-200' : 'bg-white'}`,
+                                                    input: "text-slate-800 font-bold text-sm bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0",
+                                                }
+                                            }}
                                             aria-label="Select Room"
                                             placeholder="Search room..."
                                             isDisabled={!selectedFloorId}
                                             selectedKey={selectedRoomId}
                                             onSelectionChange={(key: React.Key | null) => setSelectedRoomId(key as string)}
                                             variant="bordered"
-                                            inputProps={{
-                                                classNames: {
-                                                    inputWrapper: `h-14 rounded-xl transition-all pl-4 border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 ${selectedRoomId ? 'bg-blue-50 border-blue-200' : 'bg-white'}`,
-                                                    input: "text-slate-800 font-bold text-sm bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0",
-                                                }
-                                            }}
                                             listboxProps={{
                                                 itemClasses: {
                                                     base: "rounded-lg data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-600 px-3 py-2 my-1 gap-3",
@@ -388,10 +390,9 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                     <div className="space-y-4">
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="space-y-1.5">
+                                                <label htmlFor="config-rows" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Columns (A, B...)</label>
                                                 <Input
                                                     id="config-rows"
-                                                    label="Columns (A, B...)"
-                                                    labelPlacement="outside"
                                                     name="config-rows"
                                                     type="number"
                                                     placeholder="0"
@@ -399,17 +400,15 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                                     value={config.rows.toString()}
                                                     onValueChange={(v) => setConfig({ ...config, rows: Number(v) })}
                                                     classNames={{
-                                                        label: "text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1 mb-1.5",
                                                         inputWrapper: "h-12 bg-white border-1 border-slate-200 hover:border-blue-400 focus-within:border-blue-600 rounded-xl shadow-sm transition-all",
                                                         input: "text-lg font-bold text-slate-800 text-center bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
                                                     }}
                                                 />
                                             </div>
                                             <div className="space-y-1.5">
+                                                <label htmlFor="config-benches" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Benches / Column</label>
                                                 <Input
                                                     id="config-benches"
-                                                    label="Benches / Column"
-                                                    labelPlacement="outside"
                                                     name="config-benches"
                                                     type="number"
                                                     placeholder="0"
@@ -417,7 +416,6 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                                     value={config.benchesPerRow.toString()}
                                                     onValueChange={(v) => setConfig({ ...config, benchesPerRow: Number(v) })}
                                                     classNames={{
-                                                        label: "text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1 mb-1.5",
                                                         inputWrapper: "h-12 bg-white border-1 border-slate-200 hover:border-blue-400 focus-within:border-blue-600 rounded-xl shadow-sm transition-all",
                                                         input: "text-lg font-bold text-slate-800 text-center bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
                                                     }}
@@ -425,35 +423,39 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                             </div>
                                         </div>
                                         <div className="space-y-1.5">
-                                            <Input
-                                                id="config-seats"
-                                                label="Seats Per Bench"
-                                                labelPlacement="outside"
-                                                name="config-seats"
-                                                type="number"
-                                                placeholder="0"
-                                                min={1}
-                                                value={config.seatsPerBench.toString()}
-                                                onValueChange={(v) => setConfig({ ...config, seatsPerBench: Number(v) })}
-                                                startContent={<Hash size={16} className="text-slate-400 pointer-events-none" />}
-                                                classNames={{
-                                                    label: "text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1 mb-1.5",
-                                                    inputWrapper: "h-12 bg-white border-1 border-slate-200 hover:border-blue-400 focus-within:border-blue-600 rounded-xl shadow-sm transition-all pl-2",
-                                                    input: "text-lg font-bold text-slate-800 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
-                                                }}
-                                            />
+                                            <label htmlFor="config-seats" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Seats Per Bench</label>
+                                            <div className="relative">
+                                                <Input
+                                                    id="config-seats"
+                                                    name="config-seats"
+                                                    type="number"
+                                                    placeholder="0"
+                                                    min={1}
+                                                    value={config.seatsPerBench.toString()}
+                                                    onValueChange={(v) => setConfig({ ...config, seatsPerBench: Number(v) })}
+                                                    classNames={{
+                                                        inputWrapper: "h-12 bg-white border-1 border-slate-200 hover:border-blue-400 focus-within:border-blue-600 rounded-xl shadow-sm transition-all pl-12",
+                                                        input: "text-lg font-bold text-slate-800 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
+                                                    }}
+                                                />
+                                                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                                                    <Hash size={16} />
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
                                     {/* Summary Card */}
-                                    <div className="mt-2 bg-gradient-to-br from-slate-50 to-indigo-50/30 p-4 rounded-2xl border border-slate-200/60 flex items-center justify-between group cursor-default">
+                                    <div className={`mt-2 p-4 rounded-2xl border flex items-center justify-between group cursor-default transition-colors ${totalSeats > (rooms.find(r => r.RoomID === Number(selectedRoomId))?.Capacity || 0) ? 'bg-red-50 border-red-200' : 'bg-gradient-to-br from-slate-50 to-indigo-50/30 border-slate-200/60'}`}>
                                         <div className="flex flex-col">
-                                            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Calculated Capacity</span>
-                                            <span className="text-[10px] text-slate-400 font-medium">Auto-updated based on grid</span>
+                                            <span className={`text-xs font-bold uppercase tracking-widest ${totalSeats > (rooms.find(r => r.RoomID === Number(selectedRoomId))?.Capacity || 0) ? 'text-red-500' : 'text-slate-500'}`}>Calculated Capacity</span>
+                                            <span className={`text-[10px] font-medium ${totalSeats > (rooms.find(r => r.RoomID === Number(selectedRoomId))?.Capacity || 0) ? 'text-red-400' : 'text-slate-400'}`}>
+                                                Max Allowed: {rooms.find(r => r.RoomID === Number(selectedRoomId))?.Capacity || 0}
+                                            </span>
                                         </div>
                                         <div className="flex items-baseline gap-1">
-                                            <span className="text-3xl font-black text-indigo-600 group-hover:scale-110 transition-transform">{totalSeats}</span>
-                                            <span className="text-xs font-bold text-indigo-400 uppercase">Seats</span>
+                                            <span className={`text-3xl font-black transition-transform group-hover:scale-110 ${totalSeats > (rooms.find(r => r.RoomID === Number(selectedRoomId))?.Capacity || 0) ? 'text-red-600' : 'text-indigo-600'}`}>{totalSeats}</span>
+                                            <span className={`text-xs font-bold uppercase ${totalSeats > (rooms.find(r => r.RoomID === Number(selectedRoomId))?.Capacity || 0) ? 'text-red-400' : 'text-indigo-400'}`}>Seats</span>
                                         </div>
                                     </div>
 

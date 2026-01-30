@@ -116,6 +116,10 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
             toast.error("Block selection is required");
             return;
         }
+        if (formData.FloorNumber === undefined || formData.FloorNumber === null || isNaN(formData.FloorNumber)) {
+            toast.error("Valid Floor Number is required");
+            return;
+        }
 
         try {
             if (editingFloor) {

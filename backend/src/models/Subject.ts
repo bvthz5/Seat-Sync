@@ -12,12 +12,16 @@ interface SubjectAttributes {
   SubjectName: string;
   DepartmentID: number;
   SemesterID: number;
+  ProgramID?: number;
+  AcademicYearID?: number;
+  Credits?: number;
+  IsActive?: boolean;
 }
 
 /**
  * Attributes required when creating a subject
  */
-interface SubjectCreationAttributes extends Optional<SubjectAttributes, "SubjectID"> {}
+interface SubjectCreationAttributes extends Optional<SubjectAttributes, "SubjectID"> { }
 
 export class Subject extends Model<SubjectAttributes, SubjectCreationAttributes>
   implements SubjectAttributes {
@@ -26,6 +30,10 @@ export class Subject extends Model<SubjectAttributes, SubjectCreationAttributes>
   declare SubjectName: string;
   declare DepartmentID: number;
   declare SemesterID: number;
+  declare ProgramID?: number;
+  declare AcademicYearID?: number;
+  declare Credits?: number;
+  declare IsActive?: boolean;
 }
 
 Subject.init(
@@ -59,6 +67,22 @@ Subject.init(
         key: "SemesterID",
       },
     },
+    ProgramID: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    AcademicYearID: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    Credits: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+    },
+    IsActive: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
+    }
   },
   {
     sequelize,

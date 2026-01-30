@@ -258,6 +258,15 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
 
             } else {
                 // SINGLE CREATE / UPDATE
+                if (!singleData.roomCode || !singleData.roomCode.trim()) {
+                    toast.error("Room Code is required");
+                    return;
+                }
+                if (singleData.capacity <= 0) {
+                    toast.error("Capacity must be greater than 0");
+                    return;
+                }
+
                 if (editingRoom) {
                     await structureService.updateRoom(editingRoom.RoomID, {
                         RoomCode: singleData.roomCode,

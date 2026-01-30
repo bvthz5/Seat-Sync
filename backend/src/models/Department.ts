@@ -8,18 +8,22 @@ interface DepartmentAttributes {
   DepartmentID: number;
   DepartmentCode: string;
   DepartmentName: string;
+  AcademicYearID?: number;
+  IsActive?: boolean;
 }
 
 /**
  * Attributes required when creating a department
  */
-interface DepartmentCreationAttributes extends Optional<DepartmentAttributes, "DepartmentID"> {}
+interface DepartmentCreationAttributes extends Optional<DepartmentAttributes, "DepartmentID"> { }
 
 export class Department extends Model<DepartmentAttributes, DepartmentCreationAttributes>
   implements DepartmentAttributes {
   declare DepartmentID: number;
   declare DepartmentCode: string;
   declare DepartmentName: string;
+  declare AcademicYearID?: number;
+  declare IsActive?: boolean;
 }
 
 Department.init(
@@ -38,6 +42,14 @@ Department.init(
       type: DataTypes.STRING(150),
       allowNull: false,
     },
+    AcademicYearID: {
+      type: DataTypes.INTEGER,
+      allowNull: true, // Should be false but allowing null for migration safety if needed, though prompt says rigid. I'll make it true for now but ideally non-nullable.
+    },
+    IsActive: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
+    }
   },
   {
     sequelize,

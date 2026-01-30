@@ -139,7 +139,15 @@ export const setCurrentAcademicYear = async (req: Request, res: Response): Promi
 
 export const getAllDepartments = async (req: Request, res: Response): Promise<void> => {
     try {
+        const { academicYearId } = req.query;
+        const whereClause: any = {};
+
+        if (academicYearId) {
+            whereClause.AcademicYearID = academicYearId;
+        }
+
         const departments = await Department.findAll({
+            where: whereClause,
             order: [['DepartmentName', 'ASC']]
         });
 
@@ -159,20 +167,21 @@ export const getAllDepartments = async (req: Request, res: Response): Promise<vo
 
 export const createDepartment = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { DepartmentName, DepartmentCode } = req.body;
+        const { DepartmentName, DepartmentCode, AcademicYearID } = req.body;
         const currentUser = (req as any).user;
 
-        if (!DepartmentName || !DepartmentCode) {
+        if (!DepartmentName || !DepartmentCode || !AcademicYearID) {
             res.status(400).json({
                 success: false,
-                message: "DepartmentName and DepartmentCode are required"
+                message: "DepartmentName, DepartmentCode, and AcademicYearID are required"
             });
             return;
         }
 
         const department = await Department.create({
             DepartmentName,
-            DepartmentCode
+            DepartmentCode,
+            AcademicYearID
         });
 
         // Log activity
@@ -205,7 +214,14 @@ export const createDepartment = async (req: Request, res: Response): Promise<voi
 
 export const getAllPrograms = async (req: Request, res: Response): Promise<void> => {
     try {
+        const { departmentId, academicYearId } = req.query;
+        const whereClause: any = {};
+
+        if (departmentId) whereClause.DepartmentID = departmentId;
+        if (academicYearId) whereClause.AcademicYearID = academicYearId;
+
         const programs = await Program.findAll({
+            where: whereClause,
             order: [['ProgramName', 'ASC']]
         });
 
@@ -225,13 +241,13 @@ export const getAllPrograms = async (req: Request, res: Response): Promise<void>
 
 export const createProgram = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { ProgramName, ProgramCode, DurationYears } = req.body;
+        const { ProgramName, ProgramCode, DurationYears, DepartmentID, AcademicYearID } = req.body;
         const currentUser = (req as any).user;
 
-        if (!ProgramName || !ProgramCode) {
+        if (!ProgramName || !ProgramCode || !DepartmentID || !AcademicYearID) {
             res.status(400).json({
                 success: false,
-                message: "ProgramName and ProgramCode are required"
+                message: "ProgramName, ProgramCode, DepartmentID, and AcademicYearID are required"
             });
             return;
         }
@@ -239,7 +255,9 @@ export const createProgram = async (req: Request, res: Response): Promise<void> 
         const program = await Program.create({
             ProgramName,
             ProgramCode,
-            DurationYears: DurationYears || 4
+            DurationYears: DurationYears || 4,
+            DepartmentID,
+            AcademicYearID
         });
 
         // Log activity
@@ -272,7 +290,14 @@ export const createProgram = async (req: Request, res: Response): Promise<void> 
 
 export const getAllSemesters = async (req: Request, res: Response): Promise<void> => {
     try {
+        const { programId, academicYearId } = req.query;
+        const whereClause: any = {};
+
+        if (programId) whereClause.ProgramID = programId;
+        if (academicYearId) whereClause.AcademicYearID = academicYearId;
+
         const semesters = await Semester.findAll({
+            where: whereClause,
             order: [['SemesterNumber', 'ASC']]
         });
 
@@ -292,13 +317,13 @@ export const getAllSemesters = async (req: Request, res: Response): Promise<void
 
 export const createSemester = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { SemesterNumber, SemesterName, ProgramID } = req.body;
+        const { SemesterNumber, SemesterName, ProgramID, AcademicYearID } = req.body;
         const currentUser = (req as any).user;
 
-        if (!SemesterNumber || !SemesterName || !ProgramID) {
+        if (!SemesterNumber || !SemesterName || !ProgramID || !AcademicYearID) {
             res.status(400).json({
                 success: false,
-                message: "SemesterNumber, SemesterName, and ProgramID are required"
+                message: "SemesterNumber, SemesterName, ProgramID, and AcademicYearID are required"
             });
             return;
         }
@@ -306,7 +331,8 @@ export const createSemester = async (req: Request, res: Response): Promise<void>
         const semester = await Semester.create({
             SemesterNumber,
             SemesterName,
-            ProgramID
+            ProgramID,
+            AcademicYearID
         });
 
         // Log activity
@@ -339,7 +365,15 @@ export const createSemester = async (req: Request, res: Response): Promise<void>
 
 export const getAllSubjects = async (req: Request, res: Response): Promise<void> => {
     try {
+        const { semesterId, programId, academicYearId } = req.query;
+        const whereClause: any = {};
+
+        if (semesterId) whereClause.SemesterID = semesterId;
+        if (programId) whereClause.ProgramID = programId;
+        if (academicYearId) whereClause.AcademicYearID = academicYearId;
+
         const subjects = await Subject.findAll({
+            where: whereClause,
             order: [['SubjectName', 'ASC']]
         });
 
@@ -359,13 +393,13 @@ export const getAllSubjects = async (req: Request, res: Response): Promise<void>
 
 export const createSubject = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { SubjectCode, SubjectName, DepartmentID, SemesterID } = req.body;
+        const { SubjectCode, SubjectName, DepartmentID, SemesterID, ProgramID, AcademicYearID, Credits } = req.body;
         const currentUser = (req as any).user;
 
-        if (!SubjectCode || !SubjectName || !DepartmentID || !SemesterID) {
+        if (!SubjectCode || !SubjectName || !DepartmentID || !SemesterID || !ProgramID || !AcademicYearID) {
             res.status(400).json({
                 success: false,
-                message: "SubjectCode, SubjectName, DepartmentID, and SemesterID are required"
+                message: "SubjectCode, SubjectName, DepartmentID, SemesterID, ProgramID, and AcademicYearID are required"
             });
             return;
         }
@@ -374,7 +408,11 @@ export const createSubject = async (req: Request, res: Response): Promise<void> 
             SubjectCode,
             SubjectName,
             DepartmentID,
-            SemesterID
+            SemesterID,
+            ProgramID,
+            AcademicYearID,
+            Credits: Credits || 0, // Default to 0 if not provided
+            IsActive: true
         });
 
         // Log activity
