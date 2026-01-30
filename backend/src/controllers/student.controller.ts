@@ -20,13 +20,13 @@ export const getAllStudents = async (req: Request, res: Response) => {
         const program = req.query.program as string; // ProgramID
         const semester = req.query.semester as string; // SemesterID
 
-        const studentWhere: any = {};
+        const studentWhere: any = { [Op.and]: [] };
         const userWhere: any = {};
 
         // Filter by Department, Program, Semester
-        if (dept) studentWhere.DepartmentID = dept;
-        if (program) studentWhere.ProgramID = program;
-        if (semester) studentWhere.SemesterID = semester;
+        if (dept) studentWhere[Op.and].push({ DepartmentID: dept });
+        if (program) studentWhere[Op.and].push({ ProgramID: program });
+        if (semester) studentWhere[Op.and].push({ SemesterID: semester });
 
         // Search Logic
         if (search) {
@@ -80,11 +80,13 @@ export const getAllStudents = async (req: Request, res: Response) => {
             // if search is provided, we try to match RegisterNumber OR User fields.
             // Since standard includes are AND, checking "RegisterNumber LIKE %q% OR User.Name LIKE %q%" requires top level where with '$User.FullName$'.
 
-            studentWhere[Op.or] = [
-                { RegisterNumber: { [Op.like]: `%${search}%` } },
-                { '$User.FullName$': { [Op.like]: `%${search}%` } },
-                { '$User.Email$': { [Op.like]: `%${search}%` } }
-            ];
+            studentWhere[Op.and].push({
+                [Op.or]: [
+                    { RegisterNumber: { [Op.like]: `%${search}%` } },
+                    { '$User.FullName$': { [Op.like]: `%${search}%` } },
+                    { '$User.Email$': { [Op.like]: `%${search}%` } }
+                ]
+            });
         }
 
         const { count, rows } = await Student.findAndCountAll({
@@ -102,23 +104,44 @@ export const getAllStudents = async (req: Request, res: Response) => {
             ],
             limit,
             offset,
-            order: [['StudentID', 'ASC']]
-            // subQuery: false // Required for $Association$ where clauses with limits to work correctly often
+            order: [['StudentID', 'ASC']],
+            subQuery: false
         });
 
         // Calculate Stats (Parallel for performance)
+        const commonInclude = search ? [{ model: User, attributes: [], required: true }] : [];
+
         const [deptResults, batchResults, incompleteProfiles, totalDatabaseCount] = await Promise.all([
-            Student.findAll({ where: studentWhere, attributes: [[sequelize.fn('DISTINCT', sequelize.col('DepartmentID')), 'DepartmentID']], raw: true }),
-            Student.findAll({ where: studentWhere, attributes: [[sequelize.fn('DISTINCT', sequelize.col('BatchYear')), 'BatchYear']], raw: true }),
+            Student.findAll({
+                where: studentWhere,
+                include: commonInclude,
+                attributes: [[sequelize.fn('DISTINCT', sequelize.col('Student.DepartmentID')), 'DepartmentID']],
+                raw: true,
+                subQuery: false
+            }),
+            Student.findAll({
+                where: studentWhere,
+                include: commonInclude,
+                attributes: [[sequelize.fn('DISTINCT', sequelize.col('Student.BatchYear')), 'BatchYear']],
+                raw: true,
+                subQuery: false
+            }),
             Student.count({
                 where: {
-                    ...studentWhere,
-                    [Op.or]: [
-                        { DepartmentID: null },
-                        { ProgramID: null },
-                        { SemesterID: null }
+                    [Op.and]: [
+                        studentWhere,
+                        {
+                            [Op.or]: [
+                                { DepartmentID: null },
+                                { ProgramID: null },
+                                { SemesterID: null }
+                            ]
+                        }
                     ]
-                }
+                },
+                include: commonInclude,
+                distinct: true,
+                col: 'StudentID'
             }),
             Student.count()
         ]);
@@ -136,9 +159,13 @@ export const getAllStudents = async (req: Request, res: Response) => {
             students: rows,
             stats
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error fetching students:", error);
-        res.status(500).json({ message: "Internal server error" });
+        res.status(500).json({
+            message: "Internal server error",
+            error: error.message,
+            sql: error.sql // Helpful for debugging MSSQL issues
+        });
     }
 };
 

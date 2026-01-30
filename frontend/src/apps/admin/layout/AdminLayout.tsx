@@ -4,7 +4,7 @@ import { Navbar, NavbarBrand, NavbarContent, NavbarItem, Button, Dropdown, Dropd
 import Sidebar from './Sidebar';
 import { useAuth } from '../../../hooks/useAuth';
 import { motion } from 'framer-motion';
-import { Menu, Bell, Settings, LogOut, Search, Grip, HelpCircle } from 'lucide-react';
+import { Menu, Bell, Settings, LogOut, Search, Grip, HelpCircle, AlertCircle, AlertTriangle, Info, CheckCircle, X, User, Sliders, ChevronRight, Key } from 'lucide-react';
 
 const AdminLayout: React.FC = () => {
     const { logout, user } = useAuth();
@@ -39,20 +39,126 @@ const AdminLayout: React.FC = () => {
 
 
                 <div className="flex items-center gap-2">
-                    <Button isIconOnly variant="light" radius="full" className="text-[#5f6368]  hover:bg-[#3c4043]/10 ">
-                        <HelpCircle size={24} />
-                    </Button>
-                    <Button isIconOnly variant="light" radius="full" className="text-[#5f6368]  hover:bg-[#3c4043]/10 ">
-                        <Settings size={24} />
-                    </Button>
-                    <Button isIconOnly variant="light" radius="full" className="text-[#5f6368]  hover:bg-[#3c4043]/10 ">
-                        <Grip size={24} />
-                    </Button>
+                    <Dropdown placement="bottom-end">
+                        <DropdownTrigger>
+                            <Button isIconOnly variant="light" radius="full" className="text-[#5f6368] hover:bg-[#3c4043]/10 relative overflow-visible">
+                                <Bell size={24} />
+                                <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+                            </Button>
+                        </DropdownTrigger>
+                        <DropdownMenu
+                            aria-label="Notifications"
+                            variant="flat"
+                            className="w-96 z-[9999] bg-white shadow-xl rounded-xl border border-gray-100 p-2"
+                            itemClasses={{
+                                base: "gap-4",
+                            }}
+                        >
+                            <DropdownItem key="title" className="h-10 cursor-default" isReadOnly textValue="Notifications">
+                                <div className="flex justify-between items-center bg-white">
+                                    <span className="font-semibold text-lg">Notifications</span>
+                                    <span className="text-xs text-blue-600 cursor-pointer hover:underline">Mark all as read</span>
+                                </div>
+                            </DropdownItem>
+
+                            <DropdownItem key="1" textValue="System Alert">
+                                <div className="flex items-start gap-3 w-full">
+                                    <div className="mt-1 p-2 rounded-full bg-red-100 text-red-600">
+                                        <AlertCircle size={18} />
+                                    </div>
+                                    <div className="flex flex-col gap-1 w-full">
+                                        <div className="flex justify-between items-center">
+                                            <span className="font-semibold text-sm text-gray-900">System Alert</span>
+                                            <span className="text-[10px] text-gray-400">2 min ago</span>
+                                        </div>
+                                        <p className="text-xs text-gray-500 line-clamp-2">Critical security update required for server kernel.</p>
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-700 w-fit">
+                                            High Priority
+                                        </span>
+                                    </div>
+                                </div>
+                            </DropdownItem>
+
+                            <DropdownItem key="2" textValue="Exam Schedule">
+                                <div className="flex items-start gap-3 w-full">
+                                    <div className="mt-1 p-2 rounded-full bg-amber-100 text-amber-600">
+                                        <AlertTriangle size={18} />
+                                    </div>
+                                    <div className="flex flex-col gap-1 w-full">
+                                        <div className="flex justify-between items-center">
+                                            <span className="font-semibold text-sm text-gray-900">Schedule Change</span>
+                                            <span className="text-[10px] text-gray-400">1 hour ago</span>
+                                        </div>
+                                        <p className="text-xs text-gray-500 line-clamp-2">Exam schedule updated for CSE 3rd Year due to clash.</p>
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 w-fit">
+                                            Medium Priority
+                                        </span>
+                                    </div>
+                                </div>
+                            </DropdownItem>
+
+                            <DropdownItem key="3" textValue="New User">
+                                <div className="flex items-start gap-3 w-full">
+                                    <div className="mt-1 p-2 rounded-full bg-blue-100 text-blue-600">
+                                        <Info size={18} />
+                                    </div>
+                                    <div className="flex flex-col gap-1 w-full">
+                                        <div className="flex justify-between items-center">
+                                            <span className="font-semibold text-sm text-gray-900">New Registration</span>
+                                            <span className="text-[10px] text-gray-400">3 hours ago</span>
+                                        </div>
+                                        <p className="text-xs text-gray-500 line-clamp-2">New invigilator joined: Sarah Connor.</p>
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 w-fit">
+                                            Info
+                                        </span>
+                                    </div>
+                                </div>
+                            </DropdownItem>
+
+                            <DropdownItem key="4" textValue="Backup">
+                                <div className="flex items-start gap-3 w-full">
+                                    <div className="mt-1 p-2 rounded-full bg-green-100 text-green-600">
+                                        <CheckCircle size={18} />
+                                    </div>
+                                    <div className="flex flex-col gap-1 w-full">
+                                        <div className="flex justify-between items-center">
+                                            <span className="font-semibold text-sm text-gray-900">Backup Complete</span>
+                                            <span className="text-[10px] text-gray-400">5 hours ago</span>
+                                        </div>
+                                        <p className="text-xs text-gray-500 line-clamp-2">Daily database backup completed successfully.</p>
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-700 w-fit">
+                                            Success
+                                        </span>
+                                    </div>
+                                </div>
+                            </DropdownItem>
+                        </DropdownMenu>
+                    </Dropdown>
+                    <Dropdown placement="bottom-end">
+                        <DropdownTrigger>
+                            <Button isIconOnly variant="light" radius="full" className="text-[#5f6368] hover:bg-[#3c4043]/10">
+                                <Settings size={24} />
+                            </Button>
+                        </DropdownTrigger>
+                        <DropdownMenu
+                            aria-label="Settings Actions"
+                            variant="flat"
+                            className="w-48 z-[9999] bg-white shadow-xl rounded-xl border border-gray-100 p-2"
+                        >
+                            <DropdownItem
+                                key="change_password"
+                                startContent={<Key size={18} className="text-red-500" />}
+                                className="text-red-600 data-[hover=true]:bg-red-50"
+                            >
+                                Change Password
+                            </DropdownItem>
+                        </DropdownMenu>
+                    </Dropdown>
 
                     {/* Profile Avatar */}
                     <Dropdown placement="bottom-end" classNames={{ content: " " }} disableAnimation>
                         <DropdownTrigger>
-                            <div className="ml-2 cursor-pointer p-1 rounded-full hover:bg-[#f1f3f4]  transition-colors">
+                            <div className="ml-2 cursor-pointer p-1 rounded-full hover:bg-[#f1f3f4] transition-colors">
                                 <Avatar
                                     className="w-8 h-8 bg-blue-600 text-white text-sm font-medium"
                                     name={user?.Email?.[0].toUpperCase()}
@@ -63,16 +169,50 @@ const AdminLayout: React.FC = () => {
                         <DropdownMenu
                             aria-label="Profile Actions"
                             variant="flat"
-                            className="w-64 z-[9999] bg-white  shadow-xl rounded-xl border border-gray-100  p-2"
+                            className="w-80 z-[9999] bg-white shadow-xl rounded-2xl border border-gray-100 p-2"
+                            itemClasses={{
+                                base: "gap-4 h-12 data-[hover=true]:bg-gray-50 rounded-lg",
+                            }}
                         >
-                            <DropdownItem key="profile" className="h-16 gap-2  " textValue="Signed in as">
-                                <div className="flex flex-col">
-                                    <p className="font-semibold">{user?.Email}</p>
-                                    <p className="text-xs text-gray-500">{user?.IsRootAdmin ? 'Administrator' : 'User'}</p>
+                            <DropdownItem key="profile_header" className="h-auto opacity-100 cursor-default hover:!bg-white mb-2" isReadOnly textValue="Profile Header">
+                                <div className="flex gap-4 items-center p-2 rounded-xl bg-gray-50/50 border border-gray-100/50">
+                                    <Avatar
+                                        className="w-14 h-14 bg-blue-100 text-blue-600 text-lg font-bold"
+                                        name={user?.Email?.[0].toUpperCase()}
+                                        src={undefined}
+                                    />
+                                    <div className="flex flex-col gap-1 overflow-hidden">
+                                        <p className="font-bold text-gray-900 text-sm truncate">Root Administrator</p>
+                                        <p className="text-xs text-gray-500 truncate">{user?.Email}</p>
+                                        <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-700 text-[10px] font-bold w-fit tracking-wide">
+                                            ADMINISTRATOR
+                                        </span>
+                                    </div>
                                 </div>
                             </DropdownItem>
-                            <DropdownItem key="logout" className="text-danger " onPress={() => logout()} startContent={<LogOut size={18} />}>
-                                Sign out
+
+                            <DropdownItem key="my_profile" startContent={<User size={18} className="text-gray-500" />} textValue="My Profile">
+                                <span className="text-sm font-medium text-gray-700">My Profile</span>
+                            </DropdownItem>
+                            <DropdownItem key="settings" startContent={<Settings size={18} className="text-gray-500" />} textValue="Account Settings">
+                                <span className="text-sm font-medium text-gray-700">Account Settings</span>
+                            </DropdownItem>
+                            <DropdownItem key="preferences" startContent={<Sliders size={18} className="text-gray-500" />} textValue="Preferences">
+                                <span className="text-sm font-medium text-gray-700">Preferences</span>
+                            </DropdownItem>
+
+                            <DropdownItem key="help_support" showDivider startContent={<HelpCircle size={18} className="text-gray-500" />} textValue="Help & Support">
+                                <span className="text-sm font-medium text-gray-700">Help & Support</span>
+                            </DropdownItem>
+
+                            <DropdownItem
+                                key="logout"
+                                className="text-red-600 data-[hover=true]:bg-red-50"
+                                onPress={() => logout()}
+                                startContent={<LogOut size={18} className="text-red-600" />}
+                                textValue="Sign out"
+                            >
+                                <span className="text-sm font-medium">Sign out</span>
                             </DropdownItem>
                         </DropdownMenu>
                     </Dropdown>

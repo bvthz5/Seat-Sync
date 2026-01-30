@@ -13,6 +13,8 @@ import collegeStructureRoutes from "./routes/collegeStructure.routes.js";
 
 import roomRoutes from "./routes/room.routes.js";
 import structureImportRoutes from "./routes/structureImport.routes.js";
+import examRoutes from "./routes/exam.routes.js";
+import subjectRoutes from "./routes/subject.routes.js";
 
 // New ERP routes
 import adminManagementRoutes from "./routes/adminManagement.routes.js";
@@ -132,6 +134,8 @@ app.use("/api/students", studentRoutes);
 app.use("/api/admin/college-structure", collegeStructureRoutes);
 app.use("/api/college-structure/import", structureImportRoutes);
 app.use("/api/rooms", roomRoutes);
+app.use("/api/exams", examRoutes);
+app.use("/api/subjects", subjectRoutes);
 
 // New ERP Routes (Root Admin Only)
 app.use("/api/admin-management", adminManagementRoutes);
