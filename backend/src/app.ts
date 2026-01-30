@@ -22,6 +22,7 @@ import academicSetupRoutes from "./routes/academicSetup.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
 import securityRoutes from "./routes/security.routes.js";
 import examControlRoutes from "./routes/examControl.routes.js";
+import departmentRoutes from "./routes/department.routes.js";
 
 const app = express();
 
@@ -143,6 +144,7 @@ app.use("/api/academic-setup", academicSetupRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/security", securityRoutes);
 app.use("/api/exam-control", examControlRoutes);
+app.use("/api/departments", departmentRoutes);
 
 // --- Error Handling Middleware ---
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
