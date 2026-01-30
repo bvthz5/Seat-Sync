@@ -193,7 +193,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
     );
 
     return (
-        <div className="flex flex-col gap-6 h-full pb-8">
+        <div className="flex flex-col gap-8 pb-12 relative">
             {/* Page Title / Header */}
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
@@ -209,11 +209,11 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                 </div>
             </div>
 
-            <div className="flex flex-col xl:flex-row gap-6 h-full min-h-[700px]">
-                {/* Left Panel: Configuration */}
-                <div className="w-full xl:w-[400px] flex flex-col gap-6 shrink-0">
-                    <Card className="border border-slate-200 shadow-lg bg-white/90 backdrop-blur-xl h-full">
-                        <CardHeader className="flex gap-3 bg-slate-50/80 border-b border-slate-100 p-6">
+            <div className="flex flex-col xl:flex-row gap-8 items-start relative">
+                {/* Left Panel: Configuration (Sticky) */}
+                <div className="w-full xl:w-[400px] shrink-0 xl:sticky xl:top-[140px] transition-all z-10">
+                    <Card className="border border-slate-200 shadow-xl shadow-slate-200/50 bg-white/95 backdrop-blur-xl">
+                        <CardHeader className="flex gap-3 bg-slate-50/50 border-b border-slate-100 p-6">
                             <div className="p-2 bg-white rounded-lg border border-slate-200 shadow-sm text-indigo-600">
                                 <MonitorPlay size={20} />
                             </div>
@@ -228,7 +228,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                             {/* 1. Location Selection */}
                             <div className="space-y-5">
                                 <div className="flex items-center gap-2 mb-2">
-                                    <div className="flex flex-col gap-2">
+                                    <div className="flex flex-col gap-2 w-full">
                                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1 flex items-center gap-1.5">
                                             <Building2 size={12} /> Building Block
                                         </label>
@@ -496,7 +496,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                 {/* Right Panel: Preview (Redesigned) */}
                 <div
                     ref={containerRef}
-                    className={`${isFullScreen ? 'fixed inset-0 z-[100] rounded-none h-screen w-screen' : 'flex-1 h-full min-h-[600px] rounded-3xl border border-slate-200 shadow-2xl shadow-slate-900/10 ring-1 ring-slate-900/5'} flex flex-col overflow-hidden bg-[#0B0F19] relative transition-all duration-500`}
+                    className={`${isFullScreen ? 'fixed inset-0 z-[100] rounded-none h-screen w-screen' : 'flex-1 min-h-[800px] rounded-3xl border border-slate-200 shadow-2xl shadow-slate-900/10 ring-1 ring-slate-900/5'} flex flex-col bg-[#0B0F19] relative transition-all duration-500`}
                 >
                     {/* Background Grid Effect */}
                     <div className="absolute inset-0 bg-[linear-gradient(rgba(30,41,59,0.2)_1px,transparent_1px),linear-gradient(90deg,rgba(30,41,59,0.2)_1px,transparent_1px)] bg-[length:40px_40px] pointer-events-none" />
@@ -540,95 +540,92 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                     </div>
 
                     {/* Canvas Area */}
-                    <div className="flex-1 relative overflow-hidden flex flex-col z-10">
-                        {/* Scrollable Content */}
-                        <div className="absolute inset-0 overflow-auto custom-scrollbar p-12">
-                            <div className="min-w-full min-h-full flex flex-col">
+                    <div className="flex-1 relative flex flex-col z-10 p-12 overflow-x-auto custom-scrollbar">
+                        <div className="w-full h-full flex flex-col min-w-min">
 
-                                {/* Teacher's Desk & Front Indicator */}
-                                <div className="mb-16 flex flex-col items-center gap-4 shrink-0 mx-auto">
-                                    <div className="w-64 h-16 rounded-2xl bg-gradient-to-b from-[#1E293B] to-[#0F172A] border border-white/10 shadow-2xl flex items-center justify-center relative overflow-hidden group">
-                                        <div className="absolute inset-0 bg-indigo-500/5 group-hover:bg-indigo-500/10 transition-colors" />
-                                        <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent" />
-                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest group-hover:text-indigo-400 transition-colors">Teacher's Desk</span>
-                                    </div>
-                                    <div className="flex items-center gap-3 opacity-40">
-                                        <ChevronRight className="rotate-90 text-slate-500" size={14} />
-                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em]">Front of Room</span>
-                                        <ChevronRight className="rotate-90 text-slate-500" size={14} />
-                                    </div>
+                            {/* Teacher's Desk & Front Indicator */}
+                            <div className="mb-16 flex flex-col items-center gap-4 shrink-0 mx-auto">
+                                <div className="w-64 h-16 rounded-2xl bg-gradient-to-b from-[#1E293B] to-[#0F172A] border border-white/10 shadow-2xl flex items-center justify-center relative overflow-hidden group">
+                                    <div className="absolute inset-0 bg-indigo-500/5 group-hover:bg-indigo-500/10 transition-colors" />
+                                    <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent" />
+                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest group-hover:text-indigo-400 transition-colors">Teacher's Desk</span>
                                 </div>
+                                <div className="flex items-center gap-3 opacity-40">
+                                    <ChevronRight className="rotate-90 text-slate-500" size={14} />
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em]">Front of Room</span>
+                                    <ChevronRight className="rotate-90 text-slate-500" size={14} />
+                                </div>
+                            </div>
 
-                                {/* Seating Grid */}
-                                {!selectedRoomId || totalSeats === 0 ? (
-                                    <div className="flex flex-col items-center justify-center py-20 opacity-30 gap-6 mx-auto">
-                                        <div className="p-6 rounded-3xl bg-white/5 border border-white/5">
-                                            <Grid3X3 size={64} className="text-slate-400" strokeWidth={1} />
-                                        </div>
-                                        <p className="text-sm font-medium text-slate-500 uppercase tracking-widest">No Layout Configured</p>
+                            {/* Seating Grid */}
+                            {!selectedRoomId || totalSeats === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-20 opacity-30 gap-6 mx-auto">
+                                    <div className="p-6 rounded-3xl bg-white/5 border border-white/5">
+                                        <Grid3X3 size={64} className="text-slate-400" strokeWidth={1} />
                                     </div>
-                                ) : (
-                                    <div className="flex flex-row gap-12 items-start mx-auto pb-24">
-                                        {/* Render COLUMNS (Based on config.rows which generates A, B, C...) */}
-                                        {Array.from({ length: config.rows }).map((_, colIndex) => {
-                                            const colLabel = String.fromCharCode(65 + colIndex); // A, B, C...
+                                    <p className="text-sm font-medium text-slate-500 uppercase tracking-widest">No Layout Configured</p>
+                                </div>
+                            ) : (
+                                <div className="flex flex-row gap-12 items-start mx-auto pb-24">
+                                    {/* Render COLUMNS (Based on config.rows which generates A, B, C...) */}
+                                    {Array.from({ length: config.rows }).map((_, colIndex) => {
+                                        const colLabel = String.fromCharCode(65 + colIndex); // A, B, C...
 
-                                            return (
-                                                <div key={colIndex} className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700" style={{ animationDelay: `${colIndex * 100}ms` }}>
+                                        return (
+                                            <div key={colIndex} className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700" style={{ animationDelay: `${colIndex * 100}ms` }}>
 
-                                                    {/* Column Container */}
-                                                    <div className="relative p-2 pb-6 rounded-[2rem] border border-dashed border-white/10 bg-white/[0.02]">
-                                                        {/* Column Label */}
-                                                        <div className="absolute -left-10 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-[#1E293B] border border-white/10 flex items-center justify-center text-xs font-bold text-slate-500 shadow-xl">
-                                                            {colLabel}
-                                                        </div>
+                                                {/* Column Container */}
+                                                <div className="relative p-2 pb-6 rounded-[2rem] border border-dashed border-white/10 bg-white/[0.02]">
+                                                    {/* Column Label */}
+                                                    <div className="absolute -left-10 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-[#1E293B] border border-white/10 flex items-center justify-center text-xs font-bold text-slate-500 shadow-xl">
+                                                        {colLabel}
+                                                    </div>
 
-                                                        <div className="flex flex-col gap-4 px-2">
-                                                            {/* Render BENCHES Vertically (Based on config.benchesPerRow) */}
-                                                            {Array.from({ length: config.benchesPerRow }).map((_, benchIndex) => (
-                                                                <div key={benchIndex} className="relative group/bench">
-                                                                    {/* Bench Shape */}
-                                                                    <div className="bg-[#1E293B] border border-white/5 rounded-2xl p-2.5 shadow-lg group-hover/bench:border-indigo-500/30 group-hover/bench:shadow-indigo-500/10 transition-all duration-300">
-                                                                        {/* Desk Surface Visual */}
-                                                                        <div className="h-1.5 w-full bg-[#334155] rounded-full mb-2 opacity-50" />
+                                                    <div className="flex flex-col gap-4 px-2">
+                                                        {/* Render BENCHES Vertically (Based on config.benchesPerRow) */}
+                                                        {Array.from({ length: config.benchesPerRow }).map((_, benchIndex) => (
+                                                            <div key={benchIndex} className="relative group/bench">
+                                                                {/* Bench Shape */}
+                                                                <div className="bg-[#1E293B] border border-white/5 rounded-2xl p-2.5 shadow-lg group-hover/bench:border-indigo-500/30 group-hover/bench:shadow-indigo-500/10 transition-all duration-300">
+                                                                    {/* Desk Surface Visual */}
+                                                                    <div className="h-1.5 w-full bg-[#334155] rounded-full mb-2 opacity-50" />
 
-                                                                        <div className="flex gap-2.5">
-                                                                            {/* Seats */}
-                                                                            {Array.from({ length: config.seatsPerBench }).map((_, seatIndex) => {
-                                                                                // Calculate continuous seat number for this column
-                                                                                // Previous benches in this column * seats per bench + current seat index + 1
-                                                                                const seatNum = (benchIndex * config.seatsPerBench) + seatIndex + 1;
-                                                                                const seatCode = `${colLabel}${seatNum}`;
+                                                                    <div className="flex gap-2.5">
+                                                                        {/* Seats */}
+                                                                        {Array.from({ length: config.seatsPerBench }).map((_, seatIndex) => {
+                                                                            // Calculate continuous seat number for this column
+                                                                            // Previous benches in this column * seats per bench + current seat index + 1
+                                                                            const seatNum = (benchIndex * config.seatsPerBench) + seatIndex + 1;
+                                                                            const seatCode = `${colLabel}${seatNum}`;
 
-                                                                                return (
-                                                                                    <Tooltip key={seatIndex} content={`Seat ${seatCode}`} closeDelay={0}>
-                                                                                        <div className="w-10 h-10 rounded-lg bg-[#0F172A] border border-indigo-500/20 flex items-center justify-center hover:bg-indigo-600 hover:border-indigo-500 hover:scale-110 cursor-pointer transition-all group/seat shadow-inner relative overflow-hidden">
-                                                                                            <span className="text-[10px] font-bold font-mono text-indigo-400 group-hover/seat:text-white transition-colors relative z-10">
-                                                                                                {seatCode}
-                                                                                            </span>
-                                                                                            {/* Glow effect */}
-                                                                                            <div className="absolute inset-0 bg-indigo-500/10 opacity-0 group-hover/seat:opacity-100 transition-opacity" />
-                                                                                        </div>
-                                                                                    </Tooltip>
-                                                                                );
-                                                                            })}
-                                                                        </div>
+                                                                            return (
+                                                                                <Tooltip key={seatIndex} content={`Seat ${seatCode}`} closeDelay={0}>
+                                                                                    <div className="w-10 h-10 rounded-lg bg-[#0F172A] border border-indigo-500/20 flex items-center justify-center hover:bg-indigo-600 hover:border-indigo-500 hover:scale-110 cursor-pointer transition-all group/seat shadow-inner relative overflow-hidden">
+                                                                                        <span className="text-[10px] font-bold font-mono text-indigo-400 group-hover/seat:text-white transition-colors relative z-10">
+                                                                                            {seatCode}
+                                                                                        </span>
+                                                                                        {/* Glow effect */}
+                                                                                        <div className="absolute inset-0 bg-indigo-500/10 opacity-0 group-hover/seat:opacity-100 transition-opacity" />
+                                                                                    </div>
+                                                                                </Tooltip>
+                                                                            );
+                                                                        })}
                                                                     </div>
                                                                 </div>
-                                                            ))}
-                                                        </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
 
-                                                        {/* Bottom Column Label */}
-                                                        <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-[#1E293B] border border-white/10 flex items-center justify-center text-xs font-bold text-slate-500 shadow-xl">
-                                                            {colLabel}
-                                                        </div>
+                                                    {/* Bottom Column Label */}
+                                                    <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-[#1E293B] border border-white/10 flex items-center justify-center text-xs font-bold text-slate-500 shadow-xl">
+                                                        {colLabel}
                                                     </div>
                                                 </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

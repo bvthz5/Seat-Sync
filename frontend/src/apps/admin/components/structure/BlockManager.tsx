@@ -117,9 +117,9 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
     ];
 
     return (
-        <div className="flex flex-col gap-6">
+        <div className="h-full flex flex-col gap-6">
             {/* Header Card */}
-            <div className="bg-gradient-to-br from-white to-blue-50/20 p-6 rounded-2xl border border-slate-100 shadow-lg shadow-slate-100/50 flex flex-col md:flex-row justify-between items-center gap-4 relative overflow-hidden">
+            <div className="flex-none bg-gradient-to-br from-white to-blue-50/20 p-6 rounded-2xl border border-slate-100 shadow-lg shadow-slate-100/50 flex flex-col md:flex-row justify-between items-center gap-4 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-blue-100/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
 
                 <div className="flex items-center gap-5 z-10">
@@ -152,9 +152,9 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
                         <Button
                             onPress={() => handleOpen()}
                             color="primary"
-                            size="md"
-                            startContent={<Plus size={18} strokeWidth={2.5} />}
-                            className="font-semibold shadow-lg shadow-blue-600/20 text-white"
+                            size="lg"
+                            startContent={<Plus size={20} strokeWidth={2.5} />}
+                            className="font-bold shadow-lg shadow-blue-600/20 rounded-xl h-[52px] px-8 text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:scale-[1.02] transition-transform"
                         >
                             Add Block
                         </Button>
@@ -163,87 +163,91 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
             </div>
 
             {/* Pagination Info */}
-            <div className="flex justify-between items-center px-4 -mb-2">
+            <div className="flex-none flex justify-between items-center px-4 -mb-2">
                 <div className="text-sm font-medium text-slate-500">
                     Showing <span className="text-slate-900 font-bold">{(blocks?.length || 0) === 0 ? 0 : (page - 1) * limit + 1}</span> - <span className="text-slate-900 font-bold">{Math.min(page * limit, totalItems)}</span> of <span className="text-slate-900 font-bold">{totalItems}</span>
                 </div>
             </div>
 
-            {/* Table */}
-            <Table
-                aria-label="Blocks table"
-                classNames={{
-                    wrapper: "bg-white shadow-sm border border-slate-200 rounded-2xl p-0 overflow-hidden",
-                    th: "bg-slate-50 text-slate-600 font-semibold text-xs py-4 px-6 border-b border-slate-200",
-                    td: "py-4 px-6 border-b border-slate-100 group-last:border-0",
-                    tr: "hover:bg-slate-50/80 transition-colors cursor-default"
-                }}
-            >
-                <TableHeader columns={columns}>
-                    {(column) => (
-                        <TableColumn key={column.uid} align={column.uid === "actions" ? "end" : "start"}>
-                            {column.name}
-                        </TableColumn>
-                    )}
-                </TableHeader>
-                <TableBody
-                    items={blocks}
-                    isLoading={loading}
-                    emptyContent={
-                        <div className="py-12 flex flex-col items-center text-center">
-                            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                                <Search className="text-slate-400" size={24} />
-                            </div>
-                            <p className="text-slate-500 font-medium">No blocks configured yet.</p>
-                            {!readOnly && <p className="text-slate-400 text-sm mt-1">Add a block to begin setting up your campus.</p>}
-                        </div>
-                    }
+            {/* Table Container */}
+            <div className="flex-1 min-h-0 relative">
+                <Table
+                    isHeaderSticky
+                    aria-label="Blocks table"
+                    classNames={{
+                        base: "h-full",
+                        wrapper: "bg-white shadow-sm border border-slate-200 rounded-2xl p-0 h-full overflow-auto custom-scrollbar",
+                        th: "bg-slate-50 text-slate-600 font-semibold text-xs py-4 px-6 border-b border-slate-200",
+                        td: "py-4 px-6 border-b border-slate-100 group-last:border-0",
+                        tr: "hover:bg-slate-50/80 transition-colors cursor-default"
+                    }}
                 >
-                    {(block) => (
-                        <TableRow key={block.BlockID}>
-                            <TableCell>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center text-slate-500">
-                                        <Building2 size={20} />
-                                    </div>
-                                    <span className="font-semibold text-slate-700 text-base">{block.BlockName}</span>
+                    <TableHeader columns={columns}>
+                        {(column) => (
+                            <TableColumn key={column.uid} align={column.uid === "actions" ? "end" : "start"}>
+                                {column.name}
+                            </TableColumn>
+                        )}
+                    </TableHeader>
+                    <TableBody
+                        items={blocks}
+                        isLoading={loading}
+                        emptyContent={
+                            <div className="py-12 flex flex-col items-center text-center">
+                                <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                                    <Search className="text-slate-400" size={24} />
                                 </div>
-                            </TableCell>
-                            <TableCell>
-                                <Chip
-                                    size="sm"
-                                    variant="flat"
-                                    color={block.Status === 'Active' ? "success" : "danger"}
-                                    classNames={{ content: "font-semibold" }}
-                                >
-                                    {block.Status}
-                                </Chip>
-                            </TableCell>
-                            <TableCell>
-                                <span className="text-slate-600 font-medium px-3 py-1 bg-slate-100 rounded-full text-sm">
-                                    {block.floorCount || 0} Floors
-                                </span>
-                            </TableCell>
-                            <TableCell>
-                                {!readOnly && (
-                                    <div className="flex justify-end gap-2">
-                                        <Button isIconOnly size="sm" variant="light" onPress={() => handleOpen(block)}>
-                                            <Edit size={18} className="text-slate-400 hover:text-blue-600 transition-colors" />
-                                        </Button>
-                                        <Button isIconOnly size="sm" variant="light" color="danger" onPress={() => handleDelete(block.BlockID)}>
-                                            <Trash2 size={18} className="text-slate-400 hover:text-red-600 transition-colors" />
-                                        </Button>
+                                <p className="text-slate-500 font-medium">No blocks configured yet.</p>
+                                {!readOnly && <p className="text-slate-400 text-sm mt-1">Add a block to begin setting up your campus.</p>}
+                            </div>
+                        }
+                    >
+                        {(block) => (
+                            <TableRow key={block.BlockID}>
+                                <TableCell>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center text-slate-500">
+                                            <Building2 size={20} />
+                                        </div>
+                                        <span className="font-semibold text-slate-700 text-base">{block.BlockName}</span>
                                     </div>
-                                )}
-                            </TableCell>
-                        </TableRow>
-                    )}
-                </TableBody>
-            </Table>
+                                </TableCell>
+                                <TableCell>
+                                    <Chip
+                                        size="sm"
+                                        variant="flat"
+                                        color={block.Status === 'Active' ? "success" : "danger"}
+                                        classNames={{ content: "font-semibold" }}
+                                    >
+                                        {block.Status}
+                                    </Chip>
+                                </TableCell>
+                                <TableCell>
+                                    <span className="text-slate-600 font-medium px-3 py-1 bg-slate-100 rounded-full text-sm">
+                                        {block.floorCount || 0} Floors
+                                    </span>
+                                </TableCell>
+                                <TableCell>
+                                    {!readOnly && (
+                                        <div className="flex justify-end gap-2">
+                                            <Button isIconOnly size="sm" variant="light" onPress={() => handleOpen(block)}>
+                                                <Edit size={18} className="text-slate-400 hover:text-blue-600 transition-colors" />
+                                            </Button>
+                                            <Button isIconOnly size="sm" variant="light" color="danger" onPress={() => handleDelete(block.BlockID)}>
+                                                <Trash2 size={18} className="text-slate-400 hover:text-red-600 transition-colors" />
+                                            </Button>
+                                        </div>
+                                    )}
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
 
             {/* Table Pagination */}
             {totalPages > 1 && (
-                <div className="flex justify-center p-4 bg-white border border-slate-200 rounded-2xl shadow-sm">
+                <div className="flex-none flex justify-center p-4 bg-white border border-slate-200 rounded-2xl shadow-sm mb-1">
                     <div className="flex items-center gap-2">
                         <Button
                             size="sm"
@@ -262,7 +266,7 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
                                     variant={page === p ? "solid" : "light"}
                                     color={page === p ? "primary" : "default"}
                                     onPress={() => setPage(p)}
-                                    className={`w-8 h-8 min-w-0 rounded-lg font-bold transition-all ${page === p ? 'shadow-md shadow-blue-500/20' : ''}`}
+                                    className={`w-8 h-8 min-w-0 rounded-lg font-bold transition-all ${page === p ? 'shadow-md shadow-blue-500/20 text-white' : ''}`}
                                 >
                                     {p}
                                 </Button>

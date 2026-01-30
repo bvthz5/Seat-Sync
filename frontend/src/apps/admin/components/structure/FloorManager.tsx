@@ -152,9 +152,9 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
     ];
 
     return (
-        <div className="flex flex-col gap-6">
+        <div className="h-full flex flex-col gap-6">
             {/* Control Panel */}
-            <div className={`p-6 rounded-2xl border flex flex-col md:flex-row gap-6 justify-between items-end transition-all relative overflow-hidden ${!selectedBlockId ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200 shadow-lg shadow-slate-100/50'}`}>
+            <div className={`flex-none p-6 rounded-2xl border flex flex-col md:flex-row gap-6 justify-between items-end transition-all relative overflow-hidden ${!selectedBlockId ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200 shadow-lg shadow-slate-100/50'}`}>
                 {selectedBlockId && <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50/50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />}
 
                 <div className="flex flex-col gap-3 w-full md:w-1/2 z-10">
@@ -229,12 +229,13 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                             placeholder="Status"
                             aria-label="Filter by status"
                             size="sm"
-                            className="w-[120px]"
+                            className="w-[140px]"
                             variant="bordered"
                             selectedKeys={[statusFilter]}
                             onSelectionChange={(keys) => { setStatusFilter(Array.from(keys)[0] as string); setPage(1); }}
                             classNames={{
-                                trigger: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 shadow-sm rounded-xl h-11 transition-all"
+                                trigger: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 shadow-sm rounded-xl h-11 transition-all",
+                                selectorIcon: "right-3"
                             }}
                         >
                             <SelectItem key="all" textValue="All">All</SelectItem>
@@ -249,7 +250,7 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                             color="primary"
                             size="lg"
                             startContent={<Plus size={20} strokeWidth={2.5} />}
-                            className="font-bold shadow-lg shadow-blue-500/20 rounded-xl h-12 px-8 text-white"
+                            className="font-bold shadow-lg shadow-blue-600/20 rounded-xl h-[52px] px-8 text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:scale-[1.02] transition-transform"
                         >
                             Add Floor
                         </Button>
@@ -259,31 +260,33 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
 
             {/* Pagination Info */}
             {selectedBlockId && (
-                <div className="flex justify-between items-center px-4 -mb-2">
+                <div className="flex-none flex justify-between items-center px-4 -mb-2">
                     <div className="text-sm font-medium text-slate-500">
                         Showing <span className="text-slate-900 font-bold">{(floors?.length || 0) === 0 ? 0 : (page - 1) * limit + 1}</span> - <span className="text-slate-900 font-bold">{Math.min(page * limit, totalItems)}</span> of <span className="text-slate-900 font-bold">{totalItems}</span>
                     </div>
                 </div>
             )}
 
-            {!selectedBlockId ? (
-                // Empty State
-                <div className="flex flex-col items-center justify-center py-24 bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200">
-                    <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-lg shadow-slate-200/50 mb-6 ring-1 ring-slate-100">
-                        <Building2 className="text-slate-400" size={36} strokeWidth={1.5} />
+            <div className="flex-1 min-h-0 relative">
+                {!selectedBlockId ? (
+                    // Empty State
+                    <div className="h-full flex flex-col items-center justify-center bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200">
+                        <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-lg shadow-slate-200/50 mb-6 ring-1 ring-slate-100">
+                            <Building2 className="text-slate-400" size={36} strokeWidth={1.5} />
+                        </div>
+                        <h3 className="text-xl font-bold text-slate-800 mb-2">Select a Building</h3>
+                        <p className="text-slate-500 max-w-sm text-center font-medium leading-relaxed">
+                            Please select a building block from the dropdown above to view and manage its floors.
+                        </p>
                     </div>
-                    <h3 className="text-xl font-bold text-slate-800 mb-2">Select a Building</h3>
-                    <p className="text-slate-500 max-w-sm text-center font-medium leading-relaxed">
-                        Please select a building block from the dropdown above to view and manage its floors.
-                    </p>
-                </div>
-            ) : (
-                // Table
-                <>
+                ) : (
+                    // Table
                     <Table
+                        isHeaderSticky
                         aria-label="Floors table"
                         classNames={{
-                            wrapper: "bg-white shadow-sm border border-slate-200 rounded-2xl p-0 overflow-hidden",
+                            base: "h-full",
+                            wrapper: "bg-white shadow-sm border border-slate-200 rounded-2xl p-0 h-full overflow-auto custom-scrollbar",
                             th: "bg-slate-50 text-slate-600 font-bold text-xs py-4 px-6 border-b border-slate-200 uppercase tracking-wider",
                             td: "py-4 px-6 border-b border-slate-100 group-last:border-0",
                             tr: "hover:bg-slate-50/80 transition-colors cursor-default"
@@ -358,47 +361,47 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                             )}
                         </TableBody>
                     </Table>
+                )}
+            </div>
 
-                    {/* Table Pagination */}
-                    {totalPages > 1 && (
-                        <div className="flex justify-center p-4 bg-white border border-slate-200 rounded-2xl shadow-sm mt-4">
-                            <div className="flex items-center gap-2">
+            {/* Table Pagination */}
+            {selectedBlockId && totalPages > 1 && (
+                <div className="flex-none flex justify-center p-4 bg-white border border-slate-200 rounded-2xl shadow-sm mb-1">
+                    <div className="flex items-center gap-2">
+                        <Button
+                            size="sm"
+                            variant="flat"
+                            isDisabled={page === 1}
+                            onPress={() => setPage(page - 1)}
+                            className="rounded-lg font-bold"
+                        >
+                            Previous
+                        </Button>
+                        <div className="flex gap-1">
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
                                 <Button
+                                    key={p}
                                     size="sm"
-                                    variant="flat"
-                                    isDisabled={page === 1}
-                                    onPress={() => setPage(page - 1)}
-                                    className="rounded-lg font-bold"
+                                    variant={page === p ? "solid" : "light"}
+                                    color={page === p ? "primary" : "default"}
+                                    onPress={() => setPage(p)}
+                                    className={`w-8 h-8 min-w-0 rounded-lg font-bold transition-all ${page === p ? 'shadow-md shadow-blue-500/20 text-white' : ''}`}
                                 >
-                                    Previous
+                                    {p}
                                 </Button>
-                                <div className="flex gap-1">
-                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                                        <Button
-                                            key={p}
-                                            size="sm"
-                                            variant={page === p ? "solid" : "light"}
-                                            color={page === p ? "primary" : "default"}
-                                            onPress={() => setPage(p)}
-                                            className={`w-8 h-8 min-w-0 rounded-lg font-bold transition-all ${page === p ? 'shadow-md shadow-blue-500/20' : ''}`}
-                                        >
-                                            {p}
-                                        </Button>
-                                    ))}
-                                </div>
-                                <Button
-                                    size="sm"
-                                    variant="flat"
-                                    isDisabled={page === totalPages}
-                                    onPress={() => setPage(page + 1)}
-                                    className="rounded-lg font-bold"
-                                >
-                                    Next
-                                </Button>
-                            </div>
+                            ))}
                         </div>
-                    )}
-                </>
+                        <Button
+                            size="sm"
+                            variant="flat"
+                            isDisabled={page === totalPages}
+                            onPress={() => setPage(page + 1)}
+                            className="rounded-lg font-bold"
+                        >
+                            Next
+                        </Button>
+                    </div>
+                </div>
             )}
 
             {/* Modal */}
