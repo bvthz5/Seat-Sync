@@ -149,6 +149,7 @@ const AdminLayout: React.FC = () => {
                                 key="change_password"
                                 startContent={<Key size={18} className="text-red-500" />}
                                 className="text-red-600 data-[hover=true]:bg-red-50"
+                                onPress={() => navigate('/admin/change-password')}
                             >
                                 Change Password
                             </DropdownItem>
@@ -194,19 +195,9 @@ const AdminLayout: React.FC = () => {
                             <DropdownItem key="my_profile" startContent={<User size={18} className="text-gray-500" />} textValue="My Profile">
                                 <span className="text-sm font-medium text-gray-700">My Profile</span>
                             </DropdownItem>
-                            <DropdownItem key="settings" startContent={<Settings size={18} className="text-gray-500" />} textValue="Account Settings">
-                                <span className="text-sm font-medium text-gray-700">Account Settings</span>
-                            </DropdownItem>
-                            <DropdownItem key="preferences" startContent={<Sliders size={18} className="text-gray-500" />} textValue="Preferences">
-                                <span className="text-sm font-medium text-gray-700">Preferences</span>
-                            </DropdownItem>
-
-                            <DropdownItem key="help_support" showDivider startContent={<HelpCircle size={18} className="text-gray-500" />} textValue="Help & Support">
-                                <span className="text-sm font-medium text-gray-700">Help & Support</span>
-                            </DropdownItem>
-
                             <DropdownItem
                                 key="logout"
+                                showDivider
                                 className="text-red-600 data-[hover=true]:bg-red-50"
                                 onPress={() => logout()}
                                 startContent={<LogOut size={18} className="text-red-600" />}
