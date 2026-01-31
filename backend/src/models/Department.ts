@@ -1,5 +1,6 @@
 import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from "../config/database.js";
+// import { Faculty } from "./Faculty.js"; // Removed to avoid circular dependency
 
 /**
  * Department table attributes
@@ -13,7 +14,7 @@ interface DepartmentAttributes {
 /**
  * Attributes required when creating a department
  */
-interface DepartmentCreationAttributes extends Optional<DepartmentAttributes, "DepartmentID"> {}
+interface DepartmentCreationAttributes extends Optional<DepartmentAttributes, "DepartmentID"> { }
 
 export class Department extends Model<DepartmentAttributes, DepartmentCreationAttributes>
   implements DepartmentAttributes {
@@ -45,5 +46,7 @@ Department.init(
     timestamps: false,
   }
 );
+
+// Associations are defined in models/index.ts to handle circular dependencies
 
 export default Department;
