@@ -22,7 +22,8 @@
     "tailwind-merge": "^3.4.0",
     "three": "^0.182.0",
     "vanta": "^0.5.24",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "xlsx": "^0.18.5"
   },
   "scripts": {
     "dev": "vite",

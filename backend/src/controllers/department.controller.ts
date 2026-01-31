@@ -54,3 +54,19 @@ export const deleteDepartment = async (req: Request, res: Response) => {
         res.status(500).json({ message: error.message });
     }
 };
+
+export const getDepartmentById = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const department = await Department.findByPk(Number(id), {
+            include: ["Faculties"]
+        });
+
+        if (!department) {
+            return res.status(404).json({ message: "Department not found" });
+        }
+        res.json(department);
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};

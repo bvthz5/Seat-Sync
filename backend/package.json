@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",
+    "axios": "^1.13.4",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
@@ -33,6 +34,7 @@
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
+    "form-data": "^4.0.5",
     "helmet": "^8.1.0",
     "hpp": "^0.2.3",
     "jsonwebtoken": "^9.0.3",
@@ -63,7 +65,6 @@
     "@types/swagger-ui-express": "^4.1.8",
     "cross-env": "^10.1.0",
     "del-cli": "^7.0.0",
-    "node-fetch": "^3.3.2",
     "nodemon": "^3.1.11",
     "rimraf": "^6.1.2",
     "ts-node": "^1.7.1",

@@ -23,3 +23,19 @@ export { default as PasswordReset } from "./PasswordReset.model.js";
 export { default as AcademicYear } from "./AcademicYear.js";
 export { default as Notification } from "./Notification.js";
 export { default as ActiveSession } from "./ActiveSession.js";
+export { default as Faculty } from "./Faculty.js";
+
+// Associations
+import Department from "./Department.js";
+import Faculty from "./Faculty.js";
+
+// Define associations here to avoid circular imports in model files
+Department.hasMany(Faculty, {
+    foreignKey: "DepartmentID",
+    as: "Faculties"
+});
+
+Faculty.belongsTo(Department, {
+    foreignKey: "DepartmentID"
+});
+

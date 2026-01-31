@@ -1,5 +1,9 @@
-import React, { useState } from 'react';
-import { Button, Card, CardBody, Chip, Avatar, Pagination, Input, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from '@heroui/react';
+import React, { useState, useEffect } from 'react';
+import api from '../../../services/api';
+import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
+import { useParams } from 'react-router-dom';
+import { Button, Card, CardBody, Chip, Avatar, Pagination, Input, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, DropdownSection, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure, Select, SelectItem } from '@heroui/react';
 import {
     Download,
     Plus,
@@ -9,25 +13,255 @@ import {
     Users,
     MoreVertical,
     Search,
-    Filter
+    Filter,
+    Crown,
+    Edit,
+    Trash2,
+    CheckCircle,
+    XCircle,
+    FileText,
+    Upload,
+    AlertCircle,
+    Image as ImageIcon,
+    X
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const DepartmentDetails: React.FC = () => {
-    // Mock Data for UI matching
-    const stats = [
-        { label: "DEPT CODE", value: "CS-IT", icon: <Hash className="text-blue-500" />, color: "bg-blue-50" },
-        { label: "DEPT NAME", value: "Comp. Science", icon: <BookOpen className="text-purple-500" />, color: "bg-purple-50" },
-        { label: "HEAD (HOD)", value: "Dr. S. Verma", icon: <User className="text-green-500" />, color: "bg-green-50" },
-        { label: "TOTAL STUDENTS", value: "420", icon: <Users className="text-orange-500" />, color: "bg-orange-50" },
-        { label: "TOTAL FACULTY", value: "28", icon: <Hash className="text-pink-500" />, color: "bg-pink-50" }, // Using Hash as generic icon for count if needed, or maybe a bespoke one
-    ];
+    const { id } = useParams();
+    const [department, setDepartment] = useState<any | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+    const { isOpen: isAddOpen, onOpen: onAddOpen, onClose: onAddClose } = useDisclosure();
+    const { isOpen: isEditOpen, onOpen: onEditOpen, onClose: onEditClose } = useDisclosure();
+    const { isOpen: isImportOpen, onOpen: onImportOpen, onClose: onImportClose } = useDisclosure();
 
-    const faculties = [
-        { id: "#FAC-2024-001", name: "Dr. Arpit Saxena", role: "Sr. Professor", email: "arpit.s@university.edu", status: "Active", joinDate: "Joined Aug 2018", avatar: "A" },
-        { id: "#FAC-2024-045", name: "Prof. Sarah J.", role: "Asst. Professor", email: "sarah.j@university.edu", status: "Active", joinDate: "Joined Jan 2021", avatar: "S" },
-        { id: "#FAC-2024-112", name: "Dr. Mark Taylor", role: "Lecturer", email: "mark.t@university.edu", status: "On Leave", joinDate: "Joined Mar 2019", avatar: "M" },
-        { id: "#FAC-2024-210", name: "Mrs. Emma Watson", role: "Asst. Professor", email: "emma.w@university.edu", status: "Active", joinDate: "Joined Nov 2022", avatar: "E" },
+    const [newFaculty, setNewFaculty] = useState({
+        Name: "",
+        Designation: "",
+        ProfileImageURL: "",
+        isEligible: true
+    });
+    const [editingFaculty, setEditingFaculty] = useState<any>(null);
+    const [selectedImage, setSelectedImage] = useState<File | null>(null);
+    const [imagePreview, setImagePreview] = useState<string | null>(null);
+    const [editSelectedImage, setEditSelectedImage] = useState<File | null>(null);
+    const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
+    const [submitting, setSubmitting] = useState(false);
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setSelectedImage(file);
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setImagePreview(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleEditFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setEditSelectedImage(file);
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setEditImagePreview(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleEditOpen = (faculty: any) => {
+        setEditingFaculty({ ...faculty });
+        setEditImagePreview(faculty.ProfileImageURL);
+        setEditSelectedImage(null);
+        onEditOpen();
+    };
+
+    const handleUpdateFaculty = async () => {
+        try {
+            setSubmitting(true);
+
+            let imageUrl = editingFaculty.ProfileImageURL;
+            if (editSelectedImage) {
+                const formData = new FormData();
+                formData.append('image', editSelectedImage);
+                const uploadRes = await api.post('/faculties/upload', formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                imageUrl = uploadRes.data.imageUrl;
+            }
+
+            const payload = {
+                Name: editingFaculty.Name,
+                Designation: editingFaculty.Designation,
+                ProfileImageURL: imageUrl,
+                isEligible: editingFaculty.isEligible
+            };
+
+            await api.put(`/faculties/${editingFaculty.FacultyID}`, payload);
+
+            // Refresh list
+            const response = await api.get(`/departments/${id}`);
+            setDepartment(response.data);
+            onEditClose();
+            setEditingFaculty(null);
+            setEditSelectedImage(null);
+            setEditImagePreview(null);
+        } catch (err: any) {
+            console.error(err);
+            alert("Failed to update faculty: " + (err.response?.data?.message || err.message));
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleAddFaculty = async () => {
+        try {
+            setSubmitting(true);
+
+            let imageUrl = "";
+            if (selectedImage) {
+                const formData = new FormData();
+                formData.append('image', selectedImage);
+                const uploadRes = await api.post('/faculties/upload', formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                imageUrl = uploadRes.data.imageUrl;
+            }
+
+            const payload = {
+                ...newFaculty,
+                ProfileImageURL: imageUrl,
+                DepartmentID: id
+            };
+            await api.post('/faculties', payload);
+            // Refresh list
+            const response = await api.get(`/departments/${id}`);
+            setDepartment(response.data);
+            onAddClose();
+            setNewFaculty({ Name: "", Designation: "", ProfileImageURL: "", isEligible: true });
+            setSelectedImage(null);
+            setImagePreview(null);
+        } catch (err: any) {
+            console.error(err);
+            alert("Failed to add faculty: " + (err.response?.data?.message || err.message));
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setSubmitting(true);
+        const fileName = file.name.toLowerCase();
+
+        try {
+            let data: any[] = [];
+
+            if (fileName.endsWith('.csv')) {
+                data = await new Promise((resolve, reject) => {
+                    Papa.parse(file, {
+                        header: true,
+                        skipEmptyLines: true,
+                        complete: (results) => resolve(results.data),
+                        error: (error) => reject(error)
+                    });
+                });
+            } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+                const buffer = await file.arrayBuffer();
+                const workbook = XLSX.read(buffer);
+                const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                data = XLSX.utils.sheet_to_json(sheet);
+            }
+
+            // Map and validate
+            const facultiesToImport = data.map((item: any) => ({
+                Name: item.Name || item.name || item.FacultyName,
+                Designation: item.Designation || item.designation || "Faculty",
+                ProfileImageURL: item.ProfileImageURL || item.image || item.ImageURL || "",
+                DepartmentID: id,
+                isEligible: true
+            })).filter(f => f.Name);
+
+            if (facultiesToImport.length === 0) {
+                alert("No valid faculty data found in file.");
+                return;
+            }
+
+            await api.post('/faculties/import', { faculties: facultiesToImport });
+
+            // Refresh list
+            const response = await api.get(`/departments/${id}`);
+            setDepartment(response.data);
+            alert(`Successfully imported ${facultiesToImport.length} faculties!`);
+        } catch (err: any) {
+            console.error(err);
+            alert("Import failed: " + err.message);
+        } finally {
+            setSubmitting(false);
+            e.target.value = ""; // Clear input
+        }
+    };
+
+    useEffect(() => {
+        const fetchDepartment = async () => {
+            try {
+                // Use centralized API instance to handle auth token automatically
+                const response = await api.get(`/departments/${id}`);
+                setDepartment(response.data);
+            } catch (err: any) {
+                console.error(err);
+                setError(err.message || 'Failed to load department');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (id) {
+            fetchDepartment();
+        }
+    }, [id]);
+
+    if (loading) return <div className="p-8">Loading...</div>;
+    if (error) return <div className="p-8 text-red-500">Error: {error}</div>;
+    if (!department) return <div className="p-8">Department not found</div>;
+
+    const faculties = department.Faculties || [];
+
+    // Find HOD
+    const hod = faculties.find((f: any) =>
+        f.Designation.toLowerCase().includes('head') ||
+        f.Designation.toLowerCase().includes('hod')
+    );
+    const hodName = hod ? hod.Name : "N/A";
+
+    // Stats
+    const hodIcon = hod && hod.ProfileImageURL ? (
+        <img
+            src={hod.ProfileImageURL}
+            alt={hod.Name}
+            className="w-full h-full object-cover rounded-xl"
+            onError={(e) => {
+                e.currentTarget.style.display = 'none'; // Fallback to icon if this fails (would need more complex logic to show icon, but for now just hide broken img)
+                // Actually, if I hide it, the container is empty. 
+                // Better: e.currentTarget.parentElement.innerHTML = ... but that's messy in React.
+                // Simple fallback: reset src to UI Shield or generic
+                e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(hod.Name)}&background=10b981&color=ffffff`;
+            }}
+        />
+    ) : <User className="text-green-500" />;
+
+    const stats = [
+        { label: "DEPT CODE", value: department.DepartmentCode, icon: <Hash className="text-blue-500" />, color: "bg-blue-50" },
+        { label: "DEPT NAME", value: department.DepartmentName, icon: <BookOpen className="text-purple-500" />, color: "bg-purple-50" },
+        { label: "HEAD (HOD)", value: hodName, icon: hodIcon, color: hod && hod.ProfileImageURL ? "bg-transparent p-0" : "bg-green-50" }, // Remove padding/bg if image
+        { label: "TOTAL STUDENTS", value: "0", icon: <Users className="text-orange-500" />, color: "bg-orange-50" },
+        { label: "TOTAL FACULTY", value: faculties.length.toString(), icon: <Hash className="text-pink-500" />, color: "bg-pink-50" },
     ];
 
     const containerVariants = {
@@ -45,23 +279,33 @@ const DepartmentDetails: React.FC = () => {
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">Department Details</h1>
+                    <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">{department.DepartmentName}</h1>
                     <p className="text-slate-500 mt-2 text-base font-medium">Manage core department metrics and faculty staff.</p>
                 </div>
                 <div className="flex gap-3">
                     <Button
                         variant="bordered"
-                        startContent={<Download size={18} />}
+                        startContent={<Upload size={18} />}
                         className="font-bold border-slate-300 text-slate-700 bg-white"
+                        onPress={() => document.getElementById('import-input')?.click()}
+                        isLoading={submitting}
                     >
-                        Export
+                        Import
                     </Button>
+                    <input
+                        id="import-input"
+                        type="file"
+                        accept=".csv,.xlsx,.xls"
+                        className="hidden"
+                        onChange={handleImport}
+                    />
                     <Button
                         color="primary"
                         startContent={<Plus size={18} />}
                         className="font-bold bg-blue-600 shadow-md shadow-blue-500/20"
+                        onPress={onAddOpen}
                     >
-                        Add Department
+                        Add faculty
                     </Button>
                 </div>
             </div>
@@ -109,64 +353,363 @@ const DepartmentDetails: React.FC = () => {
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="border-b border-slate-100 bg-slate-50/50">
-                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Faculty ID</th>
                                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Name</th>
                                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Designation</th>
-                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Email</th>
                                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
                                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {faculties.map((faculty) => (
-                                    <tr key={faculty.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group">
-                                        <td className="px-6 py-4 text-sm font-medium text-slate-500 font-mono">{faculty.id}</td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <Avatar name={faculty.avatar} size="sm" className="bg-slate-200 text-slate-600 font-bold" />
-                                                <div>
-                                                    <p className="text-sm font-bold text-slate-800">{faculty.name}</p>
-                                                    <p className="text-[10px] text-slate-400 font-medium">{faculty.joinDate}</p>
+                                {faculties.map((faculty: any) => {
+                                    const isHod = hod && hod.FacultyID === faculty.FacultyID;
+                                    return (
+                                        <tr key={faculty.FacultyID} className={`border-b border-slate-50 transition-colors group ${isHod ? 'bg-blue-50/50 hover:bg-blue-50' : 'hover:bg-slate-50/50'}`}>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 min-w-[40px] rounded-full overflow-hidden bg-slate-200 ring-2 ring-white shadow-sm hover:shadow-md transition-shadow">
+                                                        <img
+                                                            src={faculty.ProfileImageURL}
+                                                            alt={faculty.Name}
+                                                            className="w-full h-full object-cover"
+                                                            onError={(e) => {
+                                                                e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(faculty.Name)}&background=f1f5f9&color=64748b&bold=true`;
+                                                            }}
+                                                            loading="lazy"
+                                                        />
+                                                    </div>
+                                                    <div className="ml-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="text-sm font-bold text-slate-800">{faculty.Name}</p>
+                                                            {isHod && (
+                                                                <Chip
+                                                                    size="sm"
+                                                                    variant="flat"
+                                                                    className="h-5 bg-amber-100 text-amber-700 font-bold border border-amber-200"
+                                                                    startContent={<Crown size={10} className="ml-1 text-amber-600" fill="currentColor" />}
+                                                                >
+                                                                    <span className="text-[10px] uppercase tracking-wide pr-1">Head of Dept</span>
+                                                                </Chip>
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-sm font-semibold text-slate-600">{faculty.role}</td>
-                                        <td className="px-6 py-4 text-sm text-slate-500">{faculty.email}</td>
-                                        <td className="px-6 py-4">
-                                            <Chip
-                                                size="sm"
-                                                className={`font-bold border ${faculty.status === 'Active' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}
-                                            >
-                                                {faculty.status}
-                                            </Chip>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <Button isIconOnly variant="light" size="sm" className="text-slate-300 group-hover:text-slate-500">
-                                                <MoreVertical size={16} />
-                                            </Button>
-                                        </td>
+                                            </td>
+                                            <td className="px-6 py-4 text-sm font-semibold text-slate-600">{faculty.Designation}</td>
+                                            <td className="px-6 py-4">
+                                                <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${faculty.isEligible
+                                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                                    : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                                                    <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${faculty.isEligible ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
+                                                    {faculty.isEligible ? 'Eligible' : 'Ineligible'}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <Dropdown placement="bottom-end">
+                                                    <DropdownTrigger>
+                                                        <Button
+                                                            size="sm"
+                                                            className="bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 hover:border-slate-300 shadow-sm"
+                                                        >
+                                                            Manage
+                                                        </Button>
+                                                    </DropdownTrigger>
+                                                    <DropdownMenu
+                                                        aria-label="Faculty Actions"
+                                                        className="bg-white border border-slate-100 shadow-xl rounded-xl"
+                                                        variant="flat"
+                                                    >
+                                                        <DropdownSection showDivider>
+                                                            <DropdownItem
+                                                                key="edit"
+                                                                startContent={<Edit size={16} className="text-blue-500" />}
+                                                                onPress={() => handleEditOpen(faculty)}
+                                                            >
+                                                                Edit Profile
+                                                            </DropdownItem>
+                                                            <DropdownItem
+                                                                key="toggle"
+                                                                startContent={faculty.isEligible ? <XCircle size={16} className="text-slate-400" /> : <CheckCircle size={16} className="text-green-500" />}
+                                                                className={faculty.isEligible ? "text-slate-600" : "text-green-600"}
+                                                                onPress={async () => {
+                                                                    try {
+                                                                        await api.put(`/faculties/${faculty.FacultyID}`, { isEligible: !faculty.isEligible });
+                                                                        const updatedFaculties = faculties.map((f: any) =>
+                                                                            f.FacultyID === faculty.FacultyID ? { ...f, isEligible: !f.isEligible } : f
+                                                                        );
+                                                                        setDepartment({ ...department, Faculties: updatedFaculties });
+                                                                    } catch (e) {
+                                                                        console.error("Failed to toggle eligibility", e);
+                                                                        alert("Failed to update status");
+                                                                    }
+                                                                }}
+                                                            >
+                                                                {faculty.isEligible ? "Mark as Ineligible" : "Mark as Eligible"}
+                                                            </DropdownItem>
+                                                        </DropdownSection>
+
+                                                        <DropdownSection>
+                                                            <DropdownItem
+                                                                key="delete"
+                                                                className="text-red-600"
+                                                                color="danger"
+                                                                startContent={<Trash2 size={16} className="text-red-500" />}
+                                                                onPress={async () => {
+                                                                    if (confirm(`Are you sure you want to remove ${faculty.Name}?`)) {
+                                                                        try {
+                                                                            await api.delete(`/faculties/${faculty.FacultyID}`);
+                                                                            const updatedFaculties = faculties.filter((f: any) => f.FacultyID !== faculty.FacultyID);
+                                                                            setDepartment({ ...department, Faculties: updatedFaculties });
+                                                                        } catch (e) {
+                                                                            console.error("Failed to delete faculty", e);
+                                                                            alert("Failed to delete faculty");
+                                                                        }
+                                                                    }
+                                                                }}
+                                                            >
+                                                                Delete Faculty
+                                                            </DropdownItem>
+                                                        </DropdownSection>
+                                                    </DropdownMenu>
+                                                </Dropdown>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                                {faculties.length === 0 && (
+                                    <tr>
+                                        <td colSpan={3} className="px-6 py-8 text-center text-slate-500 italic">No faculty members found.</td>
                                     </tr>
-                                ))}
+                                )}
                             </tbody>
                         </table>
                     </div>
-
-                    {/* Pagination */}
-                    <div className="p-6 border-t border-slate-100 flex justify-between items-center">
-                        <span className="text-sm text-slate-500 font-medium">Showing 1 to 4 of 28 faculties</span>
-                        <Pagination
-                            total={3}
-                            initialPage={1}
-                            size="sm"
-                            classNames={{
-                                wrapper: "gap-2",
-                                cursor: "bg-blue-600 text-white font-bold shadow-md shadow-blue-500/20",
-                                item: "bg-transparent text-slate-600 font-medium hover:bg-slate-100",
-                            }}
-                        />
-                    </div>
                 </CardBody>
             </Card>
+            {/* Add Faculty Modal */}
+            <Modal
+                isOpen={isAddOpen}
+                onClose={onAddClose}
+                size="2xl"
+                backdrop="blur"
+                classNames={{
+                    backdrop: "bg-slate-900/50 backdrop-blur-md"
+                }}
+            >
+                <ModalContent className="bg-white">
+                    {(onClose) => (
+                        <>
+                            <ModalHeader className="flex flex-col gap-1">
+                                <h2 className="text-2xl font-bold text-slate-800">Add New Faculty</h2>
+                                <p className="text-sm text-slate-500">Enter faculty details to register them in this department.</p>
+                            </ModalHeader>
+                            <ModalBody className="py-6 bg-white">
+                                <div className="space-y-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-1.5">
+                                            <label className="text-sm font-bold text-slate-700 ml-1">Full Name</label>
+                                            <Input
+                                                placeholder="e.g. Dr. Jane Smith"
+                                                value={newFaculty.Name}
+                                                onChange={(e) => setNewFaculty({ ...newFaculty, Name: e.target.value })}
+                                                variant="bordered"
+                                                className="bg-white"
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-sm font-bold text-slate-700 ml-1">Designation</label>
+                                            <Input
+                                                placeholder="e.g. Associate Professor"
+                                                value={newFaculty.Designation}
+                                                onChange={(e) => setNewFaculty({ ...newFaculty, Designation: e.target.value })}
+                                                variant="bordered"
+                                                className="bg-white"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-bold text-slate-700 ml-1">Profile Image</label>
+                                        <div className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-2xl p-6 transition-all hover:border-blue-400 group relative bg-white overflow-hidden">
+                                            {imagePreview ? (
+                                                <div className="relative w-full aspect-square max-w-[200px] rounded-xl overflow-hidden shadow-lg">
+                                                    <img
+                                                        src={imagePreview}
+                                                        alt="Preview"
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                    <Button
+                                                        isIconOnly
+                                                        size="sm"
+                                                        variant="flat"
+                                                        className="absolute top-2 right-2 bg-white/20 backdrop-blur-md text-white hover:bg-red-500 rounded-full"
+                                                        onPress={() => {
+                                                            setSelectedImage(null);
+                                                            setImagePreview(null);
+                                                        }}
+                                                    >
+                                                        <X size={14} />
+                                                    </Button>
+                                                </div>
+                                            ) : (
+                                                <div
+                                                    className="flex flex-col items-center cursor-pointer py-4 w-full"
+                                                    onClick={() => document.getElementById('faculty-image-upload')?.click()}
+                                                >
+                                                    <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                                                        <ImageIcon size={32} />
+                                                    </div>
+                                                    <p className="text-sm font-bold text-slate-800">Upload Image</p>
+                                                    <p className="text-xs text-slate-500 mt-1">PNG, JPG or WebP up to 5MB</p>
+                                                </div>
+                                            )}
+                                            <input
+                                                id="faculty-image-upload"
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={handleFileChange}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-xl flex items-start gap-3">
+                                        <AlertCircle className="text-blue-500 mt-0.5" size={20} />
+                                        <p className="text-sm text-blue-800 leading-relaxed font-semibold">
+                                            The new faculty will be marked as <strong>Eligible</strong> by default. You can change this later in the management menu.
+                                        </p>
+                                    </div>
+                                </div>
+                            </ModalBody>
+                            <ModalFooter className="border-t border-slate-100">
+                                <Button variant="light" onPress={onClose} className="font-bold">
+                                    Cancel
+                                </Button>
+                                <Button
+                                    color="primary"
+                                    onPress={handleAddFaculty}
+                                    className="font-bold bg-blue-600"
+                                    isLoading={submitting}
+                                >
+                                    Confirm Addition
+                                </Button>
+                            </ModalFooter>
+                        </>
+                    )}
+                </ModalContent>
+            </Modal>
+
+            {/* Edit Faculty Modal */}
+            <Modal
+                isOpen={isEditOpen}
+                onClose={onEditClose}
+                size="2xl"
+                backdrop="blur"
+                classNames={{
+                    backdrop: "bg-slate-900/50 backdrop-blur-md"
+                }}
+            >
+                <ModalContent className="bg-white">
+                    {(onClose) => (
+                        <>
+                            <ModalHeader className="flex flex-col gap-1">
+                                <h2 className="text-2xl font-bold text-slate-800">Edit Faculty Profile</h2>
+                                <p className="text-sm text-slate-500">Update the details for {editingFaculty?.Name}</p>
+                            </ModalHeader>
+                            <ModalBody className="py-6 bg-white">
+                                {editingFaculty && (
+                                    <div className="space-y-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="space-y-1.5">
+                                                <label className="text-sm font-bold text-slate-700 ml-1">Full Name</label>
+                                                <Input
+                                                    placeholder="e.g. Dr. Jane Smith"
+                                                    value={editingFaculty.Name}
+                                                    onChange={(e) => setEditingFaculty({ ...editingFaculty, Name: e.target.value })}
+                                                    variant="bordered"
+                                                    className="bg-white"
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-sm font-bold text-slate-700 ml-1">Designation</label>
+                                                <Input
+                                                    placeholder="e.g. Associate Professor"
+                                                    value={editingFaculty.Designation}
+                                                    onChange={(e) => setEditingFaculty({ ...editingFaculty, Designation: e.target.value })}
+                                                    variant="bordered"
+                                                    className="bg-white"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <label className="text-sm font-bold text-slate-700 ml-1">Profile Image</label>
+                                            <div className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-2xl p-6 transition-all hover:border-blue-400 group relative bg-white overflow-hidden">
+                                                {editImagePreview ? (
+                                                    <div className="relative w-full aspect-square max-w-[200px] rounded-xl overflow-hidden shadow-lg">
+                                                        <img
+                                                            src={editImagePreview}
+                                                            alt="Preview"
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                        <Button
+                                                            isIconOnly
+                                                            size="sm"
+                                                            variant="flat"
+                                                            className="absolute top-2 right-2 bg-white/20 backdrop-blur-md text-white hover:bg-red-500 rounded-full"
+                                                            onPress={() => {
+                                                                setEditSelectedImage(null);
+                                                                setEditImagePreview(null);
+                                                            }}
+                                                        >
+                                                            <X size={14} />
+                                                        </Button>
+                                                    </div>
+                                                ) : (
+                                                    <div
+                                                        className="flex flex-col items-center cursor-pointer py-4 w-full"
+                                                        onClick={() => document.getElementById('edit-faculty-image-upload')?.click()}
+                                                    >
+                                                        <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                                                            <ImageIcon size={32} />
+                                                        </div>
+                                                        <p className="text-sm font-bold text-slate-800">Change Image</p>
+                                                        <p className="text-xs text-slate-500 mt-1">PNG, JPG or WebP up to 5MB</p>
+                                                    </div>
+                                                )}
+                                                <input
+                                                    id="edit-faculty-image-upload"
+                                                    type="file"
+                                                    accept="image/*"
+                                                    className="hidden"
+                                                    onChange={handleEditFileChange}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-xl flex items-start gap-3">
+                                            <AlertCircle className="text-blue-500 mt-0.5" size={20} />
+                                            <p className="text-sm text-blue-800 leading-relaxed font-semibold">
+                                                Updating the profile will keep the faculty's eligibility status unchanged unless manually toggled.
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+                            </ModalBody>
+                            <ModalFooter className="border-t border-slate-100">
+                                <Button variant="light" onPress={onClose} className="font-bold">
+                                    Cancel
+                                </Button>
+                                <Button
+                                    color="primary"
+                                    onPress={handleUpdateFaculty}
+                                    className="font-bold bg-blue-600"
+                                    isLoading={submitting}
+                                >
+                                    Save Changes
+                                </Button>
+                            </ModalFooter>
+                        </>
+                    )}
+                </ModalContent>
+            </Modal>
         </motion.div>
     );
 };

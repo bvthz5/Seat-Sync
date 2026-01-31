@@ -59,6 +59,13 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(hpp());
 
+// --- Static Files ---
+import path from "path";
+import { fileURLToPath } from "url";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+
 // --- Security Middleware: Rate Limiter ---
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -138,6 +145,8 @@ app.use("/api/rooms", roomRoutes);
 app.use("/api/exams", examRoutes);
 app.use("/api/subjects", subjectRoutes);
 
+import facultyRoutes from "./routes/faculty.routes.js";
+
 // New ERP Routes (Root Admin Only)
 app.use("/api/admin-management", adminManagementRoutes);
 app.use("/api/academic-setup", academicSetupRoutes);
@@ -145,6 +154,7 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/security", securityRoutes);
 app.use("/api/exam-control", examControlRoutes);
 app.use("/api/departments", departmentRoutes);
+app.use("/api/faculties", facultyRoutes);
 
 // --- Error Handling Middleware ---
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

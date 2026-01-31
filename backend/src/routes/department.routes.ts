@@ -4,6 +4,7 @@ import {
     createDepartment,
     updateDepartment,
     deleteDepartment,
+    getDepartmentById,
 } from "../controllers/department.controller.js";
 import { AuthMiddleware } from "../middlewares/auth.middleware.js";
 
@@ -42,6 +43,28 @@ const router = express.Router();
  *                     type: string
  */
 router.get("/", AuthMiddleware.verifyAccessToken, getDepartments);
+
+/**
+ * @swagger
+ * /api/departments/{id}:
+ *   get:
+ *     summary: Get a department by ID with details
+ *     tags: [Departments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Department details
+ *       404:
+ *         description: Department not found
+ */
+router.get("/:id", AuthMiddleware.verifyAccessToken, getDepartmentById);
 
 /**
  * @swagger
