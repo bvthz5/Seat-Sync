@@ -148,6 +148,8 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
                                 <div className="relative">
                                     <label className="block text-sm font-medium text-gray-700 mb-1.5">Subject Name or Code</label>
                                     <Input
+                                        id="subjectSearch"
+                                        name="subjectSearch"
                                         placeholder="e.g. CS101 - Intro to Comp Sci"
                                         value={subjectSearch}
                                         onValueChange={handleSearchChange}
@@ -199,6 +201,7 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1.5">Date</label>
                                         <Input
+                                            id="ExamDate"
                                             type="date"
                                             name="ExamDate"
                                             value={formData.ExamDate}
@@ -238,6 +241,7 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
                                 </div>
 
                                 <Input
+                                    id="Duration"
                                     type="number"
                                     label="Duration (Minutes)"
                                     labelPlacement="outside"

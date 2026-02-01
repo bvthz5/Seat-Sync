@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { Button, Link } from '@heroui/react';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
@@ -310,14 +310,17 @@ const AdminLogin: React.FC = () => {
     const [formError, setFormError] = useState('');
     const [loading, setLoading] = useState(false);
 
-    const { login, logout } = useAuth();
+    const { login, isAuthenticated, isLoading } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
+    const from = location.state?.from?.pathname || '/admin/dashboard';
 
-    // Challenge: "If back from dashboard to login page, automatic logout"
-    // Solution: We force a logout whenever this component mounts.
+    // If already authenticated, redirect to dashboard or the page they came from
     useEffect(() => {
-        logout({ silent: true });
-    }, []);
+        if (!isLoading && isAuthenticated) {
+            navigate('/admin/dashboard', { replace: true });
+        }
+    }, [isLoading, isAuthenticated, navigate, from]);
 
     const validate = () => {
         let isValid = true;
@@ -351,7 +354,8 @@ const AdminLogin: React.FC = () => {
         setLoading(true);
         try {
             await login(email, password);
-            navigate('/admin/dashboard');
+            // Navigate to the "from" location
+            navigate('/admin/dashboard', { replace: true });
         } catch (error: any) {
             setFormError("Authentication failed. Please verify your credentials.");
         } finally {

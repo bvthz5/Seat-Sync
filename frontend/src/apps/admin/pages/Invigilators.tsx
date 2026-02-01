@@ -231,6 +231,8 @@ const Invigilators: React.FC = () => {
             <div className="flex items-center justify-between gap-4 mb-2">
                 <div className="relative w-full max-w-xl">
                     <Input
+                        id="search-invigilators"
+                        name="search-invigilators"
                         classNames={{
                             inputWrapper: "bg-white border-1 border-gray-200 shadow-sm rounded-xl h-11",
                         }}
@@ -238,6 +240,7 @@ const Invigilators: React.FC = () => {
                         startContent={<Search size={18} className="text-gray-400" />}
                         value={searchQuery}
                         onValueChange={setSearchQuery}
+                        aria-label="Search invigilators"
                     />
                 </div>
             </div>
@@ -371,11 +374,14 @@ const Invigilators: React.FC = () => {
                                 <span className="text-sm font-bold text-gray-600">Filters:</span>
                             </div>
                             <Select
+                                id="filter-department"
+                                name="filter-department"
                                 placeholder="All Departments"
                                 size="sm"
                                 className="w-56"
                                 variant="bordered"
-                                selectorIcon={<></>}
+                                selectorIcon={<span />}
+                                aria-label="Filter by department"
                                 popoverProps={{
                                     classNames: {
                                         base: "z-[9999]",
@@ -401,11 +407,14 @@ const Invigilators: React.FC = () => {
                             </Select>
 
                             <Select
+                                id="filter-availability"
+                                name="filter-availability"
                                 placeholder="Availability Status"
                                 size="sm"
                                 className="w-56"
                                 variant="bordered"
-                                selectorIcon={<></>}
+                                selectorIcon={<span />}
+                                aria-label="Filter by availability"
                                 popoverProps={{
                                     classNames: {
                                         base: "z-[9999]",
@@ -458,7 +467,7 @@ const Invigilators: React.FC = () => {
                                 <TableColumn>DEPARTMENT</TableColumn>
                                 <TableColumn>TOTAL EXAMS</TableColumn>
                                 <TableColumn>STATUS</TableColumn>
-                                <TableColumn align="right">ACTIONS</TableColumn>
+                                <TableColumn align="end">ACTIONS</TableColumn>
                             </TableHeader>
                             <TableBody
                                 emptyContent={isLoading ? <Spinner /> : "No staff members found matching your criteria."}
@@ -637,6 +646,8 @@ const Invigilators: React.FC = () => {
                                     <div className="space-y-1.5">
                                         <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Full Name</label>
                                         <Input
+                                            id="fullName"
+                                            name="fullName"
                                             placeholder="e.g. John Doe"
                                             value={newInvigilator.FullName}
                                             onValueChange={(val) => setNewInvigilator({ ...newInvigilator, FullName: val })}
@@ -647,6 +658,8 @@ const Invigilators: React.FC = () => {
                                     <div className="space-y-1.5">
                                         <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Email Address</label>
                                         <Input
+                                            id="email"
+                                            name="email"
                                             type="email"
                                             placeholder="john.doe@college.edu"
                                             value={newInvigilator.Email}
@@ -658,6 +671,8 @@ const Invigilators: React.FC = () => {
                                     <div className="space-y-1.5">
                                         <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Initial Password</label>
                                         <Input
+                                            id="password"
+                                            name="password"
                                             type="password"
                                             placeholder="••••••••"
                                             value={newInvigilator.Password}
@@ -694,7 +709,7 @@ const Invigilators: React.FC = () => {
                             </ModalHeader>
                             <ModalBody className="text-center px-8 pb-4">
                                 <p className="text-sm text-gray-500 leading-relaxed">
-                                    Are you sure you want to remove <span className="font-bold text-gray-900">{selectedInvigilator?.User.FullName}</span>?
+                                    Are you sure you want to remove <span className="font-bold text-gray-900">{selectedInvigilator?.Name}</span>?
                                     This action cannot be undone.
                                 </p>
                             </ModalBody>

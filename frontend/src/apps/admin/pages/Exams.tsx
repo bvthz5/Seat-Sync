@@ -118,6 +118,8 @@ const Exams: React.FC = () => {
                     {/* Search */}
                     <div className="w-full lg:w-72">
                         <Input
+                            id="search-exams"
+                            name="search-exams"
                             placeholder="Search subject or code..."
                             startContent={<Search size={18} className="text-gray-400" />}
                             value={searchQuery}
@@ -134,6 +136,8 @@ const Exams: React.FC = () => {
                     {/* Dropdowns */}
                     <div className="flex gap-2 w-full lg:w-auto overflow-x-auto pb-1 lg:pb-0">
                         <Select
+                            id="filter-department"
+                            name="filter-department"
                             placeholder="Department: All"
                             size="sm"
                             className="w-40"
@@ -141,7 +145,8 @@ const Exams: React.FC = () => {
                             classNames={{ trigger: "bg-gray-50 border-gray-200" }}
                             selectedKeys={[deptFilter]}
                             onChange={(e) => setDeptFilter(e.target.value)}
-                            selectorIcon={<></>}
+                            selectorIcon={<span />}
+                            aria-label="Filter by Department"
                         >
                             <SelectItem key="All">Department: All</SelectItem>
                             <SelectItem key="CS">Computer Science</SelectItem>
@@ -149,6 +154,8 @@ const Exams: React.FC = () => {
                         </Select>
 
                         <Select
+                            id="filter-session"
+                            name="filter-session"
                             placeholder="Session"
                             size="sm"
                             className="w-36"
@@ -156,7 +163,8 @@ const Exams: React.FC = () => {
                             classNames={{ trigger: "bg-gray-50 border-gray-200" }}
                             selectedKeys={[sessionFilter]}
                             onChange={(e) => setSessionFilter(e.target.value)}
-                            selectorIcon={<></>}
+                            selectorIcon={<span />}
+                            aria-label="Filter by Session"
                         >
                             <SelectItem key="All">Session: All</SelectItem>
                             <SelectItem key="Morning">Morning</SelectItem>
@@ -164,6 +172,8 @@ const Exams: React.FC = () => {
                         </Select>
 
                         <Select
+                            id="filter-status"
+                            name="filter-status"
                             placeholder="Status"
                             size="sm"
                             className="w-36"
@@ -171,7 +181,8 @@ const Exams: React.FC = () => {
                             classNames={{ trigger: "bg-gray-50 border-gray-200" }}
                             selectedKeys={[statusFilter]}
                             onChange={(e) => setStatusFilter(e.target.value)}
-                            selectorIcon={<></>}
+                            selectorIcon={<span />}
+                            aria-label="Filter by Status"
                         >
                             <SelectItem key="All">Audit Status: All</SelectItem>
                             <SelectItem key="Scheduled">Clean</SelectItem>

@@ -5,23 +5,12 @@ import { sequelize } from "../config/database.js";
 
 export const getDepartments = async (req: Request, res: Response) => {
     try {
-        const departments = await Department.findAll({
-            attributes: {
-                include: [
-                    [
-                        sequelize.literal(`(
-                            SELECT COUNT(*)
-                            FROM Students AS student
-                            WHERE
-                                student.DepartmentID = Department.DepartmentID
-                        )`),
-                        'studentCount'
-                    ]
-                ]
-            }
-        });
+        const departments = await Department.findAll();
+        // TODO: Re-implement student count efficiently. 
+        // The previous literal subquery caused aliasing issues.
         res.json(departments);
     } catch (error: any) {
+        console.error("Error fetching departments:", error);
         res.status(500).json({ message: error.message });
     }
 };
@@ -76,19 +65,7 @@ export const getDepartmentById = async (req: Request, res: Response) => {
         const { id } = req.params;
         const department = await Department.findByPk(Number(id), {
             include: ["Faculties"],
-            attributes: {
-                include: [
-                    [
-                        sequelize.literal(`(
-                            SELECT COUNT(*)
-                            FROM Students AS student
-                            WHERE
-                                student.DepartmentID = Department.DepartmentID
-                        )`),
-                        'studentCount'
-                    ]
-                ]
-            }
+            // attributes include removed temporarily
         });
 
         if (!department) {
@@ -96,6 +73,7 @@ export const getDepartmentById = async (req: Request, res: Response) => {
         }
         res.json(department);
     } catch (error: any) {
+        console.error("Error fetching department by ID:", error);
         res.status(500).json({ message: error.message });
     }
 };

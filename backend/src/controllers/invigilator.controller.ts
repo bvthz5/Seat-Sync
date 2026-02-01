@@ -44,7 +44,7 @@ export const getAllInvigilators = async (req: Request, res: Response) => {
                 ProfileImageURL: faculty.ProfileImageURL,
                 isEligible: faculty.isEligible,
                 isFlagged: false,
-                Department: facultyData.Department,
+                Department: (facultyData as any).Department,
                 totalExams: facultyAssignments.length,
                 isOnDuty: facultyAssignments.some(a => {
                     if (!a.Exam) return false;

@@ -1,36 +1,30 @@
+import api from '../../../services/api';
 
-import axios from 'axios';
-
-const API_URL = 'http://localhost:5000/api/exams';
-
-const getAuthHeader = () => {
-    const token = localStorage.getItem('accessToken');
-    return { headers: { Authorization: `Bearer ${token}` } };
-};
+const PREFIX = '/exams';
 
 export const ExamService = {
     getAll: async (params?: any) => {
-        const response = await axios.get(API_URL, { ...getAuthHeader(), params });
+        const response = await api.get(PREFIX, { params });
         return response.data;
     },
 
     getStats: async () => {
-        const response = await axios.get(`${API_URL}/stats`, getAuthHeader());
+        const response = await api.get(`${PREFIX}/stats`);
         return response.data;
     },
 
     create: async (data: any) => {
-        const response = await axios.post(API_URL, data, getAuthHeader());
+        const response = await api.post(PREFIX, data);
         return response.data;
     },
 
     update: async (id: number, data: any) => {
-        const response = await axios.put(`${API_URL}/${id}`, data, getAuthHeader());
+        const response = await api.put(`${PREFIX}/${id}`, data);
         return response.data;
     },
 
     delete: async (id: number) => {
-        const response = await axios.delete(`${API_URL}/${id}`, getAuthHeader());
+        const response = await api.delete(`${PREFIX}/${id}`);
         return response.data;
     }
 };

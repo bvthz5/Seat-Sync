@@ -10,11 +10,11 @@ const api: AxiosInstance = axios.create({
     },
 });
 
-// Simple memory store for token
+// Token storage using localStorage (persists across refreshes)
 export const AccessTokenStore = {
-    token: null as string | null,
-    setToken: (t: string) => { AccessTokenStore.token = t; },
-    clear: () => { AccessTokenStore.token = null; }
+    get token() { return localStorage.getItem('accessToken'); },
+    setToken: (t: string) => { localStorage.setItem('accessToken', t); },
+    clear: () => { localStorage.removeItem('accessToken'); }
 };
 
 // -- Refresh Token Mechanism Variables --
@@ -39,8 +39,9 @@ const processQueue = (error: any, token: string | null = null) => {
 // Request Interceptor: Attach Access Token
 api.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
-        if (AccessTokenStore.token && config.headers) {
-            config.headers.Authorization = `Bearer ${AccessTokenStore.token}`;
+        const token = localStorage.getItem('accessToken');
+        if (token && config.headers) {
+            config.headers.Authorization = `Bearer ${token}`;
         }
         return config;
     },
@@ -78,11 +79,20 @@ api.interceptors.response.use(
             isRefreshing = true;
 
             try {
-                // Call refresh endpoint
-                const response = await api.post('/auth/refresh');
+                // Call refresh endpoint using raw axios instance to avoid interceptors
+                // We assume the refresh endpoint relies on the HttpOnly cookie
+                const response = await axios.post(`${api.defaults.baseURL}/auth/refresh`, {}, {
+                    withCredentials: true
+                });
+
                 const { accessToken } = response.data;
 
+                localStorage.setItem('accessToken', accessToken);
+                // Also update the memory store wrapper just in case (though we rely on localStorage now)
                 AccessTokenStore.setToken(accessToken);
+
+                api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+
                 processQueue(null, accessToken);
 
                 if (originalRequest.headers) {
@@ -92,7 +102,7 @@ api.interceptors.response.use(
                 return api(originalRequest);
             } catch (refreshError) {
                 processQueue(refreshError, null);
-                AccessTokenStore.clear();
+                AccessTokenStore.clear(); // Clears localStorage
 
                 // Only redirect if we are not explicitly told to handle it elsewhere
                 // But for safety, we usually redirect here.
@@ -118,6 +128,15 @@ api.interceptors.response.use(
                     // Commented out to prevent toast spam, let components handle specific errors if needed
                     // Or enable if you prefer global error toasts
                 }
+            }
+        }
+
+        // Handle Network Errors (Connection Refused, Server Down) - User Request
+        if (!error.response || error.code === 'ERR_NETWORK') {
+            AccessTokenStore.clear();
+            sessionStorage.removeItem('seat_sync_active');
+            if (!window.location.pathname.includes('/login')) {
+                window.location.href = '/admin/login';
             }
         }
 

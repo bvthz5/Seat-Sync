@@ -80,7 +80,7 @@ export class ExamController {
             const { id } = req.params;
             const updates = req.body;
 
-            const exam = await Exam.findByPk(id);
+            const exam = await Exam.findByPk(id as string);
             if (!exam) {
                 return res.status(404).json({ message: 'Exam not found' });
             }
@@ -96,7 +96,7 @@ export class ExamController {
     static async deleteExam(req: Request, res: Response) {
         try {
             const { id } = req.params;
-            const exam = await Exam.findByPk(id);
+            const exam = await Exam.findByPk(id as string);
 
             if (!exam) {
                 return res.status(404).json({ message: 'Exam not found' });

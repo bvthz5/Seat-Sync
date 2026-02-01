@@ -28,15 +28,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     useEffect(() => {
         const initAuth = async () => {
-            // Check session storage first
-            if (sessionStorage.getItem('seatSync_isLoggedIn') !== 'true') {
+            // Check for active session flag (Session Storage survives reload, dies on close)
+            const sessionActive = sessionStorage.getItem('seat_sync_active');
+
+            if (!sessionActive) {
+                // Tab was closed or new session. Treat as logged out.
+                // We proactively clear artifacts to ensure no stale state.
+                AccessTokenStore.clear();
+                setIsAuthenticated(false);
                 setIsLoading(false);
+                // Optional: Attempt to clear backend cookies just in case they persist
+                try { await AuthService.logout(); } catch (e) { /* ignore */ }
                 return;
             }
 
             try {
-                // Attempt to refresh token
-                const token = await AuthService.refresh();
+                // Attempt to refresh token or get locally
+                let token = AccessTokenStore.token;
+                if (!token) {
+                    token = await AuthService.refresh();
+                }
 
                 AccessTokenStore.setToken(token);
                 setAccessToken(token);
@@ -58,9 +69,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 setIsAuthenticated(true);
             } catch (error) {
                 // Not authenticated or token expired
-                sessionStorage.removeItem('seatSync_isLoggedIn');
                 setIsAuthenticated(false);
                 AccessTokenStore.clear();
+                sessionStorage.removeItem('seat_sync_active');
             } finally {
                 // Always unset loading state
                 setIsLoading(false);
@@ -83,7 +94,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setUser(data.user);
             setAccessToken(data.accessToken);
             AccessTokenStore.setToken(data.accessToken);
-            sessionStorage.setItem('seatSync_isLoggedIn', 'true');
+            // Mark session as active
+            sessionStorage.setItem('seat_sync_active', 'true');
             setIsAuthenticated(true);
             toast.success(`Welcome, ${data.user.Email}`);
         } catch (error: any) {
@@ -99,7 +111,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setAccessToken(null);
         setIsAuthenticated(false);
         AccessTokenStore.clear();
-        sessionStorage.removeItem('seatSync_isLoggedIn');
+        sessionStorage.removeItem('seat_sync_active');
 
         if (!options?.silent) {
             toast.success('Logged out successfully');

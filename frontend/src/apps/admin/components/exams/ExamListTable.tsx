@@ -176,7 +176,12 @@ const ExamListTable: React.FC<ExamListTableProps> = ({ exams, loading, onEdit, o
             <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50/30">
                 <div className="flex items-center gap-2 text-sm text-gray-500">
                     <span>Rows per page:</span>
-                    <select className="bg-white border border-gray-300 text-gray-700 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 p-1.5 px-2.5">
+                    <select
+                        id="rows-per-page"
+                        name="rows-per-page"
+                        aria-label="Rows per page"
+                        className="bg-white border border-gray-300 text-gray-700 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 p-1.5 px-2.5"
+                    >
                         <option>10</option>
                         <option>20</option>
                         <option>50</option>
