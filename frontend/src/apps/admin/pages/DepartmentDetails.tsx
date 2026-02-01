@@ -13,7 +13,6 @@ import {
     Users,
     MoreVertical,
     Search,
-    Filter,
     Crown,
     Edit,
     Trash2,
@@ -260,7 +259,7 @@ const DepartmentDetails: React.FC = () => {
         { label: "DEPT CODE", value: department.DepartmentCode, icon: <Hash className="text-blue-500" />, color: "bg-blue-50" },
         { label: "DEPT NAME", value: department.DepartmentName, icon: <BookOpen className="text-purple-500" />, color: "bg-purple-50" },
         { label: "HEAD (HOD)", value: hodName, icon: hodIcon, color: hod && hod.ProfileImageURL ? "bg-transparent p-0" : "bg-green-50" }, // Remove padding/bg if image
-        { label: "TOTAL STUDENTS", value: "0", icon: <Users className="text-orange-500" />, color: "bg-orange-50" },
+        { label: "TOTAL STUDENTS", value: (department.studentCount || 0).toString(), icon: <Users className="text-orange-500" />, color: "bg-orange-50" },
         { label: "TOTAL FACULTY", value: faculties.length.toString(), icon: <Hash className="text-pink-500" />, color: "bg-pink-50" },
     ];
 
@@ -334,14 +333,6 @@ const DepartmentDetails: React.FC = () => {
                     <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
                         <h3 className="text-xl font-bold text-slate-800">Faculties in this Department</h3>
                         <div className="flex items-center gap-2">
-                            <Button
-                                variant="flat"
-                                size="sm"
-                                className="bg-slate-100 text-slate-600 font-medium"
-                                endContent={<Filter size={14} />}
-                            >
-                                Sort by: Name
-                            </Button>
                             <Button isIconOnly variant="light" size="sm" className="text-slate-400">
                                 <MoreVertical size={18} />
                             </Button>

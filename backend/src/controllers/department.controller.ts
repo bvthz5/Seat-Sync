@@ -1,9 +1,25 @@
 import { Request, Response } from "express";
 import Department from "../models/Department.js";
+import Student from "../models/Student.js";
+import { sequelize } from "../config/database.js";
 
 export const getDepartments = async (req: Request, res: Response) => {
     try {
-        const departments = await Department.findAll();
+        const departments = await Department.findAll({
+            attributes: {
+                include: [
+                    [
+                        sequelize.literal(`(
+                            SELECT COUNT(*)
+                            FROM Students AS student
+                            WHERE
+                                student.DepartmentID = Department.DepartmentID
+                        )`),
+                        'studentCount'
+                    ]
+                ]
+            }
+        });
         res.json(departments);
     } catch (error: any) {
         res.status(500).json({ message: error.message });
@@ -28,7 +44,7 @@ export const updateDepartment = async (req: Request, res: Response) => {
         const { id } = req.params;
         const { DepartmentCode, DepartmentName } = req.body;
 
-        const department = await Department.findByPk(id);
+        const department = await Department.findByPk(id as string);
         if (!department) {
             return res.status(404).json({ message: "Department not found" });
         }
@@ -43,7 +59,7 @@ export const updateDepartment = async (req: Request, res: Response) => {
 export const deleteDepartment = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const department = await Department.findByPk(id);
+        const department = await Department.findByPk(id as string);
         if (!department) {
             return res.status(404).json({ message: "Department not found" });
         }
@@ -59,7 +75,20 @@ export const getDepartmentById = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         const department = await Department.findByPk(Number(id), {
-            include: ["Faculties"]
+            include: ["Faculties"],
+            attributes: {
+                include: [
+                    [
+                        sequelize.literal(`(
+                            SELECT COUNT(*)
+                            FROM Students AS student
+                            WHERE
+                                student.DepartmentID = Department.DepartmentID
+                        )`),
+                        'studentCount'
+                    ]
+                ]
+            }
         });
 
         if (!department) {
