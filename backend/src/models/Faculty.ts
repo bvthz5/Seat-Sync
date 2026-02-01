@@ -27,6 +27,7 @@ export class Faculty extends Model<FacultyAttributes, FacultyCreationAttributes>
     declare ProfileImageURL?: string;
     declare isEligible: boolean;
     declare DepartmentID: number;
+    declare Department?: Department;
 }
 
 Faculty.init(

@@ -18,6 +18,7 @@ export class InvigilatorAssignment extends Model<InvigilatorAssignmentAttributes
   declare ExamID: number;
   declare RoomID: number;
   declare InvigilatorID: number;
+  declare Exam?: Exam;
 }
 
 InvigilatorAssignment.init(

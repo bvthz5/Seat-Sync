@@ -9,6 +9,7 @@ interface Department {
     DepartmentID: number;
     DepartmentCode: string;
     DepartmentName: string;
+    studentCount?: number;
 }
 
 const Departments: React.FC = () => {
@@ -96,6 +97,9 @@ const Departments: React.FC = () => {
                                         <div className="flex items-center gap-2 mt-1">
                                             <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">
                                                 {dept.DepartmentCode}
+                                            </span>
+                                            <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-md">
+                                                {dept.studentCount || 0} Students
                                             </span>
                                         </div>
                                     </div>
