@@ -1,3 +1,4 @@
+// Schema fix script
 import { sequelize } from "../config/database.js";
 import { QueryTypes } from "sequelize";
 
