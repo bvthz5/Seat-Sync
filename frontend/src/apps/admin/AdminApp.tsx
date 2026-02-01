@@ -11,6 +11,8 @@ import Reports from './pages/Reports';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import ChangePassword from './pages/ChangePassword';
+import Departments from './pages/Departments';
+import DepartmentDetails from './pages/DepartmentDetails';
 import Students from './pages/Students';
 import CollegeStructure from './pages/CollegeStructure';
 import RequireAuth from '../../components/RequireAuth';
@@ -43,6 +45,8 @@ const AdminApp: React.FC = () => {
                     <Route path="invigilators" element={<Invigilators />} />
                     <Route path="attendance" element={<Attendance />} />
                     <Route path="reports" element={<Reports />} />
+                    <Route path="departments" element={<Departments />} />
+                    <Route path="departments/:id" element={<DepartmentDetails />} />
                     <Route path="change-password" element={<ChangePassword />} />
 
                     {/* ADMINISTRATION SECTION - Root Admin Only */}

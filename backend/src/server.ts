@@ -1,7 +1,7 @@
 import "./config/env.js";
 import app from "./app.js";
 import { connectDB } from "./config/database.js";
-import open from "open";
+// import open from "open";
 
 const PORT = 5000;
 
@@ -36,7 +36,7 @@ const startServer = async () => {
         console.log(`SeatSync API running at http://localhost:${PORT}`);
         console.log(`Swagger UI available at http://localhost:${PORT}/api-docs`);
         // Automatically open Swagger UI in the default browser
-        open(`http://localhost:${PORT}/api-docs`);
+        // open(`http://localhost:${PORT}/api-docs`);
     });
 
     // Handle server errors explicitly

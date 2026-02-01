@@ -1,5 +1,6 @@
 import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from "../config/database.js";
+// import { Faculty } from "./Faculty.js"; // Removed to avoid circular dependency
 
 /**
  * Department table attributes
@@ -57,5 +58,7 @@ Department.init(
     timestamps: false,
   }
 );
+
+// Associations are defined in models/index.ts to handle circular dependencies
 
 export default Department;
