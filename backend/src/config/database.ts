@@ -1,4 +1,4 @@
-import { Sequelize } from "sequelize";
+import { Sequelize, QueryTypes } from "sequelize";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -98,10 +98,56 @@ export { sequelize };
 /* Connection Handler                            */
 /* ────────────────────────────────────────────── */
 
+async function ensureSchemaIntegrity() {
+    try {
+        const dialect = sequelize.getDialect();
+        if (dialect !== 'mssql') return;
+
+        console.log("Checking schema integrity...");
+
+        // Add AcademicYearID if not exists
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Departments' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Departments]') 
+                    AND name = 'AcademicYearID'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Departments] ADD [AcademicYearID] INT NULL;
+                    PRINT 'Added AcademicYearID';
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
+        // Add IsActive if not exists
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Departments' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Departments]') 
+                    AND name = 'IsActive'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Departments] ADD [IsActive] BIT NOT NULL DEFAULT 1;
+                    PRINT 'Added IsActive';
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
+    } catch (error) {
+        console.warn("Schema integrity check warning (non-fatal):", error);
+    }
+}
+
 export async function connectDB() {
     try {
         await sequelize.authenticate();
         console.log(`Connection Connected: ${sequelize.getDialect()}`);
+
+        await ensureSchemaIntegrity();
 
         await import("../models/index.js");
 
