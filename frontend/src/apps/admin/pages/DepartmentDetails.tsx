@@ -13,7 +13,6 @@ import {
     Users,
     MoreVertical,
     Search,
-    Filter,
     Crown,
     Edit,
     Trash2,
@@ -334,14 +333,6 @@ const DepartmentDetails: React.FC = () => {
                     <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
                         <h3 className="text-xl font-bold text-slate-800">Faculties in this Department</h3>
                         <div className="flex items-center gap-2">
-                            <Button
-                                variant="flat"
-                                size="sm"
-                                className="bg-slate-100 text-slate-600 font-medium"
-                                endContent={<Filter size={14} />}
-                            >
-                                Sort by: Name
-                            </Button>
                             <Button isIconOnly variant="light" size="sm" className="text-slate-400">
                                 <MoreVertical size={18} />
                             </Button>
