@@ -88,7 +88,7 @@ api.interceptors.response.use(
                 const { accessToken } = response.data;
 
                 localStorage.setItem('accessToken', accessToken);
-                // Also update the memory store wrapper just in case (though we rely on localStorage now)
+                // Also update the memory store wrapper
                 AccessTokenStore.setToken(accessToken);
 
                 api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
@@ -103,10 +103,9 @@ api.interceptors.response.use(
             } catch (refreshError) {
                 processQueue(refreshError, null);
                 AccessTokenStore.clear(); // Clears localStorage
+                sessionStorage.removeItem('seat_sync_active'); // Ensure session is dead
 
                 // Only redirect if we are not explicitly told to handle it elsewhere
-                // But for safety, we usually redirect here.
-                // We use window.location to force a full cleanup of state
                 if (!window.location.pathname.includes('/login')) {
                     window.location.href = '/admin/login';
                 }
@@ -115,6 +114,14 @@ api.interceptors.response.use(
             } finally {
                 isRefreshing = false;
             }
+        } else if (error.response?.status === 401 && originalRequest._retry) {
+            // If the retry also fails with 401, force logout (Double Fail Safety)
+            AccessTokenStore.clear();
+            sessionStorage.removeItem('seat_sync_active');
+            if (!window.location.pathname.includes('/login')) {
+                window.location.href = '/admin/login';
+            }
+            return Promise.reject(error);
         }
 
         // Global Error Handling (for non-401s or unhandled errors)
