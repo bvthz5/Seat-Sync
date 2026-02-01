@@ -28,6 +28,11 @@ export { default as Faculty } from "./Faculty.js";
 // Associations
 import Department from "./Department.js";
 import Faculty from "./Faculty.js";
+import Invigilator from "./Invigilator.js";
+import User from "./User.js";
+import Exam from "./Exam.js";
+import InvigilatorAssignment from "./InvigilatorAssignment.js";
+import Room from "./Room.js";
 
 // Define associations here to avoid circular imports in model files
 Department.hasMany(Faculty, {
@@ -37,5 +42,48 @@ Department.hasMany(Faculty, {
 
 Faculty.belongsTo(Department, {
     foreignKey: "DepartmentID"
+});
+
+// Department-Invigilator Association
+Department.hasMany(Invigilator, {
+    foreignKey: "DepartmentID",
+});
+
+Invigilator.belongsTo(Department, {
+    foreignKey: "DepartmentID",
+});
+
+// Invigilator Associations
+Invigilator.belongsTo(User, {
+    foreignKey: "UserID",
+});
+
+User.hasOne(Invigilator, {
+    foreignKey: "UserID",
+});
+
+// InvigilatorAssignment Associations
+InvigilatorAssignment.belongsTo(Invigilator, {
+    foreignKey: "InvigilatorID",
+});
+
+Invigilator.hasMany(InvigilatorAssignment, {
+    foreignKey: "InvigilatorID",
+});
+
+InvigilatorAssignment.belongsTo(Exam, {
+    foreignKey: "ExamID",
+});
+
+Exam.hasMany(InvigilatorAssignment, {
+    foreignKey: "ExamID",
+});
+
+InvigilatorAssignment.belongsTo(Room, {
+    foreignKey: "RoomID"
+});
+
+Room.hasMany(InvigilatorAssignment, {
+    foreignKey: "RoomID"
 });
 
