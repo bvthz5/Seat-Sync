@@ -1,90 +1,75 @@
 import { Request, Response } from "express";
-import bcrypt from "bcrypt";
-import { User, ActivityLog, ActiveSession } from "../models/index.js";
-import { Op } from "sequelize";
+import { AdminService } from "../services/admin.service.js";
+import { User } from "../models/User.js";
 
 /**
- * Admin Management Controller
- * Root Admin Only - Manages exam admin accounts
+ * Get all exam admins (Dashboard list)
  */
-
-/**
- * Get all exam admins
- */
-export const getAllAdmins = async (req: Request, res: Response): Promise<void> => {
+export const getAllAdmins = async (req: Request, res: Response) => {
     try {
-        const admins = await User.findAll({
-            where: {
-                Role: 'exam_admin'
-            },
-            attributes: ['UserID', 'Email', 'FullName', 'IsRootAdmin', 'IsActive', 'CreatedAt'],
-            order: [['CreatedAt', 'DESC']]
-        });
+        // The service returns { admins, total, ... } structure for pagination
+        // But the previous controller might have returned just a list.
+        // The prompt asks for pagination, so the services return structure is correct.
+        // We might need to handle query params here
+        const result = await AdminService.getAdmins(req.query);
+
+        // Also get dashboard stats if it's the main dashboard load? 
+        // Or create a separate endpoint for stats. 
+        // The routes file doesn't have a stats endpoint yet!
+        // I should add getDashboardStats endpoint to routes and controller.
 
         res.status(200).json({
             success: true,
-            data: admins
+            data: result
         });
     } catch (error: any) {
-        console.error("Error fetching admins:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to fetch admins",
-            error: error.message
+            message: error.message
         });
     }
 };
 
 /**
+ * Get Dashboard Stats
+ */
+export const getDashboardStats = async (req: Request, res: Response) => {
+    try {
+        const stats = await AdminService.getDashboardStats();
+        res.status(200).json({
+            success: true,
+            data: stats
+        });
+    } catch (error: any) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+}
+
+/**
  * Create a new exam admin
  */
-export const createAdmin = async (req: Request, res: Response): Promise<void> => {
+export const createAdmin = async (req: Request, res: Response) => {
     try {
-        const { Email, FullName, Password, IsRootAdmin } = req.body;
-        const currentUser = (req as any).user;
+        const { Email, FullName } = req.body; // Logic expected snake_case or camel? Prompt uses "Email", "Full Name" in table. Code usually camelCase or matching DB.
+        // Previous controller used PascalCase 'Email'. Request body usually follows frontend.
+        // Let's assume frontend sends { Email, FullName } to match DB or { email, fullName }.
+        // I'll check what I used in validaton.
 
-        // Validation
-        if (!Email || !Password) {
-            res.status(400).json({
-                success: false,
-                message: "Email and Password are required"
-            });
+        // Handling both for safety
+        const email = Email || req.body.email;
+        const fullName = FullName || req.body.fullName;
+
+
+        if (!email || !fullName) {
+            res.status(400).json({ success: false, message: "Email and Full Name are required" });
             return;
         }
 
-        // Check if email already exists
-        const existingUser = await User.findOne({ where: { Email } });
-        if (existingUser) {
-            res.status(409).json({
-                success: false,
-                message: "Email already exists"
-            });
-            return;
-        }
-
-        // Hash password
-        const PasswordHash = await bcrypt.hash(Password, 10);
-
-        // Create admin
-        const newAdmin = await User.create({
-            Email,
-            FullName: FullName || null,
-            PasswordHash,
-            Role: 'exam_admin',
-            IsRootAdmin: IsRootAdmin || false,
-            IsActive: true
-        });
-
-        // Log activity
-        await ActivityLog.create({
-            UserID: currentUser.UserID,
-            Action: 'CREATE_ADMIN',
-            EntityType: 'User',
-            EntityID: newAdmin.UserID,
-            Details: `Created new admin: ${Email}`,
-            IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
-        });
+        const creatorEmail = (req.user as any)?.Email!;
+        const newAdmin = await AdminService.createAdmin({ email, fullName }, creatorEmail);
 
         res.status(201).json({
             success: true,
@@ -93,234 +78,112 @@ export const createAdmin = async (req: Request, res: Response): Promise<void> =>
                 UserID: newAdmin.UserID,
                 Email: newAdmin.Email,
                 FullName: newAdmin.FullName,
-                IsRootAdmin: newAdmin.IsRootAdmin,
-                IsActive: newAdmin.IsActive
+                Role: newAdmin.Role,
+                IsActive: newAdmin.IsActive,
+                CreatedAt: newAdmin.CreatedAt
             }
         });
     } catch (error: any) {
-        console.error("Error creating admin:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to create admin",
-            error: error.message
-        });
-    }
-};
-
-/**
- * Toggle admin active status
- */
-export const toggleAdminStatus = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const { adminId } = req.params;
-        const currentUser = (req as any).user;
-
-        // Cannot disable yourself
-        if (parseInt(adminId as string) === currentUser.UserID) {
-            res.status(403).json({
-                success: false,
-                message: "You cannot disable your own account"
-            });
-            return;
-        }
-
-        const admin = await User.findByPk(parseInt(adminId as string));
-        if (!admin || admin.Role !== 'exam_admin') {
-            res.status(404).json({
-                success: false,
-                message: "Admin not found"
-            });
-            return;
-        }
-
-        // Toggle status
-        admin.IsActive = !admin.IsActive;
-        await admin.save();
-
-        // If disabling, invalidate all sessions
-        if (!admin.IsActive) {
-            await ActiveSession.update(
-                { IsActive: false },
-                { where: { UserID: admin.UserID } }
-            );
-        }
-
-        // Log activity
-        await ActivityLog.create({
-            UserID: currentUser.UserID,
-            Action: admin.IsActive ? 'ENABLE_ADMIN' : 'DISABLE_ADMIN',
-            EntityType: 'User',
-            EntityID: admin.UserID,
-            Details: `${admin.IsActive ? 'Enabled' : 'Disabled'} admin: ${admin.Email}`,
-            IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
-        });
-
-        res.status(200).json({
-            success: true,
-            message: `Admin ${admin.IsActive ? 'enabled' : 'disabled'} successfully`,
-            data: {
-                UserID: admin.UserID,
-                IsActive: admin.IsActive
-            }
-        });
-    } catch (error: any) {
-        console.error("Error toggling admin status:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to toggle admin status",
-            error: error.message
-        });
+        res.status(400).json({ success: false, message: error.message });
     }
 };
 
 /**
  * Reset admin password
  */
-export const resetAdminPassword = async (req: Request, res: Response): Promise<void> => {
+export const resetAdminPassword = async (req: Request, res: Response) => {
     try {
-        const { adminId } = req.params;
-        const { newPassword } = req.body;
-        const currentUser = (req as any).user;
+        const adminId = Number(req.params.adminId); // route param is adminId
+        const creatorEmail = (req.user as any)?.Email!;
 
-        if (!newPassword || newPassword.length < 8) {
-            res.status(400).json({
-                success: false,
-                message: "Password must be at least 8 characters"
-            });
-            return;
-        }
-
-        const admin = await User.findByPk(parseInt(adminId as string));
-        if (!admin || admin.Role !== 'exam_admin') {
-            res.status(404).json({
-                success: false,
-                message: "Admin not found"
-            });
-            return;
-        }
-
-        // Hash new password
-        const PasswordHash = await bcrypt.hash(newPassword, 10);
-        admin.PasswordHash = PasswordHash;
-        await admin.save();
-
-        // Invalidate all sessions for this admin
-        await ActiveSession.update(
-            { IsActive: false },
-            { where: { UserID: admin.UserID } }
-        );
-
-        // Log activity
-        await ActivityLog.create({
-            UserID: currentUser.UserID,
-            Action: 'RESET_ADMIN_PASSWORD',
-            EntityType: 'User',
-            EntityID: admin.UserID,
-            Details: `Reset password for admin: ${admin.Email}`,
-            IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
-        });
+        await AdminService.resetPassword(adminId, creatorEmail);
 
         res.status(200).json({
             success: true,
-            message: "Password reset successfully. All sessions invalidated."
+            message: "Password reset successfully. New credentials sent via email."
         });
     } catch (error: any) {
-        console.error("Error resetting admin password:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to reset password",
-            error: error.message
-        });
+        res.status(400).json({ success: false, message: error.message });
     }
 };
 
 /**
- * Get admin activity logs
+ * Toggle admin status
  */
-export const getAdminActivity = async (req: Request, res: Response): Promise<void> => {
+export const toggleAdminStatus = async (req: Request, res: Response) => {
     try {
-        const { adminId } = req.params;
-        const { limit = 50 } = req.query;
+        const adminId = Number(req.params.adminId);
+        // We need 'isActive' from body.
+        // Previous controller just toggled it.
+        // Ideally strict setting is better. The prompt implies "Disable Admin" button, so probably explicit state.
+        // But if I want to keep compatibility or "toggle", I can check.
+        // The service uses explicit 'isActive'.
+        // Let's support explicit.
 
-        const logs = await ActivityLog.findAll({
-            where: { UserID: parseInt(adminId as string) },
-            order: [['Timestamp', 'DESC']],
-            limit: parseInt(limit as string)
+        const { isActive } = req.body;
+
+        // If isActive is undefined, we might need to fetch current state and toggle? 
+        // Simplest is to require isActive or implement toggle logic here.
+        // Let's implement toggle logic if isActive is missing, or fetch to toggle.
+        // But service `toggleStatus` takes `isActive`.
+
+        const creator = await User.findByPk((req.user as any)?.UserID);
+        if (!creator) {
+            res.status(401).json({ success: false, message: "Unauthorized" });
+            return;
+        }
+
+        let targetState = isActive;
+        if (targetState === undefined) {
+            const admin = await User.findByPk(adminId);
+            if (!admin) throw new Error("Admin not found");
+            targetState = !admin.IsActive;
+        }
+
+        await AdminService.toggleStatus(adminId, targetState, creator);
+
+        res.status(200).json({
+            success: true,
+            message: `Admin ${targetState ? 'enabled' : 'disabled'} successfully`,
+            data: { IsActive: targetState }
         });
+    } catch (error: any) {
+        res.status(400).json({ success: false, message: error.message });
+    }
+};
 
+/**
+ * Delete admin
+ */
+export const deleteAdmin = async (req: Request, res: Response) => {
+    try {
+        const adminId = Number(req.params.adminId);
+        const creator = await User.findByPk((req.user as any)?.UserID);
+        if (!creator) {
+            res.status(401).json({ success: false, message: "Unauthorized" });
+            return;
+        }
+
+        await AdminService.deleteAdmin(adminId, creator);
+
+        res.status(200).json({ success: true, message: "Admin deleted successfully" });
+    } catch (error: any) {
+        res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+/**
+ * Get admin activity
+ */
+export const getAdminActivity = async (req: Request, res: Response) => {
+    try {
+        const adminId = Number(req.params.adminId);
+        const logs = await AdminService.getAdminActivity(adminId);
         res.status(200).json({
             success: true,
             data: logs
         });
     } catch (error: any) {
-        console.error("Error fetching admin activity:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch activity logs",
-            error: error.message
-        });
-    }
-};
-
-/**
- * Delete admin (soft delete - just disable)
- */
-export const deleteAdmin = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const { adminId } = req.params;
-        const currentUser = (req as any).user;
-
-        // Cannot delete yourself
-        if (parseInt(adminId as string) === currentUser.UserID) {
-            res.status(403).json({
-                success: false,
-                message: "You cannot delete your own account"
-            });
-            return;
-        }
-
-        const admin = await User.findByPk(parseInt(adminId as string));
-        if (!admin || admin.Role !== 'exam_admin') {
-            res.status(404).json({
-                success: false,
-                message: "Admin not found"
-            });
-            return;
-        }
-
-        // Soft delete - just disable
-        admin.IsActive = false;
-        await admin.save();
-
-        // Invalidate all sessions
-        await ActiveSession.update(
-            { IsActive: false },
-            { where: { UserID: admin.UserID } }
-        );
-
-        // Log activity
-        await ActivityLog.create({
-            UserID: currentUser.UserID,
-            Action: 'DELETE_ADMIN',
-            EntityType: 'User',
-            EntityID: admin.UserID,
-            Details: `Deleted admin: ${admin.Email}`,
-            IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
-        });
-
-        res.status(200).json({
-            success: true,
-            message: "Admin deleted successfully"
-        });
-    } catch (error: any) {
-        console.error("Error deleting admin:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to delete admin",
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: error.message });
     }
 };

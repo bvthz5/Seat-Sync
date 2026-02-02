@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
     getAllAdmins,
+    getDashboardStats,
     createAdmin,
     toggleAdminStatus,
     resetAdminPassword,
@@ -13,6 +14,13 @@ const router = Router();
 
 // All routes require root admin authentication
 router.use(AuthMiddleware.requireRootAuth);
+
+/**
+ * @route   GET /api/admin-management/stats
+ * @desc    Get dashboard stats
+ * @access  Root Admin Only
+ */
+router.get("/stats", getDashboardStats);
 
 /**
  * @route   GET /api/admin-management

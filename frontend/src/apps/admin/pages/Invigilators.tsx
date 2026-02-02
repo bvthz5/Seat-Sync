@@ -644,10 +644,11 @@ const Invigilators: React.FC = () => {
                             <ModalBody className="py-6 px-8">
                                 <div className="space-y-4">
                                     <div className="space-y-1.5">
-                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Full Name</label>
+                                        <label htmlFor="fullName" className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Full Name</label>
                                         <Input
                                             id="fullName"
                                             name="fullName"
+                                            autoComplete="name"
                                             placeholder="e.g. John Doe"
                                             value={newInvigilator.FullName}
                                             onValueChange={(val) => setNewInvigilator({ ...newInvigilator, FullName: val })}
@@ -656,11 +657,12 @@ const Invigilators: React.FC = () => {
                                         />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Email Address</label>
+                                        <label htmlFor="email" className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Email Address</label>
                                         <Input
                                             id="email"
                                             name="email"
                                             type="email"
+                                            autoComplete="email"
                                             placeholder="john.doe@college.edu"
                                             value={newInvigilator.Email}
                                             onValueChange={(val) => setNewInvigilator({ ...newInvigilator, Email: val })}
@@ -669,11 +671,12 @@ const Invigilators: React.FC = () => {
                                         />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Initial Password</label>
+                                        <label htmlFor="password" className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Initial Password</label>
                                         <Input
                                             id="password"
                                             name="password"
                                             type="password"
+                                            autoComplete="new-password"
                                             placeholder="••••••••"
                                             value={newInvigilator.Password}
                                             onValueChange={(val) => setNewInvigilator({ ...newInvigilator, Password: val })}

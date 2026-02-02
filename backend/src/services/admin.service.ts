@@ -1,0 +1,290 @@
+import { User, ActivityLog, ActiveSession, Notification, PasswordReset } from "../models/index.js";
+import { Op } from "sequelize";
+import bcrypt from "bcrypt";
+import crypto from "crypto";
+import { emailService } from "./email.service.js";
+
+export class AdminService {
+    /**
+     * Get dashboard summary stats
+     */
+    static async getDashboardStats() {
+        const totalAdmins = await User.count({ where: { Role: 'exam_admin' } });
+        const activeAdmins = await User.count({
+            where: {
+                Role: 'exam_admin',
+                IsActive: true
+            }
+        });
+        const rootAdmins = await User.count({
+            where: {
+                Role: 'exam_admin',
+                IsRootAdmin: true
+            }
+        });
+
+        return {
+            totalAdmins,
+            activeAdmins,
+            rootAdmins
+        };
+    }
+
+    /**
+     * Get list of admins with pagination, filtering and sorting
+     */
+    static async getAdmins(query: any) {
+        const {
+            page = 1,
+            limit = 10,
+            search = "",
+            status,
+            role,
+            sortBy = "CreatedAt",
+            sortOrder = "DESC"
+        } = query;
+
+        const offset = (Number(page) - 1) * Number(limit);
+        const whereClause: any = { Role: 'exam_admin' };
+
+        // Search
+        if (search) {
+            whereClause[Op.or] = [
+                { Email: { [Op.like]: `%${search}%` } },
+                { FullName: { [Op.like]: `%${search}%` } }
+            ];
+        }
+
+        // Filters
+        if (status) {
+            whereClause.IsActive = status === 'active';
+        }
+
+        if (role) {
+            whereClause.IsRootAdmin = role === 'root';
+        }
+
+        // Query
+        const { count, rows } = await User.findAndCountAll({
+            where: whereClause,
+            attributes: { exclude: ['PasswordHash'] }, // Security
+            limit: Number(limit),
+            offset: Number(offset),
+            order: [[sortBy, sortOrder]]
+        });
+
+        return {
+            admins: rows,
+            total: count,
+            totalPages: Math.ceil(count / Number(limit)),
+            currentPage: Number(page)
+        };
+    }
+
+    /**
+     * Create a new Exam Admin
+     */
+    static async createAdmin(data: { email: string; fullName: string }, creatorEmail: string) {
+        const { email, fullName } = data;
+
+        // 1. Validate Email Domain
+        const domainRegex = /@([a-zA-Z0-9-]+\.)*sjcetpalai\.ac\.in$/;
+        if (!domainRegex.test(email)) {
+            throw new Error("Email must end with @sjcetpalai.ac.in or its subdomains");
+        }
+
+        // 2. Check Duplicates
+        const existingUser = await User.findOne({ where: { Email: email } });
+        if (existingUser) {
+            throw new Error("User with this email already exists");
+        }
+
+        // 3. Generate Password
+        const password = this.generateSecurePassword();
+        const hashedPassword = await bcrypt.hash(password, 12);
+
+        // 4. Create User
+        const newUser = await User.create({
+            Email: email,
+            FullName: fullName,
+            PasswordHash: hashedPassword,
+            Role: 'exam_admin',
+            IsRootAdmin: false,
+            IsActive: true,
+            CreatedAt: new Date()
+        });
+
+        // 5. Send Email
+        await emailService.sendAdminCreatedEmail(email, fullName, email, password);
+
+        // 6. Log Activity
+        await this.logActivity(creatorEmail, "Create Admin", `Created admin account for ${email}`, newUser.UserID);
+
+        return newUser;
+    }
+
+    /**
+     * Reset Admin Password
+     */
+    static async resetPassword(adminId: number, creatorEmail: string) {
+        const admin = await User.findByPk(adminId);
+        if (!admin || admin.Role !== 'exam_admin') {
+            throw new Error("Admin not found");
+        }
+
+        // Generate new password
+        const password = this.generateSecurePassword();
+        const hashedPassword = await bcrypt.hash(password, 12);
+
+        await admin.update({ PasswordHash: hashedPassword });
+
+        // Invalidate Sessions
+        await ActiveSession.update(
+            { IsActive: false },
+            { where: { UserID: adminId } }
+        );
+
+        // Send Email
+        // Re-using the admin created email template or a simplified one containing the new password.
+        // For now, let's use the same one as it conveys credentials clearly.
+        await emailService.sendAdminCreatedEmail(admin.Email, admin.FullName || "Admin", admin.Email, password);
+
+        // Log
+        await this.logActivity(creatorEmail, "Reset Password", `Reset password for admin ${admin.Email}`, adminId);
+    }
+
+    /**
+     * Toggle Admin Status (Disable/Enable)
+     */
+    static async toggleStatus(adminId: number, isActive: boolean, creator: User) {
+        const admin = await User.findByPk(adminId);
+        if (!admin || admin.Role !== 'exam_admin') {
+            throw new Error("Admin not found");
+        }
+
+        // Validation
+        if (admin.IsRootAdmin) {
+            throw new Error("Cannot change status of Root Admin");
+        }
+        if (admin.UserID === creator.UserID) {
+            throw new Error("Cannot disable yourself");
+        }
+
+        // Update
+        await admin.update({ IsActive: isActive });
+
+        // If disabling, invalidate sessions
+        if (!isActive) {
+            await ActiveSession.update(
+                { IsActive: false },
+                { where: { UserID: adminId } }
+            );
+        }
+
+        // Log
+        const action = isActive ? "Enable Admin" : "Disable Admin";
+        await this.logActivity(creator.Email, action, `${action} ${admin.Email}`, adminId);
+    }
+
+    /**
+     * Delete Admin
+     */
+    static async deleteAdmin(adminId: number, creator: User) {
+        const admin = await User.findByPk(adminId);
+        if (!admin || admin.Role !== 'exam_admin') {
+            throw new Error("Admin not found");
+        }
+
+        // Validation
+        if (admin.IsRootAdmin) {
+            throw new Error("Cannot delete Root Admin");
+        }
+        if (admin.UserID === creator.UserID) {
+            throw new Error("Cannot delete yourself");
+        }
+
+        // TODO: Check if assigned to active exam (Assuming table relation check or custom logic needed)
+        // For now, we rely on DB constraints or future implementation. 
+        // If there are foreign keys, deletion might fail, which is good.
+
+        // Delete dependencies first (Hard delete)
+
+        // 1. Active Sessions
+        await ActiveSession.destroy({
+            where: { UserID: adminId }
+        });
+
+        // 2. Activity Logs (Audit trail is lost, but required for hard delete if FK is restrictive)
+        await ActivityLog.destroy({
+            where: { UserID: adminId }
+        });
+
+        // 3. Notifications sent by this admin
+        await Notification.destroy({
+            where: { SentBy: adminId }
+        });
+
+        // 4. Password Resets
+        await PasswordReset.destroy({
+            where: { UserID: adminId }
+        });
+
+        await admin.destroy();
+
+        // Log
+        await this.logActivity(creator.Email, "Delete Admin", `Deleted admin ${admin.Email}`, adminId);
+    }
+
+    /**
+     * Get Admin Activity
+     */
+    static async getAdminActivity(adminId: number) {
+        return await ActivityLog.findAll({
+            where: { UserID: adminId },
+            order: [['Timestamp', 'DESC']],
+            limit: 50
+        });
+    }
+
+    // --- Helpers ---
+
+    private static generateSecurePassword(): string {
+        const length = 12;
+        const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+        let password = "";
+
+        // Ensure at least one of each required type
+        password += "ABCDEFGHIJKLMNOPQRSTUVWXYZ".charAt(Math.floor(Math.random() * 26));
+        password += "abcdefghijklmnopqrstuvwxyz".charAt(Math.floor(Math.random() * 26));
+        password += "0123456789".charAt(Math.floor(Math.random() * 10));
+        password += "!@#$%^&*".charAt(Math.floor(Math.random() * 8));
+
+        // Fill the rest
+        for (let i = 4; i < length; i++) {
+            password += charset.charAt(Math.floor(Math.random() * charset.length));
+        }
+
+        // Shuffle
+        return password.split('').sort(() => 0.5 - Math.random()).join('');
+    }
+
+    private static async logActivity(userEmail: string, action: string, details: string, targetId?: number) {
+        // Need to find UserID from email for the log
+        const user = await User.findOne({ where: { Email: userEmail } });
+        if (user) {
+            const logPayload: any = {
+                UserID: user.UserID,
+                Action: action,
+                Details: details,
+                EntityType: 'User',
+                Timestamp: new Date()
+            };
+
+            if (targetId !== undefined) {
+                logPayload.EntityID = targetId;
+            }
+
+            await ActivityLog.create(logPayload);
+        }
+    }
+}
