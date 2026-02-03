@@ -42,7 +42,7 @@ export const getAllInvigilators = async (req: Request, res: Response) => {
                 Name: faculty.Name,
                 Designation: faculty.Designation,
                 ProfileImageURL: faculty.ProfileImageURL,
-                isEligible: faculty.isEligible,
+                isEligible: faculty.IsEligible,
                 isFlagged: false,
                 Department: (facultyData as any).Department,
                 totalExams: facultyAssignments.length,
@@ -72,12 +72,12 @@ export const toggleInvigilatorFlag = async (req: Request, res: Response) => {
             return res.status(404).json({ message: "Invigilator not found" });
         }
 
-        invigilator.isFlagged = !invigilator.isFlagged;
+        invigilator.IsFlagged = !invigilator.IsFlagged;
         await invigilator.save();
 
         res.json({
-            message: `Invigilator ${invigilator.isFlagged ? 'flagged' : 'unflagged'} successfully`,
-            isFlagged: invigilator.isFlagged
+            message: `Invigilator ${invigilator.IsFlagged ? 'flagged' : 'unflagged'} successfully`,
+            isFlagged: invigilator.IsFlagged
         });
     } catch (error: any) {
         console.error("Error toggling flag:", error);
@@ -94,12 +94,12 @@ export const toggleInvigilatorEligibility = async (req: Request, res: Response) 
             return res.status(404).json({ message: "Faculty not found" });
         }
 
-        faculty.isEligible = !faculty.isEligible;
+        faculty.IsEligible = !faculty.IsEligible;
         await faculty.save();
 
         res.json({
-            message: `Faculty marked as ${faculty.isEligible ? 'eligible' : 'ineligible'} successfully`,
-            isEligible: faculty.isEligible
+            message: `Faculty marked as ${faculty.IsEligible ? 'eligible' : 'ineligible'} successfully`,
+            isEligible: faculty.IsEligible
         });
     } catch (error: any) {
         console.error("Error toggling eligibility:", error);
@@ -183,7 +183,7 @@ export const getInvigilatorStats = async (req: Request, res: Response) => {
     try {
         const total = await Faculty.count();
         const eligible = await Faculty.count({
-            where: { isEligible: true }
+            where: { IsEligible: true }
         });
         const active = eligible; // For faculties, active = eligible
 
@@ -199,7 +199,7 @@ export const getInvigilatorStats = async (req: Request, res: Response) => {
         const onDuty = new Set(onDutyAssignments.map(a => a.InvigilatorID)).size;
 
         const flagged = await Faculty.count({
-            where: { isEligible: false }
+            where: { IsEligible: false }
         });
 
         res.json({

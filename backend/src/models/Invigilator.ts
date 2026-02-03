@@ -9,22 +9,22 @@ interface InvigilatorAttributes {
   InvigilatorID: number;
   UserID: number;
   DepartmentID?: number;
-  isEligible: boolean;
-  isFlagged: boolean;
+  IsEligible: boolean;
+  IsFlagged: boolean;
 }
 
 /**
  * Attributes required when creating an invigilator
  */
-interface InvigilatorCreationAttributes extends Optional<InvigilatorAttributes, "InvigilatorID" | "isFlagged" | "isEligible" | "DepartmentID"> { }
+interface InvigilatorCreationAttributes extends Optional<InvigilatorAttributes, "InvigilatorID" | "IsFlagged" | "IsEligible" | "DepartmentID"> { }
 
 export class Invigilator extends Model<InvigilatorAttributes, InvigilatorCreationAttributes>
   implements InvigilatorAttributes {
   declare InvigilatorID: number;
   declare UserID: number;
   declare DepartmentID?: number;
-  declare isEligible: boolean;
-  declare isFlagged: boolean;
+  declare IsEligible: boolean;
+  declare IsFlagged: boolean;
 }
 
 Invigilator.init(
@@ -51,12 +51,12 @@ Invigilator.init(
         key: "DepartmentID",
       },
     },
-    isEligible: {
+    IsEligible: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: true,
     },
-    isFlagged: {
+    IsFlagged: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false,

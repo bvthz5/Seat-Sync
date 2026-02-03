@@ -84,7 +84,17 @@ export const createAdmin = async (req: Request, res: Response) => {
             }
         });
     } catch (error: any) {
-        res.status(400).json({ success: false, message: error.message });
+        console.error("Create Admin Error:", error);
+        res.status(400).json({
+            success: false,
+            message: error.message || "Unknown Error",
+            details: {
+                message: error.message,
+                name: error.name,
+                stack: error.stack,
+                validation: error.errors
+            }
+        });
     }
 };
 
@@ -168,6 +178,7 @@ export const deleteAdmin = async (req: Request, res: Response) => {
 
         res.status(200).json({ success: true, message: "Admin deleted successfully" });
     } catch (error: any) {
+        console.error("Delete Admin Error:", error);
         res.status(400).json({ success: false, message: error.message });
     }
 };

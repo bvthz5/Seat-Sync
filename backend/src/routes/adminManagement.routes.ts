@@ -16,51 +16,194 @@ const router = Router();
 router.use(AuthMiddleware.requireRootAuth);
 
 /**
- * @route   GET /api/admin-management/stats
- * @desc    Get dashboard stats
- * @access  Root Admin Only
+ * @swagger
+ * /api/admin-management/stats:
+ *   get:
+ *     summary: Get dashboard stats
+ *     tags: [Admin Management]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Dashboard statistics
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     totalAdmins:
+ *                       type: integer
+ *                     activeAdmins:
+ *                       type: integer
+ *                     rootAdmins:
+ *                       type: integer
  */
 router.get("/stats", getDashboardStats);
 
 /**
- * @route   GET /api/admin-management
- * @desc    Get all exam admins
- * @access  Root Admin Only
+ * @swagger
+ * /api/admin-management:
+ *   get:
+ *     summary: Get all exam admins
+ *     tags: [Admin Management]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: Items per page
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by name or email
+ *     responses:
+ *       200:
+ *         description: List of admins
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     admins:
+ *                       type: array
+ *                     total:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
  */
 router.get("/", getAllAdmins);
 
 /**
- * @route   POST /api/admin-management
- * @desc    Create new exam admin
- * @access  Root Admin Only
+ * @swagger
+ * /api/admin-management:
+ *   post:
+ *     summary: Create new exam admin
+ *     tags: [Admin Management]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - fullName
+ *             properties:
+ *               email:
+ *                 type: string
+ *               fullName:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Admin created successfully
  */
 router.post("/", createAdmin);
 
 /**
- * @route   PATCH /api/admin-management/:adminId/toggle-status
- * @desc    Enable/Disable admin account
- * @access  Root Admin Only
+ * @swagger
+ * /api/admin-management/{adminId}/toggle-status:
+ *   patch:
+ *     summary: Enable/Disable admin account
+ *     tags: [Admin Management]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: adminId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               isActive:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Status updated successfully
  */
 router.patch("/:adminId/toggle-status", toggleAdminStatus);
 
 /**
- * @route   PATCH /api/admin-management/:adminId/reset-password
- * @desc    Reset admin password
- * @access  Root Admin Only
+ * @swagger
+ * /api/admin-management/{adminId}/reset-password:
+ *   patch:
+ *     summary: Reset admin password
+ *     tags: [Admin Management]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: adminId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Password reset successfully
  */
 router.patch("/:adminId/reset-password", resetAdminPassword);
 
 /**
- * @route   GET /api/admin-management/:adminId/activity
- * @desc    Get admin activity logs
- * @access  Root Admin Only
+ * @swagger
+ * /api/admin-management/{adminId}/activity:
+ *   get:
+ *     summary: Get admin activity logs
+ *     tags: [Admin Management]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: adminId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Activity logs retrieved
  */
 router.get("/:adminId/activity", getAdminActivity);
 
 /**
- * @route   DELETE /api/admin-management/:adminId
- * @desc    Delete admin (soft delete)
- * @access  Root Admin Only
+ * @swagger
+ * /api/admin-management/{adminId}:
+ *   delete:
+ *     summary: Delete admin (soft delete)
+ *     tags: [Admin Management]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: adminId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Admin deleted successfully
  */
 router.delete("/:adminId", deleteAdmin);
 

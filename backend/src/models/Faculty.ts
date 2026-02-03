@@ -10,14 +10,14 @@ interface FacultyAttributes {
     Name: string;
     Designation: string;
     ProfileImageURL?: string;
-    isEligible: boolean;
+    IsEligible: boolean;
     DepartmentID: number;
 }
 
 /**
  * Attributes required when creating a faculty
  */
-interface FacultyCreationAttributes extends Optional<FacultyAttributes, "FacultyID" | "isEligible"> { }
+interface FacultyCreationAttributes extends Optional<FacultyAttributes, "FacultyID" | "IsEligible"> { }
 
 export class Faculty extends Model<FacultyAttributes, FacultyCreationAttributes>
     implements FacultyAttributes {
@@ -25,7 +25,7 @@ export class Faculty extends Model<FacultyAttributes, FacultyCreationAttributes>
     declare Name: string;
     declare Designation: string;
     declare ProfileImageURL?: string;
-    declare isEligible: boolean;
+    declare IsEligible: boolean;
     declare DepartmentID: number;
     declare Department?: Department;
 }
@@ -49,7 +49,7 @@ Faculty.init(
             type: DataTypes.STRING(2048), // URL can be long
             allowNull: true,
         },
-        isEligible: {
+        IsEligible: {
             type: DataTypes.BOOLEAN,
             allowNull: false,
             defaultValue: true,

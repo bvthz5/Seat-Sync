@@ -137,6 +137,42 @@ async function ensureSchemaIntegrity() {
             END
         `, { type: QueryTypes.RAW });
 
+        // Add Invigilator Columns (Resolution for Delete Admin Error)
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Invigilators' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Invigilators]') AND name = 'IsEligible')
+                ALTER TABLE [dbo].[Invigilators] ADD [IsEligible] BIT NOT NULL DEFAULT 1 WITH VALUES;
+                
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Invigilators]') AND name = 'IsFlagged')
+                ALTER TABLE [dbo].[Invigilators] ADD [IsFlagged] BIT NOT NULL DEFAULT 0 WITH VALUES;
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Invigilators]') AND name = 'DepartmentID')
+                ALTER TABLE [dbo].[Invigilators] ADD [DepartmentID] INT NULL;
+            END
+        `, { type: QueryTypes.RAW });
+
+        // Add Faculty Columns
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Faculties' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Faculties]') AND name = 'IsEligible')
+                ALTER TABLE [dbo].[Faculties] ADD [IsEligible] BIT NOT NULL DEFAULT 1 WITH VALUES;
+            END
+        `, { type: QueryTypes.RAW });
+
+        // Add ActivityLog Columns
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'ActivityLogs' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[ActivityLogs]') AND name = 'EntityID')
+                ALTER TABLE [dbo].[ActivityLogs] ADD [EntityID] INT NULL;
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[ActivityLogs]') AND name = 'EntityType')
+                ALTER TABLE [dbo].[ActivityLogs] ADD [EntityType] NVARCHAR(255) NULL;
+            END
+        `, { type: QueryTypes.RAW });
+
     } catch (error) {
         console.warn("Schema integrity check warning (non-fatal):", error);
     }

@@ -22,87 +22,263 @@ router.use(AuthMiddleware.requireRootAuth);
 // ==================== ACADEMIC YEARS ====================
 
 /**
- * @route   GET /api/academic-setup/years
- * @desc    Get all academic years
- * @access  Root Admin Only
+ * @swagger
+ * /api/academic-setup/years:
+ *   get:
+ *     summary: Get all academic years
+ *     tags: [Academic Setup]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of academic years
  */
 router.get("/years", getAllAcademicYears);
 
 /**
- * @route   POST /api/academic-setup/years
- * @desc    Create new academic year
- * @access  Root Admin Only
+ * @swagger
+ * /api/academic-setup/years:
+ *   post:
+ *     summary: Create new academic year
+ *     tags: [Academic Setup]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - YearName
+ *               - StartDate
+ *               - EndDate
+ *             properties:
+ *               YearName:
+ *                 type: string
+ *               StartDate:
+ *                 type: string
+ *                 format: date
+ *               EndDate:
+ *                 type: string
+ *                 format: date
+ *     responses:
+ *       201:
+ *         description: Academic year created
  */
 router.post("/years", createAcademicYear);
 
 /**
- * @route   PATCH /api/academic-setup/years/:yearId/set-current
- * @desc    Set current academic year
- * @access  Root Admin Only
+ * @swagger
+ * /api/academic-setup/years/{yearId}/set-current:
+ *   patch:
+ *     summary: Set current academic year
+ *     tags: [Academic Setup]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: yearId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Current academic year updated
  */
 router.patch("/years/:yearId/set-current", setCurrentAcademicYear);
 
 // ==================== DEPARTMENTS ====================
 
 /**
- * @route   GET /api/academic-setup/departments
- * @desc    Get all departments
- * @access  Root Admin Only
+ * @swagger
+ * /api/academic-setup/departments:
+ *   get:
+ *     summary: Get all departments (Academic Setup View)
+ *     tags: [Academic Setup]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of departments
  */
 router.get("/departments", getAllDepartments);
 
 /**
- * @route   POST /api/academic-setup/departments
- * @desc    Create new department
- * @access  Root Admin Only
+ * @swagger
+ * /api/academic-setup/departments:
+ *   post:
+ *     summary: Create new department
+ *     tags: [Academic Setup]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - DepartmentName
+ *               - DepartmentCode
+ *             properties:
+ *               DepartmentName:
+ *                 type: string
+ *               DepartmentCode:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Department created
  */
 router.post("/departments", createDepartment);
 
 // ==================== PROGRAMS ====================
 
 /**
- * @route   GET /api/academic-setup/programs
- * @desc    Get all programs
- * @access  Root Admin Only
+ * @swagger
+ * /api/academic-setup/programs:
+ *   get:
+ *     summary: Get all programs
+ *     tags: [Academic Setup]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of programs
  */
 router.get("/programs", getAllPrograms);
 
 /**
- * @route   POST /api/academic-setup/programs
- * @desc    Create new program
- * @access  Root Admin Only
+ * @swagger
+ * /api/academic-setup/programs:
+ *   post:
+ *     summary: Create new program
+ *     tags: [Academic Setup]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - ProgramName
+ *               - ProgramCode
+ *               - DepartmentID
+ *               - DurationYears
+ *             properties:
+ *               ProgramName:
+ *                 type: string
+ *               ProgramCode:
+ *                 type: string
+ *               DepartmentID:
+ *                 type: integer
+ *               DurationYears:
+ *                 type: integer
+ *     responses:
+ *       201:
+ *         description: Program created
  */
 router.post("/programs", createProgram);
 
 // ==================== SEMESTERS ====================
 
 /**
- * @route   GET /api/academic-setup/semesters
- * @desc    Get all semesters
- * @access  Root Admin Only
+ * @swagger
+ * /api/academic-setup/semesters:
+ *   get:
+ *     summary: Get all semesters
+ *     tags: [Academic Setup]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of semesters
  */
 router.get("/semesters", getAllSemesters);
 
 /**
- * @route   POST /api/academic-setup/semesters
- * @desc    Create new semester
- * @access  Root Admin Only
+ * @swagger
+ * /api/academic-setup/semesters:
+ *   post:
+ *     summary: Create new semester
+ *     tags: [Academic Setup]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - SemesterName
+ *               - SemesterNumber
+ *               - ProgramID
+ *             properties:
+ *               SemesterName:
+ *                 type: string
+ *               SemesterNumber:
+ *                 type: integer
+ *               ProgramID:
+ *                 type: integer
+ *     responses:
+ *       201:
+ *         description: Semester created
  */
 router.post("/semesters", createSemester);
 
 // ==================== SUBJECTS ====================
 
 /**
- * @route   GET /api/academic-setup/subjects
- * @desc    Get all subjects
- * @access  Root Admin Only
+ * @swagger
+ * /api/academic-setup/subjects:
+ *   get:
+ *     summary: Get all subjects (Academic Setup View)
+ *     tags: [Academic Setup]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of subjects
  */
 router.get("/subjects", getAllSubjects);
 
 /**
- * @route   POST /api/academic-setup/subjects
- * @desc    Create new subject
- * @access  Root Admin Only
+ * @swagger
+ * /api/academic-setup/subjects:
+ *   post:
+ *     summary: Create new subject
+ *     tags: [Academic Setup]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - SubjectName
+ *               - SubjectCode
+ *               - DepartmentID
+ *               - SemesterID
+ *               - Credits
+ *             properties:
+ *               SubjectName:
+ *                 type: string
+ *               SubjectCode:
+ *                 type: string
+ *               DepartmentID:
+ *                 type: integer
+ *               SemesterID:
+ *                 type: integer
+ *               Credits:
+ *                 type: integer
+ *     responses:
+ *       201:
+ *         description: Subject created
  */
 router.post("/subjects", createSubject);
 

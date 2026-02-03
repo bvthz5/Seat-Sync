@@ -1,4 +1,4 @@
-import { User, ActivityLog, ActiveSession, Notification, PasswordReset } from "../models/index.js";
+import { User, ActivityLog, ActiveSession, Notification, PasswordReset, Invigilator, InvigilatorAssignment, InvigilatorAvailability, InvigilatorSubject } from "../models/index.js";
 import { Op } from "sequelize";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
@@ -115,7 +115,11 @@ export class AdminService {
         });
 
         // 5. Send Email
-        await emailService.sendAdminCreatedEmail(email, fullName, email, password);
+        try {
+            await emailService.sendAdminCreatedEmail(email, fullName, email, password);
+        } catch (emailError: any) {
+            console.warn(`[AdminService] Failed to send creation email to ${email}:`, emailError.message);
+        }
 
         // 6. Log Activity
         await this.logActivity(creatorEmail, "Create Admin", `Created admin account for ${email}`, newUser.UserID);
@@ -147,7 +151,11 @@ export class AdminService {
         // Send Email
         // Re-using the admin created email template or a simplified one containing the new password.
         // For now, let's use the same one as it conveys credentials clearly.
-        await emailService.sendAdminCreatedEmail(admin.Email, admin.FullName || "Admin", admin.Email, password);
+        try {
+            await emailService.sendAdminCreatedEmail(admin.Email, admin.FullName || "Admin", admin.Email, password);
+        } catch (emailError: any) {
+            console.warn(`[AdminService] Failed to send reset password email to ${admin.Email}:`, emailError.message);
+        }
 
         // Log
         await this.logActivity(creatorEmail, "Reset Password", `Reset password for admin ${admin.Email}`, adminId);
@@ -229,10 +237,23 @@ export class AdminService {
             where: { UserID: adminId }
         });
 
+        // 5. Cleanup details if the user was somehow linked as an Invigilator (legacy or hybrid roles)
+        const invigilator = await Invigilator.findOne({ where: { UserID: adminId } });
+        if (invigilator) {
+            // Delete Invigilator Dependencies
+            await InvigilatorAssignment.destroy({ where: { InvigilatorID: invigilator.InvigilatorID } });
+            await InvigilatorAvailability.destroy({ where: { InvigilatorID: invigilator.InvigilatorID } });
+            await InvigilatorSubject.destroy({ where: { InvigilatorID: invigilator.InvigilatorID } });
+
+            // Delete Invigilator Profile
+            await invigilator.destroy();
+        }
+
+        // 6. Delete User
         await admin.destroy();
 
-        // Log
-        await this.logActivity(creator.Email, "Delete Admin", `Deleted admin ${admin.Email}`, adminId);
+        // Log - we do not link EntityID because the entity is deleted
+        await this.logActivity(creator.Email, "Delete Admin", `Deleted admin ${admin.Email} (ID: ${adminId})`);
     }
 
     /**
@@ -284,7 +305,12 @@ export class AdminService {
                 logPayload.EntityID = targetId;
             }
 
-            await ActivityLog.create(logPayload);
+            try {
+                await ActivityLog.create(logPayload);
+            } catch (logError: any) {
+                console.warn("[AdminService] Failed to create ActivityLog:", logError.message);
+                // Non-blocking: don't throw
+            }
         }
     }
 }

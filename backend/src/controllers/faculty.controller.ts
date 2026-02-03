@@ -15,7 +15,7 @@ export const createFaculty = async (req: Request, res: Response): Promise<any> =
             Designation,
             ProfileImageURL,
             DepartmentID,
-            isEligible: isEligible !== undefined ? isEligible : true
+            IsEligible: isEligible !== undefined ? isEligible : true
         });
 
         return res.status(201).json({ message: "Faculty created successfully", faculty });
@@ -34,8 +34,14 @@ export const importFaculties = async (req: Request, res: Response): Promise<any>
             return res.status(400).json({ message: "An array of faculties is required" });
         }
 
+        // Map camelCase input to PascalCase model properties
+        const mappedFaculties = faculties.map((f: any) => ({
+            ...f,
+            IsEligible: f.isEligible !== undefined ? f.isEligible : (f.IsEligible !== undefined ? f.IsEligible : true)
+        }));
+
         // Bulk create
-        const createdFaculties = await Faculty.bulkCreate(faculties);
+        const createdFaculties = await Faculty.bulkCreate(mappedFaculties);
 
         return res.status(201).json({
             message: `Successfully imported ${createdFaculties.length} faculties`,
@@ -82,7 +88,7 @@ export const updateFaculty = async (req: Request, res: Response): Promise<any> =
         if (Name !== undefined) faculty.Name = Name;
         if (Designation !== undefined) faculty.Designation = Designation;
         if (ProfileImageURL !== undefined) faculty.ProfileImageURL = ProfileImageURL;
-        if (isEligible !== undefined) faculty.isEligible = isEligible;
+        if (isEligible !== undefined) faculty.IsEligible = isEligible;
 
         await faculty.save();
 
