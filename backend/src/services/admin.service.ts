@@ -4,6 +4,13 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { emailService } from "./email.service.js";
 
+export interface CreatorContext {
+    email: string;
+    userId?: number;
+    ip?: string;
+    userAgent?: string;
+}
+
 export class AdminService {
     /**
      * Get dashboard summary stats
@@ -84,7 +91,10 @@ export class AdminService {
     /**
      * Create a new Exam Admin
      */
-    static async createAdmin(data: { email: string; fullName: string }, creatorEmail: string) {
+    /**
+     * Create a new Exam Admin
+     */
+    static async createAdmin(data: { email: string; fullName: string }, context: CreatorContext) {
         const { email, fullName } = data;
 
         // 1. Validate Email Domain
@@ -122,7 +132,7 @@ export class AdminService {
         }
 
         // 6. Log Activity
-        await this.logActivity(creatorEmail, "Create Admin", `Created admin account for ${email}`, newUser.UserID);
+        await this.logActivity(context, "Create Admin", `Created admin account for ${email}`, newUser.UserID);
 
         return newUser;
     }
@@ -130,7 +140,7 @@ export class AdminService {
     /**
      * Reset Admin Password
      */
-    static async resetPassword(adminId: number, creatorEmail: string) {
+    static async resetPassword(adminId: number, context: CreatorContext) {
         const admin = await User.findByPk(adminId);
         if (!admin || admin.Role !== 'exam_admin') {
             throw new Error("Admin not found");
@@ -158,13 +168,13 @@ export class AdminService {
         }
 
         // Log
-        await this.logActivity(creatorEmail, "Reset Password", `Reset password for admin ${admin.Email}`, adminId);
+        await this.logActivity(context, "Reset Password", `Reset password for admin ${admin.Email}`, adminId);
     }
 
     /**
      * Toggle Admin Status (Disable/Enable)
      */
-    static async toggleStatus(adminId: number, isActive: boolean, creator: User) {
+    static async toggleStatus(adminId: number, isActive: boolean, context: CreatorContext, creator: User) {
         const admin = await User.findByPk(adminId);
         if (!admin || admin.Role !== 'exam_admin') {
             throw new Error("Admin not found");
@@ -191,13 +201,13 @@ export class AdminService {
 
         // Log
         const action = isActive ? "Enable Admin" : "Disable Admin";
-        await this.logActivity(creator.Email, action, `${action} ${admin.Email}`, adminId);
+        await this.logActivity(context, action, `${action} ${admin.Email}`, adminId);
     }
 
     /**
      * Delete Admin
      */
-    static async deleteAdmin(adminId: number, creator: User) {
+    static async deleteAdmin(adminId: number, context: CreatorContext, creator: User) {
         const admin = await User.findByPk(adminId);
         if (!admin || admin.Role !== 'exam_admin') {
             throw new Error("Admin not found");
@@ -253,18 +263,73 @@ export class AdminService {
         await admin.destroy();
 
         // Log - we do not link EntityID because the entity is deleted
-        await this.logActivity(creator.Email, "Delete Admin", `Deleted admin ${admin.Email} (ID: ${adminId})`);
+        await this.logActivity(context, "Delete Admin", `Deleted admin ${admin.Email} (ID: ${adminId})`);
     }
 
     /**
      * Get Admin Activity
      */
-    static async getAdminActivity(adminId: number) {
-        return await ActivityLog.findAll({
-            where: { UserID: adminId },
+    /**
+     * Get Admin Activity with Filters and Pagination
+     */
+    static async getAdminActivity(adminId: number, query: any) {
+        const {
+            page = 1,
+            limit = 10,
+            search,
+            type, // 'Login', 'Exam', 'Seating', 'Student', 'Reports'
+            startDate,
+            endDate
+        } = query;
+
+        const offset = (Number(page) - 1) * Number(limit);
+        const whereClause: any = { UserID: adminId };
+
+        // Filter by Action Type
+        if (type) {
+            // Map generic types to specific Action strings if needed, or assume Action matches type
+            // e.g. type='Login' -> Action IN ['Login Success', 'Login Failure', 'Logout']
+            if (type === 'Login') {
+                whereClause.Action = { [Op.or]: ['Login Success', 'Login Failure', 'Logout', 'Password Reset'] };
+            } else if (type === 'Exam') {
+                whereClause.Action = { [Op.like]: '%Exam%' };
+            } else if (type === 'Seating') {
+                whereClause.Action = { [Op.like]: '%Seating%' };
+            } else if (type === 'Student') {
+                whereClause.Action = { [Op.like]: '%Student%' };
+            } else {
+                whereClause.Action = { [Op.like]: `%${type}%` };
+            }
+        }
+
+        // Filter by Date Range
+        if (startDate || endDate) {
+            whereClause.Timestamp = {};
+            if (startDate) whereClause.Timestamp[Op.gte] = new Date(startDate);
+            if (endDate) whereClause.Timestamp[Op.lte] = new Date(endDate);
+        }
+
+        // Search in Details
+        if (search) {
+            whereClause[Op.or] = [
+                { Action: { [Op.like]: `%${search}%` } },
+                { Details: { [Op.like]: `%${search}%` } }
+            ];
+        }
+
+        const { count, rows } = await ActivityLog.findAndCountAll({
+            where: whereClause,
             order: [['Timestamp', 'DESC']],
-            limit: 50
+            limit: Number(limit),
+            offset: Number(offset)
         });
+
+        return {
+            logs: rows,
+            total: count,
+            totalPages: Math.ceil(count / Number(limit)),
+            currentPage: Number(page)
+        };
     }
 
     // --- Helpers ---
@@ -289,16 +354,18 @@ export class AdminService {
         return password.split('').sort(() => 0.5 - Math.random()).join('');
     }
 
-    private static async logActivity(userEmail: string, action: string, details: string, targetId?: number) {
+    public static async logActivity(context: CreatorContext, action: string, details: string, targetId?: number) {
         // Need to find UserID from email for the log
-        const user = await User.findOne({ where: { Email: userEmail } });
+        const user = await User.findOne({ where: { Email: context.email } });
         if (user) {
             const logPayload: any = {
                 UserID: user.UserID,
                 Action: action,
                 Details: details,
                 EntityType: 'User',
-                Timestamp: new Date()
+                Timestamp: new Date(),
+                IPAddress: context.ip,
+                UserAgent: context.userAgent
             };
 
             if (targetId !== undefined) {

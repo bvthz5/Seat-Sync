@@ -170,6 +170,12 @@ async function ensureSchemaIntegrity() {
 
                 IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[ActivityLogs]') AND name = 'EntityType')
                 ALTER TABLE [dbo].[ActivityLogs] ADD [EntityType] NVARCHAR(255) NULL;
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[ActivityLogs]') AND name = 'IPAddress')
+                ALTER TABLE [dbo].[ActivityLogs] ADD [IPAddress] NVARCHAR(45) NULL;
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[ActivityLogs]') AND name = 'UserAgent')
+                ALTER TABLE [dbo].[ActivityLogs] ADD [UserAgent] NVARCHAR(500) NULL;
             END
         `, { type: QueryTypes.RAW });
 

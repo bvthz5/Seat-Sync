@@ -1,6 +1,7 @@
+
 import React, { useEffect, useState } from 'react';
-import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip, Button, useDisclosure, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Input, Checkbox } from '@heroui/react';
-import { Plus, Edit, Trash2, Building2, AlertTriangle, Search } from 'lucide-react';
+import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Button, useDisclosure, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Input } from '@heroui/react';
+import { Plus, Edit, Trash2, Building2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { structureService } from '../../services/structureService';
 import { Block } from '../../types/collegeStructure';
 import { toast } from '../../../../utils/toast';
@@ -116,14 +117,28 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
         { name: "ACTIONS", uid: "actions" },
     ];
 
+    // Helper for Status Badge
+    const StatusBadge = ({ status }: { status: string }) => {
+        const isActive = status === 'Active';
+        return (
+            <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${isActive
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : "bg-slate-100 text-slate-500 border-slate-200"
+                }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-emerald-500" : "bg-slate-400"}`}></span>
+                {status}
+            </div>
+        );
+    };
+
     return (
         <div className="h-full flex flex-col gap-6">
             {/* Header Card */}
-            <div className="flex-none bg-gradient-to-br from-white to-blue-50/20 p-6 rounded-2xl border border-slate-100 shadow-lg shadow-slate-100/50 flex flex-col md:flex-row justify-between items-center gap-4 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-blue-100/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+            <div className="flex-none bg-gradient-to-br from-white to-blue-50/20 p-6 rounded-3xl border border-slate-100 shadow-xl shadow-slate-100/50 flex flex-col md:flex-row justify-between items-center gap-4 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-blue-100/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
 
                 <div className="flex items-center gap-5 z-10">
-                    <div className="p-3.5 bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-xl shadow-lg shadow-blue-500/20 ring-4 ring-blue-50">
+                    <div className="p-3.5 bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-2xl shadow-lg shadow-blue-500/20 ring-4 ring-blue-50">
                         <Building2 size={26} strokeWidth={2} />
                     </div>
                     <div>
@@ -144,7 +159,7 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
                         value={searchQuery}
                         onValueChange={(v) => { setSearchQuery(v); setPage(1); }}
                         classNames={{
-                            inputWrapper: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 shadow-sm rounded-xl h-11 transition-all",
+                            inputWrapper: "bg-white border-none rounded-xl h-11 shadow-sm ring-1 ring-slate-200 hover:ring-blue-300 focus-within:!ring-blue-500 focus-within:!shadow-blue-100 transition-all",
                             input: "bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
                         }}
                     />
@@ -154,7 +169,7 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
                             color="primary"
                             size="lg"
                             startContent={<Plus size={20} strokeWidth={2.5} />}
-                            className="font-bold shadow-lg shadow-blue-600/20 rounded-xl h-[52px] px-8 text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:scale-[1.02] transition-transform"
+                            className="font-bold shadow-lg shadow-blue-600/20 rounded-xl h-[48px] px-6 text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:scale-[1.02] transition-transform"
                         >
                             Add Block
                         </Button>
@@ -162,29 +177,33 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
                 </div>
             </div>
 
-            {/* Pagination Info */}
-            <div className="flex-none flex justify-between items-center px-4 -mb-2">
-                <div className="text-sm font-medium text-slate-500">
-                    Showing <span className="text-slate-900 font-bold">{(blocks?.length || 0) === 0 ? 0 : (page - 1) * limit + 1}</span> - <span className="text-slate-900 font-bold">{Math.min(page * limit, totalItems)}</span> of <span className="text-slate-900 font-bold">{totalItems}</span>
+            {/* Pagination Info Top */}
+            <div className="flex-none flex justify-between items-center px-4 -mb-2 z-10">
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Showing <span className="text-slate-900">{(blocks?.length || 0) === 0 ? 0 : (page - 1) * limit + 1}</span> - <span className="text-slate-900">{Math.min(page * limit, totalItems)}</span> of <span className="text-slate-900">{totalItems}</span>
                 </div>
             </div>
 
             {/* Table Container */}
-            <div className="flex-1 min-h-0 relative">
+            <div className="flex-1 min-h-0 relative z-0">
                 <Table
                     isHeaderSticky
                     aria-label="Blocks table"
                     classNames={{
                         base: "h-full",
-                        wrapper: "bg-white shadow-sm border border-slate-200 rounded-2xl p-0 h-full overflow-auto custom-scrollbar",
-                        th: "bg-slate-50 text-slate-600 font-semibold text-xs py-4 px-6 border-b border-slate-200",
-                        td: "py-4 px-6 border-b border-slate-100 group-last:border-0",
-                        tr: "hover:bg-slate-50/80 transition-colors cursor-default"
+                        wrapper: "bg-white shadow-sm border border-slate-200 rounded-3xl p-0 h-full overflow-auto custom-scrollbar",
+                        th: "bg-slate-50/50 text-slate-500 font-bold text-[11px] uppercase tracking-wider py-4 px-6 border-b border-slate-100",
+                        td: "py-4 px-6 border-b border-slate-50 group-last:border-0",
+                        tr: "hover:bg-blue-50/30 transition-colors cursor-default"
                     }}
                 >
                     <TableHeader columns={columns}>
                         {(column) => (
-                            <TableColumn key={column.uid} align={column.uid === "actions" ? "end" : "start"}>
+                            <TableColumn
+                                key={column.uid}
+                                align={column.uid === "actions" ? "end" : column.uid === "name" ? "start" : "center"}
+                                className={column.uid === "actions" ? "text-right" : column.uid === "name" ? "text-left" : "text-center"}
+                            >
                                 {column.name}
                             </TableColumn>
                         )}
@@ -193,48 +212,51 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
                         items={blocks}
                         isLoading={loading}
                         emptyContent={
-                            <div className="py-12 flex flex-col items-center text-center">
-                                <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                                    <Search className="text-slate-400" size={24} />
+                            <div className="py-20 flex flex-col items-center text-center">
+                                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6 shadow-inset">
+                                    <Search className="text-slate-300" size={32} strokeWidth={1.5} />
                                 </div>
-                                <p className="text-slate-500 font-medium">No blocks configured yet.</p>
-                                {!readOnly && <p className="text-slate-400 text-sm mt-1">Add a block to begin setting up your campus.</p>}
+                                <h4 className="text-lg font-bold text-slate-700 mb-1">No blocks found</h4>
+                                <p className="text-slate-400 text-sm max-w-xs mx-auto">
+                                    Try adjusting your search or add a new block to get started.
+                                </p>
                             </div>
                         }
                     >
                         {(block) => (
                             <TableRow key={block.BlockID}>
                                 <TableCell>
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center text-slate-500">
-                                            <Building2 size={20} />
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 bg-gradient-to-br from-slate-100 to-slate-200 rounded-xl flex items-center justify-center text-slate-600 shadow-sm border border-white">
+                                            <Building2 size={18} />
                                         </div>
-                                        <span className="font-semibold text-slate-700 text-base">{block.BlockName}</span>
+                                        <div>
+                                            <span className="block font-bold text-slate-800 text-sm">{block.BlockName}</span>
+                                            <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wide mt-0.5">ID: {block.BlockID}</span>
+                                        </div>
                                     </div>
                                 </TableCell>
                                 <TableCell>
-                                    <Chip
-                                        size="sm"
-                                        variant="flat"
-                                        color={block.Status === 'Active' ? "success" : "danger"}
-                                        classNames={{ content: "font-semibold" }}
-                                    >
-                                        {block.Status}
-                                    </Chip>
+                                    <div className="flex justify-center">
+                                        <StatusBadge status={block.Status} />
+                                    </div>
                                 </TableCell>
                                 <TableCell>
-                                    <span className="text-slate-600 font-medium px-3 py-1 bg-slate-100 rounded-full text-sm">
-                                        {block.floorCount || 0} Floors
-                                    </span>
+                                    <div className="flex justify-center">
+                                        <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600">
+                                            {/* Simple floors indicator */}
+                                            <span className="text-blue-600">{block.floorCount || 0}</span> Floors
+                                        </div>
+                                    </div>
                                 </TableCell>
                                 <TableCell>
                                     {!readOnly && (
-                                        <div className="flex justify-end gap-2">
-                                            <Button isIconOnly size="sm" variant="light" onPress={() => handleOpen(block)}>
-                                                <Edit size={18} className="text-slate-400 hover:text-blue-600 transition-colors" />
+                                        <div className="flex justify-end gap-1">
+                                            <Button isIconOnly size="sm" variant="light" onPress={() => handleOpen(block)} className="text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
+                                                <Edit size={16} />
                                             </Button>
-                                            <Button isIconOnly size="sm" variant="light" color="danger" onPress={() => handleDelete(block.BlockID)}>
-                                                <Trash2 size={18} className="text-slate-400 hover:text-red-600 transition-colors" />
+                                            <Button isIconOnly size="sm" variant="light" color="danger" onPress={() => handleDelete(block.BlockID)} className="text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg">
+                                                <Trash2 size={16} />
                                             </Button>
                                         </div>
                                     )}
@@ -245,42 +267,54 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
                 </Table>
             </div>
 
-            {/* Table Pagination */}
+            {/* Floating Pagination */}
             {totalPages > 1 && (
-                <div className="flex-none flex justify-center p-4 bg-white border border-slate-200 rounded-2xl shadow-sm mb-1">
-                    <div className="flex items-center gap-2">
-                        <Button
-                            size="sm"
-                            variant="flat"
-                            isDisabled={page === 1}
-                            onPress={() => setPage(page - 1)}
-                            className="rounded-lg font-bold"
-                        >
-                            Previous
-                        </Button>
-                        <div className="flex gap-1">
-                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                                <Button
-                                    key={p}
-                                    size="sm"
-                                    variant={page === p ? "solid" : "light"}
-                                    color={page === p ? "primary" : "default"}
-                                    onPress={() => setPage(p)}
-                                    className={`w-8 h-8 min-w-0 rounded-lg font-bold transition-all ${page === p ? 'shadow-md shadow-blue-500/20 text-white' : ''}`}
-                                >
-                                    {p}
-                                </Button>
-                            ))}
+                <div className="flex-none flex justify-center pb-2">
+                    <div className="flex items-center gap-4 p-2 pl-6 pr-2 bg-white border border-slate-200 rounded-full shadow-xl shadow-slate-200/50">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mr-2">
+                            Page {page} of {totalPages}
+                        </span>
+
+                        <div className="flex items-center gap-1">
+                            <Button
+                                isIconOnly
+                                size="sm"
+                                variant="flat"
+                                isDisabled={page === 1}
+                                onPress={() => setPage(page - 1)}
+                                className="rounded-full w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-600"
+                            >
+                                <ChevronLeft size={16} />
+                            </Button>
+
+                            <div className="flex gap-1">
+                                {Array.from({ length: totalPages }, (_, i) => i + 1).slice(0, 5).map((p) => (
+                                    <Button
+                                        key={p}
+                                        isIconOnly
+                                        size="sm"
+                                        variant={page === p ? "solid" : "light"}
+                                        color={page === p ? "primary" : "default"}
+                                        onPress={() => setPage(p)}
+                                        className={`w-8 h-8 rounded-full font-bold text-xs transition-all ${page === p ? 'shadow-md shadow-blue-500/30 bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+                                    >
+                                        {p}
+                                    </Button>
+                                ))}
+                                {totalPages > 5 && <span className="flex items-center justify-center w-8 text-slate-400">...</span>}
+                            </div>
+
+                            <Button
+                                isIconOnly
+                                size="sm"
+                                variant="flat"
+                                isDisabled={page === totalPages}
+                                onPress={() => setPage(page + 1)}
+                                className="rounded-full w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-600"
+                            >
+                                <ChevronRight size={16} />
+                            </Button>
                         </div>
-                        <Button
-                            size="sm"
-                            variant="flat"
-                            isDisabled={page === totalPages}
-                            onPress={() => setPage(page + 1)}
-                            className="rounded-lg font-bold"
-                        >
-                            Next
-                        </Button>
                     </div>
                 </div>
             )}
@@ -292,9 +326,10 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
                 placement="center"
                 backdrop="blur"
                 classNames={{
-                    base: "bg-white",
-                    header: "border-b border-slate-100",
-                    footer: "border-t border-slate-100",
+                    base: "bg-white rounded-3xl shadow-2xl",
+                    header: "border-b border-slate-100 p-6 pb-4",
+                    body: "p-6",
+                    footer: "border-t border-slate-100 p-6 pt-4",
                 }}
             >
                 <ModalContent>
@@ -306,8 +341,8 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
                                     {editingBlock ? "Update block details below" : "Define a new building block for exams"}
                                 </p>
                             </ModalHeader>
-                            <ModalBody className="py-6">
-                                <div className="flex flex-col gap-2">
+                            <ModalBody>
+                                <div className="flex flex-col gap-6">
                                     <Input
                                         id="modal-block-name"
                                         label="Block Name"
@@ -318,44 +353,43 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
                                         aria-label="Block Name"
                                         variant="bordered"
                                         classNames={{
-                                            label: "text-sm font-medium text-slate-700 mb-1",
-                                            inputWrapper: "h-12 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl shadow-sm px-4 transition-all",
+                                            label: "text-sm font-bold text-slate-700 mb-2 uppercase tracking-wide",
+                                            inputWrapper: "h-14 bg-white border-2 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl shadow-sm px-4 transition-all",
                                             input: "text-base font-medium text-slate-800 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
                                         }}
                                         value={formData.BlockName}
                                         onValueChange={(val) => setFormData({ ...formData, BlockName: val })}
                                     />
-                                </div>
 
-                                <div className="flex flex-col gap-3 pt-2">
-                                    <span className="text-sm font-medium text-slate-700">Block Status</span>
-                                    <div className="flex gap-2 p-1 bg-slate-100 rounded-xl border border-slate-200">
-                                        <button
-                                            type="button"
-                                            onClick={() => setFormData({ ...formData, Status: 'Active' })}
-                                            className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-sm font-semibold transition-all ${formData.Status === 'Active' ? 'bg-white text-emerald-600 shadow-sm ring-1 ring-slate-100' : 'text-slate-500 hover:bg-slate-200/50'}`}
-                                        >
-                                            <div className={`w-2 h-2 rounded-full ${formData.Status === 'Active' ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                                            Active
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setFormData({ ...formData, Status: 'Inactive' })}
-                                            className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-sm font-semibold transition-all ${formData.Status === 'Inactive' ? 'bg-white text-slate-700 shadow-sm ring-1 ring-slate-100' : 'text-slate-500 hover:bg-slate-200/50'}`}
-                                        >
-                                            <div className={`w-2 h-2 rounded-full ${formData.Status === 'Inactive' ? 'bg-slate-500' : 'bg-slate-300'}`} />
-                                            Inactive
-                                        </button>
+                                    <div className="flex flex-col gap-3">
+                                        <span className="text-sm font-bold text-slate-700 uppercase tracking-wide">Status</span>
+                                        <div className="flex gap-2 p-1.5 bg-slate-50 rounded-2xl border border-slate-200">
+                                            <button
+                                                type="button"
+                                                onClick={() => setFormData({ ...formData, Status: 'Active' })}
+                                                className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold transition-all duration-300 ${formData.Status === 'Active' ? 'bg-white text-emerald-600 shadow-md ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200/50'}`}
+                                            >
+                                                <div className={`w-2.5 h-2.5 rounded-full shadow-sm ${formData.Status === 'Active' ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                                                Active
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setFormData({ ...formData, Status: 'Inactive' })}
+                                                className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold transition-all duration-300 ${formData.Status === 'Inactive' ? 'bg-white text-slate-700 shadow-md ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200/50'}`}
+                                            >
+                                                <div className={`w-2.5 h-2.5 rounded-full shadow-sm ${formData.Status === 'Inactive' ? 'bg-slate-500' : 'bg-slate-300'}`} />
+                                                Inactive
+                                            </button>
+                                        </div>
                                     </div>
-                                    <p className="text-xs text-slate-400 px-1">Inactive blocks are hidden from standard selection menus.</p>
                                 </div>
                             </ModalBody>
                             <ModalFooter>
-                                <Button color="danger" variant="light" onPress={onClose} className="font-medium">
+                                <Button color="danger" variant="light" onPress={onClose} className="font-bold text-slate-500 hover:text-red-500">
                                     Cancel
                                 </Button>
-                                <Button color="primary" onPress={() => handleSubmit(onClose)} className="font-semibold shadow-lg shadow-blue-500/20 text-white">
-                                    {editingBlock ? "Update Block" : "Create Block"}
+                                <Button color="primary" onPress={() => handleSubmit(onClose)} className="font-bold shadow-lg shadow-blue-500/20 text-white bg-slate-900 rounded-xl px-6">
+                                    {editingBlock ? "Save Changes" : "Create Block"}
                                 </Button>
                             </ModalFooter>
                         </>

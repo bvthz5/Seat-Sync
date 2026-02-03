@@ -35,7 +35,8 @@ export const AdminManagementService = {
         return await api.delete(`/admin-management/${adminId}`);
     },
 
-    getActivity: async (adminId: number) => {
-        return await api.get(`/admin-management/${adminId}/activity`);
+    getActivity: async (adminId: number, params?: any) => {
+        const response = await api.get(`/admin-management/${adminId}/activity`, { params });
+        return response.data;
     }
 };

@@ -64,14 +64,14 @@ const CustomInput = ({
                 {label}
             </label>
             <div className={`
-            relative flex items-center w-full h-14 rounded-xl overflow-hidden bg-slate-50 border-2 transition-all duration-200
-            ${error ? 'border-red-300 bg-red-50' : 'border-slate-100 group-focus-within:border-slate-900 group-focus-within:shadow-lg'}
-        `}>
+                relative flex items-center w-full h-14 rounded-xl overflow-hidden bg-slate-50 border-none transition-all duration-300
+                ${error ? 'bg-red-50' : 'hover:bg-slate-100 focus-within:!bg-white focus-within:shadow-xl focus-within:shadow-blue-100'}
+            `}>
                 {/* Icon Column - Completely separated */}
                 <div className={`
-                w-14 h-full flex items-center justify-center border-r transition-colors
-                ${error ? 'border-red-200 text-red-400' : 'border-slate-200 text-slate-400 group-focus-within:text-slate-800'}
-            `}>
+                    w-14 h-full flex items-center justify-center border-r border-transparent transition-colors
+                    ${error ? 'text-red-400' : 'text-slate-400 group-focus-within:text-blue-600'}
+                `}>
                     {icon}
                 </div>
 
@@ -85,9 +85,9 @@ const CustomInput = ({
                     onChange={onChange}
                     placeholder={placeholder}
                     className={`
-                    flex-1 h-full px-4 outline-none bg-transparent font-medium text-lg placeholder:text-slate-300 !border-none !ring-0 !shadow-none focus:!ring-0
-                    ${error ? 'text-red-900' : 'text-slate-800'}
-                `}
+                        flex-1 h-full px-4 outline-none bg-transparent font-medium text-lg placeholder:text-slate-300 !border-none !ring-0 !shadow-none focus:!ring-0
+                        ${error ? 'text-red-900' : 'text-slate-800'}
+                    `}
                 />
 
                 {/* Password Toggle Button */}
@@ -108,7 +108,7 @@ const CustomInput = ({
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
                         exit={{ opacity: 0, height: 0 }}
-                        className="text-[11px] font-bold text-red-500 ml-1"
+                        className="text-[11px] font-bold text-red-500 ml-1 mt-1"
                     >
                         {error}
                     </motion.div>

@@ -1,8 +1,10 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@heroui/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AuthService } from '../../../services/auth.service';
+import { CheckCircle2, XCircle } from 'lucide-react';
 
 const LockIcon = () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -50,8 +52,8 @@ const CustomInput = ({
     return (
         <div className="group flex flex-col gap-2 w-full">
             <label htmlFor={id} className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">{label}</label>
-            <div className={`relative flex items-center w-full h-14 rounded-xl overflow-hidden bg-slate-50 border-2 transition-all duration-200 ${error ? 'border-red-300 bg-red-50' : 'border-slate-100 group-focus-within:border-slate-900 group-focus-within:shadow-lg'}`}>
-                <div className={`w-14 h-full flex items-center justify-center border-r transition-colors ${error ? 'border-red-200 text-red-400' : 'border-slate-200 text-slate-400 group-focus-within:text-slate-800'}`}>{icon}</div>
+            <div className={`relative flex items-center w-full h-14 rounded-xl overflow-hidden bg-slate-50 border-none transition-all duration-300 ${error ? 'bg-red-50' : 'hover:bg-slate-100 focus-within:!bg-white focus-within:shadow-xl focus-within:shadow-blue-100'}`}>
+                <div className={`w-14 h-full flex items-center justify-center border-r border-transparent transition-colors ${error ? 'text-red-400' : 'text-slate-400 group-focus-within:text-blue-600'}`}>{icon}</div>
                 <input id={id} name={name} autoComplete={autoComplete} type={inputType} value={value} onChange={onChange} placeholder={placeholder} className={`flex-1 h-full px-4 outline-none bg-transparent font-medium text-lg placeholder:text-slate-300 !border-none !ring-0 !shadow-none focus:!ring-0 ${error ? 'text-red-900' : 'text-slate-800'}`} />
                 {isPassword && (
                     <button
@@ -63,7 +65,7 @@ const CustomInput = ({
                     </button>
                 )}
             </div>
-            <AnimatePresence>{error && (<motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="text-[11px] font-bold text-red-500 ml-1">{error}</motion.div>)}</AnimatePresence>
+            <AnimatePresence>{error && (<motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="text-[11px] font-bold text-red-500 ml-1 mt-1">{error}</motion.div>)}</AnimatePresence>
         </div>
     );
 };
@@ -133,12 +135,16 @@ const ResetPassword: React.FC = () => {
         return (
             <div className="w-full min-h-screen flex items-center justify-center bg-white text-slate-900">
                 <div className="text-center p-8 max-w-md">
-                    <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                    </div>
-                    <h2 className="text-3xl font-bold mb-2">Password Reset!</h2>
-                    <p className="text-slate-500 mb-6">Your password has been successfully updated. Redirecting to login...</p>
-                    <Button onPress={() => navigate('/admin/login')} className="w-full bg-slate-900 text-white font-bold h-12 rounded-xl">Go to Login Now</Button>
+                    <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-8 shadow-lg shadow-emerald-200"
+                    >
+                        <CheckCircle2 size={40} strokeWidth={2.5} />
+                    </motion.div>
+                    <h2 className="text-3xl font-bold mb-3 text-slate-900">Password Reset!</h2>
+                    <p className="text-slate-500 mb-8 text-lg">Your password has been successfully updated. Redirecting to login...</p>
+                    <Button onPress={() => navigate('/admin/login')} className="w-full bg-slate-900 text-white font-bold h-14 text-lg rounded-xl shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all">Go to Login Now</Button>
                 </div>
             </div>
         );
@@ -162,14 +168,17 @@ const ResetPassword: React.FC = () => {
                 <RevealBackground />
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-[480px] flex flex-col gap-8 relative z-10">
                     <div className="text-center">
-                        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Set New Password</h2>
-                        <p className="text-slate-500 mt-2">Enter your new secure access key below.</p>
+                        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-50 text-blue-600 mb-6">
+                            <LockIcon />
+                        </div>
+                        <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Set New Password</h2>
+                        <p className="text-slate-500 mt-2 text-lg">Enter your new secure access key below.</p>
                     </div>
 
                     <AnimatePresence>
                         {error && (
-                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="bg-red-50 text-red-600 border border-red-200 px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-2">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="bg-red-50 text-red-600 border border-red-100 px-6 py-4 rounded-xl text-sm font-semibold flex items-center gap-3 shadow-sm">
+                                <XCircle size={20} />
                                 {error}
                             </motion.div>
                         )}
@@ -178,7 +187,12 @@ const ResetPassword: React.FC = () => {
                     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
                         <CustomInput label="New Password" id="newPass" type="password" value={password} onChange={(e: any) => setPassword(e.target.value)} icon={<LockIcon />} placeholder="••••••••••••" />
                         <CustomInput label="Confirm Password" id="confirmPass" type="password" value={confirmPassword} onChange={(e: any) => setConfirmPassword(e.target.value)} icon={<LockIcon />} placeholder="••••••••••••" />
-                        <Button type="submit" size="lg" isLoading={loading} className="w-full h-14 bg-slate-900 text-white font-bold text-lg rounded-xl shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
+                        <Button
+                            type="submit"
+                            size="lg"
+                            isLoading={loading}
+                            className="w-full h-14 bg-gradient-to-r from-slate-800 to-slate-900 text-white font-bold text-lg rounded-xl shadow-xl shadow-slate-900/20 hover:shadow-2xl hover:shadow-slate-900/30 hover:-translate-y-0.5 transition-all duration-300"
+                        >
                             {loading ? 'RESETTING...' : 'RESET PASSWORD'}
                         </Button>
                     </form>

@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { AuthService } from "../services/auth.service.js";
+import { AdminService } from "../services/admin.service.js";
 import { verifyRefreshToken } from "../utils/jwt.js";
 import type { LoginRequest, RefreshResponse } from "../interfaces/auth.interfaces.js";
 
@@ -33,8 +34,33 @@ export class AuthController {
             });
 
             res.status(200).json(result);
+
+            // Log Success
+            if (result.user.Role === 'exam_admin') {
+                const context = {
+                    email: result.user.Email,
+                    userId: result.user.UserID,
+                    ip: req.ip || "",
+                    userAgent: req.get('User-Agent') || ""
+                };
+                AdminService.logActivity(context, "Login Success", `User ${result.user.Email} logged in successfully`, result.user.UserID);
+            }
         } catch (error: any) {
             console.error("Login error:", error.message);
+
+            // Log Failure (Need email from body)
+            const { email } = req.body;
+            if (email) {
+                const context = {
+                    email: email,
+                    ip: req.ip || "",
+                    userAgent: req.get('User-Agent') || ""
+                };
+                // Only log if user exists and is admin? Or log all failures?
+                // logActivity checks if user exists. If not, it skips. Perfect.
+                AdminService.logActivity(context, "Login Failure", `Failed login attempt: ${error.message}`);
+            }
+
             res.status(401).json({
                 error: "Authentication failed",
                 message: error.message,
@@ -96,6 +122,17 @@ export class AuthController {
             res.status(200).json({
                 message: "Logged out successfully",
             });
+
+            // Log Logout
+            if (req.user?.UserID) {
+                const context = {
+                    email: req.user.Email,
+                    userId: req.user.UserID,
+                    ip: req.ip || "",
+                    userAgent: req.get('User-Agent') || ""
+                };
+                AdminService.logActivity(context, "Logout", "User logged out");
+            }
         } catch (error: any) {
             console.error("Logout error:", error.message);
             res.status(500).json({
@@ -179,6 +216,17 @@ export class AuthController {
             await AuthService.changePassword(userId, currentPassword, newPassword);
 
             res.json({ message: "Password changed successfully" });
+
+            // Log Password Change
+            if (req.user?.UserID) {
+                const context = {
+                    email: req.user.Email,
+                    userId: req.user.UserID,
+                    ip: req.ip || "",
+                    userAgent: req.get('User-Agent') || ""
+                };
+                AdminService.logActivity(context, "Change Password", "User changed their password");
+            }
         } catch (error: any) {
             console.error("Change password error:", error.message);
             res.status(400).json({ error: error.message });

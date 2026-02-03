@@ -68,8 +68,13 @@ export const createAdmin = async (req: Request, res: Response) => {
             return;
         }
 
-        const creatorEmail = (req.user as any)?.Email!;
-        const newAdmin = await AdminService.createAdmin({ email, fullName }, creatorEmail);
+        const context = {
+            email: (req.user as any)?.Email!,
+            userId: (req.user as any)?.UserID,
+            ip: req.ip || "",
+            userAgent: req.get('User-Agent') || ""
+        };
+        const newAdmin = await AdminService.createAdmin({ email, fullName }, context);
 
         res.status(201).json({
             success: true,
@@ -104,9 +109,13 @@ export const createAdmin = async (req: Request, res: Response) => {
 export const resetAdminPassword = async (req: Request, res: Response) => {
     try {
         const adminId = Number(req.params.adminId); // route param is adminId
-        const creatorEmail = (req.user as any)?.Email!;
-
-        await AdminService.resetPassword(adminId, creatorEmail);
+        const context = {
+            email: (req.user as any)?.Email!,
+            userId: (req.user as any)?.UserID,
+            ip: req.ip || "",
+            userAgent: req.get('User-Agent') || ""
+        };
+        await AdminService.resetPassword(adminId, context);
 
         res.status(200).json({
             success: true,
@@ -150,7 +159,13 @@ export const toggleAdminStatus = async (req: Request, res: Response) => {
             targetState = !admin.IsActive;
         }
 
-        await AdminService.toggleStatus(adminId, targetState, creator);
+        const context = {
+            email: (req.user as any)?.Email!,
+            userId: (req.user as any)?.UserID,
+            ip: req.ip || "",
+            userAgent: req.get('User-Agent') || ""
+        };
+        await AdminService.toggleStatus(adminId, targetState, context, creator);
 
         res.status(200).json({
             success: true,
@@ -174,7 +189,13 @@ export const deleteAdmin = async (req: Request, res: Response) => {
             return;
         }
 
-        await AdminService.deleteAdmin(adminId, creator);
+        const context = {
+            email: (req.user as any)?.Email!,
+            userId: (req.user as any)?.UserID,
+            ip: req.ip || "",
+            userAgent: req.get('User-Agent') || ""
+        };
+        await AdminService.deleteAdmin(adminId, context, creator);
 
         res.status(200).json({ success: true, message: "Admin deleted successfully" });
     } catch (error: any) {
@@ -189,7 +210,7 @@ export const deleteAdmin = async (req: Request, res: Response) => {
 export const getAdminActivity = async (req: Request, res: Response) => {
     try {
         const adminId = Number(req.params.adminId);
-        const logs = await AdminService.getAdminActivity(adminId);
+        const logs = await AdminService.getAdminActivity(adminId, req.query);
         res.status(200).json({
             success: true,
             data: logs

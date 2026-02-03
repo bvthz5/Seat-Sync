@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Link } from '@heroui/react';
-import { motion, AnimatePresence, Variants } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { AuthService } from '../../../services/auth.service';
 
 // --- Icons ---
@@ -18,19 +19,34 @@ const SeatSyncLogo = () => (
     </div>
 );
 
-// --- Reuse CustomInput (Simplified for brevity, or export it from Login if possible. For now, duplication is safer to avoid breaking Login) ---
+// --- CustomInput ---
 const CustomInput = ({ label, value, onChange, placeholder, type = "text", icon, error, id, name, autoComplete }: any) => (
     <div className="group flex flex-col gap-2 w-full">
         <label htmlFor={id} className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">{label}</label>
-        <div className={`relative flex items-center w-full h-14 rounded-xl overflow-hidden bg-slate-50 border-2 transition-all duration-200 ${error ? 'border-red-300 bg-red-50' : 'border-slate-100 group-focus-within:border-slate-900 group-focus-within:shadow-lg'}`}>
-            <div className={`w-14 h-full flex items-center justify-center border-r transition-colors ${error ? 'border-red-200 text-red-400' : 'border-slate-200 text-slate-400 group-focus-within:text-slate-800'}`}>{icon}</div>
-            <input id={id} name={name} autoComplete={autoComplete} type={type} value={value} onChange={onChange} placeholder={placeholder} className={`flex-1 h-full px-4 outline-none bg-transparent font-medium text-lg placeholder:text-slate-300 !border-none !ring-0 !shadow-none focus:!ring-0 ${error ? 'text-red-900' : 'text-slate-800'}`} />
+        <div className={`relative flex items-center w-full h-14 rounded-xl overflow-hidden bg-slate-50 border-none transition-all duration-300 ${error ? 'bg-red-50' : 'hover:bg-slate-100 focus-within:!bg-white focus-within:shadow-xl focus-within:shadow-blue-100'}`}>
+            <div className={`w-14 h-full flex items-center justify-center border-r border-transparent transition-colors ${error ? 'text-red-400' : 'text-slate-400 group-focus-within:text-blue-600'}`}>{icon}</div>
+            <input
+                id={id}
+                name={name}
+                autoComplete={autoComplete}
+                type={type}
+                value={value}
+                onChange={onChange}
+                placeholder={placeholder}
+                className={`flex-1 h-full px-4 outline-none bg-transparent font-medium text-lg placeholder:text-slate-300 !border-none !ring-0 !shadow-none focus:!ring-0 ${error ? 'text-red-900' : 'text-slate-800'}`}
+            />
         </div>
-        <AnimatePresence>{error && (<motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="text-[11px] font-bold text-red-500 ml-1">{error}</motion.div>)}</AnimatePresence>
+        <AnimatePresence>
+            {error && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="text-[11px] font-bold text-red-500 ml-1 mt-1">
+                    {error}
+                </motion.div>
+            )}
+        </AnimatePresence>
     </div>
 );
 
-// --- Background Components (Reused) ---
+// --- Background Components ---
 const RevealBackground = () => {
     const divRef = useRef<HTMLDivElement>(null);
     const [mousePos, setMousePos] = useState({ x: -500, y: -500 });
@@ -84,9 +100,9 @@ const ForgotPassword: React.FC = () => {
 
     return (
         <div className="w-full min-h-screen flex text-slate-800 bg-white overflow-hidden">
-            {/* Left Panel - Simplified for this page */}
+            {/* Left Panel */}
             <div className="hidden lg:flex w-1/2 bg-slate-900 relative flex-col justify-between p-16 text-white h-screen overflow-hidden">
-                <div className="absolute inset-0 opacity-50"><canvas className="w-full h-full" /></div> {/* Placeholder for neural net */}
+                <div className="absolute inset-0 opacity-50"><canvas className="w-full h-full" /></div>
                 <div className="relative z-10 flex items-center gap-3"><SeatSyncLogo /><span className="text-xl font-bold tracking-wide">SeatSync</span></div>
                 <div className="relative z-10 max-w-lg w-full">
                     <h1 className="text-4xl font-bold mb-4">Account Recovery</h1>
@@ -98,23 +114,31 @@ const ForgotPassword: React.FC = () => {
             {/* Right Panel */}
             <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white h-screen relative">
                 <RevealBackground />
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-[480px] flex flex-col gap-8 relative z-10">
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="w-full max-w-[480px] flex flex-col gap-8 relative z-10">
                     <div className="text-center">
-                        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Forgot Password?</h2>
-                        <p className="text-slate-500 mt-2">Enter your academic email to receive a reset link.</p>
+                        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-50 text-blue-600 mb-6">
+                            <EmailIcon />
+                        </div>
+                        <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Forgot Password?</h2>
+                        <p className="text-slate-500 mt-2 text-lg">Enter your academic email to receive a reset link.</p>
                     </div>
 
                     <AnimatePresence>
                         {message && (
-                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className={`px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-2 ${message.includes('sent') ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-600 border border-red-200'}`}>
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className={`px-6 py-4 rounded-xl text-sm font-semibold flex items-center gap-3 shadow-sm ${message.includes('sent') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
                                 {message}
                             </motion.div>
                         )}
                     </AnimatePresence>
 
-                    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+                    <form onSubmit={handleSubmit} className="flex flex-col gap-8">
                         <CustomInput label="Official Academic Email" id="email" type="email" value={email} onChange={(e: any) => setEmail(e.target.value)} icon={<EmailIcon />} error={emailError} placeholder="name@input.edu" />
-                        <Button type="submit" size="lg" isLoading={loading} className="w-full h-14 bg-slate-900 text-white font-bold text-lg rounded-xl shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
+                        <Button
+                            type="submit"
+                            size="lg"
+                            isLoading={loading}
+                            className="w-full h-14 bg-gradient-to-r from-slate-800 to-slate-900 text-white font-bold text-lg rounded-xl shadow-xl shadow-slate-900/20 hover:shadow-2xl hover:shadow-slate-900/30 hover:-translate-y-0.5 transition-all duration-300"
+                        >
                             {loading ? 'SENDING...' : 'SEND RESET LINK'}
                         </Button>
                     </form>

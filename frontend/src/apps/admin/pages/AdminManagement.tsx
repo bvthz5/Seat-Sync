@@ -17,6 +17,7 @@ import toast from 'react-hot-toast';
 import { AdminManagementService } from '../services/adminManagementService';
 import CreateAdminModal from '../components/CreateAdminModal';
 import ConfirmationModal from '../components/ConfirmationModal';
+import AdminActivityDrawer from '../components/AdminActivityDrawer';
 
 interface Admin {
     UserID: number;
@@ -64,6 +65,10 @@ const AdminManagement: React.FC = () => {
         type: 'danger',
         action: async () => { }
     });
+
+    // Activity Drawer State
+    const [showActivityDrawer, setShowActivityDrawer] = useState(false);
+    const [selectedAdminForActivity, setSelectedAdminForActivity] = useState<Admin | null>(null);
 
     useEffect(() => {
         const timeoutId = setTimeout(() => {
@@ -164,6 +169,11 @@ const AdminManagement: React.FC = () => {
                 }
             }
         });
+    };
+
+    const handleViewActivity = (admin: Admin) => {
+        setSelectedAdminForActivity(admin);
+        setShowActivityDrawer(true);
     };
 
     return (
@@ -325,8 +335,9 @@ const AdminManagement: React.FC = () => {
                                         <td className="px-6 py-4">
                                             <div className="flex items-center justify-end gap-2">
                                                 <button
-                                                    className="p-2 hover:bg-blue-50 rounded-lg transition-colors text-blue-600 opacity-50 cursor-not-allowed"
-                                                    title="View Activity (Coming Soon)"
+                                                    onClick={() => handleViewActivity(admin)}
+                                                    className="p-2 hover:bg-blue-50 rounded-lg transition-colors text-blue-600"
+                                                    title="View Activity"
                                                 >
                                                     <Activity size={18} />
                                                 </button>
@@ -406,6 +417,12 @@ const AdminManagement: React.FC = () => {
                 title={confirmAction.title}
                 message={confirmAction.message}
                 type={confirmAction.type}
+            />
+
+            <AdminActivityDrawer
+                isOpen={showActivityDrawer}
+                onClose={() => setShowActivityDrawer(false)}
+                admin={selectedAdminForActivity}
             />
         </div>
     );
