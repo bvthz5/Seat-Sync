@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip, Button, useDisclosure, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Input, Select, SelectItem, Checkbox, Tooltip, Autocomplete, AutocompleteItem } from '@heroui/react';
-import { Plus, Edit, Ban, DoorOpen, Search, Building2, Layers, AlertCircle, AlertTriangle, CheckSquare, Copy } from 'lucide-react';
+import { Plus, Edit, Ban, DoorOpen, Search, Building2, Layers, AlertCircle, AlertTriangle, CheckSquare, Copy, ChevronLeft, ChevronRight } from 'lucide-react';
 import { structureService } from '../../services/structureService';
 import { Block, Floor, Room } from '../../types/collegeStructure';
 import { toast } from '../../../../utils/toast';
@@ -295,6 +295,20 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
     };
 
 
+    // Helper for Status Badge
+    const StatusBadge = ({ status }: { status: string }) => {
+        const isActive = status === 'Active';
+        return (
+            <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${isActive
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : "bg-slate-100 text-slate-500 border-slate-200"
+                }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-emerald-500" : "bg-slate-400"}`}></span>
+                {status}
+            </div>
+        );
+    };
+
     return (
         <div className="h-full flex flex-col gap-6">
             {/* Top Filter Section */}
@@ -307,14 +321,11 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                     <div className="flex flex-col md:flex-row gap-5 w-full md:w-auto flex-1 z-10">
                         {/* Block Selector */}
                         <div className="flex flex-col gap-2 w-full md:w-72">
+                            <label htmlFor="room-block-select" className="flex items-center gap-1.5 ml-1 text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+                                <Building2 size={12} strokeWidth={2.5} /> Building Block
+                            </label>
                             <Autocomplete
                                 id="room-block-select"
-                                label={
-                                    <span className="flex items-center gap-1.5 ml-1 text-[11px] font-bold text-slate-400 uppercase tracking-widest">
-                                        <Building2 size={12} strokeWidth={2.5} /> Building Block
-                                    </span>
-                                }
-                                labelPlacement="outside"
                                 name="block-select"
                                 aria-label="Select Block"
                                 placeholder="Select building..."
@@ -362,14 +373,11 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
 
                         {/* Floor Selector */}
                         <div className="flex flex-col gap-2 w-full md:w-72">
+                            <label htmlFor="room-floor-select" className={`flex items-center gap-1.5 ml-1 text-[11px] font-bold uppercase tracking-widest ${!selectedBlockId ? 'text-slate-300' : 'text-slate-400'}`}>
+                                <Layers size={12} strokeWidth={2.5} /> Floor Level
+                            </label>
                             <Autocomplete
                                 id="room-floor-select"
-                                label={
-                                    <span className={`flex items-center gap-1.5 ml-1 text-[11px] font-bold uppercase tracking-widest ${!selectedBlockId ? 'text-slate-300' : 'text-slate-400'}`}>
-                                        <Layers size={12} strokeWidth={2.5} /> Floor Level
-                                    </span>
-                                }
-                                labelPlacement="outside"
                                 name="floor-select"
                                 aria-label="Select Floor"
                                 placeholder="Select floor..."
@@ -494,8 +502,8 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                     </div>
                 ) : (
                     // Table
-                    <Table isHeaderSticky aria-label="Rooms table" classNames={{ base: "h-full", wrapper: "bg-white shadow-sm border border-slate-200 rounded-2xl p-0 h-full overflow-auto custom-scrollbar", th: "bg-slate-50 text-slate-600 font-bold text-xs py-4 px-6 border-b border-slate-200 uppercase tracking-wider", td: "py-4 px-6 border-b border-slate-100 group-last:border-0", tr: "hover:bg-slate-50/80 transition-colors cursor-default" }}>
-                        <TableHeader columns={columns}>{(column) => <TableColumn key={column.uid} align={column.uid === "actions" ? "end" : "start"}>{column.name}</TableColumn>}</TableHeader>
+                    <Table isHeaderSticky aria-label="Rooms table" classNames={{ base: "h-full", wrapper: "bg-white shadow-sm border border-slate-200 rounded-3xl p-0 h-full overflow-auto custom-scrollbar", th: "bg-slate-50/50 text-slate-500 font-bold text-[11px] uppercase tracking-wider py-4 px-6 border-b border-slate-100", td: "py-4 px-6 border-b border-slate-50 group-last:border-0", tr: "hover:bg-blue-50/30 transition-colors cursor-default" }}>
+                        <TableHeader columns={columns}>{(column) => <TableColumn key={column.uid} align={column.uid === "actions" ? "end" : (["status", "usable", "capacity"].includes(column.uid) ? "center" : "start")}>{column.name}</TableColumn>}</TableHeader>
                         <TableBody items={rooms} isLoading={loading} emptyContent={<div className="py-12 flex flex-col items-center text-center"><Search className="text-slate-300 mb-3" size={32} /><p className="text-slate-500 font-medium">No rooms found.</p></div>}>
                             {(room) => (
                                 <TableRow key={room.RoomID}>
@@ -507,7 +515,11 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                     </TableCell>
                                     <TableCell><span className="font-bold text-slate-700">{room.Capacity}</span></TableCell>
                                     <TableCell><Chip size="sm" variant="flat" color={room.ExamUsable ? "success" : "default"} startContent={room.ExamUsable ? <CheckSquare size={14} /> : undefined} classNames={{ content: "font-semibold" }}>{room.ExamUsable ? "Yes" : "No"}</Chip></TableCell>
-                                    <TableCell><Chip size="sm" variant="dot" color={room.Status === 'Active' ? "success" : "danger"}>{room.Status}</Chip></TableCell>
+                                    <TableCell>
+                                        <div className="flex justify-center">
+                                            <StatusBadge status={room.Status} />
+                                        </div>
+                                    </TableCell>
                                     <TableCell>{!readOnly && (<div className="flex justify-end gap-2"><Tooltip content="Edit Room"><Button isIconOnly size="sm" variant="light" onPress={() => handleOpen(room)}><Edit size={18} className="text-slate-400 hover:text-blue-600" /></Button></Tooltip><Tooltip content="Disable Room"><Button isIconOnly size="sm" variant="light" color="danger" onPress={() => handleDisable(room.RoomID)}><Ban size={18} className="text-slate-400 hover:text-red-600" /></Button></Tooltip></div>)}</TableCell>
                                 </TableRow>
                             )}
@@ -516,42 +528,54 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                 )}
             </div>
 
-            {/* Table Pagination */}
+            {/* Floating Pagination */}
             {selectedFloorId && totalPages > 1 && (
-                <div className="flex-none flex justify-center p-4 bg-white border border-slate-200 rounded-2xl shadow-sm mb-1">
-                    <div className="flex items-center gap-2">
-                        <Button
-                            size="sm"
-                            variant="flat"
-                            isDisabled={page === 1}
-                            onPress={() => setPage(page - 1)}
-                            className="rounded-lg font-bold"
-                        >
-                            Previous
-                        </Button>
-                        <div className="flex gap-1">
-                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                                <Button
-                                    key={p}
-                                    size="sm"
-                                    variant={page === p ? "solid" : "light"}
-                                    color={page === p ? "primary" : "default"}
-                                    onPress={() => setPage(p)}
-                                    className={`w-8 h-8 min-w-0 rounded-lg font-bold transition-all ${page === p ? 'shadow-md shadow-blue-500/20 text-white' : ''}`}
-                                >
-                                    {p}
-                                </Button>
-                            ))}
+                <div className="flex-none flex justify-center pb-2">
+                    <div className="flex items-center gap-4 p-2 pl-6 pr-2 bg-white border border-slate-200 rounded-full shadow-xl shadow-slate-200/50">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mr-2">
+                            Page {page} of {totalPages}
+                        </span>
+
+                        <div className="flex items-center gap-1">
+                            <Button
+                                isIconOnly
+                                size="sm"
+                                variant="flat"
+                                isDisabled={page === 1}
+                                onPress={() => setPage(page - 1)}
+                                className="rounded-full w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-600"
+                            >
+                                <ChevronLeft size={16} />
+                            </Button>
+
+                            <div className="flex gap-1">
+                                {Array.from({ length: totalPages }, (_, i) => i + 1).slice(0, 5).map((p) => (
+                                    <Button
+                                        key={p}
+                                        isIconOnly
+                                        size="sm"
+                                        variant={page === p ? "solid" : "light"}
+                                        color={page === p ? "primary" : "default"}
+                                        onPress={() => setPage(p)}
+                                        className={`w-8 h-8 rounded-full font-bold text-xs transition-all ${page === p ? 'shadow-md shadow-blue-500/30 bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+                                    >
+                                        {p}
+                                    </Button>
+                                ))}
+                                {totalPages > 5 && <span className="flex items-center justify-center w-8 text-slate-400">...</span>}
+                            </div>
+
+                            <Button
+                                isIconOnly
+                                size="sm"
+                                variant="flat"
+                                isDisabled={page === totalPages}
+                                onPress={() => setPage(page + 1)}
+                                className="rounded-full w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-600"
+                            >
+                                <ChevronRight size={16} />
+                            </Button>
                         </div>
-                        <Button
-                            size="sm"
-                            variant="flat"
-                            isDisabled={page === totalPages}
-                            onPress={() => setPage(page + 1)}
-                            className="rounded-lg font-bold"
-                        >
-                            Next
-                        </Button>
                     </div>
                 </div>
             )}
@@ -595,10 +619,12 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                     // Single Room Form
                                     <div className="space-y-6 max-w-lg mx-auto w-full">
                                         <div className="flex flex-col gap-1.5">
-                                            <Input label="Room Code" labelPlacement="outside" id="modal-room-code" name="roomCode" autoFocus aria-label="Room Code" placeholder="e.g. LH-201" variant="bordered" classNames={{ label: "text-sm font-semibold text-slate-700 ml-1 mb-1.5", inputWrapper: "h-12 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl shadow-sm px-4 transition-all", input: "text-base font-medium text-slate-800 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0" }} value={singleData.roomCode} onValueChange={(v) => setSingleData({ ...singleData, roomCode: v })} />
+                                            <label htmlFor="modal-room-code" className="text-sm font-semibold text-slate-700 ml-1 mb-1.5">Room Code</label>
+                                            <Input id="modal-room-code" name="roomCode" autoFocus aria-label="Room Code" placeholder="e.g. LH-201" variant="bordered" classNames={{ inputWrapper: "h-12 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl shadow-sm px-4 transition-all", input: "text-base font-medium text-slate-800 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0" }} value={singleData.roomCode} onValueChange={(v) => setSingleData({ ...singleData, roomCode: v })} />
                                         </div>
                                         <div className="flex flex-col gap-1.5">
-                                            <Input label="Capacity" labelPlacement="outside" id="modal-room-capacity" name="capacity" type="number" aria-label="Capacity" placeholder="60" variant="bordered" classNames={{ label: "text-sm font-semibold text-slate-700 ml-1 mb-1.5", inputWrapper: "h-12 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl shadow-sm px-4 transition-all", input: "text-base font-medium text-slate-800 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0" }} value={singleData.capacity.toString()} onValueChange={(v) => setSingleData({ ...singleData, capacity: Number(v) })} />
+                                            <label htmlFor="modal-room-capacity" className="text-sm font-semibold text-slate-700 ml-1 mb-1.5">Capacity</label>
+                                            <Input id="modal-room-capacity" name="capacity" type="number" aria-label="Capacity" placeholder="60" variant="bordered" classNames={{ inputWrapper: "h-12 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl shadow-sm px-4 transition-all", input: "text-base font-medium text-slate-800 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0" }} value={singleData.capacity.toString()} onValueChange={(v) => setSingleData({ ...singleData, capacity: Number(v) })} />
                                         </div>
                                         <div className="flex flex-col gap-3 pt-2">
                                             <span className="text-sm font-semibold text-slate-700 ml-1">Exam Compatibility</span>
@@ -614,12 +640,40 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                         {/* Left: Check Controls */}
                                         <div className="flex-1 space-y-6">
                                             {/* Common Prefix & Capacity */}
+                                            {/* Common Prefix & Capacity */}
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div className="flex flex-col gap-1.5">
-                                                    <Input label="Prefix" labelPlacement="outside" id="bulk-room-prefix" name="prefix" placeholder="LH" aria-label="Room Prefix" variant="bordered" classNames={{ label: "text-xs font-bold text-slate-400 uppercase tracking-wider ml-1 mb-1.5", inputWrapper: "h-10 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-lg", input: "font-mono font-bold bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0" }} value={bulkData.prefix} onValueChange={(v) => setBulkData({ ...bulkData, prefix: v })} />
+                                                    <label htmlFor="bulk-room-prefix" className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1 mb-1.5">Prefix</label>
+                                                    <Input
+                                                        id="bulk-room-prefix"
+                                                        name="prefix"
+                                                        placeholder="LH"
+                                                        aria-label="Room Prefix"
+                                                        variant="bordered"
+                                                        classNames={{
+                                                            inputWrapper: "h-10 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-lg",
+                                                            input: "font-mono font-bold bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
+                                                        }}
+                                                        value={bulkData.prefix}
+                                                        onValueChange={(v) => setBulkData({ ...bulkData, prefix: v })}
+                                                    />
                                                 </div>
                                                 <div className="flex flex-col gap-1.5">
-                                                    <Input label="Default Cap" labelPlacement="outside" id="bulk-room-capacity" name="bulkCapacity" type="number" aria-label="Default Capacity" placeholder="60" variant="bordered" classNames={{ label: "text-xs font-bold text-slate-400 uppercase tracking-wider ml-1 mb-1.5", inputWrapper: "h-10 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-lg", input: "font-mono font-bold bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0" }} value={bulkData.capacity.toString()} onValueChange={(v) => setBulkData({ ...bulkData, capacity: Number(v) })} />
+                                                    <label htmlFor="bulk-room-capacity" className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1 mb-1.5">Default Cap</label>
+                                                    <Input
+                                                        id="bulk-room-capacity"
+                                                        name="bulkCapacity"
+                                                        type="number"
+                                                        aria-label="Default Capacity"
+                                                        placeholder="60"
+                                                        variant="bordered"
+                                                        classNames={{
+                                                            inputWrapper: "h-10 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-lg",
+                                                            input: "font-mono font-bold bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
+                                                        }}
+                                                        value={bulkData.capacity.toString()}
+                                                        onValueChange={(v) => setBulkData({ ...bulkData, capacity: Number(v) })}
+                                                    />
                                                 </div>
                                             </div>
 
@@ -627,10 +681,38 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                             {bulkModeType === 'auto' && (
                                                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
                                                     <div className="flex flex-col gap-1.5">
-                                                        <Input label="Start Number" labelPlacement="outside" id="bulk-start-number" name="startNumber" type="number" aria-label="Start Number" placeholder="101" variant="bordered" classNames={{ label: "text-sm font-semibold text-slate-700 mb-1.5", inputWrapper: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-lg transition-all", input: "bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0" }} value={bulkData.startNumber.toString()} onValueChange={(v) => setBulkData({ ...bulkData, startNumber: Number(v) })} />
+                                                        <label htmlFor="bulk-start-number" className="text-sm font-semibold text-slate-700 mb-1.5">Start Number</label>
+                                                        <Input
+                                                            id="bulk-start-number"
+                                                            name="startNumber"
+                                                            type="number"
+                                                            aria-label="Start Number"
+                                                            placeholder="101"
+                                                            variant="bordered"
+                                                            classNames={{
+                                                                inputWrapper: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-lg transition-all",
+                                                                input: "bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
+                                                            }}
+                                                            value={bulkData.startNumber.toString()}
+                                                            onValueChange={(v) => setBulkData({ ...bulkData, startNumber: Number(v) })}
+                                                        />
                                                     </div>
                                                     <div className="flex flex-col gap-1.5">
-                                                        <Input label="Count (How many?)" labelPlacement="outside" id="bulk-room-count" name="count" type="number" aria-label="Room Count" placeholder="5" variant="bordered" classNames={{ label: "text-sm font-semibold text-slate-700 mb-1.5", inputWrapper: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-lg transition-all", input: "bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0" }} value={bulkData.count.toString()} onValueChange={(v) => setBulkData({ ...bulkData, count: Number(v) })} />
+                                                        <label htmlFor="bulk-room-count" className="text-sm font-semibold text-slate-700 mb-1.5">Count (How many?)</label>
+                                                        <Input
+                                                            id="bulk-room-count"
+                                                            name="count"
+                                                            type="number"
+                                                            aria-label="Room Count"
+                                                            placeholder="5"
+                                                            variant="bordered"
+                                                            classNames={{
+                                                                inputWrapper: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-lg transition-all",
+                                                                input: "bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
+                                                            }}
+                                                            value={bulkData.count.toString()}
+                                                            onValueChange={(v) => setBulkData({ ...bulkData, count: Number(v) })}
+                                                        />
                                                     </div>
                                                 </div>
                                             )}

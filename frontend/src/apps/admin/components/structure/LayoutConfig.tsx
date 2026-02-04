@@ -262,7 +262,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                             }}
                                             popoverProps={{
                                                 classNames: {
-                                                    content: "rounded-xl border border-slate-100 shadow-2xl min-w-[300px]"
+                                                    content: "bg-white rounded-xl border border-slate-100 shadow-2xl min-w-[300px]"
                                                 }
                                             }}
                                         >
@@ -309,7 +309,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                             }}
                                             popoverProps={{
                                                 classNames: {
-                                                    content: "rounded-xl border border-slate-100 shadow-2xl min-w-[200px]"
+                                                    content: "bg-white rounded-xl border border-slate-100 shadow-2xl min-w-[200px]"
                                                 }
                                             }}
                                         >
@@ -352,7 +352,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                             }}
                                             popoverProps={{
                                                 classNames: {
-                                                    content: "rounded-xl border border-slate-100 shadow-2xl min-w-[200px]"
+                                                    content: "bg-white rounded-xl border border-slate-100 shadow-2xl min-w-[200px]"
                                                 }
                                             }}
                                         >

@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Button, useDisclosure, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Input } from '@heroui/react';
+import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Button, useDisclosure, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Input, Tooltip } from '@heroui/react';
 import { Plus, Edit, Trash2, Building2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { structureService } from '../../services/structureService';
 import { Block } from '../../types/collegeStructure';
@@ -252,12 +252,16 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
                                 <TableCell>
                                     {!readOnly && (
                                         <div className="flex justify-end gap-1">
-                                            <Button isIconOnly size="sm" variant="light" onPress={() => handleOpen(block)} className="text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
-                                                <Edit size={16} />
-                                            </Button>
-                                            <Button isIconOnly size="sm" variant="light" color="danger" onPress={() => handleDelete(block.BlockID)} className="text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg">
-                                                <Trash2 size={16} />
-                                            </Button>
+                                            <Tooltip content="Edit Block">
+                                                <Button isIconOnly size="sm" variant="light" onPress={() => handleOpen(block)} className="text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
+                                                    <Edit size={16} />
+                                                </Button>
+                                            </Tooltip>
+                                            <Tooltip content="Delete Block" color="danger">
+                                                <Button isIconOnly size="sm" variant="light" color="danger" onPress={() => handleDelete(block.BlockID)} className="text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg">
+                                                    <Trash2 size={16} />
+                                                </Button>
+                                            </Tooltip>
                                         </div>
                                     )}
                                 </TableCell>
@@ -343,23 +347,25 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
                             </ModalHeader>
                             <ModalBody>
                                 <div className="flex flex-col gap-6">
-                                    <Input
-                                        id="modal-block-name"
-                                        label="Block Name"
-                                        labelPlacement="outside"
-                                        name="BlockName"
-                                        autoFocus
-                                        placeholder="e.g. Science Block, Main Building"
-                                        aria-label="Block Name"
-                                        variant="bordered"
-                                        classNames={{
-                                            label: "text-sm font-bold text-slate-700 mb-2 uppercase tracking-wide",
-                                            inputWrapper: "h-14 bg-white border-2 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl shadow-sm px-4 transition-all",
-                                            input: "text-base font-medium text-slate-800 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
-                                        }}
-                                        value={formData.BlockName}
-                                        onValueChange={(val) => setFormData({ ...formData, BlockName: val })}
-                                    />
+                                    <div className="flex flex-col gap-2">
+                                        <label htmlFor="modal-block-name" className="text-sm font-bold text-slate-700 uppercase tracking-wide ml-1">
+                                            Block Name
+                                        </label>
+                                        <Input
+                                            id="modal-block-name"
+                                            name="BlockName"
+                                            autoFocus
+                                            placeholder="e.g. Science Block, Main Building"
+                                            aria-label="Block Name"
+                                            variant="bordered"
+                                            classNames={{
+                                                inputWrapper: "h-14 bg-white border-2 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl shadow-sm px-4 transition-all",
+                                                input: "text-base font-medium text-slate-800 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
+                                            }}
+                                            value={formData.BlockName}
+                                            onValueChange={(val) => setFormData({ ...formData, BlockName: val })}
+                                        />
+                                    </div>
 
                                     <div className="flex flex-col gap-3">
                                         <span className="text-sm font-bold text-slate-700 uppercase tracking-wide">Status</span>
