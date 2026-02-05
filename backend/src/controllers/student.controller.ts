@@ -233,7 +233,7 @@ export const exportStudents = async (req: Request, res: Response) => {
 };
 
 export const importStudents = async (req: Request, res: Response) => {
-    // Expected Excel Columns: Name, Email, RegisterNumber, DepartmentCode, ProgramName, SemesterNumber, BatchYear
+    // Expected Excel Columns: Register Number, Name, Email (Optional), Program (Optional if inferred), Semester (Optional if inferred)
     if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
     }
@@ -257,72 +257,225 @@ export const importStudents = async (req: Request, res: Response) => {
         let successCount = 0;
         let errors: string[] = [];
 
+        // Cache for Lookups to speed up loop
+        const programCache = new Map<string, any>(); // Code -> Program
+        const deptCache = new Map<string, any>();    // Code -> Department
+        const programsAll = await Program.findAll();
+        const deptsAll = await Department.findAll();
+
+        programsAll.forEach((p: any) => {
+            if (p.ProgramCode) programCache.set(p.ProgramCode.toUpperCase(), p);
+            programCache.set(p.ProgramName.toUpperCase(), p); // Also support Name match
+        });
+
+        deptsAll.forEach((d: any) => {
+            deptCache.set(d.DepartmentCode.toUpperCase(), d);
+            deptCache.set(d.DepartmentName.toUpperCase(), d);
+        });
+
+
+        // Normalize keys helper
+        const normalizeKey = (row: any, keys: string[]) => {
+            const rowKeys = Object.keys(row);
+            for (const key of keys) {
+                // Exact match
+                if (row[key] !== undefined) return row[key];
+                // Case insensitive match
+                const foundKey = rowKeys.find(k => k.toLowerCase().trim() === key.toLowerCase().trim());
+                if (foundKey) return row[foundKey];
+            }
+            return undefined;
+        };
+
+        // DEBUG: Log headers
+        if (data.length > 0) {
+            try {
+                const fs = await import('fs');
+                const path = await import('path');
+                fs.writeFileSync(path.resolve('debug_import_headers.log'), `Headers found: ${JSON.stringify(Object.keys(data[0]))}`);
+            } catch (e) { }
+        }
+
         for (const row of data) {
+            // Flexible Key Matching
+            const regNo = normalizeKey(row, ['Register Number', 'RegisterNumber', 'Reg No', 'RegNo', 'Register No']);
+            const name = normalizeKey(row, ['Name', 'Student Name', 'Full Name', 'StudentName']);
+            const email = normalizeKey(row, ['Email', 'E-mail', 'Mail']);
+            const programInput = normalizeKey(row, ['Program', 'Course', 'Branch', 'Stream']);
+            const semesterInput = normalizeKey(row, ['Semester', 'Sem', 'Term']);
+
             try {
                 // 1. Validation basics
-                if (!row.Email || !row.RegisterNumber || !row.DepartmentCode) {
-                    throw new Error(`Missing required fields for ${row.RegisterNumber || 'Unknown'}`);
+                if (!regNo || !name) {
+                    throw new Error(`Missing required fields (Register Number, Name) for row`);
                 }
 
-                // 2. Find/Create User
-                // Default Password: First 4 chars of Name + @123 ?? or just 'SeatSync@123'
-                const defaultPassword = await bcrypt.hash('SeatSync@123', 10);
+                // 2. Smart Parsing Logic
+                // Regex: (L?SJC)(\d{2})([A-Z]+)(\d+)
+                // Group 1: Prefix (SJC/LSJC)
+                // Group 2: Year (24 -> 2024)
+                // Group 3: Code (MCA, CS, etc)
+                // Group 4: Number
+                const idRegex = /^(L?SJC)(\d{2})([A-Z]+)(\d+)$/i;
+                const match = String(regNo).trim().match(idRegex);
 
-                let user = await User.findOne({ where: { Email: row.Email }, transaction: t });
+                let targetProgram: any = null;
+                let targetDept: any = null;
+                let derivedBatchYear: number | null = null;
+
+                if (match) {
+                    const full = match[0];
+                    const prefix = match[1];
+                    const yearShort = match[2];
+                    const code = match[3];
+                    const num = match[4];
+
+                    if (yearShort && code) {
+                        derivedBatchYear = 2000 + parseInt(yearShort, 10);
+                        const codeUpper = code.toUpperCase();
+
+                        // Strategy A: Try to find Program by Code (e.g. MCAI)
+                        if (programCache.has(codeUpper)) {
+                            targetProgram = programCache.get(codeUpper);
+                            targetDept = deptsAll.find((d: any) => d.DepartmentID === targetProgram.DepartmentID);
+                        }
+                        // Strategy B: If no Program, try Department (e.g. CS)
+                        else if (deptCache.has(codeUpper)) {
+                            targetDept = deptCache.get(codeUpper);
+                            // Program is still unknown, check Excel input
+                        }
+                    }
+                }
+
+                // override/fallback with Excel inputs
+                if (programInput) {
+                    const pInputUpper = String(programInput).trim().toUpperCase();
+                    if (programCache.has(pInputUpper)) {
+                        targetProgram = programCache.get(pInputUpper);
+                        // Update dept if not already set or mismatch? Trust Program's dept.
+                        if (targetProgram.DepartmentID) {
+                            targetDept = deptsAll.find((d: any) => d.DepartmentID === targetProgram.DepartmentID);
+                        }
+                    } else {
+                        // If program not found in cache, maybe we can try to find it by name or code dynamically?
+                    }
+                }
+
+                // FIX: If Program found but Dept not linked, try to find Dept by Program Name keywords
+                if (targetProgram && !targetDept) {
+                    if (targetProgram.ProgramName.includes('Computer') || targetProgram.ProgramName.includes('MCA')) {
+                        targetDept = deptsAll.find((d: any) => d.DepartmentCode === 'MCA' || d.DepartmentCode === 'CSE');
+                    }
+                }
+
+                // Final Validations
+                if (!targetProgram) {
+                    // Try to match "Generic" program for the department if only Dept is known? 
+                    // No, "CS" Dept has "B.Tech CS" and "M.Tech CS". We cannot guess.
+                    throw new Error(`Could not identify Program/Course '${programInput}'. Please check spelling or add it to Academic Setup.`);
+                }
+                if (!targetDept) {
+                    // Inferred failed. 
+                    throw new Error(`Could not identify Department. Ensure Program '${targetProgram.ProgramName}' is linked to a Department or Department Code is known.`);
+                }
+
+                // Semester Logic
+                let targetSemester: any = null;
+                if (semesterInput) {
+                    // Try to find matching semester number
+                    const semNum = parseInt(String(semesterInput).replace(/S/i, ''), 10); // "S3" -> 3
+                    if (!isNaN(semNum)) {
+                        targetSemester = await Semester.findOne({
+                            where: { ProgramID: targetProgram.ProgramID, SemesterNumber: semNum },
+                            transaction: t
+                        });
+                    }
+                }
+
+                // Fallback: If no semester input or not found, default to S1
+                if (!targetSemester) {
+                    targetSemester = await Semester.findOne({
+                        where: { ProgramID: targetProgram.ProgramID, SemesterNumber: 1 },
+                        transaction: t
+                    });
+                }
+
+                if (!targetSemester) {
+                    // Auto-create S1 if missing?
+                    targetSemester = await Semester.create({
+                        ProgramID: targetProgram.ProgramID,
+                        SemesterNumber: 1,
+                        SemesterName: 'S1',
+                        IsActive: true
+                    }, { transaction: t });
+                }
+
+                if (!targetSemester) {
+                    throw new Error(`Invalid Semester '${semesterInput}' for Program '${targetProgram.ProgramName}'`);
+                }
+
+
+                // 3. Find/Create User (Login)
+                // Use RegisterNumber as unique identifier instead of email
+                // Default Password: First 4 chars of Name + @123
+                const passwordStr = (name.replace(/\s/g, '').substring(0, 4) + '@123'); // Simple logic
+                const defaultPassword = await bcrypt.hash(passwordStr, 10);
+
+                // Use register number as email (for now, until login system is updated)
+                const userEmail = `${regNo.toLowerCase()}@student.internal`;
+
+                let user = await User.findOne({ where: { Email: userEmail }, transaction: t });
                 if (!user) {
                     user = await User.create({
-                        Email: row.Email,
-                        FullName: row.Name || null,
+                        Email: userEmail,
+                        FullName: name,
                         PasswordHash: defaultPassword,
                         Role: 'student',
                         IsRootAdmin: false
                     }, { transaction: t });
                 } else {
-                    // Update name if missing
-                    if (!user.FullName && row.Name) {
-                        await user.update({ FullName: row.Name }, { transaction: t });
+                    // Always update FullName from Excel import (fresh data takes precedence)
+                    if (name) {
+                        await user.update({ FullName: name }, { transaction: t });
                     }
                 }
 
-                // 3. Resolve Relations
-                const department = await Department.findOne({ where: { DepartmentCode: row.DepartmentCode }, transaction: t });
-                if (!department) throw new Error(`Department Code ${row.DepartmentCode} not found`);
-
-                const program = await Program.findOne({ where: { ProgramName: row.ProgramName }, transaction: t });
-                if (!program) throw new Error(`Program ${row.ProgramName} not found`);
-
-                const semester = await Semester.findOne({
-                    where: { SemesterNumber: row.SemesterNumber, ProgramID: program.ProgramID },
-                    transaction: t
-                });
-
-                if (!semester) throw new Error(`Semester ${row.SemesterNumber} not found for Program ${row.ProgramName}`);
-
                 // 4. Create/Update Student
-                const existingStudent = await Student.findOne({ where: { RegisterNumber: row.RegisterNumber }, transaction: t });
+                const existingStudent = await Student.findOne({ where: { RegisterNumber: regNo }, transaction: t });
 
                 if (existingStudent) {
                     await existingStudent.update({
                         UserID: user.UserID,
-                        DepartmentID: department.DepartmentID,
-                        ProgramID: program.ProgramID,
-                        SemesterID: semester.SemesterID,
-                        BatchYear: row.BatchYear
+                        DepartmentID: targetDept.DepartmentID,
+                        ProgramID: targetProgram.ProgramID,
+                        SemesterID: targetSemester.SemesterID,
+                        BatchYear: derivedBatchYear || existingStudent.BatchYear // derived takes precedence if valid?
                     }, { transaction: t });
                 } else {
                     await Student.create({
                         UserID: user.UserID,
-                        RegisterNumber: row.RegisterNumber,
-                        DepartmentID: department.DepartmentID,
-                        ProgramID: program.ProgramID,
-                        SemesterID: semester.SemesterID,
-                        BatchYear: row.BatchYear
+                        RegisterNumber: regNo,
+                        DepartmentID: targetDept.DepartmentID,
+                        ProgramID: targetProgram.ProgramID,
+                        SemesterID: targetSemester.SemesterID,
+                        BatchYear: derivedBatchYear || new Date().getFullYear() // Fallback
                     }, { transaction: t });
                 }
 
                 successCount++;
             } catch (err: any) {
-                errors.push(`Row error (${row.RegisterNumber}): ${err.message}`);
+                const errorDetail = err.message || JSON.stringify(err, null, 2);
+                const errorMsg = `Row error (${regNo || name}): ${errorDetail}`;
+                errors.push(errorMsg);
+
+                // DEBUG: Log first 5 errors to file
+                if (errors.length <= 5) {
+                    try {
+                        const fs = await import('fs');
+                        const path = await import('path');
+                        fs.appendFileSync(path.resolve('debug_error.log'), `Validation Error: ${errorMsg}\nStack: ${err.stack}\n`);
+                    } catch (e) { }
+                }
             }
         }
 
@@ -338,7 +491,23 @@ export const importStudents = async (req: Request, res: Response) => {
     } catch (error: any) {
         await t.rollback();
         console.error("Bulk Import Error:", error);
-        res.status(500).json({ message: "Internal server error during import", error: error.message });
+
+        // DEBUG: Write error to file for AI Agent to read
+        try {
+            const fs = await import('fs');
+            const path = await import('path');
+            const logPath = path.resolve('debug_error.log');
+            fs.writeFileSync(logPath, `Time: ${new Date().toISOString()}\nError: ${error.message}\nStack: ${error.stack}\n`);
+        } catch (logErr) {
+            console.error("Failed to write debug log", logErr);
+        }
+
+        // Send the actual error message to the frontend for debugging
+        res.status(500).json({
+            message: `Import Failed: ${error.message}`,
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 };
 
@@ -461,31 +630,46 @@ export const updateStudent = async (req: Request, res: Response) => {
 };
 
 export const deleteStudent = async (req: Request, res: Response) => {
-    const t = await sequelize.transaction();
     try {
         const { id } = req.params;
 
-        const student = await Student.findByPk(id as unknown as number, { transaction: t });
-        if (!student) {
-            await t.rollback();
-            return res.status(404).json({ message: "Student not found" });
-        }
+        await sequelize.transaction(async (t) => {
+            const student = await Student.findByPk(id as unknown as number, { transaction: t });
+            if (!student) {
+                throw new Error("Student not found");
+            }
 
-        const userId = student.UserID;
+            const userId = student.UserID;
 
-        // Delete Student first (foreign key constraint likely on UserID)
-        await student.destroy({ transaction: t });
+            // Delete Student first (foreign key constraint likely on UserID)
+            await student.destroy({ transaction: t });
 
-        // Delete User
-        await User.destroy({ where: { UserID: userId }, transaction: t });
+            // Delete User
+            await User.destroy({ where: { UserID: userId }, transaction: t });
+        });
 
-        await t.commit();
         res.json({ message: "Student deleted successfully" });
 
     } catch (error: any) {
-        await t.rollback();
         console.error("Delete Student Error:", error);
-        res.status(500).json({ message: "Failed to delete student", error: error.message });
+        const status = error.message === "Student not found" ? 404 : 500;
+        res.status(status).json({ message: error.message || "Failed to delete student" });
+    }
+};
+
+export const deleteAllStudents = async (req: Request, res: Response) => {
+    try {
+        // Use Managed Transaction to prevent "rollback without begin" errors
+        await sequelize.transaction(async (t) => {
+            // Only Delete Students. Users remain.
+            await Student.destroy({ where: {}, truncate: false, transaction: t });
+        });
+
+        res.status(200).json({ message: "Successfully deleted all student records. User accounts are preserved." });
+
+    } catch (error: any) {
+        console.error("Delete All Students Error:", error);
+        res.status(500).json({ message: "Failed to delete all students", error: error.message });
     }
 };
 

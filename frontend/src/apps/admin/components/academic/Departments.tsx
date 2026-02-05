@@ -1,9 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Input, Button, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure, Chip } from '@heroui/react';
-import { Building2, Plus, Search } from 'lucide-react';
+import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Button, Chip, Spinner } from '@heroui/react';
+import { Building2, Upload, Download, RefreshCw } from 'lucide-react';
 import { academicService } from '../../services/academicService';
-import { Department } from '../../types/academic';
 import { toast } from '../../../../utils/toast';
+
+interface Department {
+    DepartmentID: number;
+    DepartmentCode: string;
+    DepartmentName: string;
+}
 
 interface DepartmentsProps {
     academicYearId: number | null;
@@ -12,17 +17,13 @@ interface DepartmentsProps {
 export const Departments: React.FC<DepartmentsProps> = ({ academicYearId }) => {
     const [departments, setDepartments] = useState<Department[]>([]);
     const [loading, setLoading] = useState(false);
-    const { isOpen, onOpen, onOpenChange } = useDisclosure();
-    const [formData, setFormData] = useState({ DepartmentName: '', DepartmentCode: '' });
+    const [importing, setImporting] = useState(false);
 
     const fetchDepartments = async () => {
-        if (!academicYearId) return;
         try {
             setLoading(true);
-            const res = await academicService.getDepartments({ academicYearId });
-            if (res.data && res.data.success) {
-                setDepartments(res.data.data);
-            }
+            const res = await academicService.getDepartments();
+            setDepartments(res.data || []);
         } catch (error) {
             console.error(error);
             toast.error("Failed to load departments");
@@ -33,86 +34,125 @@ export const Departments: React.FC<DepartmentsProps> = ({ academicYearId }) => {
 
     useEffect(() => {
         fetchDepartments();
-    }, [academicYearId]);
+    }, []);
 
-    const handleCreate = async (onClose: () => void) => {
-        if (!academicYearId) {
-            toast.error("No academic year selected");
-            return;
-        }
-        if (!formData.DepartmentName || !formData.DepartmentCode) {
-            toast.error("Name and Code are required");
-            return;
-        }
+    const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
         try {
-            await academicService.createDepartment({ ...formData, AcademicYearID: academicYearId });
-            toast.success("Department created");
+            setImporting(true);
+            const result = await academicService.importDepartments(file);
+            toast.success(`Imported ${result.successCount} departments successfully`);
+            if (result.errorCount > 0) {
+                toast.error(`${result.errorCount} errors occurred`);
+            }
             fetchDepartments();
-            onClose();
         } catch (error: any) {
-            toast.error(error.response?.data?.message || "Failed to create");
+            toast.error(error.response?.data?.message || "Import failed");
+        } finally {
+            setImporting(false);
+            event.target.value = ''; // Reset file input
         }
     };
 
-    if (!academicYearId) {
-        return (
-            <div className="flex flex-col items-center justify-center p-12 text-center text-slate-400">
-                <Building2 size={48} className="mb-4 opacity-50" />
-                <p className="font-semibold text-lg">Please select an Academic Year first</p>
-            </div>
-        );
-    }
+    const handleDownloadTemplate = async () => {
+        try {
+            await academicService.downloadDepartmentTemplate();
+            toast.success("Template downloaded");
+        } catch (error) {
+            toast.error("Failed to download template");
+        }
+    };
 
     return (
         <div className="flex flex-col gap-6">
+            {/* Header */}
             <div className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                    <h3 className="text-xl font-bold text-slate-800">Departments</h3>
-                    <Chip size="sm" variant="flat" color="primary">{departments.length}</Chip>
+                <div className="flex items-center gap-3">
+                    <div className="bg-blue-50 p-2.5 rounded-lg">
+                        <Building2 size={20} className="text-blue-600" />
+                    </div>
+                    <div>
+                        <h3 className="text-xl font-bold text-slate-800">Departments</h3>
+                        <p className="text-sm text-slate-500">Manage academic departments via Excel import</p>
+                    </div>
                 </div>
-                <Button color="primary" onPress={onOpen} startContent={<Plus size={20} />} className="font-semibold text-white">
-                    Add Department
+                <div className="flex items-center gap-2">
+                    <Chip size="sm" variant="flat" color="primary">{departments.length} Total</Chip>
+                </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+                <Button
+                    color="primary"
+                    className="font-semibold text-white"
+                    startContent={<Upload size={18} />}
+                    onPress={() => document.getElementById('dept-file-input')?.click()}
+                    isLoading={importing}
+                >
+                    Import Departments
+                </Button>
+                <input
+                    id="dept-file-input"
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={handleImport}
+                    className="hidden"
+                />
+                <Button
+                    variant="bordered"
+                    startContent={<Download size={18} />}
+                    onPress={handleDownloadTemplate}
+                    className="font-medium"
+                >
+                    Download Template
+                </Button>
+                <Button
+                    variant="light"
+                    isIconOnly
+                    onPress={fetchDepartments}
+                    isLoading={loading}
+                >
+                    <RefreshCw size={18} />
                 </Button>
             </div>
 
-            <Table aria-label="Departments Table">
-                <TableHeader>
-                    <TableColumn>CODE</TableColumn>
-                    <TableColumn>NAME</TableColumn>
-                    <TableColumn>STATUS</TableColumn>
-                </TableHeader>
-                <TableBody emptyContent="No departments found for this year.">
-                    {departments.map(dept => (
-                        <TableRow key={dept.DepartmentID}>
-                            <TableCell><span className="font-mono font-bold text-slate-700">{dept.DepartmentCode}</span></TableCell>
-                            <TableCell><span className="font-medium text-slate-900">{dept.DepartmentName}</span></TableCell>
-                            <TableCell>
-                                <Chip size="sm" color={dept.IsActive ? "success" : "default"} variant="flat">
-                                    {dept.IsActive ? "Active" : "Inactive"}
-                                </Chip>
-                            </TableCell>
-                        </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
-
-            <Modal isOpen={isOpen} onOpenChange={onOpenChange} backdrop="blur">
-                <ModalContent>
-                    {(onClose) => (
-                        <>
-                            <ModalHeader className="flex flex-col gap-1">Add Department</ModalHeader>
-                            <ModalBody>
-                                <Input label="Department Code" placeholder="e.g. CSE" value={formData.DepartmentCode} onValueChange={v => setFormData({ ...formData, DepartmentCode: v })} variant="bordered" labelPlacement="outside" />
-                                <Input label="Department Name" placeholder="e.g. Computer Science" value={formData.DepartmentName} onValueChange={v => setFormData({ ...formData, DepartmentName: v })} variant="bordered" labelPlacement="outside" />
-                            </ModalBody>
-                            <ModalFooter>
-                                <Button variant="light" onPress={onClose}>Cancel</Button>
-                                <Button color="primary" className="text-white" onPress={() => handleCreate(onClose)}>Create</Button>
-                            </ModalFooter>
-                        </>
-                    )}
-                </ModalContent>
-            </Modal>
+            {/* Table */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+                <Table
+                    aria-label="Departments Table"
+                    classNames={{
+                        wrapper: "shadow-none",
+                        th: "bg-slate-50 text-slate-600 font-semibold",
+                    }}
+                >
+                    <TableHeader>
+                        <TableColumn>CODE</TableColumn>
+                        <TableColumn>DEPARTMENT NAME</TableColumn>
+                    </TableHeader>
+                    <TableBody
+                        emptyContent={
+                            loading ? <Spinner /> : "No departments found. Import departments to get started."
+                        }
+                        isLoading={loading}
+                    >
+                        {departments.map(dept => (
+                            <TableRow key={dept.DepartmentID}>
+                                <TableCell>
+                                    <span className="font-mono font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded">
+                                        {dept.DepartmentCode}
+                                    </span>
+                                </TableCell>
+                                <TableCell>
+                                    <span className="font-medium text-slate-900">{dept.DepartmentName}</span>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </div>
         </div>
     );
 };

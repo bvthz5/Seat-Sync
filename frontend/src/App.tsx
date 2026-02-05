@@ -10,13 +10,13 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/" element={<Navigate to="/admin" replace />} /> {/* Redirect root to admin for now */}
+          <Route path="/" element={<Navigate to="/admin" replace />} />
 
+          {/* Admin App */}
           <Route path="/admin/*" element={<AdminApp />} />
 
           {/* Placeholders for other apps */}
           <Route path="/student/*" element={<div>Student App Placeholder</div>} />
-          <Route path="/invigilator/*" element={<div>Invigilator App Placeholder</div>} />
 
           <Route path="*" element={<div>404 Not Found</div>} />
         </Routes>

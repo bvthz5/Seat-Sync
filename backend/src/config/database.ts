@@ -121,7 +121,7 @@ async function ensureSchemaIntegrity() {
             END
         `, { type: QueryTypes.RAW });
 
-        // Add IsActive if not exists
+        // Add IsActive to Departments
         await sequelize.query(`
             IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Departments' AND TABLE_SCHEMA = 'dbo')
             BEGIN
@@ -132,7 +132,99 @@ async function ensureSchemaIntegrity() {
                 )
                 BEGIN
                     ALTER TABLE [dbo].[Departments] ADD [IsActive] BIT NOT NULL DEFAULT 1;
-                    PRINT 'Added IsActive';
+                    PRINT 'Added IsActive to Departments';
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
+        // Add IsActive and AcademicYearID to Programs (Fix for Import Error)
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Programs' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Programs]') 
+                    AND name = 'AcademicYearID'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Programs] ADD [AcademicYearID] INT NULL;
+                    PRINT 'Added AcademicYearID to Programs';
+                END
+
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Programs]') 
+                    AND name = 'IsActive'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Programs] ADD [IsActive] BIT NOT NULL DEFAULT 1;
+                    PRINT 'Added IsActive to Programs';
+                END
+
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Programs]') 
+                    AND name = 'DepartmentID'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Programs] ADD [DepartmentID] INT NULL;
+                    PRINT 'Added DepartmentID to Programs';
+                END
+
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Programs]') 
+                    AND name = 'ProgramCode'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Programs] ADD [ProgramCode] NVARCHAR(20) NULL;
+                    PRINT 'Added ProgramCode to Programs';
+                END
+
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Programs]') 
+                    AND name = 'DurationYears'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Programs] ADD [DurationYears] INT NULL;
+                    PRINT 'Added DurationYears to Programs';
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
+        // Add IsActive and SemesterName to Semesters (Fix for Import Error)
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Semesters' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Semesters]') 
+                    AND name = 'IsActive'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Semesters] ADD [IsActive] BIT NOT NULL DEFAULT 1;
+                    PRINT 'Added IsActive to Semesters';
+                END
+
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Semesters]') 
+                    AND name = 'SemesterName'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Semesters] ADD [SemesterName] NVARCHAR(50) NULL;
+                    PRINT 'Added SemesterName to Semesters';
+                END
+
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Semesters]') 
+                    AND name = 'AcademicYearID'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Semesters] ADD [AcademicYearID] INT NULL;
+                    PRINT 'Added AcademicYearID to Semesters';
                 END
             END
         `, { type: QueryTypes.RAW });

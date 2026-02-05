@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Card, CardBody, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip, Pagination, Input, User as UserAvatar, Tooltip, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Popover, PopoverTrigger, PopoverContent, Select, SelectItem, Badge } from '@heroui/react';
-import { Plus, Search, FileSpreadsheet, MoreVertical, Filter, Download, Pencil, Trash2, AlertTriangle, X, Check, Building2, GraduationCap, BookOpen, Calendar } from 'lucide-react';
+import { Plus, Search, FileSpreadsheet, MoreVertical, Filter, Download, Pencil, Trash2, AlertTriangle, X, Check, Building2, GraduationCap, BookOpen, Calendar, Mail, FileDown } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import api from '../../../services/api';
-import { BulkImportModal } from '../components/students/BulkImportModal';
+import StudentImportModal from '../components/students/StudentImportModal';
 import { AddStudentModal } from '../components/students/AddStudentModal';
 import { EditStudentModal } from '../components/students/EditStudentModal';
 import { useDebounce } from '../../../hooks/useDebounce';
@@ -22,6 +22,7 @@ interface Student {
 }
 
 const Students: React.FC = () => {
+    // --- State Management ---
     const [students, setStudents] = useState<Student[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [page, setPage] = useState(1);
@@ -34,64 +35,38 @@ const Students: React.FC = () => {
         totalDatabaseCount: 0
     });
 
-    // Search & Filter State
     const [searchQuery, setSearchQuery] = useState("");
     const debouncedSearch = useDebounce(searchQuery, 500);
-    const [filters, setFilters] = useState({
-        dept: "",
-        program: "",
-        semester: ""
-    });
+    const [filters, setFilters] = useState({ dept: "", program: "", semester: "" });
+    const [tempFilters, setTempFilters] = useState({ dept: "", program: "", semester: "" });
 
-    // Master Data for Filters
     const [departments, setDepartments] = useState<any[]>([]);
     const [programs, setPrograms] = useState<any[]>([]);
     const [semesters, setSemesters] = useState<any[]>([]);
 
-    // Modals
-    const [isImportOpen, setIsImportOpen] = useState(false);
     const [isAddOpen, setIsAddOpen] = useState(false);
+    const [isImportOpen, setIsImportOpen] = useState(false);
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-    const [isFilterOpen, setIsFilterOpen] = useState(false); // New Filter Modal State
-
-    // Temp state for filter modal
-    const [tempFilters, setTempFilters] = useState(filters);
+    const [isDeleteAllOpen, setIsDeleteAllOpen] = useState(false);
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
 
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
 
-    // Fetch Master Data
-    useEffect(() => {
-        const fetchMeta = async () => {
-            try {
-                const res = await api.get('/students/meta/create-options');
-                setDepartments(res.data.departments);
-                setPrograms(res.data.programs);
-                setSemesters(res.data.semesters);
-            } catch (err) {
-                console.error("Failed to load filters", err);
-            }
-        };
-        fetchMeta();
-    }, []);
-
+    // --- Data Fetching ---
     const fetchStudents = async () => {
         setIsLoading(true);
         try {
-            const params = new URLSearchParams({
-                page: page.toString(),
-                limit: "10",
-                search: debouncedSearch,
-                ...(filters.dept && { dept: filters.dept }),
-                ...(filters.program && { program: filters.program }),
-                ...(filters.semester && { semester: filters.semester })
+            const res = await api.get('/students', {
+                params: { page, limit: 10, search: debouncedSearch, ...filters }
             });
+            setStudents(res.data.students);
+            setTotalPages(res.data.totalPages);
+            setTotalStudents(res.data.total);
 
-            const response = await api.get(`/students?${params.toString()}`);
-            setStudents(response.data.students);
-            setTotalPages(response.data.totalPages);
-            setTotalStudents(response.data.totalItems);
-            if (response.data.stats) setStats(response.data.stats);
+            // Dummy Stats for now (replace with API call if available)
+            setStats(prev => ({ ...prev, totalDatabaseCount: res.data.total }));
+
         } catch (error) {
             console.error("Failed to fetch students", error);
             toast.error("Failed to load students");
@@ -100,11 +75,17 @@ const Students: React.FC = () => {
         }
     };
 
-    // Refetch when dependencies change
+    // Initial Load & Dependencies
     useEffect(() => {
         fetchStudents();
+        // Load filter data (mock or api)
+        // api.get('/departments').then(res => setDepartments(res.data)).catch(console.error);
+        // api.get('/programs').then(res => setPrograms(res.data)).catch(console.error);
+        // api.get('/semesters').then(res => setSemesters(res.data)).catch(console.error);
     }, [page, debouncedSearch, filters]);
 
+
+    // --- Handlers ---
     const handleEdit = (student: Student) => {
         setSelectedStudent(student);
         setIsEditOpen(true);
@@ -122,9 +103,19 @@ const Students: React.FC = () => {
             toast.success("Student deleted successfully");
             setIsDeleteOpen(false);
             fetchStudents();
+        } catch (error) {
+            toast.error("Failed to delete student");
+        }
+    };
+
+    const handleDeleteAll = async () => {
+        try {
+            await api.delete('/students/delete-all');
+            toast.success("All student profiles deleted.");
+            setIsDeleteAllOpen(false);
+            fetchStudents();
         } catch (error: any) {
-            console.error("Delete failed", error);
-            toast.error(error.response?.data?.message || "Failed to delete student");
+            toast.error(error.response?.data?.message || "Delete all failed");
         }
     };
 
@@ -135,68 +126,54 @@ const Students: React.FC = () => {
 
     const applyFilters = () => {
         setFilters(tempFilters);
-        setPage(1);
         setIsFilterOpen(false);
     };
 
     const clearFilters = () => {
-        setFilters({ dept: "", program: "", semester: "" });
         setTempFilters({ dept: "", program: "", semester: "" });
-        setPage(1);
-        setIsFilterOpen(false);
+        setFilters({ dept: "", program: "", semester: "" });
     };
+
+    const handleExport = () => {
+        toast("Export functionality coming soon!");
+    };
+
+    const filteredFilterSemesters = semesters; // Logic to filter semesters based on program can go here
 
     const activeFiltersCount = Object.values(filters).filter(Boolean).length;
 
-    const filteredFilterSemesters = tempFilters.program
-        ? semesters.filter(s => s.ProgramID === parseInt(tempFilters.program))
-        : semesters;
-
-    const handleExport = async () => {
-        try {
-            const params = new URLSearchParams({
-                search: debouncedSearch,
-                ...(filters.dept && { dept: filters.dept }),
-                ...(filters.program && { program: filters.program }),
-                ...(filters.semester && { semester: filters.semester })
-            });
-
-            const response = await api.get(`/students/export?${params.toString()}`, {
-                responseType: 'blob'
-            });
-
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', 'students.xlsx');
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-        } catch (error) {
-            console.error("Export failed", error);
-            toast.error("Failed to export students");
-        }
-    };
-
     return (
-        <div className="flex flex-col gap-8 max-w-[1600px] mx-auto">
+        <div className="flex flex-col gap-8 max-w-[1600px] mx-auto min-h-screen pb-10">
             {/* Header Section */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-gray-100  pb-6">
-                <div>
-                    <h1 className="text-3xl font-bold text-gray-900  tracking-tight">Students</h1>
-                    <p className="text-gray-500  mt-1">Manage student records, enrollments, and academic details.</p>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 pb-6 border-b border-gray-200/50">
+                <div className="space-y-1">
+                    <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
+                        Students Directory
+                    </h1>
+                    <p className="text-gray-500 font-medium max-w-lg">
+                        Manage student enrollments, academic progress, and database records.
+                    </p>
                 </div>
                 <div className="flex gap-3">
                     <Button
-                        className="bg-white  border border-gray-200  text-gray-700  font-medium shadow-sm hover:bg-gray-50 "
-                        variant="light"
-                        startContent={<FileSpreadsheet size={18} className="text-gray-500" />}
-                        onPress={() => setIsImportOpen(true)}
+                        className="bg-white border border-red-200 text-red-600 font-medium shadow-sm hover:bg-red-50 transition-all"
+                        variant="flat"
+                        color="danger"
+                        startContent={<Trash2 size={18} />}
+                        onPress={() => setIsDeleteAllOpen(true)}
                     >
-                        Import from Excel
+                        Delete All
                     </Button>
                     <Button
-                        className="bg-gray-900  text-white  font-medium shadow-md shadow-gray-200 "
+                        className="bg-white border border-gray-200 text-gray-700 font-medium shadow-sm hover:shadow transition-all"
+                        variant="light"
+                        startContent={<FileSpreadsheet size={18} className="text-emerald-600" />}
+                        onPress={() => setIsImportOpen(true)}
+                    >
+                        Import Excel
+                    </Button>
+                    <Button
+                        className="bg-gray-900 text-white font-medium shadow-lg shadow-gray-900/20 hover:scale-[1.02] transition-transform"
                         startContent={<Plus size={18} />}
                         onPress={() => setIsAddOpen(true)}
                     >
@@ -205,383 +182,169 @@ const Students: React.FC = () => {
                 </div>
             </div>
 
-            {/* Stats Overview */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card className="border border-gray-100  shadow-sm bg-white ">
-                    <CardBody className="flex flex-row items-center gap-4 p-4">
-                        <div className="p-3 rounded-xl bg-primary/10 text-primary">
-                            <Building2 size={24} strokeWidth={2.5} />
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium text-gray-500 ">Departments</p>
-                            <div className="text-2xl font-bold text-gray-900 ">
-                                {stats.activeDepartments}
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                {[
+                    { title: "Departments", value: stats.activeDepartments, icon: Building2, color: "text-blue-600", bg: "bg-blue-50" },
+                    { title: "Active Batches", value: stats.activeBatches, icon: Calendar, color: "text-purple-600", bg: "bg-purple-50" },
+                    { title: "Incomplete", value: stats.incompleteProfiles, icon: AlertTriangle, color: "text-orange-600", bg: "bg-orange-50" },
+                    { title: "Total Students", value: totalStudents, sub: `/ ${stats.totalDatabaseCount}`, icon: GraduationCap, color: "text-emerald-600", bg: "bg-emerald-50" }
+                ].map((stat, idx) => (
+                    <Card key={idx} className="border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                        <CardBody className="flex flex-row items-center gap-4 p-5">
+                            <div className={`p-3.5 rounded-2xl ${stat.bg} ${stat.color}`}>
+                                <stat.icon size={24} strokeWidth={2.5} />
                             </div>
-                        </div>
-                    </CardBody>
-                </Card>
-
-                <Card className="border border-gray-100  shadow-sm bg-white ">
-                    <CardBody className="flex flex-row items-center gap-4 p-4">
-                        <div className="p-3 rounded-xl bg-secondary/10 text-secondary">
-                            <Calendar size={24} strokeWidth={2.5} />
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium text-gray-500 ">Active Batches</p>
-                            <div className="text-2xl font-bold text-gray-900 ">
-                                {stats.activeBatches}
+                            <div>
+                                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{stat.title}</p>
+                                <div className="flex items-baseline gap-1.5 mt-0.5">
+                                    <span className="text-2xl font-bold text-gray-900">{stat.value}</span>
+                                    {stat.sub && <span className="text-sm font-medium text-gray-400">{stat.sub}</span>}
+                                </div>
                             </div>
-                        </div>
-                    </CardBody>
-                </Card>
-
-                <Card className="border border-gray-100  shadow-sm bg-white ">
-                    <CardBody className="flex flex-row items-center gap-4 p-4">
-                        <div className="p-3 rounded-xl bg-warning/10 text-warning">
-                            <AlertTriangle size={24} strokeWidth={2.5} />
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium text-gray-500 ">Incomplete</p>
-                            <div className="text-2xl font-bold text-gray-900 ">
-                                {stats.incompleteProfiles}
-                            </div>
-                        </div>
-                    </CardBody>
-                </Card>
-
-                <Card className="border border-green-200  shadow-sm bg-green-50 ">
-                    <CardBody className="flex flex-row items-center gap-4 p-4">
-                        <div className="p-3 rounded-xl bg-white/60  text-green-600 ">
-                            <Check size={24} strokeWidth={2.5} />
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium text-green-800/70 ">Eligible</p>
-                            <div className="flex items-baseline gap-1">
-                                <span className="text-2xl font-bold text-green-900 ">{totalStudents}</span>
-                                <span className="text-sm font-medium text-green-700/60 ">/ {stats.totalDatabaseCount}</span>
-                            </div>
-                        </div>
-                    </CardBody>
-                </Card>
+                        </CardBody>
+                    </Card>
+                ))}
             </div>
 
-            {/* Filters & Actions Bar */}
-            <div className="flex flex-col sm:flex-row justify-between gap-4 items-center bg-white  p-4 rounded-2xl border border-gray-100  shadow-sm">
-                <div className="w-full sm:w-96">
-                    <Input
-                        classNames={{
-                            base: "max-w-full sm:max-w-md h-10",
-                            mainWrapper: "h-full",
-                            inputWrapper: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 shadow-sm rounded-xl h-10 transition-all",
-                            input: "bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
-                        }}
-                        placeholder="Search by name, email, or register no..."
-                        startContent={<Search size={18} className="text-gray-400 mr-2" />}
-                        value={searchQuery}
-                        onValueChange={(val) => {
-                            setSearchQuery(val);
-                            setPage(1); // Reset page on search
-                        }}
-                        isClearable
-                        onClear={() => setSearchQuery("")}
-                    />
-                </div>
-                <div className="flex gap-2">
+            {/* Actions Bar */}
+            <div className="flex flex-col sm:flex-row justify-between gap-4 items-center bg-white p-2 rounded-2xl border border-gray-100 shadow-sm">
+                <Input
+                    classNames={{
+                        base: "w-full sm:w-96",
+                        inputWrapper: "bg-transparent shadow-none hover:bg-gray-50 focus-within:!bg-gray-50 border-0 ring-0 data-[hover=true]:bg-gray-50",
+                        input: "text-base",
+                    }}
+                    placeholder="Search by name, Reg No, or email..."
+                    startContent={<Search size={18} className="text-gray-400 mr-2" />}
+                    value={searchQuery}
+                    onValueChange={(val) => { setSearchQuery(val); setPage(1); }}
+                    isClearable
+                    onClear={() => setSearchQuery("")}
+                />
+
+                <div className="flex items-center gap-2 pr-2">
+                    {/* Filter Button */}
                     <Button
                         variant={activeFiltersCount > 0 ? "flat" : "light"}
                         color={activeFiltersCount > 0 ? "primary" : "default"}
-                        className={`font-medium ${activeFiltersCount > 0 ? "bg-primary/10 text-primary" : "text-gray-600 "}`}
+                        className={`font-medium min-w-[100px] ${activeFiltersCount > 0 ? "bg-primary/10 text-primary" : "text-gray-600"}`}
                         startContent={<Filter size={18} />}
                         onPress={openFilters}
                     >
-                        Filter
-                        {activeFiltersCount > 0 && (
-                            <span className="ml-2 bg-primary text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                                {activeFiltersCount}
-                            </span>
-                        )}
+                        Filter {activeFiltersCount > 0 && <Badge content={activeFiltersCount} color="primary" size="sm" shape="circle" className="border-none shadow-sm ml-1" />}
                     </Button>
-                    <Modal
-                        isOpen={isFilterOpen}
-                        onClose={() => setIsFilterOpen(false)}
-                        size="sm"
-                        classNames={{
-                            base: "bg-white  border border-gray-100  shadow-2xl rounded-2xl",
-                            header: "border-b border-gray-100  p-6",
-                            body: "p-6",
-                            footer: "border-t border-gray-100  p-6 bg-gray-50/50 ",
-                            closeButton: "hover:bg-gray-100  active:bg-gray-200  p-2 rounded-full transition-colors right-4 top-4"
-                        }}
-                    >
-                        <ModalContent>
-                            <ModalHeader className="flex flex-col gap-1">
-                                <div className="flex items-center gap-2">
-                                    <div className="p-2 rounded-lg bg-primary/10 text-primary">
-                                        <Filter size={18} />
-                                    </div>
-                                    <span className="text-lg font-bold text-gray-900 ">Filter Students</span>
-                                </div>
-                                <p className="text-xs font-normal text-gray-500">Refine the student list by selecting criteria below.</p>
-                            </ModalHeader>
-                            <ModalBody>
-                                <div className="space-y-5">
-                                    <div className="space-y-1.5">
-                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider ml-1">Department</label>
-                                        <Select
-                                            placeholder="Select Department"
-                                            size="md"
-                                            selectedKeys={tempFilters.dept ? [tempFilters.dept] : []}
-                                            onChange={(e) => setTempFilters(prev => ({ ...prev, dept: e.target.value }))}
-                                            startContent={<Building2 size={18} className="text-gray-400 mr-2 group-hover:text-primary transition-colors" />}
-                                            classNames={{
-                                                mainWrapper: "w-full",
-                                                trigger: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 shadow-sm rounded-xl h-12 transition-all",
-                                                popoverContent: "bg-white border border-gray-100 shadow-xl w-full",
-                                                value: "text-small text-gray-700 group-data-[has-value=true]:text-gray-900 font-medium pl-1",
-                                                selectorIcon: "hidden"
-                                            }}
-                                        >
-                                            {departments.map((d) => (
-                                                <SelectItem key={d.DepartmentID} textValue={d.DepartmentName} classNames={{ base: "rounded-lg" }}>
-                                                    {d.DepartmentName}
-                                                </SelectItem>
-                                            ))}
-                                        </Select>
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider ml-1">Program</label>
-                                        <Select
-                                            placeholder="Select Program"
-                                            size="md"
-                                            selectedKeys={tempFilters.program ? [tempFilters.program] : []}
-                                            onChange={(e) => setTempFilters(prev => ({ ...prev, program: e.target.value }))}
-                                            startContent={<GraduationCap size={18} className="text-gray-400 mr-2 group-hover:text-primary transition-colors" />}
-                                            classNames={{
-                                                mainWrapper: "w-full",
-                                                trigger: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 shadow-sm rounded-xl h-12 transition-all",
-                                                popoverContent: "bg-white border border-gray-100 shadow-xl w-full",
-                                                value: "text-small text-gray-700 group-data-[has-value=true]:text-gray-900 font-medium pl-1",
-                                                selectorIcon: "hidden"
-                                            }}
-                                        >
-                                            {programs.map((p) => (
-                                                <SelectItem key={p.ProgramID} textValue={p.ProgramName} classNames={{ base: "rounded-lg" }}>
-                                                    {p.ProgramName}
-                                                </SelectItem>
-                                            ))}
-                                        </Select>
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider ml-1">Semester</label>
-                                        <Select
-                                            placeholder="Select Semester"
-                                            size="md"
-                                            selectedKeys={tempFilters.semester ? [tempFilters.semester] : []}
-                                            onChange={(e) => setTempFilters(prev => ({ ...prev, semester: e.target.value }))}
-                                            isDisabled={!tempFilters.program}
-                                            startContent={<BookOpen size={18} className="text-gray-400 mr-2 group-hover:text-primary transition-colors" />}
-                                            classNames={{
-                                                mainWrapper: "w-full",
-                                                trigger: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 shadow-sm rounded-xl h-12 transition-all",
-                                                popoverContent: "bg-white border border-gray-100 shadow-xl w-full",
-                                                value: "text-small text-gray-700 group-data-[has-value=true]:text-gray-900 font-medium pl-1",
-                                                selectorIcon: "hidden"
-                                            }}
-                                        >
-                                            {filteredFilterSemesters.map((s) => (
-                                                <SelectItem key={s.SemesterID} textValue={s.SemesterNumber.toString()} classNames={{ base: "rounded-lg" }}>
-                                                    Semester {s.SemesterNumber}
-                                                </SelectItem>
-                                            ))}
-                                        </Select>
-                                    </div>
-                                </div>
-                            </ModalBody>
-                            <ModalFooter className="flex justify-between items-center">
-                                <Button
-                                    variant="flat"
-                                    color="danger"
-                                    className="bg-red-50 text-red-600   font-medium"
-                                    onPress={clearFilters}
-                                >
-                                    Reset
-                                </Button>
-                                <div className="flex gap-3">
-                                    <Button variant="light" onPress={() => setIsFilterOpen(false)} className="font-semibold text-gray-500">
-                                        Cancel
-                                    </Button>
-                                    <Button
-                                        className="bg-black  text-white  font-bold shadow-lg shadow-black/20 "
-                                        onPress={applyFilters}
-                                    >
-                                        Apply Filters
-                                    </Button>
-                                </div>
-                            </ModalFooter>
-                        </ModalContent>
-                    </Modal>
-                    <Button
-                        isIconOnly
-                        variant="flat"
-                        className="bg-gray-50  text-gray-600 "
-                        onPress={handleExport}
-                    >
-                        <Download size={18} />
-                    </Button>
+                    <div className="h-6 w-px bg-gray-200 mx-1"></div>
+                    <Tooltip content="Export to Excel">
+                        <Button isIconOnly variant="light" className="text-gray-500 hover:text-green-600" onPress={handleExport}>
+                            <FileDown size={20} />
+                        </Button>
+                    </Tooltip>
                 </div>
             </div>
 
-            {/* Table Card */}
-            <Card className="border border-gray-100  shadow-sm rounded-2xl overflow-hidden bg-white ">
-                <CardBody className="p-0">
-                    <Table
-                        aria-label="Students Table"
-                        shadow="none"
-                        classNames={{
-                            wrapper: "p-0",
-                            th: "bg-gray-50/50  text-gray-500 font-medium text-xs uppercase tracking-wider h-12 border-b border-gray-100 ",
-                            td: "py-4 border-b border-gray-50  group-last:border-none",
-                            table: "min-h-[400px]"
-                        }}
-                        bottomContent={
-                            totalPages > 1 && (
-                                <div className="flex w-full justify-center items-center px-6 py-4 border-t border-gray-100 ">
-                                    <Pagination
-                                        showControls
-                                        disableCursorAnimation
-                                        total={totalPages}
-                                        page={page}
-                                        onChange={setPage}
-                                        variant="light"
-                                        radius="md"
-                                        classNames={{
-                                            wrapper: "gap-2",
-                                            item: "w-8 h-8 text-small font-medium text-gray-500 rounded-lg transition-colors data-[active=true]:bg-gray-100  data-[active=true]:text-gray-900  data-[active=true]:font-bold hover:bg-gray-50 ",
-                                            prev: "hover:bg-gray-50  rounded-lg",
-                                            next: "hover:bg-gray-50  rounded-lg",
+            {/* Table */}
+            <Card className="border border-gray-100 shadow-sm rounded-2xl overflow-hidden bg-white">
+                <Table
+                    aria-label="Students Table"
+                    shadow="none"
+                    classNames={{
+                        wrapper: "p-0",
+                        th: "bg-gray-50/70 text-gray-500 font-medium text-xs uppercase tracking-wider h-12 border-b border-gray-100 pl-6",
+                        td: "py-4 border-b border-gray-50 group-last:border-none pl-6",
+                        table: "min-h-[400px]"
+                    }}
+                    bottomContent={
+                        totalPages > 1 && (
+                            <div className="flex w-full justify-center px-4 py-4 border-t border-gray-100 bg-white">
+                                <Pagination
+                                    total={totalPages}
+                                    page={page}
+                                    onChange={setPage}
+                                    color="default"
+                                    variant="light"
+                                    showControls
+                                    classNames={{
+                                        cursor: "bg-gray-900 text-white font-bold"
+                                    }}
+                                />
+                            </div>
+                        )
+                    }
+                >
+                    <TableHeader>
+                        <TableColumn>STUDENT DETAILS</TableColumn>
+                        <TableColumn>ACADEMIC INFO</TableColumn>
+                        <TableColumn>BATCH</TableColumn>
+                        <TableColumn align="end">ACTIONS</TableColumn>
+                    </TableHeader>
+                    <TableBody
+                        emptyContent={
+                            <div className="flex flex-col items-center justify-center p-12 text-center text-gray-400">
+                                <FileSpreadsheet size={48} className="text-gray-300 mb-4 opacity-50" />
+                                <p className="text-lg font-semibold text-gray-700">No students found</p>
+                                <p className="text-sm text-gray-500 mt-1">Try adjusting filters or import a new batch.</p>
+                            </div>
+                        }
+                        items={students}
+                        isLoading={isLoading}
+                    >
+                        {(item) => (
+                            <TableRow key={item.StudentID} className="hover:bg-gray-50/50 transition-colors group">
+                                <TableCell>
+                                    <UserAvatar
+                                        name={item.User?.FullName || "Unknown"}
+                                        description={<span className="font-mono text-xs text-blue-600/80 bg-blue-50 px-1.5 py-0.5 rounded">{item.RegisterNumber}</span>}
+                                        avatarProps={{
+                                            radius: "lg",
+                                            src: `https://api.dicebear.com/7.x/initials/svg?seed=${item.RegisterNumber}`,
+                                            classNames: { base: "bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-semibold ring-2 ring-white shadow-sm" }
                                         }}
                                     />
-                                </div>
-                            )
-                        }
-                    >
-                        <TableHeader>
-                            <TableColumn>STUDENT</TableColumn>
-                            <TableColumn>REGISTER NO.</TableColumn>
-                            <TableColumn>DEPARTMENT</TableColumn>
-                            <TableColumn>PROGRAM</TableColumn>
-                            <TableColumn>SEMESTER</TableColumn>
-                            <TableColumn>BATCH</TableColumn>
-                            <TableColumn>ACTIONS</TableColumn>
-                        </TableHeader>
-                        <TableBody
-                            emptyContent={
-                                <div className="flex flex-col items-center justify-center p-12 text-center text-gray-400">
-                                    <div className="p-6 bg-gray-50  rounded-full mb-4">
-                                        <FileSpreadsheet size={48} className="text-gray-300 " />
-                                    </div>
-                                    <p className="text-lg font-semibold text-gray-700 ">No students found</p>
-                                    <p className="text-sm text-gray-500 max-w-xs mt-1">Try adjusting your search or add new students to the system.</p>
-                                </div>
-                            }
-                            items={students}
-                            isLoading={isLoading}
-                        >
-                            {(item) => (
-                                <TableRow key={item.StudentID} className="hover:bg-gray-50/50  transition-colors group">
-                                    <TableCell>
-                                        <UserAvatar
-                                            name={item.User?.FullName || item.User?.Email?.split('@')[0] || "Student"}
-                                            description={item.User?.Email}
-                                            avatarProps={{
-                                                radius: "lg",
-                                                src: `https://api.dicebear.com/7.x/initials/svg?seed=${item.RegisterNumber}`,
-                                                classNames: { base: "bg-primary/10 text-primary font-semibold" }
-                                            }}
-                                        />
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="font-semibold text-gray-700  font-mono text-sm">{item.RegisterNumber}</div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Chip size="sm" variant="dot" color="primary" classNames={{ content: "font-semibold text-gray-600 " }}>
-                                            {item.Department?.DepartmentCode}
-                                        </Chip>
-                                    </TableCell>
-                                    <TableCell>
-                                        <span className="text-gray-600 ">{item.Program?.ProgramName}</span>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center gap-1">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                                            <span className="text-gray-600  font-medium">Sem {item.Semester?.SemesterNumber}</span>
+                                </TableCell>
+                                <TableCell>
+                                    <div className="flex flex-col gap-1">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-gray-700 px-2 py-0.5 bg-gray-100 rounded border border-gray-200">{item.Department?.DepartmentCode}</span>
+                                            <span className="text-sm text-gray-600">{item.Program?.ProgramName}</span>
                                         </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <span className="px-2 py-1 rounded-md bg-gray-100  text-xs font-semibold text-gray-500">
-                                            {item.BatchYear}
+                                        <span className="text-xs text-gray-400 font-medium flex items-center gap-1">
+                                            <BookOpen size={12} /> Semester {item.Semester?.SemesterNumber}
                                         </span>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex justify-end items-center gap-2">
-                                            <Dropdown placement="bottom-end" disableAnimation>
-                                                <DropdownTrigger>
-                                                    <Button
-                                                        size="sm"
-                                                        color="danger"
-                                                        variant="flat"
-                                                        className="font-medium"
-                                                    >
-                                                        Action
-                                                    </Button>
-                                                </DropdownTrigger>
-                                                <DropdownMenu
-                                                    aria-label="Student Actions"
-                                                    className="bg-white  border border-gray-100  rounded-xl shadow-xl p-1"
-                                                    itemClasses={{
-                                                        base: "rounded-lg data-[hover=true]:bg-gray-100 "
-                                                    }}
-                                                >
-                                                    <DropdownItem
-                                                        key="edit"
-                                                        startContent={<Pencil size={16} />}
-                                                        onPress={() => handleEdit(item)}
-                                                    >
-                                                        Edit Details
-                                                    </DropdownItem>
-                                                    <DropdownItem
-                                                        key="delete"
-                                                        className="text-red-600 "
-                                                        color="danger"
-                                                        startContent={<Trash2 size={16} />}
-                                                        onPress={() => confirmDelete(item)}
-                                                    >
-                                                        Delete
-                                                    </DropdownItem>
-                                                </DropdownMenu>
-                                            </Dropdown>
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table >
-                </CardBody >
-            </Card >
+                                    </div>
+                                </TableCell>
+                                <TableCell>
+                                    <Chip size="sm" variant="flat" className="bg-emerald-50 text-emerald-700 font-medium border border-emerald-100">
+                                        Batch {item.BatchYear}
+                                    </Chip>
+                                </TableCell>
+                                <TableCell>
+                                    <div className="flex justify-end gap-2">
+                                        <Tooltip content="Edit Details">
+                                            <Button isIconOnly size="sm" variant="light" onPress={() => handleEdit(item)}>
+                                                <Pencil size={18} className="text-gray-400 hover:text-blue-600" />
+                                            </Button>
+                                        </Tooltip>
+                                        <Tooltip content="Delete Student" color="danger">
+                                            <Button isIconOnly size="sm" variant="light" onPress={() => confirmDelete(item)}>
+                                                <Trash2 size={18} className="text-gray-400 hover:text-red-600" />
+                                            </Button>
+                                        </Tooltip>
+                                    </div>
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </Card>
 
-            {/* Modals */}
-            < BulkImportModal
-                isOpen={isImportOpen}
-                onClose={() => setIsImportOpen(false)}
-                onSuccess={() => {
-                    fetchStudents();
-                }}
-            />
-            < AddStudentModal
+
+            <AddStudentModal
                 isOpen={isAddOpen}
                 onClose={() => setIsAddOpen(false)}
                 onSuccess={() => fetchStudents()}
             />
+
             {
                 selectedStudent && (
                     <EditStudentModal
@@ -593,50 +356,139 @@ const Students: React.FC = () => {
                 )
             }
 
-            {/* Delete Confirmation Modal */}
+            {/* Filter Modal */}
+            <Modal isOpen={isFilterOpen} onClose={() => setIsFilterOpen(false)} size="sm" backdrop="blur" classNames={{ base: "bg-white rounded-2xl shadow-2xl", backdrop: "bg-black/50" }}>
+                <ModalContent>
+                    {(onClose) => (
+                        <>
+                            <ModalHeader className="flex flex-col gap-1 border-b border-gray-100 pb-4">
+                                <span className="text-lg font-bold text-gray-900">Filters</span>
+                            </ModalHeader>
+                            <ModalBody className="pt-6">
+                                <div className="space-y-4">
+                                    <Select placeholder="All Departments" selectedKeys={tempFilters.dept ? [tempFilters.dept] : []} onChange={(e) => setTempFilters(p => ({ ...p, dept: e.target.value }))} classNames={{ selectorIcon: "hidden" }}>
+                                        {departments.map(d => <SelectItem key={d.DepartmentID}>{d.DepartmentName}</SelectItem>)}
+                                    </Select>
+                                    <Select placeholder="All Programs" selectedKeys={tempFilters.program ? [tempFilters.program] : []} onChange={(e) => setTempFilters(p => ({ ...p, program: e.target.value }))} classNames={{ selectorIcon: "hidden" }}>
+                                        {programs.map(p => <SelectItem key={p.ProgramID}>{p.ProgramName}</SelectItem>)}
+                                    </Select>
+                                    <Select placeholder="All Semesters" isDisabled={!tempFilters.program} selectedKeys={tempFilters.semester ? [tempFilters.semester] : []} onChange={(e) => setTempFilters(p => ({ ...p, semester: e.target.value }))} classNames={{ selectorIcon: "hidden" }}>
+                                        {filteredFilterSemesters.map(s => <SelectItem key={s.SemesterID}>{`Semester ${s.SemesterNumber}`}</SelectItem>)}
+                                    </Select>
+                                </div>
+                            </ModalBody>
+                            <ModalFooter className="border-t border-gray-100 pt-4">
+                                <Button variant="light" onPress={clearFilters} color="danger">Clear</Button>
+                                <Button className="bg-gray-900 text-white" onPress={applyFilters}>Apply</Button>
+                            </ModalFooter>
+                        </>
+                    )}
+                </ModalContent>
+            </Modal>
+
+            {/* Delete Modal */}
             <Modal
                 isOpen={isDeleteOpen}
                 onClose={() => setIsDeleteOpen(false)}
-                placement="center"
-                backdrop="blur"
                 size="sm"
+                backdrop="blur"
                 classNames={{
-                    base: "bg-white  border border-gray-100 ",
+                    base: "bg-white rounded-2xl shadow-xl border border-gray-100",
+                    header: "border-b border-gray-100 py-4",
+                    body: "py-6",
+                    footer: "border-t border-gray-100 py-4"
                 }}
             >
                 <ModalContent>
                     {(onClose) => (
                         <>
-                            <ModalHeader className="flex flex-col gap-1 items-center justify-center pt-8">
-                                <div className="h-12 w-12 rounded-full bg-red-50  flex items-center justify-center text-red-500 mb-2">
-                                    <AlertTriangle size={24} />
-                                </div>
-                                <h3 className="text-lg font-bold text-gray-900 ">Delete Student?</h3>
+                            <ModalHeader className="flex flex-col gap-1">
+                                <span className="text-xl font-bold text-gray-900">Delete Student</span>
+                                <span className="text-sm font-normal text-gray-500">This action cannot be undone.</span>
                             </ModalHeader>
-                            <ModalBody className="text-center px-8">
-                                <p className="text-gray-500 ">
-                                    Are you sure you want to delete <span className="font-semibold text-gray-900 ">{selectedStudent?.User?.FullName}</span>?
-                                    This action cannot be undone and will remove all associated data.
+                            <ModalBody>
+                                <p className="text-gray-700">
+                                    Are you sure you want to delete the student profile for <span className="font-bold text-gray-900">{selectedStudent?.User?.FullName}</span>?
                                 </p>
                             </ModalBody>
-                            <ModalFooter className="justify-center gap-3 pb-8 pt-6">
-                                <Button variant="light" onPress={onClose} className="font-medium text-gray-600">
-                                    Cancel
-                                </Button>
-                                <Button
-                                    className="bg-red-500 hover:bg-red-600 text-white font-medium shadow-lg shadow-red-500/20"
-                                    onPress={handleDelete}
-                                >
-                                    Delete Student
+                            <ModalFooter>
+                                <Button variant="light" onPress={onClose} className="font-medium text-gray-600">Cancel</Button>
+                                <Button color="danger" onPress={handleDelete} className="font-medium shadow-lg shadow-red-500/20">Delete Student</Button>
+                            </ModalFooter>
+                        </>
+                    )}
+                </ModalContent>
+            </Modal>
+
+            {/* Delete All Modal */}
+            <Modal
+                isOpen={isDeleteAllOpen}
+                onClose={() => setIsDeleteAllOpen(false)}
+                size="md"
+                backdrop="blur"
+                classNames={{
+                    base: "bg-white rounded-2xl shadow-xl border border-gray-100",
+                    header: "border-b border-gray-100 py-4",
+                    body: "py-6",
+                    footer: "border-t border-gray-100 py-4"
+                }}
+            >
+                <ModalContent>
+                    {(onClose) => (
+                        <>
+                            <ModalHeader className="flex gap-3 items-center">
+                                <div className="p-2 bg-red-50 rounded-xl text-red-600">
+                                    <AlertTriangle size={24} />
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-xl font-bold text-gray-900">Delete All Students</span>
+                                    <span className="text-sm font-normal text-gray-500">Bulk action</span>
+                                </div>
+                            </ModalHeader>
+                            <ModalBody>
+                                <div className="space-y-4">
+                                    <p className="text-gray-600">
+                                        You are about to delete <span className="font-bold text-gray-900">ALL</span> student academic records from the database.
+                                    </p>
+
+                                    <div className="bg-red-50/50 p-4 rounded-xl border border-red-100 space-y-3">
+                                        <div className="flex gap-2 text-sm text-red-800 font-medium">
+                                            <AlertTriangle size={16} className="mt-0.5" />
+                                            What will be deleted:
+                                        </div>
+                                        <ul className="list-disc pl-9 space-y-1 text-sm text-red-700/80">
+                                            <li>Academic profiles (Batch, Dept, etc.)</li>
+                                            <li>Enrollment records</li>
+                                        </ul>
+                                    </div>
+
+                                    <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex gap-3">
+                                        <div className="text-blue-600 mt-0.5"><Building2 size={18} /></div>
+                                        <div className="text-sm text-blue-900/80">
+                                            <span className="font-bold text-blue-900">Note:</span> User login accounts will NOT be deleted. To remove accounts, please use the Data Cleanup page.
+                                        </div>
+                                    </div>
+                                </div>
+                            </ModalBody>
+                            <ModalFooter>
+                                <Button variant="light" onPress={onClose} className="font-medium text-gray-600">Cancel</Button>
+                                <Button className="font-medium shadow-lg shadow-red-500/20 bg-red-600 text-white" onPress={handleDeleteAll}>
+                                    Yes, Delete All Profiles
                                 </Button>
                             </ModalFooter>
                         </>
                     )}
                 </ModalContent>
             </Modal>
-        </div >
+
+            {/* Import Modal */}
+            <StudentImportModal
+                isOpen={isImportOpen}
+                onClose={() => setIsImportOpen(false)}
+                onSuccess={fetchStudents}
+            />
+        </div>
     );
 };
-
 
 export default Students;

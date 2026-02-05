@@ -6,7 +6,7 @@ const api: AxiosInstance = axios.create({
     baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api',
     withCredentials: true, // Important for cookies (refresh token)
     headers: {
-        'Content-Type': 'application/json',
+        // 'Content-Type': 'application/json', // Do NOT set this globally, let Axios set it automatically (especially for FormData)
     },
 });
 

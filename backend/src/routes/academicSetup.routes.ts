@@ -3,6 +3,8 @@ import {
     getAllAcademicYears,
     createAcademicYear,
     setCurrentAcademicYear,
+    deleteAcademicYear,
+    getAllDepartments,
     getAllDepartments,
     createDepartment,
     getAllPrograms,
@@ -87,6 +89,26 @@ router.post("/years", createAcademicYear);
  *         description: Current academic year updated
  */
 router.patch("/years/:yearId/set-current", setCurrentAcademicYear);
+
+/**
+ * @swagger
+ * /api/academic-setup/years/{yearId}:
+ *   delete:
+ *     summary: Delete academic year
+ *     tags: [Academic Setup]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: yearId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Academic year deleted
+ */
+router.delete("/years/:yearId", deleteAcademicYear);
 
 // ==================== DEPARTMENTS ====================
 

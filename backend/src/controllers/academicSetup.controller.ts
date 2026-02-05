@@ -135,6 +135,57 @@ export const setCurrentAcademicYear = async (req: Request, res: Response): Promi
     }
 };
 
+export const deleteAcademicYear = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { yearId } = req.params;
+        const currentUser = (req as any).user;
+
+        const year = await AcademicYear.findByPk(parseInt(yearId as string));
+        if (!year) {
+            res.status(404).json({
+                success: false,
+                message: "Academic year not found"
+            });
+            return;
+        }
+
+        if (year.IsCurrent) {
+            res.status(400).json({
+                success: false,
+                message: "Cannot delete the current active academic year. Please set another year as current first."
+            });
+            return;
+        }
+
+        // Check for dependencies (optional but good practice)
+        // For now, we will just attempt to delete. If FK constraints fail, the catch block handles it.
+        await year.destroy();
+
+        // Log activity
+        await ActivityLog.create({
+            UserID: currentUser.UserID,
+            Action: 'DELETE_ACADEMIC_YEAR',
+            EntityType: 'AcademicYear',
+            EntityID: year.AcademicYearID,
+            Details: `Deleted academic year: ${year.YearName}`,
+            IPAddress: req.ip || 'unknown',
+            UserAgent: req.get('user-agent') || 'unknown'
+        });
+
+        res.status(200).json({
+            success: true,
+            message: "Academic year deleted successfully"
+        });
+    } catch (error: any) {
+        console.error("Error deleting academic year:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to delete academic year. It may differenced by other records.",
+            error: error.message
+        });
+    }
+};
+
 // ==================== DEPARTMENTS ====================
 
 export const getAllDepartments = async (req: Request, res: Response): Promise<void> => {

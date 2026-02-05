@@ -53,7 +53,6 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
     const [formData, setFormData] = useState({
         RegisterNumber: "",
         FullName: "",
-        Email: "",
         DepartmentID: "",
         ProgramID: "",
         SemesterID: "",
@@ -67,7 +66,6 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                 setFormData({
                     RegisterNumber: student.RegisterNumber || "",
                     FullName: student.User?.FullName || "",
-                    Email: student.User?.Email || "",
                     DepartmentID: student.DepartmentID?.toString() || "",
                     ProgramID: student.ProgramID?.toString() || "",
                     SemesterID: student.SemesterID?.toString() || "",
@@ -95,7 +93,7 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
 
     const handleSubmit = async () => {
         // Basic Validation
-        if (!formData.RegisterNumber || !formData.FullName || !formData.Email || !formData.DepartmentID || !formData.ProgramID || !formData.SemesterID || !formData.BatchYear) {
+        if (!formData.RegisterNumber || !formData.FullName || !formData.DepartmentID || !formData.ProgramID || !formData.SemesterID || !formData.BatchYear) {
             toast.error("Please fill all fields");
             return;
         }
@@ -180,18 +178,6 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                                     placeholder="Full Name"
                                     value={formData.FullName}
                                     onValueChange={(v) => handleChange("FullName", v)}
-                                    classNames={{
-                                        inputWrapper: "h-12 bg-white border-1 border-slate-200 shadow-sm hover:border-blue-400 focus-within:border-blue-600 focus-within:shadow-md rounded-xl transition-all",
-                                        input: "text-small bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0",
-                                    }}
-                                />
-                                <Input
-                                    startContent={<Mail className="text-gray-400 mr-2" size={16} />}
-                                    placeholder="Email Address"
-                                    type="email"
-                                    className="md:col-span-2"
-                                    value={formData.Email}
-                                    onValueChange={(v) => handleChange("Email", v)}
                                     classNames={{
                                         inputWrapper: "h-12 bg-white border-1 border-slate-200 shadow-sm hover:border-blue-400 focus-within:border-blue-600 focus-within:shadow-md rounded-xl transition-all",
                                         input: "text-small bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0",

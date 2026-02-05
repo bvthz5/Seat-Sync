@@ -5,8 +5,11 @@ import {
     updateDepartment,
     deleteDepartment,
     getDepartmentById,
+    importDepartments,
+    exportDepartmentTemplate,
 } from "../controllers/department.controller.js";
 import { AuthMiddleware } from "../middlewares/auth.middleware.js";
+import multer from "multer";
 
 const router = express.Router();
 
@@ -127,6 +130,46 @@ router.post("/", AuthMiddleware.requireRootAuth, createDepartment);
  *         description: Department not found
  */
 router.put("/:id", AuthMiddleware.requireRootAuth, updateDepartment);
+
+const upload = multer({ storage: multer.memoryStorage() });
+
+/**
+ * @swagger
+ * /api/departments/import:
+ *   post:
+ *     summary: Import departments from Excel file
+ *     tags: [Departments]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Import completed
+ */
+router.post("/import", AuthMiddleware.requireRootAuth, upload.single('file'), importDepartments);
+
+/**
+ * @swagger
+ * /api/departments/template:
+ *   get:
+ *     summary: Download department import template
+ *     tags: [Departments]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Excel template file
+ */
+router.get("/template", AuthMiddleware.verifyAccessToken, exportDepartmentTemplate);
 
 /**
  * @swagger

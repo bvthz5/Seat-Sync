@@ -25,6 +25,7 @@ import Notifications from './pages/Notifications';
 import Security from './pages/Security';
 import ExamControl from './pages/ExamControl';
 import AuditLogs from './pages/AuditLogs';
+import DataCleanup from './pages/DataCleanup';
 
 const AdminApp: React.FC = () => {
     return (
@@ -58,6 +59,7 @@ const AdminApp: React.FC = () => {
                         <Route path="notifications" element={<Notifications />} />
                         <Route path="audit-logs" element={<AuditLogs />} />
                         <Route path="security" element={<Security />} />
+                        <Route path="data-cleanup" element={<DataCleanup />} />
                     </Route>
                 </Route>
             </Route>

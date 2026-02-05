@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { getAllStudents, importStudents, createStudent, getCreateOptions, updateStudent, deleteStudent, exportStudents } from '../controllers/student.controller.js';
+import { getAllStudents, importStudents, createStudent, getCreateOptions, updateStudent, deleteStudent, exportStudents, deleteAllStudents } from '../controllers/student.controller.js';
 import { AuthMiddleware } from '../middlewares/auth.middleware.js';
 
 const router = express.Router();
@@ -224,6 +224,22 @@ router.post('/', AuthMiddleware.verifyAccessToken, createStudent);
  *         description: Server error
  */
 router.put('/:id', AuthMiddleware.verifyAccessToken, updateStudent);
+
+/**
+ * @swagger
+ * /api/students/delete-all:
+ *   delete:
+ *     summary: Delete all students (Academic Records Only)
+ *     tags: [Student]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: All students deleted successfully
+ *       500:
+ *         description: Server error
+ */
+router.delete('/delete-all', AuthMiddleware.verifyAccessToken, deleteAllStudents);
 
 /**
  * @swagger
