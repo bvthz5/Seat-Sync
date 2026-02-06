@@ -1,7 +1,8 @@
 import React, { useEffect } from 'react';
 import { Card, CardBody } from '@heroui/react';
 import { motion, useSpring, useTransform } from 'framer-motion';
-import { Users, FileText, Layout, UserCheck } from 'lucide-react';
+import { Users, FileText, Layout, UserCheck, Activity } from 'lucide-react';
+import { ExamService } from '../services/examService';
 
 // CountUp Component for animated numbers
 const CountUp = ({ value }: { value: number }) => {
@@ -59,38 +60,55 @@ export const SummaryCard: React.FC<SummaryCardProps> = ({ title, value, icon, ch
     );
 };
 
-export const DashboardCards = () => {
+export const DashboardCards = ({ seriesId }: { seriesId?: number }) => {
+    const [stats, setStats] = React.useState<any>(null);
+    const [loading, setLoading] = React.useState(true);
+
+    useEffect(() => {
+        fetchStats();
+    }, [seriesId]);
+
+    const fetchStats = async () => {
+        setLoading(true);
+        try {
+            const data = await ExamService.getStats({ seriesId });
+            setStats(data);
+        } catch (error) {
+            console.error("Failed to fetch dashboard stats", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <SummaryCard
-                title="Total Students"
-                value="1,245"
-                change="+12%"
-                icon={<Users size={24} />}
+                title="Total Exams"
+                value={loading ? "..." : stats?.total || 0}
+                icon={<FileText size={24} />}
                 iconColor="text-blue-600"
                 iconBg="bg-blue-50"
             />
             <SummaryCard
-                title="Active Exams"
-                value="3"
-                icon={<FileText size={24} />}
+                title="Completed"
+                value={loading ? "..." : stats?.completed || 0}
+                icon={<UserCheck size={24} />}
+                iconColor="text-emerald-600"
+                iconBg="bg-emerald-50"
+            />
+            <SummaryCard
+                title="Upcoming"
+                value={loading ? "..." : stats?.upcoming || 0}
+                icon={<Layout size={24} />}
                 iconColor="text-orange-600"
                 iconBg="bg-orange-50"
             />
             <SummaryCard
-                title="Exam Rooms"
-                value="12"
-                icon={<Layout size={24} />}
+                title="Active Today"
+                value={loading ? "..." : stats?.activeToday || 0}
+                icon={<Activity size={24} />}
                 iconColor="text-purple-600"
                 iconBg="bg-purple-50"
-            />
-            <SummaryCard
-                title="Invigilators"
-                value="24"
-                change="+2"
-                icon={<UserCheck size={24} />}
-                iconColor="text-teal-600"
-                iconBg="bg-teal-50"
             />
         </div>
     );

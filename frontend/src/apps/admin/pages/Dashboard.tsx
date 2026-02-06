@@ -1,4 +1,4 @@
-import React from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardCards } from '../components/DashboardCards';
 import { LiveMonitor } from '../components/LiveMonitor';
 import { AnalyticsChart } from '../components/AnalyticsChart';
@@ -6,13 +6,35 @@ import { QuickActions } from '../components/QuickActions';
 import { ActivityFeed } from '../components/ActivityFeed';
 import { LiveExamDetails } from '../components/LiveExamDetails';
 import { LiveClock } from '../components/LiveClock';
-import { Button, Card, CardBody, CardHeader, Chip } from '@heroui/react';
-import { Download, RefreshCw, ShieldAlert, Activity, Server, AlertTriangle } from 'lucide-react';
+import { Button, Card, CardBody, CardHeader, Chip, Select, SelectItem } from '@heroui/react';
+import { Download, RefreshCw, ShieldAlert, Activity, Server, AlertTriangle, BookOpen } from 'lucide-react';
 import { useAuth } from '../../../hooks/useAuth';
+import { SeriesService } from '../services/seriesService';
 
 const Dashboard: React.FC = () => {
     const { user } = useAuth();
     const isRoot = user?.IsRootAdmin;
+    const [series, setSeries] = useState<any[]>([]);
+    const [seriesFilter, setSeriesFilter] = useState<string>('All');
+    const [loadingSeries, setLoadingSeries] = useState(false);
+
+    useEffect(() => {
+        fetchSeries();
+    }, []);
+
+    const fetchSeries = async () => {
+        setLoadingSeries(true);
+        try {
+            const response = await SeriesService.getAll();
+            if (response.success) {
+                setSeries(response.data);
+            }
+        } catch (error) {
+            console.error("Failed to fetch series", error);
+        } finally {
+            setLoadingSeries(false);
+        }
+    };
 
     return (
         <div className="max-w-[1600px] mx-auto flex flex-col gap-8 p-6 pb-20 font-sans">
@@ -25,11 +47,31 @@ const Dashboard: React.FC = () => {
                     </p>
                 </div>
                 <div className="flex gap-3 items-center">
+                    <Select
+                        placeholder="All Series"
+                        selectedKeys={[seriesFilter]}
+                        onSelectionChange={(keys) => setSeriesFilter(String(Array.from(keys)[0]))}
+                        size="sm"
+                        variant="bordered"
+                        className="w-48"
+                        startContent={<BookOpen size={16} className="text-blue-500" />}
+                        items={[
+                            { ExamSeriesID: 'All', SeriesName: 'All Series' },
+                            ...series
+                        ]}
+                    >
+                        {(item: any) => (
+                            <SelectItem key={String(item.ExamSeriesID)} textValue={item.SeriesName}>
+                                {item.SeriesName}
+                            </SelectItem>
+                        )}
+                    </Select>
                     <Button
                         startContent={<RefreshCw size={16} />}
                         variant="bordered"
                         radius="sm"
                         className="font-medium text-[#5f6368] border-gray-300 hover:bg-gray-50"
+                        onPress={fetchSeries}
                     >
                         Refresh
                     </Button>
@@ -42,7 +84,7 @@ const Dashboard: React.FC = () => {
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Key Metrics</h3>
                 </div>
-                <DashboardCards />
+                <DashboardCards seriesId={seriesFilter === 'All' ? undefined : parseInt(seriesFilter)} />
             </section>
 
             {/* 3. Main Bento Grid Layout */}

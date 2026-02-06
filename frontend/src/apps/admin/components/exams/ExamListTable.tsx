@@ -13,9 +13,12 @@ interface Exam {
     Subject?: {
         SubjectName: string;
         SubjectCode: string;
+        Department?: {
+            DepartmentName: string;
+            DepartmentCode: string;
+        }
     };
-    // Mock fields for UI match
-    Department?: string;
+    // Mock fields for UI match (keeping some for now)
     Enrollment?: number;
     AuditStatus?: 'Clean' | 'Conflict' | 'Pending';
 }
@@ -56,8 +59,6 @@ const ExamListTable: React.FC<ExamListTableProps> = ({ exams, loading, onEdit, o
     // Helper to generate consistent mock data based on ID
     const getMockData = (exam: Exam) => {
         const id = exam.ExamID;
-        const depts = ["Computer Science", "Mathematics", "Humanities", "Biology", "Physics Dept"];
-        const dept = depts[id % depts.length];
         const enroll = 40 + (id * 7) % 150;
 
         // Deterministic audit status
@@ -65,7 +66,7 @@ const ExamListTable: React.FC<ExamListTableProps> = ({ exams, loading, onEdit, o
         if (id % 5 === 0) audit = 'Conflict';
         if (id % 7 === 0) audit = 'Pending';
 
-        return { dept, enroll, audit };
+        return { enroll, audit };
     };
 
     return (
@@ -84,8 +85,10 @@ const ExamListTable: React.FC<ExamListTableProps> = ({ exams, loading, onEdit, o
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                         {exams.map((exam) => {
-                            const { dept, enroll, audit } = getMockData(exam);
-                            const displayStatus = exam.Status === 'Scheduled' ? 'Finalized' : exam.Status; // Map for UI match
+                            const { enroll, audit } = getMockData(exam);
+                            const displayStatus = exam.Status === 'Scheduled' ? 'Finalized' : exam.Status;
+                            const deptName = exam.Subject?.Department?.DepartmentName || 'General';
+                            const deptCode = exam.Subject?.Department?.DepartmentCode || 'GEN';
 
                             return (
                                 <tr
@@ -109,11 +112,11 @@ const ExamListTable: React.FC<ExamListTableProps> = ({ exams, loading, onEdit, o
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-2">
                                             <div className={`w-2 h-2 rounded-full 
-                                                ${dept === 'Computer Science' ? 'bg-blue-500' :
-                                                    dept === 'Mathematics' ? 'bg-purple-500' :
-                                                        dept === 'Biology' ? 'bg-green-500' : 'bg-gray-400'}`}
+                                                ${deptCode === 'CS' ? 'bg-blue-500' :
+                                                    deptCode === 'MA' ? 'bg-purple-500' :
+                                                        deptCode === 'BIO' ? 'bg-green-500' : 'bg-gray-400'}`}
                                             />
-                                            <span className="text-sm text-gray-700">{dept}</span>
+                                            <span className="text-sm text-gray-700">{deptName}</span>
                                         </div>
                                     </td>
 

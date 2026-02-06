@@ -3,7 +3,11 @@ import express from 'express';
 import { ExamController } from '../controllers/exam.controller.js';
 import { AuthMiddleware } from '../middlewares/auth.middleware.js';
 
+import multer from 'multer';
+
 const router = express.Router();
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 /**
  * @swagger
@@ -132,5 +136,40 @@ router.put('/:id', AuthMiddleware.verifyAccessToken, ExamController.updateExam);
  *         description: Exam deleted
  */
 router.delete('/:id', AuthMiddleware.verifyAccessToken, ExamController.deleteExam);
+
+/**
+ * @swagger
+ * /api/exams/import-timetable:
+ *   post:
+ *     summary: Import exam timetable
+ *     tags: [Exam]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Imported successfully
+ */
+router.post('/import-timetable', AuthMiddleware.verifyAccessToken, upload.single('file'), ExamController.importTimetable);
+
+/**
+ * @swagger
+ * /api/exams/template:
+ *   get:
+ *     summary: Download exam timetable template
+ *     tags: [Exam]
+ *     responses:
+ *       200:
+ *         description: Template file
+ */
+router.get('/template', AuthMiddleware.verifyAccessToken, ExamController.exportTimetableTemplate);
 
 export default router;

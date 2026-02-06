@@ -8,6 +8,7 @@ import { Subject } from "./Subject.js";
 interface ExamAttributes {
   ExamID: number;
   SubjectID: number;
+  ExamSeriesID?: number;
   ExamName: string;
   ExamDate: Date;
   Session: string;
@@ -18,12 +19,13 @@ interface ExamAttributes {
 /**
  * Attributes required when creating an exam
  */
-interface ExamCreationAttributes extends Optional<ExamAttributes, "ExamID"> {}
+interface ExamCreationAttributes extends Optional<ExamAttributes, "ExamID"> { }
 
 export class Exam extends Model<ExamAttributes, ExamCreationAttributes>
   implements ExamAttributes {
   declare ExamID: number;
   declare SubjectID: number;
+  declare ExamSeriesID?: number;
   declare ExamName: string;
   declare ExamDate: Date;
   declare Session: string;
@@ -44,6 +46,14 @@ Exam.init(
       references: {
         model: "Subjects",
         key: "SubjectID",
+      },
+    },
+    ExamSeriesID: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: "ExamSeries",
+        key: "ExamSeriesID",
       },
     },
     ExamName: {
@@ -74,6 +84,8 @@ Exam.init(
   }
 );
 
+import { ExamSeries } from "./ExamSeries.js";
+
 /**
  * Associations
  */
@@ -83,6 +95,14 @@ Exam.belongsTo(Subject, {
 
 Subject.hasMany(Exam, {
   foreignKey: "SubjectID",
+});
+
+Exam.belongsTo(ExamSeries, {
+  foreignKey: "ExamSeriesID",
+});
+
+ExamSeries.hasMany(Exam, {
+  foreignKey: "ExamSeriesID",
 });
 
 export default Exam;

@@ -21,7 +21,7 @@ interface StudentAttributes {
 /**
  * Attributes required when creating a student
  */
-interface StudentCreationAttributes extends Optional<StudentAttributes, "StudentID"> {}
+interface StudentCreationAttributes extends Optional<StudentAttributes, "StudentID"> { }
 
 export class Student extends Model<StudentAttributes, StudentCreationAttributes>
   implements StudentAttributes {
@@ -108,6 +108,7 @@ Student.belongsTo(Department, {
 
 Department.hasMany(Student, {
   foreignKey: "DepartmentID",
+  onDelete: 'CASCADE',
 });
 
 Student.belongsTo(Program, {
@@ -116,6 +117,7 @@ Student.belongsTo(Program, {
 
 Program.hasMany(Student, {
   foreignKey: "ProgramID",
+  onDelete: 'CASCADE',
 });
 
 Student.belongsTo(Semester, {
@@ -124,6 +126,7 @@ Student.belongsTo(Semester, {
 
 Semester.hasMany(Student, {
   foreignKey: "SemesterID",
+  onDelete: 'CASCADE',
 });
 
 export default Student;

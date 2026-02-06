@@ -77,6 +77,7 @@ Semester.belongsTo(Program, {
 
 Program.hasMany(Semester, {
   foreignKey: "ProgramID",
+  onDelete: 'CASCADE',
 });
 
 export default Semester;

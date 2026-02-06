@@ -57,6 +57,12 @@ export const deleteDepartment = async (req: Request, res: Response) => {
         await department.destroy();
         res.json({ message: "Department deleted successfully" });
     } catch (error: any) {
+        console.error("Delete department error:", error);
+        if (error.name === 'SequelizeForeignKeyConstraintError' || error.original?.code === 'ER_ROW_IS_REFERENCED_2') {
+            return res.status(400).json({
+                message: "Cannot delete department because it has associated data (programs, students, or faculty). Please remove related data first."
+            });
+        }
         res.status(500).json({ message: error.message });
     }
 };
@@ -170,5 +176,20 @@ export const exportDepartmentTemplate = async (req: Request, res: Response) => {
     } catch (error: any) {
         console.error("Template export error:", error);
         res.status(500).json({ message: "Failed to generate template", error: error.message });
+    }
+};
+
+export const deleteAllDepartments = async (req: Request, res: Response) => {
+    try {
+        const count = await Department.destroy({ where: {}, truncate: true });
+        res.json({ message: `Successfully deleted all departments`, count });
+    } catch (error: any) {
+        console.error("Delete all departments error:", error);
+        if (error.name === 'SequelizeForeignKeyConstraintError' || error.original?.code === 'ER_ROW_IS_REFERENCED_2') {
+            return res.status(400).json({
+                message: "Cannot delete departments because some have associated data (programs, students, or faculty). Please remove related data first."
+            });
+        }
+        res.status(500).json({ message: "Failed to delete all departments", error: error.message });
     }
 };

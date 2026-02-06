@@ -271,6 +271,23 @@ async function ensureSchemaIntegrity() {
             END
         `, { type: QueryTypes.RAW });
 
+        // Add ExamSeries SemesterID Nullable Fix
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'ExamSeries' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                -- Ensure SemesterID is nullable
+                IF EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[ExamSeries]') 
+                    AND name = 'SemesterID'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[ExamSeries] ALTER COLUMN [SemesterID] INT NULL;
+                    PRINT 'Ensured ExamSeries.SemesterID is nullable';
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
     } catch (error) {
         console.warn("Schema integrity check warning (non-fatal):", error);
     }
@@ -285,14 +302,14 @@ export async function connectDB() {
 
         await import("../models/index.js");
 
-        // try {
-        //     await sequelize.sync({ alter: true });
-        //     console.log("Database synchronized with alter");
-        // } catch (syncErr: any) {
-        //     console.warn("Database alter sync failed, falling back to standard sync:", syncErr.message);
-        await sequelize.sync();
-        console.log("Database synchronized (standard)");
-        // }
+        try {
+            await sequelize.sync({ alter: true });
+            console.log("Database synchronized with alter");
+        } catch (syncErr: any) {
+            console.warn("Database alter sync failed, falling back to standard sync:", syncErr.message);
+            await sequelize.sync();
+            console.log("Database synchronized (standard)");
+        }
 
         return true;
     } catch (err: any) {

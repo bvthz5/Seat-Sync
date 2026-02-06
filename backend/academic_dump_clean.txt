@@ -1,0 +1,20 @@
+--- DEPARTMENTS ---
+AI&DS: Artificial Intelligence & Data Science
+CIVIL: Civil Engineering
+CSE: Computer Science & Engineering
+CSE-CS: Computer Science & Engineering (Cyber Security)
+CSE-AI: Computer Science & Engineering (Artificial Intelligence)
+ECE: Electronics & Communication Engineering
+ECM: Electronics & Computer Engineering
+EEE: Electrical & Electronics Engineering
+MECH: Mechanical Engineering
+CA: Computer Applications
+MBA: Masters in Business Administration
+
+--- PROGRAMS ---
+BTECH: Bachelor of Technology
+MCA: Master of Computer Applications
+MBA: Master of Business Administration
+MTECH: Master of Technology
+MCAI: Integrated Master of Computer Applications
+IMCA-Short: Integrated MCA

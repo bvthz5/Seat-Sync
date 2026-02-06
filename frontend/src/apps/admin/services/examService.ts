@@ -8,8 +8,8 @@ export const ExamService = {
         return response.data;
     },
 
-    getStats: async () => {
-        const response = await api.get(`${PREFIX}/stats`);
+    getStats: async (params?: any) => {
+        const response = await api.get(`${PREFIX}/stats`, { params });
         return response.data;
     },
 
@@ -26,5 +26,33 @@ export const ExamService = {
     delete: async (id: number) => {
         const response = await api.delete(`${PREFIX}/${id}`);
         return response.data;
+    },
+
+    importTimetable: async (file: File, seriesId?: number, examTitle?: string) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        if (seriesId) {
+            formData.append('seriesId', String(seriesId));
+        }
+        if (examTitle) {
+            formData.append('title', examTitle);
+        }
+        const response = await api.post(`${PREFIX}/import-timetable`, formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data'
+            }
+        });
+        return response.data;
+    },
+
+    downloadTemplate: async () => {
+        const response = await api.get(`${PREFIX}/template`, { responseType: 'blob' });
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', 'exam_timetable_template.xlsx');
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
     }
 };

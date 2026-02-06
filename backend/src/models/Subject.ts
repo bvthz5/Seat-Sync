@@ -12,10 +12,6 @@ interface SubjectAttributes {
   SubjectName: string;
   DepartmentID: number;
   SemesterID: number;
-  ProgramID?: number;
-  AcademicYearID?: number;
-  Credits?: number;
-  IsActive?: boolean;
 }
 
 /**
@@ -30,10 +26,6 @@ export class Subject extends Model<SubjectAttributes, SubjectCreationAttributes>
   declare SubjectName: string;
   declare DepartmentID: number;
   declare SemesterID: number;
-  declare ProgramID?: number;
-  declare AcademicYearID?: number;
-  declare Credits?: number;
-  declare IsActive?: boolean;
 }
 
 Subject.init(
@@ -66,22 +58,6 @@ Subject.init(
         model: "Semesters",
         key: "SemesterID",
       },
-    },
-    ProgramID: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-    },
-    AcademicYearID: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-    },
-    Credits: {
-      type: DataTypes.INTEGER,
-      defaultValue: 0,
-    },
-    IsActive: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: true,
     }
   },
   {
@@ -100,6 +76,7 @@ Subject.belongsTo(Department, {
 
 Department.hasMany(Subject, {
   foreignKey: "DepartmentID",
+  onDelete: 'CASCADE',
 });
 
 Subject.belongsTo(Semester, {
@@ -108,6 +85,7 @@ Subject.belongsTo(Semester, {
 
 Semester.hasMany(Subject, {
   foreignKey: "SemesterID",
+  onDelete: 'CASCADE',
 });
 
 export default Subject;

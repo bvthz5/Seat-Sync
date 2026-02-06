@@ -24,6 +24,7 @@ export { default as AcademicYear } from "./AcademicYear.js";
 export { default as Notification } from "./Notification.js";
 export { default as ActiveSession } from "./ActiveSession.js";
 export { default as Faculty } from "./Faculty.js";
+export { default as ExamSeries } from "./ExamSeries.js";
 
 // Associations
 import Department from "./Department.js";
@@ -33,11 +34,13 @@ import User from "./User.js";
 import Exam from "./Exam.js";
 import InvigilatorAssignment from "./InvigilatorAssignment.js";
 import Room from "./Room.js";
+import Program from "./Program.js";
 
 // Define associations here to avoid circular imports in model files
 Department.hasMany(Faculty, {
     foreignKey: "DepartmentID",
-    as: "Faculties"
+    as: "Faculties",
+    onDelete: 'CASCADE'
 });
 
 Faculty.belongsTo(Department, {
@@ -47,10 +50,23 @@ Faculty.belongsTo(Department, {
 // Department-Invigilator Association
 Department.hasMany(Invigilator, {
     foreignKey: "DepartmentID",
+    onDelete: 'CASCADE'
 });
 
 Invigilator.belongsTo(Department, {
     foreignKey: "DepartmentID",
+});
+
+// Department-Program Association
+Department.hasMany(Program, {
+    foreignKey: "DepartmentID",
+    as: "Programs",
+    onDelete: 'CASCADE'
+});
+
+Program.belongsTo(Department, {
+    foreignKey: "DepartmentID",
+    as: "Department"
 });
 
 // Invigilator Associations

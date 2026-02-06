@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Tabs, Tab, Card, CardBody, Select, SelectItem } from '@heroui/react';
-import { BookOpen, Calendar, Building2, Layers, Book, Bookmark, Clock, ChevronDown } from 'lucide-react';
-import { AcademicYears } from '../components/academic/AcademicYears';
+import { Tabs, Tab, Card, CardBody, Select, SelectItem, Button } from '@heroui/react';
+import { BookOpen, Calendar, Building2, Layers, Book, Bookmark, Clock, ChevronDown, FileSpreadsheet } from 'lucide-react';
 import { Departments } from '../components/academic/Departments';
 import { Programs } from '../components/academic/Programs';
 import { Semesters } from '../components/academic/Semesters';
 import { Subjects } from '../components/academic/Subjects';
+import { UnifiedImportModal } from '../components/academic/UnifiedImportModal';
 import { academicService } from '../services/academicService';
 import { AcademicYear } from '../types/academic';
 import { toast } from '../../../utils/toast';
@@ -13,7 +13,8 @@ import { toast } from '../../../utils/toast';
 const AcademicSetup: React.FC = () => {
     const [years, setYears] = useState<AcademicYear[]>([]);
     const [selectedYearId, setSelectedYearId] = useState<string>("");
-    const [selectedTab, setSelectedTab] = useState("years");
+    const [selectedTab, setSelectedTab] = useState("departments");
+    const [isUnifiedImportOpen, setIsUnifiedImportOpen] = useState(false);
 
     const fetchYears = async () => {
         try {
@@ -44,39 +45,55 @@ const AcademicSetup: React.FC = () => {
     return (
         <div className="min-h-screen bg-slate-50/50 pb-12">
             {/* Header Section */}
-            <div className="pt-8 px-8 max-w-[1920px] mx-auto flex flex-col md:flex-row justify-between items-end gap-6 mb-8">
-                <div className="flex items-center gap-4">
-                    <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-3 rounded-xl text-white shadow-lg shadow-blue-500/20">
-                        <BookOpen size={28} strokeWidth={2} />
-                    </div>
-                    <div>
-                        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Academic Setup</h1>
-                        <p className="text-slate-500 font-medium mt-1">Manage hierarchical academic data structure</p>
-                    </div>
-                </div>
+            <div className="pt-8 px-8 max-w-[1920px] mx-auto mb-8">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+                    {/* Left: Title and Import Button */}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 flex-1">
+                        <div className="flex items-center gap-4">
+                            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-3 rounded-xl text-white shadow-lg shadow-blue-500/20">
+                                <BookOpen size={28} strokeWidth={2} />
+                            </div>
+                            <div>
+                                <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Academic Setup</h1>
+                                <p className="text-slate-500 font-medium mt-1">Manage hierarchical academic data structure</p>
+                            </div>
+                        </div>
 
-                {/* Global Context Selector */}
-                <div className="w-full md:w-72">
-                    <label className="block text-sm font-semibold text-slate-600 mb-1.5">Working Academic Year</label>
-                    <Select
-                        aria-label="Working Academic Year"
-                        placeholder="Select Year"
-                        selectedKeys={selectedYearId ? [selectedYearId] : []}
-                        onChange={(e) => setSelectedYearId(e.target.value)}
-                        variant="bordered"
-                        startContent={<Calendar size={18} className="text-slate-400" />}
-                        selectorIcon={<ChevronDown size={18} className="text-slate-500" />}
-                        classNames={{
-                            trigger: "bg-white border-slate-200 shadow-sm min-h-[48px]",
-                            value: "text-slate-700 font-medium",
-                        }}
-                    >
-                        {years.map((year) => (
-                            <SelectItem key={year.AcademicYearID} textValue={year.YearName}>
-                                {year.YearName} {year.IsCurrent ? '(Current)' : ''}
-                            </SelectItem>
-                        ))}
-                    </Select>
+                        {/* Import All Button */}
+                        <Button
+                            color="primary"
+                            variant="shadow"
+                            startContent={<FileSpreadsheet size={20} />}
+                            onPress={() => setIsUnifiedImportOpen(true)}
+                            className="font-semibold whitespace-nowrap text-white"
+                        >
+                            Import All Data
+                        </Button>
+                    </div>
+
+                    {/* Right: Global Context Selector */}
+                    <div className="w-full md:w-72">
+                        <label className="block text-sm font-semibold text-slate-600 mb-1.5">Working Academic Year</label>
+                        <Select
+                            aria-label="Working Academic Year"
+                            placeholder="Select Year"
+                            selectedKeys={selectedYearId ? [selectedYearId] : []}
+                            onChange={(e) => setSelectedYearId(e.target.value)}
+                            variant="bordered"
+                            startContent={<Calendar size={18} className="text-slate-400" />}
+                            selectorIcon={<ChevronDown size={18} className="text-slate-500" />}
+                            classNames={{
+                                trigger: "bg-white border-slate-200 shadow-sm min-h-[48px]",
+                                value: "text-slate-700 font-medium",
+                            }}
+                        >
+                            {years.map((year) => (
+                                <SelectItem key={year.AcademicYearID} textValue={year.YearName}>
+                                    {year.YearName} {year.IsCurrent ? '(Current)' : ''}
+                                </SelectItem>
+                            ))}
+                        </Select>
+                    </div>
                 </div>
             </div>
 
@@ -96,15 +113,6 @@ const AcademicSetup: React.FC = () => {
                         selectedKey={selectedTab}
                         onSelectionChange={(key) => setSelectedTab(key.toString())}
                     >
-                        <Tab
-                            key="years"
-                            title={
-                                <div className="flex items-center space-x-2 py-1">
-                                    <Calendar size={18} />
-                                    <span>Academic Years</span>
-                                </div>
-                            }
-                        />
                         <Tab
                             key="departments"
                             title={
@@ -148,9 +156,6 @@ const AcademicSetup: React.FC = () => {
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <Card className="border-none shadow-none bg-transparent">
                         <CardBody className="p-0">
-                            {selectedTab === "years" && (
-                                <AcademicYears onYearChange={handleYearChange} />
-                            )}
                             {selectedTab === "departments" && (
                                 <Departments academicYearId={selectedYearId ? Number(selectedYearId) : null} />
                             )}
@@ -167,6 +172,20 @@ const AcademicSetup: React.FC = () => {
                     </Card>
                 </div>
             </div>
+
+            {/* Unified Import Modal */}
+            <UnifiedImportModal
+                isOpen={isUnifiedImportOpen}
+                onOpenChange={() => setIsUnifiedImportOpen(false)}
+                onSuccess={() => {
+                    // Refresh all data - you can add specific refresh handlers for each tab
+                    fetchYears();
+                    // Force re-render of child components by changing selected tab
+                    const currentTab = selectedTab;
+                    setSelectedTab('');
+                    setTimeout(() => setSelectedTab(currentTab), 100);
+                }}
+            />
         </div>
     );
 };

@@ -7,6 +7,7 @@ import {
     getDepartmentById,
     importDepartments,
     exportDepartmentTemplate,
+    deleteAllDepartments,
 } from "../controllers/department.controller.js";
 import { AuthMiddleware } from "../middlewares/auth.middleware.js";
 import multer from "multer";
@@ -173,9 +174,23 @@ router.get("/template", AuthMiddleware.verifyAccessToken, exportDepartmentTempla
 
 /**
  * @swagger
+ * /api/departments/delete-all:
+ *   delete:
+ *     summary: Delete all departments
+ *     tags: [Departments]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: All departments deleted successfully
+ */
+router.delete("/delete-all", AuthMiddleware.requireRootAuth, deleteAllDepartments);
+
+/**
+ * @swagger
  * /api/departments/{id}:
  *   delete:
- *     summary: Delete a department
+ *     summary: Delete a department by ID
  *     tags: [Departments]
  *     security:
  *       - bearerAuth: []
@@ -193,5 +208,6 @@ router.get("/template", AuthMiddleware.verifyAccessToken, exportDepartmentTempla
  *         description: Department not found
  */
 router.delete("/:id", AuthMiddleware.requireRootAuth, deleteDepartment);
+
 
 export default router;

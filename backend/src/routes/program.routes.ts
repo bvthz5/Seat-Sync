@@ -6,6 +6,7 @@ import {
     deleteProgram,
     importPrograms,
     exportProgramTemplate,
+    deleteAllPrograms,
 } from "../controllers/program.controller.js";
 import { AuthMiddleware } from "../middlewares/auth.middleware.js";
 import multer from "multer";
@@ -142,15 +143,29 @@ router.put("/:id", AuthMiddleware.requireRootAuth, updateProgram);
 
 /**
  * @swagger
+ * /api/programs/delete-all:
+ *   delete:
+ *     summary: Delete all programs
+ *     tags: [Programs]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: All programs deleted successfully
+ */
+router.delete("/delete-all", AuthMiddleware.requireRootAuth, deleteAllPrograms);
+
+/**
+ * @swagger
  * /api/programs/{id}:
  *   delete:
- *     summary: Delete a program
+ *     summary: Delete a program by ID
  *     tags: [Programs]
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - in: path
- *         name: id
+ *       - name: id
+ *         in: path
  *         required: true
  *         schema:
  *           type: integer

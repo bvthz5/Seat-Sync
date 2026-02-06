@@ -1,13 +1,16 @@
 import { Request, Response } from "express";
-import Program from "../models/Program.js";
-import Department from "../models/Department.js";
+import { Program, Department } from "../models/index.js";
 import { sequelize } from "../config/database.js";
 import * as XLSX from 'xlsx';
 
 export const getPrograms = async (req: Request, res: Response) => {
     try {
         const programs = await Program.findAll({
-            include: [{ model: Department, attributes: ['DepartmentCode', 'DepartmentName'] }]
+            include: [{
+                model: Department,
+                as: 'Department',
+                attributes: ['DepartmentCode', 'DepartmentName']
+            }]
         });
         res.json(programs);
     } catch (error: any) {
@@ -59,6 +62,13 @@ export const deleteProgram = async (req: Request, res: Response) => {
         await program.destroy();
         res.json({ message: "Program deleted successfully" });
     } catch (error: any) {
+        console.error("Delete program error:", error);
+        // Check if it's a foreign key constraint error
+        if (error.name === 'SequelizeForeignKeyConstraintError' || error.original?.code === 'ER_ROW_IS_REFERENCED_2') {
+            return res.status(400).json({
+                message: "Cannot delete program because it has associated data (students, subjects, or semesters). Please remove related data first."
+            });
+        }
         res.status(500).json({ message: error.message });
     }
 };
@@ -174,5 +184,21 @@ export const exportProgramTemplate = async (req: Request, res: Response) => {
     } catch (error: any) {
         console.error("Template export error:", error);
         res.status(500).json({ message: "Failed to generate template", error: error.message });
+    }
+};
+
+export const deleteAllPrograms = async (req: Request, res: Response) => {
+    try {
+        const count = await Program.destroy({ where: {}, truncate: true });
+        res.json({ message: `Successfully deleted all programs`, count });
+    } catch (error: any) {
+        console.error("Delete all programs error:", error);
+        // Check if it's a foreign key constraint error
+        if (error.name === 'SequelizeForeignKeyConstraintError' || error.original?.code === 'ER_ROW_IS_REFERENCED_2') {
+            return res.status(400).json({
+                message: "Cannot delete programs because some have associated data (students, subjects, or semesters). Please remove related data first."
+            });
+        }
+        res.status(500).json({ message: "Failed to delete all programs", error: error.message });
     }
 };
