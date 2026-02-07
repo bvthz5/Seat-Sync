@@ -5,7 +5,7 @@ import { Subject } from '../models/Subject.js';
 import { Department } from '../models/Department.js';
 import { Semester } from "../models/Semester.js";
 import { AcademicYear } from "../models/AcademicYear.js";
-import { Op } from 'sequelize';
+import { Op, QueryTypes } from 'sequelize';
 import { ExamSeries } from '../models/index.js';
 import * as XLSX from 'xlsx';
 import { sequelize } from '../config/database.js';
@@ -129,6 +129,24 @@ export class ExamController {
 
             if (!exam) {
                 return res.status(404).json({ message: 'Exam not found' });
+            }
+
+            // 1. Delete associated registrations derived from this exam
+            try {
+                // We need to import ExamRegistration model if not present, or use raw query if easier
+                // But let's assume we can use the model if imported. 
+                // Since I can't guarantee import is up top in this single replacement, I will use sequelize.query or ExamRegistration if I add import.
+                // BEST PRACTICE: Use the model. I will add the import in a separate tool call or use fully qualified if possible? No.
+                // I'll assume I can add the import in a previous step or here.
+                // Actually, I can use a raw query to be safe given the context limits:
+                // "DELETE FROM ExamRegistrations WHERE ExamID = :id"
+                await sequelize.query('DELETE FROM ExamRegistrations WHERE ExamID = :id', {
+                    replacements: { id: exam.ExamID },
+                    type: QueryTypes.DELETE
+                });
+            } catch (err) {
+                console.error("Error cleaning up registrations:", err);
+                // Continue? If this fails, exam.destroy might fail too if FK exists.
             }
 
             await exam.destroy();
@@ -266,6 +284,7 @@ export class ExamController {
             }
 
             let successCount = 0;
+            let updatedCount = 0;
             let errors: string[] = [];
 
             // Cache (No transaction needed for initial load)
@@ -415,37 +434,132 @@ export class ExamController {
                     });
 
                     if (existingExam) {
-                        throw new Error(`EXISTS: ${cleanCode} on ${formattedDate} (${session})`);
+                        // Update existing (UPSERT behavior)
+                        console.log(`Updating existing exam: ${cleanCode} on ${formattedDate}`);
+                        await existingExam.update({
+                            ExamName: importedExamName || existingExam.ExamName,
+                            Duration: durationRaw ? parseInt(String(durationRaw)) : existingExam.Duration,
+                            ExamSeriesID: seriesId ? parseInt(String(seriesId)) : (existingExam.ExamSeriesID || null),
+                            Status: new Date(formattedDate as any) < new Date() ? 'Completed' : 'Scheduled' // Auto-update status based on date
+                        } as any);
+                        updatedCount++;
+                    } else {
+                        // Create New
+                        const rawTitle = req.body.title;
+                        const defaultPrefix: string = rawTitle ? String(rawTitle) : 'Exam';
+                        await Exam.create({
+                            SubjectID: subjectID,
+                            ExamSeriesID: seriesId ? parseInt(String(seriesId)) : undefined,
+                            ExamName: importedExamName || `${defaultPrefix} - ${subjectName}`,
+                            ExamDate: formattedDate as any,
+                            Session: session.toUpperCase(),
+                            Duration: durationRaw ? parseInt(String(durationRaw)) : 180,
+                            Status: new Date(formattedDate as any) < new Date() ? 'Completed' : 'Scheduled'
+                        } as any);
+                        successCount++;
                     }
-
-                    const rawTitle = req.body.title;
-                    const defaultPrefix: string = rawTitle ? String(rawTitle) : 'Exam';
-                    await Exam.create({
-                        SubjectID: subjectID,
-                        ExamSeriesID: seriesId ? parseInt(String(seriesId)) : null,
-                        ExamName: importedExamName || `${defaultPrefix} - ${subjectName}`,
-                        ExamDate: formattedDate as any,
-                        Session: session.toUpperCase(),
-                        Duration: duration || 180,
-                        Status: new Date(formattedDate) < new Date() ? 'Completed' : 'Scheduled'
-                    } as any);
-
-                    successCount++;
                 } catch (err: any) {
-                    errors.push(err.message);
+                    console.error("Row Error:", err.message);
+                    errors.push(`Row ${data.indexOf(row) + 2}: ${err.message}`);
                 }
             }
 
-            res.json({
-                message: successCount > 0 ? "Import complete" : "Import failed",
+            if (errors.length > 0) {
+                console.error("Import Errors:", errors);
+            }
+
+            // Trigger Logic-Based Audit
+            // Trigger Logic-Based Audit
+            if (seriesId) {
+                const sId = parseInt(String(seriesId));
+                if (!isNaN(sId)) {
+                    await ExamController.auditSeries(sId);
+                }
+            }
+
+            return res.json({
+                success: true,
+                message: "Import processing complete",
                 successCount,
+                updatedCount,
                 errorCount: errors.length,
-                errors: errors.slice(0, 20)
+                errors
             });
 
         } catch (error: any) {
             console.error("Import error:", error);
             res.status(500).json({ message: "Fatal error during import", error: error.message });
+        }
+    }
+
+    // Logic-Based Timetable Audit
+    static async auditSeries(seriesId: number) {
+        console.log(`Starting Audit for Series ID: ${seriesId}`);
+        try {
+            // 1. Fetch all exams in this series with Subject/Department info
+            const exams = await Exam.findAll({
+                where: { ExamSeriesID: seriesId },
+                include: [{
+                    model: Subject,
+                    include: [
+                        { model: Department, attributes: ['DepartmentCode'] },
+                        { model: Semester, attributes: ['SemesterID'] }
+                    ]
+                }]
+            });
+
+            // 2. Clear previous audit status
+            await Exam.update(
+                { AuditStatus: 'Clean', ConflictDetails: null } as any,
+                { where: { ExamSeriesID: seriesId } }
+            );
+
+            const updates: Promise<any>[] = [];
+
+            // 3. Group by Date + Session
+            const slots = new Map<string, any[]>();
+            exams.forEach(exam => {
+                const key = `${exam.ExamDate}_${exam.Session}`;
+                if (!slots.has(key)) slots.set(key, []);
+                slots.get(key)?.push(exam);
+            });
+
+            // 4. Check for Batch Conflicts (Same Dept + Semester in same slot)
+            for (const [slot, slotExams] of slots.entries()) {
+                const batches = new Map<string, any[]>();
+
+                // Group by Batch (Dept + Semester)
+                slotExams.forEach(exam => {
+                    const subject = (exam as any).Subject;
+                    if (!subject) return;
+
+                    const batchKey = `${subject.DepartmentID}_${subject.SemesterID}`;
+                    if (!batches.has(batchKey)) batches.set(batchKey, []);
+                    batches.get(batchKey)?.push(exam);
+                });
+
+                // Detect Conflicts
+                for (const [batchKey, batchExams] of batches.entries()) {
+                    if (batchExams.length > 1) {
+                        // CONFLICT FOUND: Multiple exams for same batch in same slot
+                        const confSubjects = batchExams.map(e => e.Subject.SubjectCode).join(', ');
+
+                        batchExams.forEach(exam => {
+                            updates.push(exam.update({
+                                AuditStatus: 'Conflict',
+                                ConflictDetails: `Clash with: ${confSubjects}`
+                            } as any));
+                        });
+                        console.log(`Conflict found in ${slot} for batch ${batchKey}: ${confSubjects}`);
+                    }
+                }
+            }
+
+            await Promise.all(updates);
+            console.log(`Audit Complete. ${updates.length} exams flagged.`);
+
+        } catch (error) {
+            console.error("Audit Failed:", error);
         }
     }
 }

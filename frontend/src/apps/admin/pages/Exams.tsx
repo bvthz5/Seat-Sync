@@ -1,31 +1,34 @@
-
 import React, { useState, useEffect } from 'react';
-import { Button, Input, Select, SelectItem, ButtonGroup } from "@heroui/react";
-import { Plus, Search, Download, RefreshCw, Bell, LayoutGrid, List as ListIcon, FileSpreadsheet, BookOpen } from "lucide-react";
+import { useParams, useNavigate } from 'react-router-dom';
+import { Button, Input, Select, SelectItem } from "@heroui/react";
+import { Plus, Search, FileSpreadsheet, List as ListIcon, LayoutGrid, ArrowLeft } from "lucide-react";
 import { toast } from 'react-hot-toast';
 
 import ExamStats from '../components/exams/ExamStats';
 import ExamListTable from '../components/exams/ExamListTable';
 import ExamCalendar from '../components/exams/ExamCalendar';
 import CreateExamModal from '../components/exams/CreateExamModal';
+import EditExamModal from '../components/exams/EditExamModal';
 import ExamImportModal from '../components/exams/ExamImportModal';
-import ExamSeriesManagementModal from '../components/exams/ExamSeriesManagementModal';
 import ExamDetailPanel from '../components/exams/ExamDetailPanel';
 import { ExamService } from '../services/examService';
 import { SeriesService } from '../services/seriesService';
 import { academicService } from '../services/academicService';
 
 const Exams: React.FC = () => {
+    const { seriesId } = useParams<{ seriesId: string }>();
+    const navigate = useNavigate();
+
     // State
     const [stats, setStats] = useState<{ total: number; completed: number; upcoming: number; activeToday: number; } | null>(null);
     const [exams, setExams] = useState([]);
     const [departments, setDepartments] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-    const [isSeriesModalOpen, setIsSeriesModalOpen] = useState(false);
     const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
-    const [series, setSeries] = useState<any[]>([]);
+    const [seriesName, setSeriesName] = useState<string>('');
 
     // Panel State
     const [selectedExam, setSelectedExam] = useState<any>(null);
@@ -34,22 +37,23 @@ const Exams: React.FC = () => {
     // Filters
     const [searchQuery, setSearchQuery] = useState('');
     const [deptFilter, setDeptFilter] = useState('All');
-    const [seriesFilter, setSeriesFilter] = useState('All');
     const [sessionFilter, setSessionFilter] = useState('All');
     const [statusFilter, setStatusFilter] = useState('All');
 
     useEffect(() => {
         fetchDepartments();
-        fetchSeries();
+        if (seriesId) {
+            fetchSeriesDetails();
+        }
         fetchData();
-    }, []);
+    }, [seriesId]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
             fetchData();
         }, 500);
         return () => clearTimeout(timer);
-    }, [searchQuery, statusFilter, deptFilter, seriesFilter]);
+    }, [searchQuery, statusFilter, deptFilter, seriesId]);
 
     const fetchDepartments = async () => {
         try {
@@ -60,24 +64,27 @@ const Exams: React.FC = () => {
         }
     };
 
-    const fetchSeries = async () => {
+    const fetchSeriesDetails = async () => {
+        if (!seriesId) return;
         try {
+            // Optimization: In a real app, we might have a specific endpoint or store this in context/state
+            // For now, we'll fetch all and find the one we need, or rely on a new endpoint if exists
             const response = await SeriesService.getAll();
-            if (response.success) setSeries(response.data);
+            if (response.success) {
+                const found = response.data.find((s: any) => String(s.ExamSeriesID) === seriesId);
+                if (found) setSeriesName(found.SeriesName);
+            }
         } catch (error) {
-            console.error("Failed to fetch series", error);
+            console.error("Failed to fetch series details", error);
         }
     };
-
-    // ...
-
-
 
     const fetchData = async () => {
         setLoading(true);
         try {
             const apiStatus = statusFilter === 'All' ? '' : statusFilter;
-            const apiSeries = seriesFilter === 'All' ? '' : seriesFilter;
+            const apiSeries = seriesId || ''; // Force series filter if in detail view
+
             const [statsData, examsData] = await Promise.all([
                 ExamService.getStats({ seriesId: apiSeries }),
                 ExamService.getAll({
@@ -113,7 +120,13 @@ const Exams: React.FC = () => {
     };
 
     const handleEdit = (exam: any) => {
-        toast("Edit detailed configuration", { icon: '✏️' });
+        setSelectedExam(exam);
+        setIsEditModalOpen(true);
+    };
+
+    const handleExamUpdated = () => {
+        fetchData();
+        // Trigger audit re-check if needed, but fetchData usually gets fresh data
     };
 
     const handleRowClick = (exam: any) => {
@@ -123,14 +136,23 @@ const Exams: React.FC = () => {
 
     return (
         <div className="p-8 max-w-[1600px] mx-auto space-y-8 bg-[#F8F9FA] min-h-screen">
-
             {/* Top Bar (SeatSync Header) */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">
-                        Exam Schedule {seriesFilter !== 'All' ? `: ${series.find(s => String(s.ExamSeriesID) === seriesFilter)?.SeriesName}` : ''}
-                    </h1>
-                    <p className="text-gray-500 mt-1 text-sm">Manage sessions, group by series, and resolve automated audit conflicts.</p>
+                <div className="flex items-center gap-4">
+                    <Button
+                        isIconOnly
+                        variant="light"
+                        onPress={() => navigate('/admin/exams')}
+                        className="text-gray-500 hover:text-blue-600"
+                    >
+                        <ArrowLeft size={24} />
+                    </Button>
+                    <div>
+                        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
+                            {seriesName || 'Exam Schedule'}
+                        </h1>
+                        <p className="text-gray-500 mt-1 text-sm">Manage sessions and resolve automated audit conflicts.</p>
+                    </div>
                 </div>
                 <div className="flex items-center gap-3">
                     <Button
@@ -141,15 +163,6 @@ const Exams: React.FC = () => {
                         onPress={() => setIsImportModalOpen(true)}
                     >
                         Import Timetable
-                    </Button>
-                    <Button
-                        variant="flat"
-                        color="primary"
-                        className="bg-blue-50 text-blue-700 font-medium border border-blue-200"
-                        startContent={<BookOpen size={18} />}
-                        onPress={() => setIsSeriesModalOpen(true)}
-                    >
-                        Manage Series
                     </Button>
                     <Button
                         color="primary"
@@ -200,32 +213,6 @@ const Exams: React.FC = () => {
                                 inputWrapper: "bg-gray-50 group-data-[focus=true]:bg-white border border-transparent group-data-[focus=true]:border-blue-500 transition-all rounded-lg"
                             }}
                         />
-                    </div>
-
-                    <div className="h-8 w-px bg-gray-200 mx-2 hidden lg:block"></div>
-
-                    {/* Series Select */}
-                    <div className="w-full lg:w-56">
-                        <Select
-                            placeholder="All Exam Series"
-                            size="sm"
-                            variant="bordered"
-                            classNames={{ trigger: "bg-blue-50/50 border-blue-100" }}
-                            selectedKeys={[seriesFilter]}
-                            onSelectionChange={(keys) => setSeriesFilter(String(Array.from(keys)[0]))}
-                            startContent={<BookOpen size={16} className="text-blue-500" />}
-                            aria-label="Filter by Series"
-                            items={[
-                                { ExamSeriesID: 'All', SeriesName: 'All Exam Series' },
-                                ...series
-                            ]}
-                        >
-                            {(item: any) => (
-                                <SelectItem key={String(item.ExamSeriesID)} textValue={item.SeriesName}>
-                                    {item.SeriesName}
-                                </SelectItem>
-                            )}
-                        </Select>
                     </div>
 
                     <div className="h-8 w-px bg-gray-200 mx-2 hidden lg:block"></div>
@@ -324,21 +311,22 @@ const Exams: React.FC = () => {
                 onSuccess={fetchData}
             />
 
+            {/* Edit Modal */}
+            {selectedExam && (
+                <EditExamModal
+                    isOpen={isEditModalOpen}
+                    onClose={() => setIsEditModalOpen(false)}
+                    onSuccess={handleExamUpdated}
+                    exam={selectedExam}
+                />
+            )}
+
             {/* Import Modal */}
             <ExamImportModal
                 isOpen={isImportModalOpen}
                 onClose={() => setIsImportModalOpen(false)}
                 onSuccess={fetchData}
-            />
-
-            {/* Series Management Modal */}
-            <ExamSeriesManagementModal
-                isOpen={isSeriesModalOpen}
-                onClose={() => setIsSeriesModalOpen(false)}
-                onSuccess={() => {
-                    fetchSeries();
-                    fetchData();
-                }}
+                preSelectedSeriesId={seriesId} // Pass seriesId to pre-select
             />
 
             {/* Detail Drawer */}

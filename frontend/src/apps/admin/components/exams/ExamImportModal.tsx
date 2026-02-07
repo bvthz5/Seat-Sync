@@ -10,9 +10,10 @@ interface ExamImportModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSuccess: () => void;
+    preSelectedSeriesId?: string;
 }
 
-const ExamImportModal = ({ isOpen, onClose, onSuccess }: ExamImportModalProps) => {
+const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: ExamImportModalProps) => {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [importing, setImporting] = useState(false);
     const [examTitle, setExamTitle] = useState('');
@@ -23,8 +24,11 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess }: ExamImportModalProps) =
     useEffect(() => {
         if (isOpen) {
             fetchSeries();
+            if (preSelectedSeriesId) {
+                setSelectedSeriesId(preSelectedSeriesId);
+            }
         }
-    }, [isOpen]);
+    }, [isOpen, preSelectedSeriesId]);
 
     const fetchSeries = async () => {
         setLoadingSeries(true);
@@ -32,8 +36,8 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess }: ExamImportModalProps) =
             const response = await SeriesService.getAll();
             if (response.success) {
                 setSeries(response.data);
-                // Auto-select first series if available
-                if (response.data.length > 0 && !selectedSeriesId) {
+                // Auto-select first series if available AND no pre-selection
+                if (response.data.length > 0 && !selectedSeriesId && !preSelectedSeriesId) {
                     setSelectedSeriesId(String(response.data[0].ExamSeriesID));
                 }
             }
@@ -79,7 +83,16 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess }: ExamImportModalProps) =
                 parseInt(selectedSeriesId),
                 examTitle
             );
-            toast.success(`Processed: ${result.successCount} exams created`);
+
+            const created = result.successCount || 0;
+            const updated = result.updatedCount || 0;
+
+            if (created > 0 || updated > 0) {
+                toast.success(`Complete: ${created} created, ${updated} updated`);
+            } else {
+                toast('No changes made', { icon: 'ℹ️' });
+            }
+
             if (result.errorCount > 0) {
                 toast.error(`Failed: ${result.errorCount} errors (Check console)`);
                 console.error("Import Errors:", result.errors);

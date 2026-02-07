@@ -288,6 +288,48 @@ async function ensureSchemaIntegrity() {
             END
         `, { type: QueryTypes.RAW });
 
+        // Add ExamSeriesID to Exams (Fix for Timetable Import Error)
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Exams' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') 
+                    AND name = 'ExamSeriesID'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Exams] ADD [ExamSeriesID] INT NULL;
+                    PRINT 'Added ExamSeriesID to Exams';
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
+        // Add Audit Columns to Exams
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Exams' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') 
+                    AND name = 'AuditStatus'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Exams] ADD [AuditStatus] NVARCHAR(20) DEFAULT 'Pending' WITH VALUES;
+                    PRINT 'Added AuditStatus to Exams';
+                END
+
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') 
+                    AND name = 'ConflictDetails'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Exams] ADD [ConflictDetails] NVARCHAR(MAX) NULL;
+                    PRINT 'Added ConflictDetails to Exams';
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
     } catch (error) {
         console.warn("Schema integrity check warning (non-fatal):", error);
     }
@@ -296,7 +338,7 @@ async function ensureSchemaIntegrity() {
 export async function connectDB() {
     try {
         await sequelize.authenticate();
-        console.log(`Connection Connected: ${sequelize.getDialect()}`);
+        console.log(`Connection Connected: ${sequelize.getDialect()} `);
 
         await ensureSchemaIntegrity();
 

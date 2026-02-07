@@ -14,6 +14,8 @@ interface ExamAttributes {
   Session: string;
   Duration: number;
   Status: string;
+  AuditStatus?: 'Clean' | 'Conflict' | 'Pending';
+  ConflictDetails?: string;
 }
 
 /**
@@ -76,6 +78,15 @@ Exam.init(
       type: DataTypes.STRING(20),
       allowNull: false,
     },
+    AuditStatus: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+      defaultValue: 'Pending'
+    },
+    ConflictDetails: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    }
   },
   {
     sequelize,

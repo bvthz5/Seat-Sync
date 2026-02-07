@@ -21,6 +21,7 @@ interface Exam {
     // Mock fields for UI match (keeping some for now)
     Enrollment?: number;
     AuditStatus?: 'Clean' | 'Conflict' | 'Pending';
+    ConflictDetails?: string;
 }
 
 interface ExamListTableProps {
@@ -56,19 +57,6 @@ const ExamListTable: React.FC<ExamListTableProps> = ({ exams, loading, onEdit, o
         );
     }
 
-    // Helper to generate consistent mock data based on ID
-    const getMockData = (exam: Exam) => {
-        const id = exam.ExamID;
-        const enroll = 40 + (id * 7) % 150;
-
-        // Deterministic audit status
-        let audit: 'Clean' | 'Conflict' | 'Pending' = 'Clean';
-        if (id % 5 === 0) audit = 'Conflict';
-        if (id % 7 === 0) audit = 'Pending';
-
-        return { enroll, audit };
-    };
-
     return (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
@@ -81,11 +69,12 @@ const ExamListTable: React.FC<ExamListTableProps> = ({ exams, loading, onEdit, o
                             <th className="px-6 py-4 text-center">Enrollment</th>
                             <th className="px-6 py-4">Status</th>
                             <th className="px-6 py-4">SeatSync Audit</th>
+                            <th className="px-6 py-4 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                         {exams.map((exam) => {
-                            const { enroll, audit } = getMockData(exam);
+                            const audit = exam.AuditStatus || 'Pending';
                             const displayStatus = exam.Status === 'Scheduled' ? 'Finalized' : exam.Status;
                             const deptName = exam.Subject?.Department?.DepartmentName || 'General';
                             const deptCode = exam.Subject?.Department?.DepartmentCode || 'GEN';
@@ -134,7 +123,7 @@ const ExamListTable: React.FC<ExamListTableProps> = ({ exams, loading, onEdit, o
 
                                     {/* Enrollment */}
                                     <td className="px-6 py-4 text-center">
-                                        <span className="text-sm font-semibold text-gray-800">{enroll}</span>
+                                        <span className="text-sm font-semibold text-gray-400">-</span>
                                     </td>
 
                                     {/* Status */}
@@ -156,17 +145,47 @@ const ExamListTable: React.FC<ExamListTableProps> = ({ exams, loading, onEdit, o
                                             <div className="flex flex-col">
                                                 <div className="flex items-center gap-2 text-red-600">
                                                     <AlertTriangle size={16} fill="currentColor" className="text-white" />
-                                                    <span className="text-sm font-bold">12 Student clashes</span>
+                                                    <span className="text-sm font-bold">Batch Clash</span>
                                                 </div>
-                                                <span className="text-xs text-red-400 pl-6">Conflict with PHY101</span>
+                                                <span className="text-xs text-red-400 pl-6 truncate max-w-[200px]" title={exam.ConflictDetails}>
+                                                    {exam.ConflictDetails || 'Multiple exams for same batch'}
+                                                </span>
                                             </div>
                                         )}
                                         {audit === 'Pending' && (
                                             <div className="flex items-center gap-2 text-blue-600">
                                                 <RefreshCw size={14} className="animate-spin" />
-                                                <span className="text-sm font-medium">Audit in progress...</span>
+                                                <span className="text-sm font-medium">Analyzing...</span>
                                             </div>
                                         )}
+                                    </td>
+
+                                    {/* Actions */}
+                                    <td className="px-6 py-4 text-right">
+                                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <Tooltip content="Edit Exam">
+                                                <Button
+                                                    isIconOnly
+                                                    size="sm"
+                                                    variant="light"
+                                                    onPress={() => onEdit(exam)}
+                                                    className="text-gray-400 hover:text-blue-600"
+                                                >
+                                                    <Edit2 size={18} />
+                                                </Button>
+                                            </Tooltip>
+                                            <Tooltip content="Delete Exam" color="danger">
+                                                <Button
+                                                    isIconOnly
+                                                    size="sm"
+                                                    variant="light"
+                                                    onPress={() => onDelete(exam.ExamID)}
+                                                    className="text-gray-400 hover:text-red-600"
+                                                >
+                                                    <Trash2 size={18} />
+                                                </Button>
+                                            </Tooltip>
+                                        </div>
                                     </td>
                                 </tr>
                             );
