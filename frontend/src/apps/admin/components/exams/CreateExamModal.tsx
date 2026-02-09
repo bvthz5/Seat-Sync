@@ -1,9 +1,9 @@
-
-import React, { useState } from 'react';
-import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button, Input, Select, SelectItem, Textarea, Chip, RadioGroup, Radio } from "@heroui/react";
+import React, { useState, useEffect } from 'react';
+import { Modal, ModalContent, ModalHeader, ModalBody, Button, Input } from "@heroui/react";
 import toast from 'react-hot-toast';
 import { ExamService } from '../../services/examService';
-import { Calendar, Clock, Search, AlertTriangle, AlertCircle, CheckCircle, Info, Layers, Check, X } from "lucide-react";
+import { SubjectService } from '../../services/subjectService';
+import { Search, AlertTriangle, AlertCircle, Check, Info, Layers } from "lucide-react";
 
 interface CreateExamModalProps {
     isOpen: boolean;
@@ -11,15 +11,11 @@ interface CreateExamModalProps {
     onSuccess: () => void;
 }
 
-// Mock Subjects removed - fetching from API
-import { SubjectService } from '../../services/subjectService';
-
 interface Subject {
     SubjectID: number;
     SubjectCode: string;
     SubjectName: string;
 }
-
 
 const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSuccess }) => {
     const [loading, setLoading] = useState(false);
@@ -32,8 +28,7 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
         ExamDate: '',
         Session: 'FN',
         Duration: '180',
-        ExamType: 'Internal Assessment',
-        Instructions: ''
+        ExamType: 'Internal Assessment'
     });
 
     const [subjectSearch, setSubjectSearch] = useState('');
@@ -41,7 +36,7 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
     const [filteredSubjects, setFilteredSubjects] = useState<Subject[]>([]);
 
     // Fetch subjects on mount
-    React.useEffect(() => {
+    useEffect(() => {
         if (isOpen) {
             loadSubjects();
         }
@@ -56,7 +51,6 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
             toast.error("Could not load subjects list");
         }
     };
-
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -129,7 +123,7 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
             <ModalContent>
                 <ModalHeader>
                     <div>
-                        <h2 className="text-2xl font-bold text-gray-900">Schedule New Exam</h2>
+                        <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Schedule New Exam</h2>
                         <p className="text-sm text-gray-500 font-normal mt-1">Configure exam details and verify constraints before publishing.</p>
                     </div>
                 </ModalHeader>
@@ -137,7 +131,7 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
                     <div className="flex flex-col lg:flex-row h-full">
 
                         {/* LEFT COLUMN: FORM */}
-                        <div className="flex-1 p-5 bg-white overflow-y-auto">
+                        <div className="flex-1 p-6 bg-white overflow-y-auto">
                             <h3 className="text-base font-bold text-gray-800 mb-6 flex items-center gap-2">
                                 <Layers size={18} className="text-blue-600" /> Exam Details
                             </h3>
@@ -146,7 +140,7 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
 
                                 {/* 1. Subject Search */}
                                 <div className="relative">
-                                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Subject Name or Code</label>
+                                    <label className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Subject Name or Code</label>
                                     <Input
                                         id="subjectSearch"
                                         name="subjectSearch"
@@ -154,15 +148,16 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
                                         value={subjectSearch}
                                         onValueChange={handleSearchChange}
                                         size="lg"
-                                        variant="bordered"
+                                        variant="flat"
                                         radius="sm"
                                         endContent={<Search className="text-gray-400" size={20} />}
                                         classNames={{
-                                            inputWrapper: "border-gray-200 hover:border-blue-400 focus-within:border-blue-600 shadow-none"
+                                            inputWrapper: "!bg-gray-50 !border-none !shadow-none hover:!bg-gray-100 group-data-[focus=true]:!bg-white group-data-[focus=true]:!shadow-sm !ring-transparent group-data-[focus=true]:!ring-gray-200",
+                                            input: "font-medium text-gray-800 !border-0 !outline-none placeholder:text-gray-400"
                                         }}
                                     />
                                     {filteredSubjects.length > 0 && (
-                                        <div className="absolute z-10 w-full bg-white border border-gray-100 rounded-lg shadow-xl mt-1 max-h-48 overflow-y-auto">
+                                        <div className="absolute z-50 w-full bg-white border border-gray-100 rounded-lg shadow-xl mt-1 max-h-48 overflow-y-auto">
                                             {filteredSubjects.map(sub => (
                                                 <div
                                                     key={sub.SubjectID}
@@ -179,14 +174,15 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
 
                                 {/* 2. Exam Type */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">Exam Type</label>
+                                    <label className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Exam Type</label>
                                     <div className="flex gap-3">
                                         {['Internal Assessment', 'Semester End', 'Supplementary'].map((type) => (
                                             <button
                                                 key={type}
+                                                type="button"
                                                 className={`px-4 py-2 text-sm font-medium rounded-lg border transition-all ${formData.ExamType === type
                                                     ? 'bg-blue-50 border-blue-500 text-blue-700 shadow-sm'
-                                                    : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                                                    : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
                                                     }`}
                                                 onClick={() => setFormData({ ...formData, ExamType: type })}
                                             >
@@ -197,75 +193,84 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
                                 </div>
 
                                 {/* 3. Date & Session */}
-                                <div className="grid grid-cols-2 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Date</label>
+                                        <label className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Date</label>
                                         <Input
                                             id="ExamDate"
                                             type="date"
                                             name="ExamDate"
                                             value={formData.ExamDate}
                                             onChange={handleChange}
-                                            variant="bordered"
+                                            variant="flat"
                                             radius="sm"
                                             size="lg"
                                             className="w-full"
+                                            classNames={{
+                                                inputWrapper: "!bg-gray-50 !border-none !shadow-none hover:!bg-gray-100 group-data-[focus=true]:!bg-white group-data-[focus=true]:!shadow-sm !ring-transparent group-data-[focus=true]:!ring-gray-200",
+                                                input: "font-medium text-gray-800 !border-0 !outline-none"
+                                            }}
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-3">Session</label>
-                                        <div className="flex gap-6">
+                                        <label className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-3">Session</label>
+                                        <div className="flex gap-6 h-[48px] items-center">
                                             <label className="flex items-center gap-2 cursor-pointer group">
-                                                <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${formData.Session === 'FN' ? 'border-blue-600' : 'border-gray-300'}`}>
+                                                <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${formData.Session === 'FN' ? 'border-blue-600 bg-white' : 'border-gray-300 bg-white group-hover:border-gray-400'}`}>
                                                     {formData.Session === 'FN' && <div className="w-2.5 h-2.5 bg-blue-600 rounded-full" />}
                                                 </div>
                                                 <input type="radio" className="hidden" name="Session" value="FN" checked={formData.Session === 'FN'} onChange={handleChange} />
                                                 <div className="text-sm">
-                                                    <span className="font-medium text-gray-800 block">Forenoon</span>
-                                                    <span className="text-xs text-gray-500">(FN)</span>
+                                                    <span className="font-bold text-gray-700 block">Forenoon</span>
+                                                    <span className="text-xs text-gray-400 font-medium">(FN)</span>
                                                 </div>
                                             </label>
 
                                             <label className="flex items-center gap-2 cursor-pointer group">
-                                                <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${formData.Session === 'AN' ? 'border-blue-600' : 'border-gray-300'}`}>
+                                                <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${formData.Session === 'AN' ? 'border-blue-600 bg-white' : 'border-gray-300 bg-white group-hover:border-gray-400'}`}>
                                                     {formData.Session === 'AN' && <div className="w-2.5 h-2.5 bg-blue-600 rounded-full" />}
                                                 </div>
                                                 <input type="radio" className="hidden" name="Session" value="AN" checked={formData.Session === 'AN'} onChange={handleChange} />
                                                 <div className="text-sm">
-                                                    <span className="font-medium text-gray-800 block">Afternoon</span>
-                                                    <span className="text-xs text-gray-500">(AN)</span>
+                                                    <span className="font-bold text-gray-700 block">Afternoon</span>
+                                                    <span className="text-xs text-gray-400 font-medium">(AN)</span>
                                                 </div>
                                             </label>
                                         </div>
                                     </div>
                                 </div>
 
-                                <Input
-                                    id="Duration"
-                                    type="number"
-                                    label="Duration (Minutes)"
-                                    labelPlacement="outside"
-                                    placeholder="180"
-                                    name="Duration"
-                                    value={formData.Duration}
-                                    onChange={handleChange}
-                                    variant="bordered"
-                                    radius="sm"
-                                    size="lg"
-                                    className="w-full"
-                                    classNames={{ label: "!text-gray-700 font-medium" }}
-                                />
+                                {/* 4. Duration - Fixed Overlap */}
+                                <div>
+                                    <label className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Duration (Minutes)</label>
+                                    <Input
+                                        id="Duration"
+                                        type="number"
+                                        placeholder="180"
+                                        name="Duration"
+                                        value={formData.Duration}
+                                        onChange={handleChange}
+                                        variant="flat"
+                                        radius="sm"
+                                        size="lg"
+                                        className="w-full"
+                                        classNames={{
+                                            inputWrapper: "!bg-gray-50 !border-none !shadow-none hover:!bg-gray-100 group-data-[focus=true]:!bg-white group-data-[focus=true]:!shadow-sm !ring-transparent group-data-[focus=true]:!ring-gray-200",
+                                            input: "font-medium text-gray-800 placeholder:text-gray-400 !border-0 !outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                        }}
+                                    />
+                                </div>
 
                                 {/* Divider */}
                                 <div className="h-px bg-gray-100 my-4"></div>
 
-                                {/* Action Buttons (Inline bottom) */}
+                                {/* Action Buttons */}
                                 <div className="flex justify-end gap-3 pt-2">
                                     <Button variant="bordered" className="border-gray-300 text-gray-700 font-medium px-6" onPress={onClose}>
                                         Save Draft
                                     </Button>
                                     <Button
-                                        className="bg-blue-600 text-white font-semibold shadow-md px-6"
+                                        className="bg-blue-600 text-white font-semibold shadow-md px-6 hover:bg-blue-700"
                                         onPress={handleSubmit}
                                         isLoading={loading}
                                     >
@@ -277,20 +282,20 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
                         </div>
 
                         {/* RIGHT COLUMN: SIDEBAR */}
-                        <div className="w-full lg:w-[280px] bg-[#F8FAFC] border-l border-gray-200 p-5">
+                        <div className="w-full lg:w-[280px] bg-[#F8FAFC] border-l border-gray-200 p-5 flex flex-col gap-6">
 
-                            <div className="flex items-center justify-between mb-6">
-                                <h3 className="font-bold text-gray-800 text-sm uppercase tracking-wide">Live Conflict Check</h3>
-                                <div className="flex items-center gap-1.5 px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-bold">
-                                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" /> Active
+                            <div className="flex items-center justify-between">
+                                <h3 className="font-bold text-gray-800 text-xs uppercase tracking-wide">Live Conflict Check</h3>
+                                <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold uppercase tracking-wider">
+                                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" /> Active
                                 </div>
                             </div>
 
-                            <div className="space-y-4">
+                            <div className="space-y-4 overflow-y-auto pr-1">
                                 {/* Green Item */}
-                                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex gap-3">
-                                    <div className="mt-0.5 w-6 h-6 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-                                        <Check size={14} className="text-green-600" strokeWidth={3} />
+                                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex gap-3 hover:shadow-md transition-shadow cursor-default">
+                                    <div className="mt-0.5 w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                                        <Check size={14} className="text-emerald-600" strokeWidth={3} />
                                     </div>
                                     <div>
                                         <p className="text-sm font-bold text-gray-800">Student Clashes</p>
@@ -299,9 +304,9 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
                                 </div>
 
                                 {/* Yellow Item */}
-                                <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100 shadow-sm flex gap-3">
-                                    <div className="mt-0.5 w-6 h-6 rounded-full bg-yellow-100 flex items-center justify-center shrink-0">
-                                        <AlertTriangle size={14} className="text-yellow-600" strokeWidth={2} />
+                                <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 shadow-sm flex gap-3 hover:shadow-md transition-shadow cursor-default">
+                                    <div className="mt-0.5 w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                                        <AlertTriangle size={14} className="text-amber-600" strokeWidth={2} />
                                     </div>
                                     <div>
                                         <p className="text-sm font-bold text-gray-800">Simultaneous Exams</p>
@@ -312,9 +317,9 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
                                 </div>
 
                                 {/* Red Item */}
-                                <div className="bg-red-50 p-4 rounded-xl border border-red-100 shadow-sm flex gap-3">
-                                    <div className="mt-0.5 w-6 h-6 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                                        <AlertCircle size={14} className="text-red-600" strokeWidth={2} />
+                                <div className="bg-rose-50 p-4 rounded-xl border border-rose-100 shadow-sm flex gap-3 hover:shadow-md transition-shadow cursor-default">
+                                    <div className="mt-0.5 w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
+                                        <AlertCircle size={14} className="text-rose-600" strokeWidth={2} />
                                     </div>
                                     <div>
                                         <p className="text-sm font-bold text-gray-800">Missing Registrations</p>
@@ -325,9 +330,9 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
                                 </div>
 
                                 {/* Green Item */}
-                                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex gap-3">
-                                    <div className="mt-0.5 w-6 h-6 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-                                        <Check size={14} className="text-green-600" strokeWidth={3} />
+                                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex gap-3 hover:shadow-md transition-shadow cursor-default">
+                                    <div className="mt-0.5 w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                                        <Check size={14} className="text-emerald-600" strokeWidth={3} />
                                     </div>
                                     <div>
                                         <p className="text-sm font-bold text-gray-800">Room Availability</p>
@@ -337,7 +342,7 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
                             </div>
 
                             {/* Info Box */}
-                            <div className="mt-6 bg-blue-50 border border-blue-100 rounded-xl p-4">
+                            <div className="mt-auto bg-blue-50 border border-blue-100 rounded-xl p-4 shadow-sm">
                                 <div className="flex items-center gap-2 mb-2">
                                     <Info size={16} className="text-blue-600" />
                                     <span className="text-xs font-bold text-blue-800">Quick Tip</span>

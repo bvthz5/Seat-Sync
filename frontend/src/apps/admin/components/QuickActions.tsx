@@ -5,7 +5,7 @@ import { Printer, UserX, Play, TriangleAlert } from 'lucide-react';
 export const QuickActions: React.FC = () => {
     return (
         <Card className="h-full border-none shadow-sm rounded-2xl bg-white">
-            <CardHeader className="px-6 py-5 border-b border-gray-100">
+            <CardHeader className="p-3 z-10 w-full shrink-0 overflow-inherit color-inherit subpixel-antialiased rounded-t-large px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-100 gap-4">
                 <h3 className="font-normal text-lg text-[#202124]">Quick Actions</h3>
             </CardHeader>
             <CardBody className="p-6">

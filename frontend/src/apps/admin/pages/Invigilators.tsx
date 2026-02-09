@@ -11,7 +11,6 @@ import {
     TableCell,
     Chip,
     Input,
-    User as UserAvatar,
     Dropdown,
     DropdownTrigger,
     DropdownMenu,
@@ -35,7 +34,6 @@ import {
     MoreVertical,
     Trash2,
     AlertTriangle,
-    Mail,
     ShieldCheck,
     Users,
     Activity,
@@ -57,6 +55,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { invigilatorService, Invigilator, InvigilatorStats } from '../services/invigilatorService';
+
+import AddInvigilatorModal from '../components/invigilators/AddInvigilatorModal';
 
 const Invigilators: React.FC = () => {
     const [invigilators, setInvigilators] = useState<Invigilator[]>([]);
@@ -83,11 +83,6 @@ const Invigilators: React.FC = () => {
     const [selectedInvigilator, setSelectedInvigilator] = useState<Invigilator | null>(null);
 
     // Form State
-    const [newInvigilator, setNewInvigilator] = useState({
-        FullName: "",
-        Email: "",
-        Password: ""
-    });
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const fetchData = async () => {
@@ -110,26 +105,6 @@ const Invigilators: React.FC = () => {
     useEffect(() => {
         fetchData();
     }, []);
-
-    const handleAddInvigilator = async () => {
-        if (!newInvigilator.FullName || !newInvigilator.Email || !newInvigilator.Password) {
-            toast.error("Please fill all required fields");
-            return;
-        }
-
-        setIsSubmitting(true);
-        try {
-            await invigilatorService.create(newInvigilator);
-            toast.success("Invigilator added successfully");
-            onAddClose();
-            setNewInvigilator({ FullName: "", Email: "", Password: "" });
-            fetchData();
-        } catch (error: any) {
-            toast.error(error.response?.data?.message || "Failed to add invigilator");
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
 
     const handleToggleFlag = async (id: number) => {
         try {
@@ -234,8 +209,10 @@ const Invigilators: React.FC = () => {
                         id="search-invigilators"
                         name="search-invigilators"
                         classNames={{
-                            inputWrapper: "bg-white border-1 border-gray-200 shadow-sm rounded-xl h-11",
+                            inputWrapper: "bg-white hover:bg-gray-50 focus-within:!bg-white rounded-xl h-11 shadow-none transition-all",
+                            input: "text-gray-700 font-medium"
                         }}
+                        variant="flat"
                         placeholder="Search staff members, departments..."
                         startContent={<Search size={18} className="text-gray-400" />}
                         value={searchQuery}
@@ -314,54 +291,62 @@ const Invigilators: React.FC = () => {
                 <>
                     {/* Stats Cards Section */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
-                        <Card className="shadow-sm border-none bg-white rounded-3xl overflow-hidden py-2">
-                            <CardBody className="flex flex-row items-center gap-5 p-6 relative">
-                                <div className="h-12 w-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600">
-                                    <Briefcase size={24} strokeWidth={2.5} />
+                        <Card className="shadow-sm border-none bg-white rounded-2xl overflow-hidden py-1 transition-all hover:shadow-md">
+                            <CardBody className="flex flex-row items-center gap-4 p-5">
+                                <div className="h-12 w-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
+                                    <Briefcase size={22} strokeWidth={2.5} />
                                 </div>
-                                <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-gray-400 tracking-[0.1em] uppercase absolute top-6 right-6">GLOBAL</span>
-                                    <span className="text-sm font-semibold text-gray-500">Total Invigilators</span>
-                                    <span className="text-3xl font-bold text-gray-900 mt-1">{stats.total}</span>
-                                </div>
-                            </CardBody>
-                        </Card>
-
-                        <Card className="shadow-sm border-none bg-white rounded-3xl overflow-hidden py-2">
-                            <CardBody className="flex flex-row items-center gap-5 p-6 relative">
-                                <div className="h-12 w-12 rounded-2xl bg-green-50 flex items-center justify-center text-green-600">
-                                    <ShieldCheck size={24} strokeWidth={2.5} />
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-gray-400 tracking-[0.1em] uppercase absolute top-6 right-6">ACTIVE</span>
-                                    <span className="text-sm font-semibold text-gray-500">Eligible/Available</span>
-                                    <span className="text-3xl font-bold text-gray-900 mt-1">{stats.eligible}</span>
+                                <div className="flex flex-col flex-1 min-w-0">
+                                    <div className="flex justify-between items-start mb-1">
+                                        <span className="text-sm font-semibold text-gray-500 truncate">Total Invigilators</span>
+                                        <span className="text-[10px] font-bold text-blue-200 bg-blue-50 px-1.5 py-0.5 rounded ml-2">GLOBAL</span>
+                                    </div>
+                                    <span className="text-2xl font-bold text-gray-900">{stats.total}</span>
                                 </div>
                             </CardBody>
                         </Card>
 
-                        <Card className="shadow-sm border-none bg-white rounded-3xl overflow-hidden py-2">
-                            <CardBody className="flex flex-row items-center gap-5 p-6 relative">
-                                <div className="h-12 w-12 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600">
-                                    <Users size={24} strokeWidth={2.5} />
+                        <Card className="shadow-sm border-none bg-white rounded-2xl overflow-hidden py-1 transition-all hover:shadow-md">
+                            <CardBody className="flex flex-row items-center gap-4 p-5">
+                                <div className="h-12 w-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
+                                    <ShieldCheck size={22} strokeWidth={2.5} />
                                 </div>
-                                <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-gray-400 tracking-[0.1em] uppercase absolute top-6 right-6">LIVE</span>
-                                    <span className="text-sm font-semibold text-gray-500">On Duty</span>
-                                    <span className="text-3xl font-bold text-gray-900 mt-1">{stats.onDuty}</span>
+                                <div className="flex flex-col flex-1 min-w-0">
+                                    <div className="flex justify-between items-start mb-1">
+                                        <span className="text-sm font-semibold text-gray-500 truncate">Eligible/Available</span>
+                                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded ml-2">ACTIVE</span>
+                                    </div>
+                                    <span className="text-2xl font-bold text-gray-900">{stats.eligible}</span>
                                 </div>
                             </CardBody>
                         </Card>
 
-                        <Card className="shadow-sm border-none bg-white rounded-3xl overflow-hidden py-2">
-                            <CardBody className="flex flex-row items-center gap-5 p-6 relative">
-                                <div className="h-12 w-12 rounded-2xl bg-rose-50 flex items-center justify-center text-rose-600">
-                                    <AlertTriangle size={24} strokeWidth={2.5} />
+                        <Card className="shadow-sm border-none bg-white rounded-2xl overflow-hidden py-1 transition-all hover:shadow-md">
+                            <CardBody className="flex flex-row items-center gap-4 p-5">
+                                <div className="h-12 w-12 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 shrink-0">
+                                    <Users size={22} strokeWidth={2.5} />
                                 </div>
-                                <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-gray-400 tracking-[0.1em] uppercase absolute top-6 right-6">RESTRICTED</span>
-                                    <span className="text-sm font-semibold text-gray-500">Flagged/Unavailable</span>
-                                    <span className="text-3xl font-bold text-gray-900 mt-1">{stats.flagged}</span>
+                                <div className="flex flex-col flex-1 min-w-0">
+                                    <div className="flex justify-between items-start mb-1">
+                                        <span className="text-sm font-semibold text-gray-500 truncate">On Duty</span>
+                                        <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded ml-2">LIVE</span>
+                                    </div>
+                                    <span className="text-2xl font-bold text-gray-900">{stats.onDuty}</span>
+                                </div>
+                            </CardBody>
+                        </Card>
+
+                        <Card className="shadow-sm border-none bg-white rounded-2xl overflow-hidden py-1 transition-all hover:shadow-md">
+                            <CardBody className="flex flex-row items-center gap-4 p-5">
+                                <div className="h-12 w-12 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600 shrink-0">
+                                    <AlertTriangle size={22} strokeWidth={2.5} />
+                                </div>
+                                <div className="flex flex-col flex-1 min-w-0">
+                                    <div className="flex justify-between items-start mb-1">
+                                        <span className="text-sm font-semibold text-gray-500 truncate">Flagged/Unavailable</span>
+                                        <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded ml-2">RESTRICTED</span>
+                                    </div>
+                                    <span className="text-2xl font-bold text-gray-900">{stats.flagged}</span>
                                 </div>
                             </CardBody>
                         </Card>
@@ -380,27 +365,45 @@ const Invigilators: React.FC = () => {
                                 size="sm"
                                 className="w-56"
                                 variant="bordered"
-                                selectorIcon={<span />}
+                                selectorIcon={<ChevronDown size={16} className="text-gray-500" />}
                                 aria-label="Filter by department"
-                                popoverProps={{
-                                    classNames: {
-                                        base: "z-[9999]",
-                                        content: "z-[9999] bg-white"
-                                    }
-                                }}
-                                listboxProps={{
-                                    classNames: {
-                                        base: "max-h-[300px] overflow-auto"
-                                    }
-                                }}
                                 selectedKeys={selectedDepartment ? new Set([selectedDepartment]) : new Set()}
                                 onSelectionChange={(keys) => {
                                     const selected = Array.from(keys as Set<string>)[0];
                                     setSelectedDepartment(selected || "");
                                 }}
+                                classNames={{
+                                    trigger: "!bg-white hover:!bg-gray-50 focus:!bg-white min-h-10 rounded-xl transition-all relative w-full pr-10 shadow-none",
+                                    value: "text-gray-700 font-medium text-left text-sm group-data-[has-value=true]:text-gray-900",
+                                    selectorIcon: "!absolute !right-3 !top-1/2 !-translate-y-1/2 text-gray-500",
+                                    popoverContent: "bg-white shadow-xl border border-gray-100 rounded-xl"
+                                }}
+                                popoverProps={{
+                                    classNames: {
+                                        base: "z-[9999]",
+                                        content: "p-1 border-none shadow-xl rounded-xl bg-white w-full min-w-[var(--trigger-width)]"
+                                    },
+                                    placement: "bottom"
+                                }}
+                                listboxProps={{
+                                    classNames: {
+                                        base: "max-h-[300px] overflow-auto p-2",
+                                        list: "gap-1"
+                                    },
+                                    itemClasses: {
+                                        base: [
+                                            "rounded-lg",
+                                            "text-gray-700",
+                                            "font-medium",
+                                            "data-[hover=true]:bg-gray-50",
+                                            "data-[selectable=true]:focus:bg-gray-50",
+                                            "py-2"
+                                        ]
+                                    }
+                                }}
                             >
                                 {uniqueDepartments.map((dept) => (
-                                    <SelectItem key={dept.DepartmentID.toString()}>
+                                    <SelectItem key={dept.DepartmentID.toString()} className="rounded-lg">
                                         {dept.DepartmentCode}
                                     </SelectItem>
                                 ))}
@@ -413,17 +416,18 @@ const Invigilators: React.FC = () => {
                                 size="sm"
                                 className="w-56"
                                 variant="bordered"
-                                selectorIcon={<span />}
+                                selectorIcon={<ChevronDown size={16} className="text-gray-500" />}
                                 aria-label="Filter by availability"
                                 popoverProps={{
                                     classNames: {
                                         base: "z-[9999]",
-                                        content: "z-[9999] bg-white"
+                                        content: "z-[9999] bg-white rounded-xl shadow-xl border border-gray-100"
                                     }
                                 }}
                                 listboxProps={{
                                     classNames: {
-                                        base: "max-h-[300px] overflow-auto"
+                                        base: "max-h-[300px] overflow-auto p-2",
+                                        list: "gap-1"
                                     }
                                 }}
                                 selectedKeys={selectedAvailability ? new Set([selectedAvailability]) : new Set()}
@@ -431,10 +435,16 @@ const Invigilators: React.FC = () => {
                                     const selected = Array.from(keys as Set<string>)[0];
                                     setSelectedAvailability(selected || "");
                                 }}
+                                classNames={{
+                                    trigger: "!bg-white hover:!bg-gray-50 focus:!bg-white min-h-10 rounded-xl transition-all relative w-full pr-10 shadow-none",
+                                    value: "text-gray-700 font-medium text-left text-sm group-data-[has-value=true]:text-gray-900",
+                                    selectorIcon: "!absolute !right-3 !top-1/2 !-translate-y-1/2 text-gray-500",
+                                    popoverContent: "bg-white shadow-xl border border-gray-100 rounded-xl"
+                                }}
                             >
-                                <SelectItem key="available">Available</SelectItem>
-                                <SelectItem key="assigned">Assigned</SelectItem>
-                                <SelectItem key="ineligible">Ineligible</SelectItem>
+                                <SelectItem key="available" className="rounded-lg">Available</SelectItem>
+                                <SelectItem key="assigned" className="rounded-lg">Assigned</SelectItem>
+                                <SelectItem key="ineligible" className="rounded-lg">Ineligible</SelectItem>
                             </Select>
                         </div>
                         <Button
@@ -632,73 +642,12 @@ const Invigilators: React.FC = () => {
                 </div>
             )}
 
-            {/* Modals remain mostly the same but with refined styling */}
-            <Modal isOpen={isAddOpen} onClose={onAddClose} size="md">
-                <ModalContent className="rounded-3xl">
-                    {(onClose) => (
-                        <>
-                            <ModalHeader className="flex flex-col gap-1 pt-8 px-8">
-                                <h2 className="text-xl font-bold text-gray-900">Add Invigilator</h2>
-                                <p className="text-sm font-normal text-gray-500">Create a new system user with invigilator permissions.</p>
-                            </ModalHeader>
-                            <ModalBody className="py-6 px-8">
-                                <div className="space-y-4">
-                                    <div className="space-y-1.5">
-                                        <label htmlFor="fullName" className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Full Name</label>
-                                        <Input
-                                            id="fullName"
-                                            name="fullName"
-                                            autoComplete="name"
-                                            placeholder="e.g. John Doe"
-                                            value={newInvigilator.FullName}
-                                            onValueChange={(val) => setNewInvigilator({ ...newInvigilator, FullName: val })}
-                                            variant="bordered"
-                                            className="rounded-xl"
-                                        />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <label htmlFor="email" className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Email Address</label>
-                                        <Input
-                                            id="email"
-                                            name="email"
-                                            type="email"
-                                            autoComplete="email"
-                                            placeholder="john.doe@college.edu"
-                                            value={newInvigilator.Email}
-                                            onValueChange={(val) => setNewInvigilator({ ...newInvigilator, Email: val })}
-                                            variant="bordered"
-                                            startContent={<Mail size={18} className="text-gray-400" />}
-                                        />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <label htmlFor="password" className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Initial Password</label>
-                                        <Input
-                                            id="password"
-                                            name="password"
-                                            type="password"
-                                            autoComplete="new-password"
-                                            placeholder="••••••••"
-                                            value={newInvigilator.Password}
-                                            onValueChange={(val) => setNewInvigilator({ ...newInvigilator, Password: val })}
-                                            variant="bordered"
-                                        />
-                                    </div>
-                                </div>
-                            </ModalBody>
-                            <ModalFooter className="pb-8 px-8 pt-2">
-                                <Button variant="light" onPress={onClose} className="font-bold text-gray-500">Cancel</Button>
-                                <Button
-                                    className="bg-blue-800 text-white font-bold rounded-xl px-6"
-                                    onPress={handleAddInvigilator}
-                                    isLoading={isSubmitting}
-                                >
-                                    Confirm Addition
-                                </Button>
-                            </ModalFooter>
-                        </>
-                    )}
-                </ModalContent>
-            </Modal>
+            {/* Add Invigilator Modal */}
+            <AddInvigilatorModal
+                isOpen={isAddOpen}
+                onClose={onAddClose}
+                onSuccess={fetchData}
+            />
 
             <Modal isOpen={isDeleteOpen} onClose={onCloseDelete} size="sm">
                 <ModalContent className="rounded-3xl">

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, Input, Select, SelectItem } from "@heroui/react";
-import { Plus, Search, FileSpreadsheet, List as ListIcon, LayoutGrid, ArrowLeft } from "lucide-react";
+import { Plus, Search, FileSpreadsheet, List as ListIcon, LayoutGrid, ArrowLeft, Building2, Layers, Sun, Moon, CheckCircle, AlertCircle, Clock } from "lucide-react";
 import { toast } from 'react-hot-toast';
 
 import ExamStats from '../components/exams/ExamStats';
@@ -224,19 +224,37 @@ const Exams: React.FC = () => {
                             name="filter-department"
                             placeholder="Department: All"
                             size="sm"
-                            className="w-40"
+                            className="w-48"
                             variant="bordered"
-                            classNames={{ trigger: "bg-gray-50 border-gray-200" }}
+                            classNames={{
+                                trigger: "bg-white border-gray-200 h-10 rounded-lg relative transition-all hover:border-blue-400 focus:border-blue-500",
+                                selectorIcon: "absolute right-2 text-gray-400",
+                                popoverContent: "bg-white border border-gray-100 shadow-xl rounded-xl p-1"
+                            }}
                             selectedKeys={[deptFilter]}
                             onChange={(e) => setDeptFilter(e.target.value)}
-                            selectorIcon={<span />}
                             aria-label="Filter by Department"
+                            disallowEmptySelection
                         >
                             {[
-                                { DepartmentID: 'All', DepartmentName: 'Department: All' },
-                                ...departments
-                            ].map((dept) => (
-                                <SelectItem key={dept.DepartmentID.toString()}>
+                                { DepartmentID: 'All', DepartmentName: 'Department: All', description: 'Show all departments' },
+                                ...departments.map((d: any) => ({ ...d, description: 'Academic Department' }))
+                            ].map((dept: any) => (
+                                <SelectItem
+                                    key={dept.DepartmentID.toString()}
+                                    textValue={dept.DepartmentName}
+                                    startContent={
+                                        <div className="p-1.5 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                                            {dept.DepartmentID === 'All' ? <Layers size={16} /> : <Building2 size={16} />}
+                                        </div>
+                                    }
+                                    description={dept.description}
+                                    classNames={{
+                                        base: "rounded-lg data-[hover=true]:bg-gray-50 mb-1",
+                                        title: "text-sm font-semibold text-slate-700",
+                                        description: "text-xs text-slate-400"
+                                    }}
+                                >
                                     {dept.DepartmentName}
                                 </SelectItem>
                             ))}
@@ -247,17 +265,45 @@ const Exams: React.FC = () => {
                             name="filter-session"
                             placeholder="Session"
                             size="sm"
-                            className="w-36"
+                            className="w-40"
                             variant="bordered"
-                            classNames={{ trigger: "bg-gray-50 border-gray-200" }}
+                            classNames={{
+                                trigger: "bg-white border-gray-200 h-10 rounded-lg relative transition-all hover:border-blue-400 focus:border-blue-500",
+                                selectorIcon: "absolute right-2 text-gray-400",
+                                popoverContent: "bg-white border border-gray-100 shadow-xl rounded-xl p-1"
+                            }}
                             selectedKeys={[sessionFilter]}
                             onChange={(e) => setSessionFilter(e.target.value)}
-                            selectorIcon={<span />}
                             aria-label="Filter by Session"
+                            disallowEmptySelection
                         >
-                            <SelectItem key="All">Session: All</SelectItem>
-                            <SelectItem key="Morning">Morning</SelectItem>
-                            <SelectItem key="Afternoon">Afternoon</SelectItem>
+                            <SelectItem
+                                key="All"
+                                textValue="Session: All"
+                                startContent={<div className="p-1.5 rounded-md bg-gray-100 text-gray-600 flex items-center justify-center shrink-0"><Clock size={16} /></div>}
+                                description="Show all sessions"
+                                classNames={{ base: "rounded-lg data-[hover=true]:bg-gray-50 mb-1", title: "text-sm font-semibold text-slate-700", description: "text-xs text-slate-400" }}
+                            >
+                                Session: All
+                            </SelectItem>
+                            <SelectItem
+                                key="Morning"
+                                textValue="Morning"
+                                startContent={<div className="p-1.5 rounded-md bg-orange-50 text-orange-600 flex items-center justify-center shrink-0"><Sun size={16} /></div>}
+                                description="09:00 AM - 12:00 PM"
+                                classNames={{ base: "rounded-lg data-[hover=true]:bg-gray-50 mb-1", title: "text-sm font-semibold text-slate-700", description: "text-xs text-slate-400" }}
+                            >
+                                Morning
+                            </SelectItem>
+                            <SelectItem
+                                key="Afternoon"
+                                textValue="Afternoon"
+                                startContent={<div className="p-1.5 rounded-md bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0"><Moon size={16} /></div>}
+                                description="01:00 PM - 04:00 PM"
+                                classNames={{ base: "rounded-lg data-[hover=true]:bg-gray-50 mb-1", title: "text-sm font-semibold text-slate-700", description: "text-xs text-slate-400" }}
+                            >
+                                Afternoon
+                            </SelectItem>
                         </Select>
 
                         <Select
@@ -265,17 +311,45 @@ const Exams: React.FC = () => {
                             name="filter-status"
                             placeholder="Status"
                             size="sm"
-                            className="w-36"
+                            className="w-40"
                             variant="bordered"
-                            classNames={{ trigger: "bg-gray-50 border-gray-200" }}
+                            classNames={{
+                                trigger: "bg-white border-gray-200 h-10 rounded-lg relative transition-all hover:border-blue-400 focus:border-blue-500",
+                                selectorIcon: "absolute right-2 text-gray-400",
+                                popoverContent: "bg-white border border-gray-100 shadow-xl rounded-xl p-1"
+                            }}
                             selectedKeys={[statusFilter]}
                             onChange={(e) => setStatusFilter(e.target.value)}
-                            selectorIcon={<span />}
                             aria-label="Filter by Status"
+                            disallowEmptySelection
                         >
-                            <SelectItem key="All">Audit Status: All</SelectItem>
-                            <SelectItem key="Scheduled">Clean</SelectItem>
-                            <SelectItem key="Conflict">Conflict</SelectItem>
+                            <SelectItem
+                                key="All"
+                                textValue="Audit Status: All"
+                                startContent={<div className="p-1.5 rounded-md bg-gray-100 text-gray-600 flex items-center justify-center shrink-0"><Layers size={16} /></div>}
+                                description="Show all statuses"
+                                classNames={{ base: "rounded-lg data-[hover=true]:bg-gray-50 mb-1", title: "text-sm font-semibold text-slate-700", description: "text-xs text-slate-400" }}
+                            >
+                                Audit Status: All
+                            </SelectItem>
+                            <SelectItem
+                                key="Scheduled"
+                                textValue="Clean"
+                                startContent={<div className="p-1.5 rounded-md bg-green-50 text-green-600 flex items-center justify-center shrink-0"><CheckCircle size={16} /></div>}
+                                description="No conflicts detected"
+                                classNames={{ base: "rounded-lg data-[hover=true]:bg-gray-50 mb-1", title: "text-sm font-semibold text-slate-700", description: "text-xs text-slate-400" }}
+                            >
+                                Clean
+                            </SelectItem>
+                            <SelectItem
+                                key="Conflict"
+                                textValue="Conflict"
+                                startContent={<div className="p-1.5 rounded-md bg-red-50 text-red-600 flex items-center justify-center shrink-0"><AlertCircle size={16} /></div>}
+                                description="Schedule clashes found"
+                                classNames={{ base: "rounded-lg data-[hover=true]:bg-gray-50 mb-1", title: "text-sm font-semibold text-slate-700", description: "text-xs text-slate-400" }}
+                            >
+                                Conflict
+                            </SelectItem>
                         </Select>
                     </div>
                 </div>

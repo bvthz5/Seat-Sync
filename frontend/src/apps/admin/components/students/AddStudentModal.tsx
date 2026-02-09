@@ -228,9 +228,10 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                                     onChange={(e) => handleChange("DepartmentID", e.target.value)}
                                     aria-label="Department"
                                     classNames={{
-                                        trigger: "h-12 bg-white border-1 border-slate-200 shadow-sm data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 rounded-xl transition-all",
+                                        trigger: "h-12 bg-white border-1 border-slate-200 shadow-sm data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 rounded-xl transition-all relative",
                                         popoverContent: "bg-white border border-gray-100 shadow-xl",
-                                        value: "text-small group-data-[has-value=true]:text-gray-900"
+                                        value: "text-small group-data-[has-value=true]:text-gray-900",
+                                        selectorIcon: "absolute right-3"
                                     }}
                                 >
                                     {departments.map((dept) => (
@@ -247,9 +248,10 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                                     onChange={(e) => handleChange("ProgramID", e.target.value)}
                                     aria-label="Program"
                                     classNames={{
-                                        trigger: "h-12 bg-white border-1 border-slate-200 shadow-sm data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 rounded-xl transition-all",
+                                        trigger: "h-12 bg-white border-1 border-slate-200 shadow-sm data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 rounded-xl transition-all relative",
                                         popoverContent: "bg-white border border-gray-100 shadow-xl",
-                                        value: "text-small group-data-[has-value=true]:text-gray-900"
+                                        value: "text-small group-data-[has-value=true]:text-gray-900",
+                                        selectorIcon: "absolute right-3"
                                     }}
                                 >
                                     {programs.map((prog) => (
@@ -267,8 +269,9 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                                     isDisabled={!formData.ProgramID}
                                     aria-label="Semester"
                                     classNames={{
-                                        trigger: "h-12 bg-white border-1 border-slate-200 shadow-sm data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 rounded-xl transition-all",
+                                        trigger: "h-12 bg-white border-1 border-slate-200 shadow-sm data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 rounded-xl transition-all relative",
                                         popoverContent: "bg-white border border-gray-100 shadow-xl",
+                                        selectorIcon: "absolute right-3"
                                     }}
                                 >
                                     {filteredSemesters.map((sem) => (

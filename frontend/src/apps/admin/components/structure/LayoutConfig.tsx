@@ -295,8 +295,9 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                             {/* Location Selectors */}
                             <div className="space-y-4">
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1 flex items-center gap-1.5"><Building2 size={12} /> Building Block</label>
+                                    <label htmlFor="building-select" className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1 flex items-center gap-1.5"><Building2 size={12} /> Building Block</label>
                                     <Autocomplete
+                                        id="building-select"
                                         aria-label="Select Building"
                                         placeholder="Search building..."
                                         variant="bordered"
@@ -310,8 +311,9 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="space-y-1.5">
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1 flex items-center gap-1.5"><Layers size={12} /> Floor</label>
+                                        <label htmlFor="floor-select" className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1 flex items-center gap-1.5"><Layers size={12} /> Floor</label>
                                         <Autocomplete
+                                            id="floor-select"
                                             isDisabled={!selectedBlockId}
                                             aria-label="Select Floor"
                                             placeholder="Floor..."
@@ -325,8 +327,9 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                         </Autocomplete>
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1 flex items-center gap-1.5"><Armchair size={12} /> Room</label>
+                                        <label htmlFor="room-select" className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1 flex items-center gap-1.5"><Armchair size={12} /> Room</label>
                                         <Autocomplete
+                                            id="room-select"
                                             isDisabled={!selectedFloorId}
                                             aria-label="Select Room"
                                             placeholder="Room..."
@@ -355,8 +358,10 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
 
                                         <div className="grid grid-cols-2 gap-3">
                                             <div className="space-y-1.5">
-                                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Room Type</label>
+                                                <label htmlFor="room-type-select" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Room Type</label>
                                                 <Select
+                                                    id="room-type-select"
+                                                    aria-label="Room Type"
                                                     selectedKeys={[config.roomType]}
                                                     onChange={(e) => setConfig({ ...config, roomType: e.target.value as RoomType })}
                                                     variant="bordered"
@@ -371,8 +376,10 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                                 </Select>
                                             </div>
                                             <div className="space-y-1.5">
-                                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Bench Mode</label>
+                                                <label htmlFor="bench-mode-select" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Bench Mode</label>
                                                 <Select
+                                                    id="bench-mode-select"
+                                                    aria-label="Bench Mode"
                                                     selectedKeys={[config.benchMode]}
                                                     onChange={(e) => setConfig({ ...config, benchMode: e.target.value as BenchMode })}
                                                     variant="bordered"
@@ -394,17 +401,17 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                         <h4 className="text-sm font-bold text-slate-700">Grid Dimensions</h4>
                                         <div className="grid grid-cols-2 gap-3">
                                             <div className="space-y-1.5">
-                                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Columns</label>
-                                                <Input type="number" min={1} value={config.rows.toString()} onValueChange={(v) => setConfig({ ...config, rows: Number(v) })} classNames={{ inputWrapper: "bg-slate-50 border-none shadow-inner rounded-xl group-data-[focus=true]:bg-white group-data-[focus=true]:shadow-lg transition-all", input: "!font-bold text-slate-700" }} />
+                                                <label htmlFor="columns-input" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Columns</label>
+                                                <Input id="columns-input" aria-label="Columns" type="number" min={1} value={config.rows.toString()} onValueChange={(v) => setConfig({ ...config, rows: Number(v) })} classNames={{ inputWrapper: "bg-slate-50 border-none shadow-inner rounded-xl group-data-[focus=true]:bg-white group-data-[focus=true]:shadow-lg transition-all", input: "!font-bold text-slate-700" }} />
                                             </div>
                                             <div className="space-y-1.5">
-                                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Benches/Col</label>
-                                                <Input type="number" min={1} value={config.benchesPerRow.toString()} onValueChange={(v) => setConfig({ ...config, benchesPerRow: Number(v) })} classNames={{ inputWrapper: "bg-slate-50 border-none shadow-inner rounded-xl group-data-[focus=true]:bg-white group-data-[focus=true]:shadow-lg transition-all", input: "!font-bold text-slate-700" }} />
+                                                <label htmlFor="benches-per-row-input" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Benches/Col</label>
+                                                <Input id="benches-per-row-input" aria-label="Benches per Row" type="number" min={1} value={config.benchesPerRow.toString()} onValueChange={(v) => setConfig({ ...config, benchesPerRow: Number(v) })} classNames={{ inputWrapper: "bg-slate-50 border-none shadow-inner rounded-xl group-data-[focus=true]:bg-white group-data-[focus=true]:shadow-lg transition-all", input: "!font-bold text-slate-700" }} />
                                             </div>
                                         </div>
                                         <div className="space-y-1.5">
-                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Seats/Bench</label>
-                                            <Input type="number" min={1} value={config.seatsPerBench.toString()} onValueChange={(v) => setConfig({ ...config, seatsPerBench: Number(v) })} classNames={{ inputWrapper: "bg-slate-50 border-none shadow-inner rounded-xl group-data-[focus=true]:bg-white group-data-[focus=true]:shadow-lg transition-all", input: "!font-bold text-slate-700" }} startContent={<Hash size={14} className="text-slate-400" />} />
+                                            <label htmlFor="seats-per-bench-input" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Seats/Bench</label>
+                                            <Input id="seats-per-bench-input" aria-label="Seats per Bench" type="number" min={1} value={config.seatsPerBench.toString()} onValueChange={(v) => setConfig({ ...config, seatsPerBench: Number(v) })} classNames={{ inputWrapper: "bg-slate-50 border-none shadow-inner rounded-xl group-data-[focus=true]:bg-white group-data-[focus=true]:shadow-lg transition-all", input: "!font-bold text-slate-700" }} startContent={<Hash size={14} className="text-slate-400" />} />
                                         </div>
                                     </div>
 

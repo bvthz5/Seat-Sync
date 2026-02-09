@@ -12,7 +12,7 @@ const activities = [
 export const ActivityFeed: React.FC = () => {
     return (
         <Card className="h-full border-none shadow-sm rounded-2xl bg-white overflow-hidden">
-            <CardHeader className="px-6 py-5 flex justify-between items-center border-b border-gray-100 bg-white sticky top-0 z-10">
+            <CardHeader className="p-3 z-10 w-full shrink-0 overflow-inherit color-inherit subpixel-antialiased rounded-t-large px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-100 gap-4 bg-white sticky top-0">
                 <div className="flex flex-col gap-1">
                     <h3 className="font-normal text-lg text-[#202124]">Recent Activity</h3>
                     <p className="text-xs text-[#5f6368]">Audit log of system events</p>

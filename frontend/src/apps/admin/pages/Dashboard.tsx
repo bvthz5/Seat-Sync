@@ -48,20 +48,51 @@ const Dashboard: React.FC = () => {
                 </div>
                 <div className="flex gap-3 items-center">
                     <Select
-                        placeholder="All Series"
-                        selectedKeys={[seriesFilter]}
+                        selectedKeys={new Set([seriesFilter])}
                         onSelectionChange={(keys) => setSeriesFilter(String(Array.from(keys)[0]))}
-                        size="sm"
+                        size="md"
                         variant="bordered"
-                        className="w-48"
-                        startContent={<BookOpen size={16} className="text-blue-500" />}
+                        className="w-64"
+                        classNames={{
+                            trigger: "bg-white border-slate-200 data-[hover=true]:border-blue-500 focus:border-blue-500 focus-within:border-blue-500 rounded-xl transition-all shadow-sm h-12 relative",
+                            value: "text-slate-700 font-bold text-sm",
+                            selectorIcon: "text-slate-500 absolute right-3",
+                            popoverContent: "bg-white border border-slate-100 shadow-xl rounded-xl p-2 w-64"
+                        }}
+                        aria-label="Select Exam Series"
+                        disallowEmptySelection
                         items={[
-                            { ExamSeriesID: 'All', SeriesName: 'All Series' },
-                            ...series
+                            { ExamSeriesID: 'All', SeriesName: 'All Series', description: 'View all examinations' },
+                            ...series.map(s => ({ ...s, description: 'Academic Series' }))
                         ]}
+                        selectionMode="single"
+                        renderValue={(items) => {
+                            return items.map((item) => (
+                                <div key={item.key} className="flex items-center gap-2">
+                                    <div className="p-1 rounded-md bg-blue-50 text-blue-600">
+                                        <BookOpen size={14} />
+                                    </div>
+                                    <span className="font-bold text-slate-700">{item.textValue}</span>
+                                </div>
+                            ));
+                        }}
                     >
                         {(item: any) => (
-                            <SelectItem key={String(item.ExamSeriesID)} textValue={item.SeriesName}>
+                            <SelectItem
+                                key={String(item.ExamSeriesID)}
+                                textValue={item.SeriesName}
+                                startContent={
+                                    <div className="p-2 rounded-lg bg-slate-50 text-slate-400 group-data-[hover=true]:bg-blue-50 group-data-[hover=true]:text-blue-600 transition-colors">
+                                        <BookOpen size={18} strokeWidth={2} />
+                                    </div>
+                                }
+                                description={item.description}
+                                classNames={{
+                                    base: "rounded-lg data-[hover=true]:bg-gray-50 data-[selectable=true]:focus:bg-gray-50 mb-1 py-2",
+                                    title: "text-slate-700 font-bold text-sm",
+                                    description: "text-slate-400 text-xs font-medium"
+                                }}
+                            >
                                 {item.SeriesName}
                             </SelectItem>
                         )}
@@ -118,17 +149,11 @@ const Dashboard: React.FC = () => {
                 <div className="xl:col-span-4 flex flex-col gap-8 w-full h-full">
                     {/* Quick Action Tiles */}
                     <div className="w-full">
-                        <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Quick Actions</h3>
-                        </div>
                         <QuickActions />
                     </div>
 
                     {/* Activity Feed */}
                     <div className="flex-1 w-full min-h-[400px]">
-                        <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Recent Activity</h3>
-                        </div>
                         <ActivityFeed />
                     </div>
                 </div>
