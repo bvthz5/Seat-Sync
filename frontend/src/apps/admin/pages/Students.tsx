@@ -62,10 +62,11 @@ const Students: React.FC = () => {
             });
             setStudents(res.data.students);
             setTotalPages(res.data.totalPages);
-            setTotalStudents(res.data.total);
+            setTotalStudents(res.data.totalItems);
 
-            // Dummy Stats for now (replace with API call if available)
-            setStats(prev => ({ ...prev, totalDatabaseCount: res.data.total }));
+            if (res.data.stats) {
+                setStats(res.data.stats);
+            }
 
         } catch (error) {
             console.error("Failed to fetch students", error);

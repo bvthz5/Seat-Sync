@@ -41,12 +41,7 @@ export const sidebarConfig: SidebarItem[] = [
         path: "/admin/students",
         requiresRoot: false
     },
-    {
-        label: "Departments",
-        icon: <Building2 size={20} />,
-        path: "/admin/departments",
-        requiresRoot: false
-    },
+
     {
         label: "Exams",
         icon: <FileText size={20} />,
