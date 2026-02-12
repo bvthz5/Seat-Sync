@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Card, CardBody, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip, Pagination, Input, User as UserAvatar, Tooltip, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Popover, PopoverTrigger, PopoverContent, Select, SelectItem } from '@heroui/react';
-import { Plus, Search, FileSpreadsheet, MoreVertical, Filter, Download, Pencil, Trash2, AlertTriangle, X, Check, Building2, GraduationCap, BookOpen, Calendar, Mail, FileDown } from 'lucide-react';
+import { Button, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip, Pagination, Input, Tooltip, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Select, SelectItem } from '@heroui/react';
+import { Plus, Search, FileSpreadsheet, Filter, Pencil, Trash2, AlertTriangle, Building2, GraduationCap, BookOpen, Calendar, FileDown, Users } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import api from '../../../services/api';
 import StudentImportModal from '../components/students/StudentImportModal';
@@ -22,7 +22,6 @@ interface Student {
 }
 
 const Students: React.FC = () => {
-    // --- State Management ---
     const [students, setStudents] = useState<Student[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [page, setPage] = useState(1);
@@ -53,7 +52,6 @@ const Students: React.FC = () => {
 
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
 
-    // --- Data Fetching ---
     const fetchStudents = async () => {
         setIsLoading(true);
         try {
@@ -63,11 +61,7 @@ const Students: React.FC = () => {
             setStudents(res.data.students);
             setTotalPages(res.data.totalPages);
             setTotalStudents(res.data.totalItems);
-
-            if (res.data.stats) {
-                setStats(res.data.stats);
-            }
-
+            if (res.data.stats) setStats(res.data.stats);
         } catch (error) {
             console.error("Failed to fetch students", error);
             toast.error("Failed to load students");
@@ -76,26 +70,10 @@ const Students: React.FC = () => {
         }
     };
 
-    // Initial Load & Dependencies
-    useEffect(() => {
-        fetchStudents();
-        // Load filter data (mock or api)
-        // api.get('/departments').then(res => setDepartments(res.data)).catch(console.error);
-        // api.get('/programs').then(res => setPrograms(res.data)).catch(console.error);
-        // api.get('/semesters').then(res => setSemesters(res.data)).catch(console.error);
-    }, [page, debouncedSearch, filters]);
+    useEffect(() => { fetchStudents(); }, [page, debouncedSearch, filters]);
 
-
-    // --- Handlers ---
-    const handleEdit = (student: Student) => {
-        setSelectedStudent(student);
-        setIsEditOpen(true);
-    };
-
-    const confirmDelete = (student: Student) => {
-        setSelectedStudent(student);
-        setIsDeleteOpen(true);
-    };
+    const handleEdit = (student: Student) => { setSelectedStudent(student); setIsEditOpen(true); };
+    const confirmDelete = (student: Student) => { setSelectedStudent(student); setIsDeleteOpen(true); };
 
     const handleDelete = async () => {
         if (!selectedStudent) return;
@@ -104,9 +82,7 @@ const Students: React.FC = () => {
             toast.success("Student deleted successfully");
             setIsDeleteOpen(false);
             fetchStudents();
-        } catch (error) {
-            toast.error("Failed to delete student");
-        }
+        } catch (error) { toast.error("Failed to delete student"); }
     };
 
     const handleDeleteAll = async () => {
@@ -115,149 +91,169 @@ const Students: React.FC = () => {
             toast.success("All student profiles deleted.");
             setIsDeleteAllOpen(false);
             fetchStudents();
-        } catch (error: any) {
-            toast.error(error.response?.data?.message || "Delete all failed");
-        }
+        } catch (error: any) { toast.error(error.response?.data?.message || "Delete all failed"); }
     };
 
-    const openFilters = () => {
-        setTempFilters(filters);
-        setIsFilterOpen(true);
-    };
+    const openFilters = () => { setTempFilters(filters); setIsFilterOpen(true); };
+    const applyFilters = () => { setFilters(tempFilters); setIsFilterOpen(false); };
+    const clearFilters = () => { setTempFilters({ dept: "", program: "", semester: "" }); setFilters({ dept: "", program: "", semester: "" }); };
+    const handleExport = () => { toast("Export functionality coming soon!"); };
 
-    const applyFilters = () => {
-        setFilters(tempFilters);
-        setIsFilterOpen(false);
-    };
-
-    const clearFilters = () => {
-        setTempFilters({ dept: "", program: "", semester: "" });
-        setFilters({ dept: "", program: "", semester: "" });
-    };
-
-    const handleExport = () => {
-        toast("Export functionality coming soon!");
-    };
-
-    const filteredFilterSemesters = semesters; // Logic to filter semesters based on program can go here
-
+    const filteredFilterSemesters = semesters;
     const activeFiltersCount = Object.values(filters).filter(Boolean).length;
 
     return (
-        <div className="flex flex-col gap-8 max-w-[1600px] mx-auto min-h-screen pb-10">
-            {/* Header Section */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 pb-6 border-b border-gray-200/50">
-                <div className="space-y-1">
-                    <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
-                        Students Directory
-                    </h1>
-                    <p className="text-gray-500 font-medium max-w-lg">
-                        Manage student enrollments, academic progress, and database records.
-                    </p>
+        <div className="max-w-[1600px] mx-auto space-y-6 pb-10">
+
+            {/* Hero Header — blue/cyan gradient (distinct from Exams indigo/violet theme) */}
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-blue-900 to-cyan-900 p-8 md:p-10">
+                {/* Decorative Elements */}
+                <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                <div className="absolute bottom-0 left-0 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4"></div>
+                <div className="absolute top-4 right-8 opacity-[0.03]">
+                    <GraduationCap size={200} strokeWidth={0.5} />
                 </div>
-                <div className="flex gap-3">
-                    <Button
-                        className="bg-white border border-red-200 text-red-600 font-medium shadow-sm hover:bg-red-50 transition-all"
-                        variant="flat"
-                        color="danger"
-                        startContent={<Trash2 size={18} />}
-                        onPress={() => setIsDeleteAllOpen(true)}
-                    >
-                        Delete All
-                    </Button>
-                    <Button
-                        className="bg-white border border-gray-200 text-gray-700 font-medium shadow-sm hover:shadow transition-all"
-                        variant="light"
-                        startContent={<FileSpreadsheet size={18} className="text-emerald-600" />}
-                        onPress={() => setIsImportOpen(true)}
-                    >
-                        Import Excel
-                    </Button>
-                    <Button
-                        className="bg-gray-900 text-white font-medium shadow-lg shadow-gray-900/20 hover:scale-[1.02] transition-transform"
-                        startContent={<Plus size={18} />}
-                        onPress={() => setIsAddOpen(true)}
-                    >
-                        Add Student
-                    </Button>
+
+                <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                    <div>
+                        <div className="flex items-center gap-2 mb-3">
+                            <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></div>
+                            <span className="text-cyan-300 text-xs font-semibold uppercase tracking-widest">Student Management</span>
+                        </div>
+                        <h1 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight">
+                            Students Directory
+                        </h1>
+                        <p className="text-blue-200/60 mt-2 text-sm max-w-md">
+                            Manage student enrollments, academic progress, and database records.
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <Button
+                            className="bg-white/10 backdrop-blur-sm border border-white/20 text-white font-medium hover:bg-white/20 transition-all"
+                            startContent={<Trash2 size={16} />}
+                            onPress={() => setIsDeleteAllOpen(true)}
+                            size="md"
+                            radius="lg"
+                        >
+                            Delete All
+                        </Button>
+                        <Button
+                            className="bg-white/10 backdrop-blur-sm border border-white/20 text-white font-medium hover:bg-white/20 transition-all"
+                            startContent={<FileSpreadsheet size={16} className="text-cyan-300" />}
+                            onPress={() => setIsImportOpen(true)}
+                            size="md"
+                            radius="lg"
+                        >
+                            Import Excel
+                        </Button>
+                        <Button
+                            className="bg-white text-blue-900 font-bold shadow-lg shadow-black/20 hover:shadow-xl hover:scale-[1.02] transition-all px-6"
+                            startContent={<Plus size={16} />}
+                            onPress={() => setIsAddOpen(true)}
+                            size="md"
+                            radius="lg"
+                        >
+                            Add Student
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Inline Stats */}
+                <div className="relative z-10 mt-8 flex flex-wrap gap-6">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-sm flex items-center justify-center border border-white/10">
+                            <Building2 size={18} className="text-blue-300" />
+                        </div>
+                        <div>
+                            <p className="text-2xl font-bold text-white">{stats.activeDepartments}</p>
+                            <p className="text-xs text-blue-300/70">Departments</p>
+                        </div>
+                    </div>
+                    <div className="w-px bg-white/10 self-stretch"></div>
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-sm flex items-center justify-center border border-white/10">
+                            <Calendar size={18} className="text-cyan-300" />
+                        </div>
+                        <div>
+                            <p className="text-2xl font-bold text-white">{stats.activeBatches}</p>
+                            <p className="text-xs text-cyan-300/70">Active Batches</p>
+                        </div>
+                    </div>
+                    <div className="w-px bg-white/10 self-stretch"></div>
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-sm flex items-center justify-center border border-white/10">
+                            <AlertTriangle size={18} className="text-amber-300" />
+                        </div>
+                        <div>
+                            <p className="text-2xl font-bold text-white">{stats.incompleteProfiles}</p>
+                            <p className="text-xs text-amber-300/70">Incomplete</p>
+                        </div>
+                    </div>
+                    <div className="w-px bg-white/10 self-stretch"></div>
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-sm flex items-center justify-center border border-white/10">
+                            <Users size={18} className="text-sky-300" />
+                        </div>
+                        <div>
+                            <div className="flex items-baseline gap-1.5">
+                                <p className="text-2xl font-bold text-white">{totalStudents}</p>
+                                <span className="text-sm text-sky-300/50 font-medium">/ {stats.totalDatabaseCount}</span>
+                            </div>
+                            <p className="text-xs text-sky-300/70">Total Students</p>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                {[
-                    { title: "Departments", value: stats.activeDepartments, icon: Building2, color: "text-blue-600", bg: "bg-blue-50" },
-                    { title: "Active Batches", value: stats.activeBatches, icon: Calendar, color: "text-purple-600", bg: "bg-purple-50" },
-                    { title: "Incomplete", value: stats.incompleteProfiles, icon: AlertTriangle, color: "text-orange-600", bg: "bg-orange-50" },
-                    { title: "Total Students", value: totalStudents, sub: `/ ${stats.totalDatabaseCount}`, icon: GraduationCap, color: "text-emerald-600", bg: "bg-emerald-50" }
-                ].map((stat, idx) => (
-                    <Card key={idx} className="border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                        <CardBody className="flex flex-row items-center gap-4 p-5">
-                            <div className={`p-3.5 rounded-2xl ${stat.bg} ${stat.color}`}>
-                                <stat.icon size={24} strokeWidth={2.5} />
-                            </div>
-                            <div>
-                                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{stat.title}</p>
-                                <div className="flex items-baseline gap-1.5 mt-0.5">
-                                    <span className="text-2xl font-bold text-gray-900">{stat.value}</span>
-                                    {stat.sub && <span className="text-sm font-medium text-gray-400">{stat.sub}</span>}
-                                </div>
-                            </div>
-                        </CardBody>
-                    </Card>
-                ))}
-            </div>
-
-            {/* Actions Bar */}
-            <div className="flex flex-col sm:flex-row justify-between gap-4 items-center bg-white p-2 rounded-2xl border border-gray-100 shadow-sm">
+            {/* Search & Filter Bar */}
+            <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-3">
                 <Input
                     classNames={{
-                        base: "w-full sm:w-96",
-                        inputWrapper: "bg-transparent shadow-none hover:bg-gray-50 focus-within:!bg-gray-50 border-0 ring-0 data-[hover=true]:bg-gray-50",
-                        input: "text-base",
+                        base: "w-full sm:max-w-md",
+                        inputWrapper: "bg-gray-50 group-data-[focus=true]:bg-white border border-transparent group-data-[focus=true]:border-blue-500 transition-all rounded-lg shadow-none h-10",
+                        input: "text-sm",
                     }}
                     placeholder="Search by name, Reg No, or email..."
-                    startContent={<Search size={18} className="text-gray-400 mr-2" />}
+                    startContent={<Search size={16} className="text-gray-400" />}
                     value={searchQuery}
                     onValueChange={(val) => { setSearchQuery(val); setPage(1); }}
                     isClearable
                     onClear={() => setSearchQuery("")}
+                    size="sm"
                 />
-
-                <div className="flex items-center gap-2 pr-2">
-                    {/* Filter Button */}
+                <div className="flex items-center gap-2 pr-1">
                     <Button
                         variant={activeFiltersCount > 0 ? "flat" : "light"}
-                        color={activeFiltersCount > 0 ? "primary" : "default"}
-                        className={`font-medium min-w-[100px] ${activeFiltersCount > 0 ? "bg-primary/10 text-primary" : "text-gray-600"}`}
-                        startContent={<Filter size={18} />}
+                        className={`font-medium text-sm ${activeFiltersCount > 0 ? "bg-blue-50 text-blue-600 border border-blue-200" : "text-gray-500"}`}
+                        startContent={<Filter size={15} />}
                         onPress={openFilters}
+                        size="sm"
                     >
-                        Filter {activeFiltersCount > 0 && <Chip size="sm" color="primary" className="ml-1 h-5 min-w-5 px-0 text-tiny">{activeFiltersCount}</Chip>}
+                        Filter {activeFiltersCount > 0 && <Chip size="sm" className="ml-1 h-5 min-w-5 px-1 text-[10px] bg-blue-500 text-white">{activeFiltersCount}</Chip>}
                     </Button>
-                    <div className="h-6 w-px bg-gray-200 mx-1"></div>
+                    <div className="h-5 w-px bg-gray-200"></div>
                     <Tooltip content="Export to Excel">
-                        <Button isIconOnly variant="light" className="text-gray-500 hover:text-green-600" onPress={handleExport}>
-                            <FileDown size={20} />
+                        <Button isIconOnly variant="light" className="text-gray-400 hover:text-blue-600" onPress={handleExport} size="sm">
+                            <FileDown size={17} />
                         </Button>
                     </Tooltip>
                 </div>
             </div>
 
             {/* Table */}
-            <Card className="border border-gray-100 shadow-sm rounded-2xl overflow-hidden bg-white">
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <Table
                     aria-label="Students Table"
                     shadow="none"
                     classNames={{
                         wrapper: "p-0",
-                        th: "bg-gray-50/70 text-gray-500 font-medium text-xs uppercase tracking-wider h-12 border-b border-gray-100 pl-6",
-                        td: "py-4 border-b border-gray-50 group-last:border-none pl-6",
+                        th: "bg-gray-50/60 text-gray-500 font-semibold text-[11px] uppercase tracking-wider h-11 border-b border-gray-100 px-5",
+                        td: "py-3.5 border-b border-gray-50 group-last:border-none px-5",
                         table: "min-h-[400px]"
                     }}
                     bottomContent={
                         totalPages > 1 && (
-                            <div className="flex w-full justify-center px-4 py-4 border-t border-gray-100 bg-white">
+                            <div className="flex w-full justify-center px-4 py-3.5 border-t border-gray-100">
                                 <Pagination
                                     total={totalPages}
                                     page={page}
@@ -266,7 +262,7 @@ const Students: React.FC = () => {
                                     variant="light"
                                     showControls
                                     classNames={{
-                                        cursor: "bg-gray-900 text-white font-bold"
+                                        cursor: "bg-blue-600 text-white font-bold shadow-md shadow-blue-600/20"
                                     }}
                                 />
                             </div>
@@ -281,54 +277,56 @@ const Students: React.FC = () => {
                     </TableHeader>
                     <TableBody
                         emptyContent={
-                            <div className="flex flex-col items-center justify-center p-12 text-center text-gray-400">
-                                <FileSpreadsheet size={48} className="text-gray-300 mb-4 opacity-50" />
-                                <p className="text-lg font-semibold text-gray-700">No students found</p>
-                                <p className="text-sm text-gray-500 mt-1">Try adjusting filters or import a new batch.</p>
+                            <div className="flex flex-col items-center justify-center p-16 text-center">
+                                <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center mb-4">
+                                    <GraduationCap size={26} className="text-blue-300" />
+                                </div>
+                                <p className="text-base font-semibold text-gray-700">No students found</p>
+                                <p className="text-sm text-gray-400 mt-1">Try adjusting filters or import a new batch.</p>
                             </div>
                         }
                         items={students}
                         isLoading={isLoading}
                     >
                         {(item) => (
-                            <TableRow key={item.StudentID} className="hover:bg-gray-50/50 transition-colors group">
+                            <TableRow key={item.StudentID} className="hover:bg-blue-50/30 transition-colors group">
                                 <TableCell>
-                                    <UserAvatar
-                                        name={item.User?.FullName || "Unknown"}
-                                        description={<span className="font-mono text-xs text-blue-600/80 bg-blue-50 px-1.5 py-0.5 rounded">{item.RegisterNumber}</span>}
-                                        avatarProps={{
-                                            radius: "lg",
-                                            src: `https://api.dicebear.com/7.x/initials/svg?seed=${item.RegisterNumber}`,
-                                            classNames: { base: "bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-semibold ring-2 ring-white shadow-sm" }
-                                        }}
-                                    />
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs shadow-md shadow-blue-500/20">
+                                            {(item.User?.FullName || "U")[0].toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <p className="font-semibold text-gray-900 text-sm">{item.User?.FullName || "Unknown"}</p>
+                                            <span className="font-mono text-[11px] text-blue-600/80 bg-blue-50 px-1.5 py-0.5 rounded">{item.RegisterNumber}</span>
+                                        </div>
+                                    </div>
                                 </TableCell>
                                 <TableCell>
-                                    <div className="flex flex-col gap-1">
+                                    <div className="flex flex-col gap-0.5">
                                         <div className="flex items-center gap-2">
-                                            <span className="text-xs font-bold text-gray-700 px-2 py-0.5 bg-gray-100 rounded border border-gray-200">{item.Department?.DepartmentCode}</span>
-                                            <span className="text-sm text-gray-600">{item.Program?.ProgramName}</span>
+                                            <span className="text-[11px] font-bold text-gray-600 px-1.5 py-0.5 bg-gray-100 rounded border border-gray-200">{item.Department?.DepartmentCode}</span>
+                                            <span className="text-sm text-gray-700 font-medium">{item.Program?.ProgramName}</span>
                                         </div>
                                         <span className="text-xs text-gray-400 font-medium flex items-center gap-1">
-                                            <BookOpen size={12} /> Semester {item.Semester?.SemesterNumber}
+                                            <BookOpen size={11} /> Semester {item.Semester?.SemesterNumber}
                                         </span>
                                     </div>
                                 </TableCell>
                                 <TableCell>
-                                    <Chip size="sm" variant="flat" className="bg-emerald-50 text-emerald-700 font-medium border border-emerald-100">
+                                    <Chip size="sm" variant="flat" className="bg-sky-50 text-sky-700 font-semibold border border-sky-100">
                                         Batch {item.BatchYear}
                                     </Chip>
                                 </TableCell>
                                 <TableCell>
-                                    <div className="flex justify-end gap-2">
+                                    <div className="flex justify-end gap-1">
                                         <Tooltip content="Edit Details">
-                                            <Button isIconOnly size="sm" variant="light" onPress={() => handleEdit(item)}>
-                                                <Pencil size={18} className="text-gray-400 hover:text-blue-600" />
+                                            <Button isIconOnly size="sm" variant="light" onPress={() => handleEdit(item)} className="text-blue-500 hover:text-blue-700 hover:bg-blue-50">
+                                                <Pencil size={15} />
                                             </Button>
                                         </Tooltip>
                                         <Tooltip content="Delete Student" color="danger">
-                                            <Button isIconOnly size="sm" variant="light" onPress={() => confirmDelete(item)}>
-                                                <Trash2 size={18} className="text-gray-400 hover:text-red-600" />
+                                            <Button isIconOnly size="sm" variant="light" onPress={() => confirmDelete(item)} className="text-red-400 hover:text-red-600 hover:bg-red-50">
+                                                <Trash2 size={15} />
                                             </Button>
                                         </Tooltip>
                                     </div>
@@ -337,157 +335,118 @@ const Students: React.FC = () => {
                         )}
                     </TableBody>
                 </Table>
-            </Card>
+            </div>
 
-
-            <AddStudentModal
-                isOpen={isAddOpen}
-                onClose={() => setIsAddOpen(false)}
-                onSuccess={() => fetchStudents()}
-            />
-
-            {
-                selectedStudent && (
-                    <EditStudentModal
-                        isOpen={isEditOpen}
-                        onClose={() => setIsEditOpen(false)}
-                        onSuccess={() => fetchStudents()}
-                        student={selectedStudent}
-                    />
-                )
-            }
+            {/* Modals */}
+            <AddStudentModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onSuccess={() => fetchStudents()} />
+            {selectedStudent && (
+                <EditStudentModal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} onSuccess={() => fetchStudents()} student={selectedStudent} />
+            )}
 
             {/* Filter Modal */}
-            <Modal isOpen={isFilterOpen} onClose={() => setIsFilterOpen(false)} size="sm" backdrop="blur" classNames={{ base: "bg-white rounded-2xl shadow-2xl", backdrop: "bg-black/50" }}>
+            <Modal isOpen={isFilterOpen} onClose={() => setIsFilterOpen(false)} size="sm" backdrop="blur"
+                classNames={{ base: "bg-white border border-gray-200 shadow-2xl rounded-2xl", backdrop: "bg-black/40 backdrop-blur-sm", header: "border-b border-gray-100 py-5 px-6", body: "p-6", footer: "border-t border-gray-100 py-4 px-6" }}>
                 <ModalContent>
                     {(onClose) => (
                         <>
-                            <ModalHeader className="flex flex-col gap-1 border-b border-gray-100 pb-4">
-                                <span className="text-lg font-bold text-gray-900">Filters</span>
+                            <ModalHeader>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center"><Filter size={16} className="text-blue-600" /></div>
+                                    <div>
+                                        <span className="text-lg font-bold text-gray-900">Filters</span>
+                                        <p className="text-xs text-gray-400 font-normal">Narrow down results</p>
+                                    </div>
+                                </div>
                             </ModalHeader>
-                            <ModalBody className="pt-6">
+                            <ModalBody>
                                 <div className="space-y-4">
-                                    <Select placeholder="All Departments" selectedKeys={tempFilters.dept ? [tempFilters.dept] : []} onChange={(e) => setTempFilters(p => ({ ...p, dept: e.target.value }))} classNames={{ selectorIcon: "hidden" }}>
+                                    <Select placeholder="All Departments" selectedKeys={tempFilters.dept ? [tempFilters.dept] : []} onChange={(e) => setTempFilters(p => ({ ...p, dept: e.target.value }))} variant="bordered" classNames={{ trigger: "rounded-xl border-gray-200" }}>
                                         {departments.map(d => <SelectItem key={d.DepartmentID}>{d.DepartmentName}</SelectItem>)}
                                     </Select>
-                                    <Select placeholder="All Programs" selectedKeys={tempFilters.program ? [tempFilters.program] : []} onChange={(e) => setTempFilters(p => ({ ...p, program: e.target.value }))} classNames={{ selectorIcon: "hidden" }}>
+                                    <Select placeholder="All Programs" selectedKeys={tempFilters.program ? [tempFilters.program] : []} onChange={(e) => setTempFilters(p => ({ ...p, program: e.target.value }))} variant="bordered" classNames={{ trigger: "rounded-xl border-gray-200" }}>
                                         {programs.map(p => <SelectItem key={p.ProgramID}>{p.ProgramName}</SelectItem>)}
                                     </Select>
-                                    <Select placeholder="All Semesters" isDisabled={!tempFilters.program} selectedKeys={tempFilters.semester ? [tempFilters.semester] : []} onChange={(e) => setTempFilters(p => ({ ...p, semester: e.target.value }))} classNames={{ selectorIcon: "hidden" }}>
+                                    <Select placeholder="All Semesters" isDisabled={!tempFilters.program} selectedKeys={tempFilters.semester ? [tempFilters.semester] : []} onChange={(e) => setTempFilters(p => ({ ...p, semester: e.target.value }))} variant="bordered" classNames={{ trigger: "rounded-xl border-gray-200" }}>
                                         {filteredFilterSemesters.map(s => <SelectItem key={s.SemesterID}>{`Semester ${s.SemesterNumber}`}</SelectItem>)}
                                     </Select>
                                 </div>
                             </ModalBody>
-                            <ModalFooter className="border-t border-gray-100 pt-4">
-                                <Button variant="light" onPress={clearFilters} color="danger">Clear</Button>
-                                <Button className="bg-gray-900 text-white" onPress={applyFilters}>Apply</Button>
+                            <ModalFooter>
+                                <Button variant="light" onPress={clearFilters} className="text-red-500 font-medium">Clear</Button>
+                                <Button className="bg-blue-600 text-white font-semibold shadow-lg shadow-blue-600/20 px-6 rounded-xl" onPress={applyFilters}>Apply</Button>
                             </ModalFooter>
                         </>
                     )}
                 </ModalContent>
             </Modal>
 
-            {/* Delete Modal */}
-            <Modal
-                isOpen={isDeleteOpen}
-                onClose={() => setIsDeleteOpen(false)}
-                size="sm"
-                backdrop="blur"
-                classNames={{
-                    base: "bg-white rounded-2xl shadow-xl border border-gray-100",
-                    header: "border-b border-gray-100 py-4",
-                    body: "py-6",
-                    footer: "border-t border-gray-100 py-4"
-                }}
-            >
+            {/* Delete Student Modal */}
+            <Modal isOpen={isDeleteOpen} onClose={() => setIsDeleteOpen(false)} size="sm" backdrop="blur"
+                classNames={{ base: "bg-white border border-gray-200 shadow-2xl rounded-2xl", backdrop: "bg-black/30 backdrop-blur-sm", header: "hidden", body: "p-0", footer: "hidden" }}>
                 <ModalContent>
                     {(onClose) => (
-                        <>
-                            <ModalHeader className="flex flex-col gap-1">
-                                <span className="text-xl font-bold text-gray-900">Delete Student</span>
-                                <span className="text-sm font-normal text-gray-500">This action cannot be undone.</span>
-                            </ModalHeader>
-                            <ModalBody>
-                                <p className="text-gray-700">
-                                    Are you sure you want to delete the student profile for <span className="font-bold text-gray-900">{selectedStudent?.User?.FullName}</span>?
-                                </p>
-                            </ModalBody>
-                            <ModalFooter>
-                                <Button variant="light" onPress={onClose} className="font-medium text-gray-600">Cancel</Button>
-                                <Button color="danger" onPress={handleDelete} className="font-medium shadow-lg shadow-red-500/20">Delete Student</Button>
-                            </ModalFooter>
-                        </>
+                        <ModalBody>
+                            <div className="p-8 text-center space-y-5">
+                                <div className="w-16 h-16 mx-auto rounded-2xl bg-red-50 flex items-center justify-center">
+                                    <AlertTriangle size={28} className="text-red-500" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-900">Delete Student?</h3>
+                                    <p className="text-sm text-gray-500 mt-2 leading-relaxed">
+                                        Are you sure you want to delete <strong className="text-gray-800">{selectedStudent?.User?.FullName}</strong>? This action cannot be undone.
+                                    </p>
+                                </div>
+                                <div className="flex gap-3 pt-2">
+                                    <Button variant="bordered" className="flex-1 border-gray-300 text-gray-700 font-semibold hover:bg-gray-50" onPress={onClose} size="lg" radius="lg">Cancel</Button>
+                                    <Button className="flex-1 bg-red-500 text-white font-semibold shadow-lg shadow-red-500/20 hover:bg-red-600" onPress={handleDelete} size="lg" radius="lg" startContent={<Trash2 size={16} />}>Delete</Button>
+                                </div>
+                            </div>
+                        </ModalBody>
                     )}
                 </ModalContent>
             </Modal>
 
             {/* Delete All Modal */}
-            <Modal
-                isOpen={isDeleteAllOpen}
-                onClose={() => setIsDeleteAllOpen(false)}
-                size="md"
-                backdrop="blur"
-                classNames={{
-                    base: "bg-white rounded-2xl shadow-xl border border-gray-100",
-                    header: "border-b border-gray-100 py-4",
-                    body: "py-6",
-                    footer: "border-t border-gray-100 py-4"
-                }}
-            >
+            <Modal isOpen={isDeleteAllOpen} onClose={() => setIsDeleteAllOpen(false)} size="md" backdrop="blur"
+                classNames={{ base: "bg-white border border-gray-200 shadow-2xl rounded-2xl", backdrop: "bg-black/30 backdrop-blur-sm", header: "border-b border-gray-100 py-5 px-6", body: "p-6", footer: "border-t border-gray-100 py-4 px-6" }}>
                 <ModalContent>
                     {(onClose) => (
                         <>
-                            <ModalHeader className="flex gap-3 items-center">
-                                <div className="p-2 bg-red-50 rounded-xl text-red-600">
-                                    <AlertTriangle size={24} />
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-xl font-bold text-gray-900">Delete All Students</span>
-                                    <span className="text-sm font-normal text-gray-500">Bulk action</span>
+                            <ModalHeader>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center"><AlertTriangle size={20} className="text-red-600" /></div>
+                                    <div>
+                                        <span className="text-lg font-bold text-gray-900">Delete All Students</span>
+                                        <p className="text-xs text-gray-500 font-normal">Destructive bulk action</p>
+                                    </div>
                                 </div>
                             </ModalHeader>
                             <ModalBody>
                                 <div className="space-y-4">
-                                    <p className="text-gray-600">
-                                        You are about to delete <span className="font-bold text-gray-900">ALL</span> student academic records from the database.
-                                    </p>
-
+                                    <p className="text-gray-600 text-sm">You are about to delete <span className="font-bold text-gray-900">ALL</span> student academic records.</p>
                                     <div className="bg-red-50/50 p-4 rounded-xl border border-red-100 space-y-3">
-                                        <div className="flex gap-2 text-sm text-red-800 font-medium">
-                                            <AlertTriangle size={16} className="mt-0.5" />
-                                            What will be deleted:
-                                        </div>
+                                        <div className="flex gap-2 text-sm text-red-800 font-semibold"><AlertTriangle size={16} className="mt-0.5 shrink-0" />What will be deleted:</div>
                                         <ul className="list-disc pl-9 space-y-1 text-sm text-red-700/80">
                                             <li>Academic profiles (Batch, Dept, etc.)</li>
                                             <li>Enrollment records</li>
                                         </ul>
                                     </div>
-
                                     <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex gap-3">
-                                        <div className="text-blue-600 mt-0.5"><Building2 size={18} /></div>
-                                        <div className="text-sm text-blue-900/80">
-                                            <span className="font-bold text-blue-900">Note:</span> User login accounts will NOT be deleted. To remove accounts, please use the Data Cleanup page.
-                                        </div>
+                                        <Building2 size={18} className="text-blue-600 mt-0.5 shrink-0" />
+                                        <p className="text-sm text-blue-900/80"><span className="font-bold text-blue-900">Note:</span> User login accounts will NOT be deleted.</p>
                                     </div>
                                 </div>
                             </ModalBody>
                             <ModalFooter>
-                                <Button variant="light" onPress={onClose} className="font-medium text-gray-600">Cancel</Button>
-                                <Button className="font-medium shadow-lg shadow-red-500/20 bg-red-600 text-white" onPress={handleDeleteAll}>
-                                    Yes, Delete All Profiles
-                                </Button>
+                                <Button variant="bordered" onPress={onClose} className="font-medium text-gray-600 border-gray-300">Cancel</Button>
+                                <Button className="font-semibold shadow-lg shadow-red-500/20 bg-red-600 text-white" onPress={handleDeleteAll} startContent={<Trash2 size={16} />}>Yes, Delete All</Button>
                             </ModalFooter>
                         </>
                     )}
                 </ModalContent>
             </Modal>
 
-            {/* Import Modal */}
-            <StudentImportModal
-                isOpen={isImportOpen}
-                onClose={() => setIsImportOpen(false)}
-                onSuccess={fetchStudents}
-            />
+            <StudentImportModal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} onSuccess={fetchStudents} />
         </div>
     );
 };
