@@ -514,46 +514,117 @@ export const importStudents = async (req: Request, res: Response) => {
 export const createStudent = async (req: Request, res: Response) => {
     const t = await sequelize.transaction();
     try {
-        const { FullName, Email, RegisterNumber, DepartmentID, ProgramID, SemesterID, BatchYear } = req.body;
+        const { FullName, RegisterNumber } = req.body;
 
-        // Basic validation
-        if (!FullName || !Email || !RegisterNumber || !DepartmentID || !ProgramID || !SemesterID || !BatchYear) {
-            return res.status(400).json({ message: "All fields are required" });
+        // Only Name and Register Number are required
+        if (!FullName || !RegisterNumber) {
+            return res.status(400).json({ message: "Full Name and Register Number are required" });
         }
 
-        // Check for existing user
-        let user = await User.findOne({ where: { Email }, transaction: t });
+        const regNo = String(RegisterNumber).trim();
+
+        // Check for existing student
+        const existingStudent = await Student.findOne({ where: { RegisterNumber: regNo }, transaction: t });
+        if (existingStudent) {
+            await t.rollback();
+            return res.status(409).json({ message: "Student with this Register Number already exists" });
+        }
+
+        // Smart Parsing — same logic as Excel import
+        const programCache = new Map<string, any>();
+        const deptCache = new Map<string, any>();
+        const programsAll = await Program.findAll({ transaction: t });
+        const deptsAll = await Department.findAll({ transaction: t });
+
+        programsAll.forEach((p: any) => {
+            if (p.ProgramCode) programCache.set(p.ProgramCode.toUpperCase(), p);
+            programCache.set(p.ProgramName.toUpperCase(), p);
+        });
+        deptsAll.forEach((d: any) => {
+            deptCache.set(d.DepartmentCode.toUpperCase(), d);
+            deptCache.set(d.DepartmentName.toUpperCase(), d);
+        });
+
+        const idRegex = /^(L?SJC)(\d{2})([A-Z]+)(\d+)$/i;
+        const match = regNo.match(idRegex);
+
+        let targetProgram: any = null;
+        let targetDept: any = null;
+        let derivedBatchYear: number | null = null;
+
+        if (match) {
+            const yearShort = match[2];
+            const code = match[3];
+
+            if (yearShort && code) {
+                derivedBatchYear = 2000 + parseInt(yearShort, 10);
+                const codeUpper = code.toUpperCase();
+
+                if (programCache.has(codeUpper)) {
+                    targetProgram = programCache.get(codeUpper);
+                    targetDept = deptsAll.find((d: any) => d.DepartmentID === targetProgram.DepartmentID);
+                } else if (deptCache.has(codeUpper)) {
+                    targetDept = deptCache.get(codeUpper);
+                }
+            }
+        }
+
+        if (targetProgram && !targetDept) {
+            if (targetProgram.ProgramName.includes('Computer') || targetProgram.ProgramName.includes('MCA')) {
+                targetDept = deptsAll.find((d: any) => d.DepartmentCode === 'MCA' || d.DepartmentCode === 'CSE');
+            }
+        }
+
+        if (!targetProgram) {
+            await t.rollback();
+            return res.status(400).json({ message: `Could not identify Program from Register Number '${regNo}'. Please check the format.` });
+        }
+        if (!targetDept) {
+            await t.rollback();
+            return res.status(400).json({ message: `Could not identify Department from Register Number '${regNo}'.` });
+        }
+
+        // Default to Semester 1
+        let targetSemester = await Semester.findOne({
+            where: { ProgramID: targetProgram.ProgramID, SemesterNumber: 1 },
+            transaction: t
+        });
+        if (!targetSemester) {
+            targetSemester = await Semester.create({
+                ProgramID: targetProgram.ProgramID,
+                SemesterNumber: 1,
+                SemesterName: 'S1',
+                IsActive: true
+            }, { transaction: t });
+        }
+
+        // Create minimal User to hold FullName (required by DB schema constraint on UserID)
+        const passwordStr = (FullName.replace(/\s/g, '').substring(0, 4) + '@123');
+        const defaultPassword = await bcrypt.hash(passwordStr, 10);
+
+        let user = await User.findOne({ where: { Email: regNo }, transaction: t });
         if (!user) {
-            const defaultPassword = await bcrypt.hash('SeatSync@123', 10);
             user = await User.create({
-                Email,
+                Email: regNo,
                 FullName,
                 PasswordHash: defaultPassword,
                 Role: 'student',
                 IsRootAdmin: false
             }, { transaction: t });
         } else {
-            // Optional: Update name if provided? Let's assume we maintain existing user details primarily but update name if null
-            if (!user.FullName) {
+            if (FullName) {
                 await user.update({ FullName }, { transaction: t });
             }
         }
 
-        // Check for existing student profile
-        const existingStudent = await Student.findOne({ where: { RegisterNumber }, transaction: t });
-        if (existingStudent) {
-            await t.rollback();
-            return res.status(409).json({ message: "Student with this Register Number already exists" });
-        }
-
-        // Create Student
+        // Create Student record linked to User
         const newStudent = await Student.create({
             UserID: user.UserID,
-            RegisterNumber,
-            DepartmentID,
-            ProgramID,
-            SemesterID,
-            BatchYear
+            RegisterNumber: regNo,
+            DepartmentID: targetDept.DepartmentID,
+            ProgramID: targetProgram.ProgramID,
+            SemesterID: targetSemester.SemesterID,
+            BatchYear: derivedBatchYear || new Date().getFullYear()
         }, { transaction: t });
 
         await t.commit();

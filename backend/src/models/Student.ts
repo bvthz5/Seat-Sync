@@ -10,7 +10,7 @@ import { Semester } from "./Semester.js";
  */
 interface StudentAttributes {
   StudentID: number;
-  UserID: number;
+  UserID: number | null;
   RegisterNumber: string;
   DepartmentID: number;
   ProgramID: number;
@@ -21,12 +21,12 @@ interface StudentAttributes {
 /**
  * Attributes required when creating a student
  */
-interface StudentCreationAttributes extends Optional<StudentAttributes, "StudentID"> { }
+interface StudentCreationAttributes extends Optional<StudentAttributes, "StudentID" | "UserID"> { }
 
 export class Student extends Model<StudentAttributes, StudentCreationAttributes>
   implements StudentAttributes {
   declare StudentID: number;
-  declare UserID: number;
+  declare UserID: number | null;
   declare RegisterNumber: string;
   declare DepartmentID: number;
   declare ProgramID: number;
@@ -43,7 +43,7 @@ Student.init(
     },
     UserID: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
       unique: true,
       references: {
         model: "Users",
