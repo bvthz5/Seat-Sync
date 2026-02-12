@@ -167,7 +167,10 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                     <div className="flex gap-2">
                                         <div className="flex-1">
                                             <Select
+                                                id="import-series-select"
+                                                name="seriesSelect"
                                                 placeholder="Select an exam series"
+                                                label="Target Exam Series"
                                                 selectedKeys={selectedSeriesId ? [selectedSeriesId] : []}
                                                 onChange={(e) => setSelectedSeriesId(e.target.value)}
                                                 variant="bordered"
@@ -193,6 +196,8 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                         Exam Name Prefix (Optional)
                                     </label>
                                     <input
+                                        id="import-exam-title"
+                                        name="examTitle"
                                         type="text"
                                         placeholder="e.g., S1 Supplementary"
                                         value={examTitle}
@@ -226,6 +231,7 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                 <div className="relative">
                                     <input
                                         type="file"
+                                        name="fileUpload"
                                         accept=".xlsx,.xls"
                                         onChange={handleFileSelect}
                                         className="hidden"

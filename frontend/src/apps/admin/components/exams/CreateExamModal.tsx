@@ -140,7 +140,7 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
 
                                 {/* 1. Subject Search */}
                                 <div className="relative">
-                                    <label className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Subject Name or Code</label>
+                                    <label htmlFor="subjectSearch" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Subject Name or Code</label>
                                     <Input
                                         id="subjectSearch"
                                         name="subjectSearch"
@@ -195,11 +195,12 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
                                 {/* 3. Date & Session */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
-                                        <label className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Date</label>
+                                        <label htmlFor="ExamDate" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Date</label>
                                         <Input
                                             id="ExamDate"
                                             type="date"
                                             name="ExamDate"
+                                            aria-label="Exam Date"
                                             value={formData.ExamDate}
                                             onChange={handleChange}
                                             variant="flat"
@@ -242,12 +243,13 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
 
                                 {/* 4. Duration - Fixed Overlap */}
                                 <div>
-                                    <label className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Duration (Minutes)</label>
+                                    <label htmlFor="Duration" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Duration (Minutes)</label>
                                     <Input
                                         id="Duration"
                                         type="number"
-                                        placeholder="180"
                                         name="Duration"
+                                        aria-label="Duration"
+                                        placeholder="180"
                                         value={formData.Duration}
                                         onChange={handleChange}
                                         variant="flat"

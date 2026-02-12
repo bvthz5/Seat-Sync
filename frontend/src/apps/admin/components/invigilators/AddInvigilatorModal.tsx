@@ -84,8 +84,10 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
                         <ModalBody className="px-8 py-6">
                             <div className="flex flex-col gap-5">
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide ml-1">Full Name</label>
+                                    <label htmlFor="invigilator-name" className="text-xs font-bold text-gray-500 uppercase tracking-wide ml-1">Full Name</label>
                                     <Input
+                                        id="invigilator-name"
+                                        name="fullName"
                                         value={formData.FullName}
                                         onValueChange={(v) => handleChange("FullName", v)}
                                         placeholder="e.g. Sarah Connor"
@@ -103,8 +105,10 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide ml-1">Email Address</label>
+                                    <label htmlFor="invigilator-email" className="text-xs font-bold text-gray-500 uppercase tracking-wide ml-1">Email Address</label>
                                     <Input
+                                        id="invigilator-email"
+                                        name="email"
                                         type="email"
                                         value={formData.Email}
                                         onValueChange={(v) => handleChange("Email", v)}
@@ -124,8 +128,10 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide ml-1">Initial Password</label>
+                                    <label htmlFor="invigilator-password" className="text-xs font-bold text-gray-500 uppercase tracking-wide ml-1">Initial Password</label>
                                     <Input
+                                        id="invigilator-password"
+                                        name="password"
                                         type={isVisible ? "text" : "password"}
                                         value={formData.Password}
                                         onValueChange={(v) => handleChange("Password", v)}

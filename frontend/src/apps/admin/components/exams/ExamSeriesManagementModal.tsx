@@ -89,7 +89,7 @@ const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesMan
                     EndDate: academicEndDate
                 });
 
-                if (yearRes.data?.success || yearRes.success) {
+                if (yearRes.data?.success) {
                     const createdYear = yearRes.data?.data || yearRes.data;
                     yearID = createdYear.AcademicYearID;
                 } else {
@@ -170,8 +170,11 @@ const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesMan
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
                                     <div className="space-y-2.5">
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Series Name</label>
+                                        <label htmlFor="series-name" className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Series Name</label>
                                         <Input
+                                            id="series-name"
+                                            name="seriesName"
+                                            aria-label="Series Name"
                                             placeholder="e.g., Internal 1"
                                             value={newName}
                                             onValueChange={setNewName}
@@ -185,7 +188,7 @@ const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesMan
                                     </div>
                                     <div className="space-y-2.5">
                                         <div className="flex justify-between items-center px-1">
-                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Academic Year</label>
+                                            <label htmlFor="academic-year" className="text-xs font-bold text-slate-500 uppercase tracking-wider">Academic Year</label>
                                             <button
                                                 onClick={() => setIsCreatingYear(!isCreatingYear)}
                                                 className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wider transition-all ${isCreatingYear
@@ -203,8 +206,11 @@ const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesMan
                                         {isCreatingYear ? (
                                             <div className="flex gap-4 p-4 bg-slate-50 border border-slate-200 rounded-xl animate-in fade-in zoom-in-95 duration-200">
                                                 <div className="flex-1 space-y-1.5">
-                                                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Start Year</label>
+                                                    <label htmlFor="start-year" className="text-[10px] font-bold text-slate-400 uppercase ml-1">Start Year</label>
                                                     <select
+                                                        id="start-year"
+                                                        name="startYear"
+                                                        aria-label="Start Year"
                                                         className="w-full h-11 px-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer appearance-none"
                                                         value={startYear}
                                                         onChange={(e) => setStartYear(e.target.value)}
@@ -219,8 +225,11 @@ const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesMan
                                                     <div className="w-4 h-0.5 bg-slate-300 rounded-full"></div>
                                                 </div>
                                                 <div className="flex-1 space-y-1.5">
-                                                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">End Year</label>
+                                                    <label htmlFor="end-year" className="text-[10px] font-bold text-slate-400 uppercase ml-1">End Year</label>
                                                     <select
+                                                        id="end-year"
+                                                        name="endYear"
+                                                        aria-label="End Year"
                                                         className="w-full h-11 px-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer appearance-none"
                                                         value={endYear}
                                                         onChange={(e) => setEndYear(e.target.value)}
@@ -234,8 +243,11 @@ const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesMan
                                             </div>
                                         ) : (
                                             <Select
+                                                id="academic-year"
+                                                name="academicYear"
+                                                aria-label="Academic Year"
                                                 placeholder="Select Year"
-                                                selectedKeys={selectedYear ? [selectedYear] : []}
+                                                selectedKeys={selectedYear ? new Set([selectedYear]) : new Set([])}
                                                 onChange={(e) => setSelectedYear(e.target.value)}
                                                 variant="bordered"
                                                 size="lg"
@@ -292,13 +304,16 @@ const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesMan
                                             <TableColumn>YEAR</TableColumn>
                                             <TableColumn align="center">ACTIONS</TableColumn>
                                         </TableHeader>
-                                        <TableBody emptyContent={
-                                            <div className="flex flex-col items-center justify-center p-8 text-slate-400">
-                                                <BookOpen size={32} className="mb-2 opacity-20" />
-                                                <p className="text-sm font-medium">No series found</p>
-                                            </div>
-                                        }>
-                                            {seriesList.map((item) => (
+                                        <TableBody
+                                            items={seriesList}
+                                            emptyContent={
+                                                <div className="flex flex-col items-center justify-center p-8 text-slate-400">
+                                                    <BookOpen size={32} className="mb-2 opacity-20" />
+                                                    <p className="text-sm font-medium">No series found</p>
+                                                </div>
+                                            }
+                                        >
+                                            {(item: any) => (
                                                 <TableRow key={item.ExamSeriesID}>
                                                     <TableCell>
                                                         <div className="flex items-center gap-3">
@@ -314,19 +329,21 @@ const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesMan
                                                         </span>
                                                     </TableCell>
                                                     <TableCell>
-                                                        <Button
-                                                            isIconOnly
-                                                            size="sm"
-                                                            variant="light"
-                                                            color="danger"
-                                                            onPress={() => handleDelete(item.ExamSeriesID)}
-                                                            className="text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </Button>
+                                                        <div className="flex justify-center">
+                                                            <Button
+                                                                isIconOnly
+                                                                size="sm"
+                                                                variant="light"
+                                                                color="danger"
+                                                                onPress={() => handleDelete(item.ExamSeriesID)}
+                                                                className="text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </Button>
+                                                        </div>
                                                     </TableCell>
                                                 </TableRow>
-                                            ))}
+                                            )}
                                         </TableBody>
                                     </Table>
                                 )}

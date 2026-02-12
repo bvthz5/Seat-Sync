@@ -45,6 +45,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             try {
                 // Attempt to refresh token or get locally
                 let token = AccessTokenStore.token;
+
+                // Validate local token expiration
+                if (token) {
+                    try {
+                        const base64Url = token.split('.')[1];
+                        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                        const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function (c) {
+                            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                        }).join(''));
+                        const payload = JSON.parse(jsonPayload);
+
+                        // Check if token is expired (add 10s buffer)
+                        const currentTime = Date.now() / 1000;
+                        if (payload.exp && payload.exp < (currentTime + 10)) {
+                            token = null;
+                        }
+                    } catch (e) {
+                        token = null;
+                    }
+                }
+
                 if (!token) {
                     token = await AuthService.refresh();
                 }

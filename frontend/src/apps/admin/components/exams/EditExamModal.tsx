@@ -90,6 +90,8 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
                             <div className="space-y-4">
                                 <div className="grid grid-cols-2 gap-4">
                                     <Input
+                                        id="edit-exam-name"
+                                        name="ExamName"
                                         label="Exam Name"
                                         placeholder="e.g. End Semester Exam"
                                         value={formData.ExamName}
@@ -98,6 +100,8 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
                                         isRequired
                                     />
                                     <Input
+                                        id="edit-exam-date"
+                                        name="ExamDate"
                                         type="date"
                                         label="Date"
                                         placeholder="YYYY-MM-DD"
@@ -110,6 +114,8 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <Select
+                                        id="edit-exam-session"
+                                        name="Session"
                                         label="Session"
                                         placeholder="Select Session"
                                         selectedKeys={formData.Session ? [formData.Session] : []}
@@ -122,6 +128,8 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
                                     </Select>
 
                                     <Input
+                                        id="edit-exam-duration"
+                                        name="Duration"
                                         type="number"
                                         label="Duration (Minutes)"
                                         placeholder="180"
