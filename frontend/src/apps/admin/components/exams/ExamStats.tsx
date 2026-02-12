@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Card, CardBody, Chip } from "@heroui/react";
-import { Users, AlertTriangle, Home, FileText, TrendingUp, AlertCircle } from "lucide-react";
+import { FileText, CheckCircle, CalendarClock, Zap } from "lucide-react";
 
 interface StatsProps {
     stats: {
@@ -13,13 +13,10 @@ interface StatsProps {
 }
 
 const ExamStats: React.FC<StatsProps> = ({ stats }) => {
-    // Fallback if stats are loading
     const total = stats?.total || 0;
-
-    // Mocking specific metrics that might not be in the basic stats object yet
-    const studentsSeated = 3850; // Mock
-    const clashes = 12;          // Mock
-    const roomUtilization = 85;  // Mock
+    const completed = stats?.completed || 0;
+    const upcoming = stats?.upcoming || 0;
+    const activeToday = stats?.activeToday || 0;
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -27,49 +24,65 @@ const ExamStats: React.FC<StatsProps> = ({ stats }) => {
             {/* Card 1: Total Exams */}
             <Card className="border border-gray-100 shadow-sm bg-white">
                 <CardBody className="p-5">
-                    <p className="text-sm text-gray-500 font-medium mb-1">Total Exams</p>
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
+                            <FileText size={18} className="text-blue-600" />
+                        </div>
+                        <p className="text-sm text-gray-500 font-medium">Total Exams</p>
+                    </div>
+                    <h2 className="text-3xl font-bold text-gray-900">{total}</h2>
+                </CardBody>
+            </Card>
+
+            {/* Card 2: Completed */}
+            <Card className="border border-gray-100 shadow-sm bg-white">
+                <CardBody className="p-5">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center">
+                            <CheckCircle size={18} className="text-green-600" />
+                        </div>
+                        <p className="text-sm text-gray-500 font-medium">Completed</p>
+                    </div>
                     <div className="flex items-center gap-3">
-                        <h2 className="text-3xl font-bold text-gray-900">{total}</h2>
-                        <Chip size="sm" color="success" variant="flat" className="bg-green-50 text-green-600 font-semibold px-2">
-                            <TrendingUp size={12} className="inline mr-1" /> +5%
-                        </Chip>
+                        <h2 className="text-3xl font-bold text-gray-900">{completed}</h2>
+                        {total > 0 && (
+                            <Chip size="sm" variant="flat" className="bg-green-50 text-green-600 font-semibold px-2">
+                                {Math.round((completed / total) * 100)}%
+                            </Chip>
+                        )}
                     </div>
                 </CardBody>
             </Card>
 
-            {/* Card 2: Students Seated */}
+            {/* Card 3: Upcoming */}
             <Card className="border border-gray-100 shadow-sm bg-white">
                 <CardBody className="p-5">
-                    <p className="text-sm text-gray-500 font-medium mb-1">Students Seated</p>
-                    <div className="flex items-center gap-3">
-                        <h2 className="text-3xl font-bold text-gray-900">{studentsSeated.toLocaleString()}</h2>
-                        <span className="text-xs text-gray-400 font-medium">Total capacity</span>
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center">
+                            <CalendarClock size={18} className="text-indigo-600" />
+                        </div>
+                        <p className="text-sm text-gray-500 font-medium">Upcoming</p>
                     </div>
+                    <h2 className="text-3xl font-bold text-gray-900">{upcoming}</h2>
                 </CardBody>
             </Card>
 
-            {/* Card 3: Clashes Detected */}
+            {/* Card 4: Active Today */}
             <Card className="border border-gray-100 shadow-sm bg-white">
                 <CardBody className="p-5">
-                    <p className="text-sm text-gray-500 font-medium mb-1">Clashes Detected</p>
-                    <div className="flex items-center gap-3">
-                        <h2 className="text-3xl font-bold text-red-600">{clashes}</h2>
-                        <Chip size="sm" color="danger" variant="flat" className="bg-red-50 text-red-600 font-bold px-2">
-                            Action Required
-                        </Chip>
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center">
+                            <Zap size={18} className="text-amber-600" />
+                        </div>
+                        <p className="text-sm text-gray-500 font-medium">Active Today</p>
                     </div>
-                </CardBody>
-            </Card>
-
-            {/* Card 4: Rooms Utilized */}
-            <Card className="border border-gray-100 shadow-sm bg-white">
-                <CardBody className="p-5">
-                    <p className="text-sm text-gray-500 font-medium mb-1">Rooms Utilized</p>
                     <div className="flex items-center gap-3">
-                        <h2 className="text-3xl font-bold text-gray-900">{roomUtilization}%</h2>
-                        <Chip size="sm" color="warning" variant="flat" className="bg-orange-50 text-orange-600 font-semibold px-2">
-                            Near Capacity
-                        </Chip>
+                        <h2 className="text-3xl font-bold text-gray-900">{activeToday}</h2>
+                        {activeToday > 0 && (
+                            <Chip size="sm" variant="flat" className="bg-amber-50 text-amber-600 font-semibold px-2">
+                                Live
+                            </Chip>
+                        )}
                     </div>
                 </CardBody>
             </Card>

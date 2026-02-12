@@ -11,6 +11,7 @@ import CreateExamModal from '../components/exams/CreateExamModal';
 import EditExamModal from '../components/exams/EditExamModal';
 import ExamImportModal from '../components/exams/ExamImportModal';
 import ExamDetailPanel from '../components/exams/ExamDetailPanel';
+import ConfirmationModal from '../components/ConfirmationModal';
 import { ExamService } from '../services/examService';
 import { SeriesService } from '../services/seriesService';
 import { academicService } from '../services/academicService';
@@ -29,6 +30,7 @@ const Exams: React.FC = () => {
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
     const [seriesName, setSeriesName] = useState<string>('');
+    const [deleteExamId, setDeleteExamId] = useState<number | null>(null);
 
     // Panel State
     const [selectedExam, setSelectedExam] = useState<any>(null);
@@ -103,13 +105,17 @@ const Exams: React.FC = () => {
         }
     };
 
-    const handleDelete = async (id: number) => {
-        if (!confirm("Are you sure you want to delete this exam?")) return;
+    const handleDeleteClick = (id: number) => {
+        setDeleteExamId(id);
+    };
+
+    const confirmDelete = async () => {
+        if (!deleteExamId) return;
         try {
-            await ExamService.delete(id);
+            await ExamService.delete(deleteExamId);
             toast.success("Exam deleted successfully");
             fetchData();
-            if (selectedExam?.ExamID === id) setIsPanelOpen(false);
+            if (selectedExam?.ExamID === deleteExamId) setIsPanelOpen(false);
         } catch (error) {
             toast.error("Failed to delete exam");
         }
@@ -122,6 +128,7 @@ const Exams: React.FC = () => {
     const handleEdit = (exam: any) => {
         setSelectedExam(exam);
         setIsEditModalOpen(true);
+        setIsPanelOpen(false);
     };
 
     const handleExamUpdated = () => {
@@ -365,7 +372,7 @@ const Exams: React.FC = () => {
                     exams={exams}
                     loading={loading}
                     onEdit={handleEdit}
-                    onDelete={handleDelete}
+                    onDelete={handleDeleteClick}
                     onAllocate={handleAllocate}
                     onRowClick={handleRowClick}
                 />
@@ -395,6 +402,18 @@ const Exams: React.FC = () => {
                 />
             )}
 
+            {/* Delete Confirmation Modal */}
+            <ConfirmationModal
+                isOpen={!!deleteExamId}
+                onClose={() => setDeleteExamId(null)}
+                onConfirm={confirmDelete}
+                title="Delete Exam"
+                message="Are you sure you want to delete this exam? This action cannot be undone and will remove all associated allocations."
+                confirmText="Delete Exam"
+                cancelText="Cancel"
+                type="danger"
+            />
+
             {/* Import Modal */}
             <ExamImportModal
                 isOpen={isImportModalOpen}
@@ -408,6 +427,7 @@ const Exams: React.FC = () => {
                 isOpen={isPanelOpen}
                 exam={selectedExam}
                 onClose={() => setIsPanelOpen(false)}
+                onEdit={handleEdit}
             />
 
         </div>

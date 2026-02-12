@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Card, CardBody, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip, Pagination, Input, User as UserAvatar, Tooltip, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Popover, PopoverTrigger, PopoverContent, Select, SelectItem, Badge } from '@heroui/react';
+import { Button, Card, CardBody, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip, Pagination, Input, User as UserAvatar, Tooltip, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Popover, PopoverTrigger, PopoverContent, Select, SelectItem } from '@heroui/react';
 import { Plus, Search, FileSpreadsheet, MoreVertical, Filter, Download, Pencil, Trash2, AlertTriangle, X, Check, Building2, GraduationCap, BookOpen, Calendar, Mail, FileDown } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import api from '../../../services/api';
@@ -233,7 +233,7 @@ const Students: React.FC = () => {
                         startContent={<Filter size={18} />}
                         onPress={openFilters}
                     >
-                        Filter {activeFiltersCount > 0 && <Badge content={activeFiltersCount} color="primary" size="sm" shape="circle" className="border-none shadow-sm ml-1" />}
+                        Filter {activeFiltersCount > 0 && <Chip size="sm" color="primary" className="ml-1 h-5 min-w-5 px-0 text-tiny">{activeFiltersCount}</Chip>}
                     </Button>
                     <div className="h-6 w-px bg-gray-200 mx-1"></div>
                     <Tooltip content="Export to Excel">

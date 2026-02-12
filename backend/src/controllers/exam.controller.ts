@@ -62,7 +62,35 @@ export class ExamController {
                 order: [['ExamDate', 'ASC']]
             });
 
-            res.json(exams);
+            // Compute dynamic status based on date, session, and duration
+            const now = new Date();
+            const examsWithStatus = exams.map(exam => {
+                const examData = exam.toJSON() as any;
+                const examDate = new Date(examData.ExamDate);
+
+                // Session start times: FN = 10:00 AM, AN = 2:00 PM
+                const startHour = examData.Session === 'FN' ? 10 : 14;
+                const startMinute = 0;
+
+                // Build exam start datetime
+                const examStart = new Date(examDate);
+                examStart.setHours(startHour, startMinute, 0, 0);
+
+                // Build exam end datetime (start + duration in minutes)
+                const examEnd = new Date(examStart.getTime() + (examData.Duration || 180) * 60 * 1000);
+
+                if (now >= examEnd) {
+                    examData.Status = 'Completed';
+                } else if (now >= examStart && now < examEnd) {
+                    examData.Status = 'In Progress';
+                } else {
+                    examData.Status = 'Scheduled';
+                }
+
+                return examData;
+            });
+
+            res.json(examsWithStatus);
         } catch (error: any) {
             res.status(500).json({ message: 'Error fetching exams', error: error.message });
         }
@@ -167,23 +195,32 @@ export class ExamController {
             }
 
             const totalExams = await Exam.count({ where: whereClause });
-            const completedExams = await Exam.count({ where: { Status: 'Completed' } });
-            const upcomingExams = await Exam.count({
+
+            // Use date-based logic matching the dynamic status in getExams
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+
+            // Completed = exam date is before today
+            const completedExams = await Exam.count({
                 where: {
-                    ExamDate: { [Op.gte]: new Date() }
+                    ...whereClause,
+                    ExamDate: { [Op.lt]: todayStr }
                 }
             });
 
-            const today = new Date();
-            const startOfDay = new Date(today.setHours(0, 0, 0, 0));
-            const endOfDay = new Date(today.setHours(23, 59, 59, 999));
+            // Upcoming = exam date is after today
+            const upcomingExams = await Exam.count({
+                where: {
+                    ...whereClause,
+                    ExamDate: { [Op.gt]: todayStr }
+                }
+            });
 
+            // Active today = exam date is today
             const activeToday = await Exam.count({
                 where: {
                     ...whereClause,
-                    ExamDate: {
-                        [Op.between]: [startOfDay, endOfDay]
-                    }
+                    ExamDate: todayStr
                 }
             });
 

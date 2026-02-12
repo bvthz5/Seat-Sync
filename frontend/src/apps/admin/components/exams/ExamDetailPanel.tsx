@@ -1,16 +1,27 @@
 
 import React from 'react';
-import { Button, Chip, Tabs, Tab, Card, CardBody, Progress, Divider } from "@heroui/react";
-import { X, Calendar, Clock, MapPin, Users, CheckCircle, AlertCircle, FileText } from "lucide-react";
+import { Button, Chip } from "@heroui/react";
+import { X, Calendar, Clock, FileText, Hash, Timer, BookOpen } from "lucide-react";
 
 interface ExamDetailPanelProps {
     exam: any;
     isOpen: boolean;
     onClose: () => void;
+    onEdit: (exam: any) => void;
 }
 
-const ExamDetailPanel: React.FC<ExamDetailPanelProps> = ({ exam, isOpen, onClose }) => {
+const ExamDetailPanel: React.FC<ExamDetailPanelProps> = ({ exam, isOpen, onClose, onEdit }) => {
     if (!isOpen || !exam) return null;
+
+    const formattedDate = new Date(exam.ExamDate).toLocaleDateString('en-IN', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+
+    const sessionLabel = exam.Session === 'FN' ? 'Forenoon' : 'Afternoon';
+    const sessionTime = exam.Session === 'FN' ? '10:00 AM – 1:00 PM' : '2:00 PM – 5:00 PM';
 
     return (
         <>
@@ -21,8 +32,9 @@ const ExamDetailPanel: React.FC<ExamDetailPanelProps> = ({ exam, isOpen, onClose
             />
 
             {/* Slide-over Panel */}
-            <div className={`fixed inset-y-0 right-0 w-full sm:w-[500px] bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+            <div className={`fixed top-0 bottom-0 right-0 w-full sm:w-[480px] bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
                 <div className="flex flex-col h-full">
+
                     {/* Header */}
                     <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gray-50/50">
                         <div>
@@ -42,114 +54,92 @@ const ExamDetailPanel: React.FC<ExamDetailPanelProps> = ({ exam, isOpen, onClose
                     {/* Scrollable Content */}
                     <div className="flex-1 overflow-y-auto p-6 space-y-6">
 
-                        {/* Key Info Cards */}
+                        {/* Date & Time Cards */}
                         <div className="grid grid-cols-2 gap-4">
                             <div className="p-4 rounded-xl bg-blue-50 border border-blue-100">
                                 <div className="flex items-center gap-2 mb-2 text-blue-600">
                                     <Calendar size={18} />
                                     <span className="text-xs font-semibold uppercase tracking-wide">Date</span>
                                 </div>
-                                <p className="text-lg font-bold text-gray-800">{new Date(exam.ExamDate).toLocaleDateString()}</p>
+                                <p className="text-base font-bold text-gray-800">{formattedDate}</p>
                             </div>
                             <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-100">
                                 <div className="flex items-center gap-2 mb-2 text-indigo-600">
                                     <Clock size={18} />
-                                    <span className="text-xs font-semibold uppercase tracking-wide">Time</span>
+                                    <span className="text-xs font-semibold uppercase tracking-wide">Session</span>
                                 </div>
-                                <p className="text-lg font-bold text-gray-800">
-                                    {exam.Session === 'FN' ? '10:00 AM - 1:00 PM' : '02:00 PM - 05:00 PM'}
-                                </p>
+                                <p className="text-base font-bold text-gray-800">{sessionLabel}</p>
+                                <p className="text-xs text-gray-500 mt-0.5">{sessionTime}</p>
                             </div>
                         </div>
 
-                        {/* Details Tabs */}
-                        <div className="w-full flex flex-col">
-                            <Tabs aria-label="Exam Options" color="primary" variant="underlined" classNames={{
-                                tabList: "gap-6 w-full relative rounded-none p-0 border-b border-divider",
-                                cursor: "w-full bg-indigo-500",
-                                tab: "max-w-fit px-0 h-10",
-                                tabContent: "group-data-[selected=true]:text-indigo-600 text-gray-500 font-medium"
-                            }}>
-                                <Tab key="overview" title="Overview">
-                                    <div className="pt-4 space-y-6">
-
-                                        {/* Subject Info */}
-                                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                                            <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                                                <FileText size={16} /> Subject Information
-                                            </h3>
-                                            <div className="space-y-2">
-                                                <div className="flex justify-between">
-                                                    <span className="text-sm text-gray-500">Subject Name</span>
-                                                    <span className="text-sm font-medium text-gray-800">{exam.ExamName}</span>
-                                                    {/* Ideally subject name should be separate from Exam Name, using ExamName for now */}
-                                                </div>
-                                                <div className="flex justify-between">
-                                                    <span className="text-sm text-gray-500">Subject Code</span>
-                                                    <span className="text-sm font-medium text-gray-800">{exam.Subject?.SubjectCode || 'N/A'}</span>
-                                                </div>
-                                                <div className="flex justify-between">
-                                                    <span className="text-sm text-gray-500">Duration</span>
-                                                    <span className="text-sm font-medium text-gray-800">{exam.Duration} Minutes</span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Seating Progress */}
-                                        <div>
-                                            <div className="flex justify-between mb-2">
-                                                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                                                    <Users size={16} /> Seat Allocation
-                                                </h3>
-                                                <span className="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">0% Allocated</span>
-                                            </div>
-                                            <Progress value={0} color="primary" className="h-2" />
-                                            <p className="text-xs text-gray-400 mt-2">0 out of 0 students allocated.</p>
-                                        </div>
-
-                                        <Divider />
-
-                                        {/* Actions */}
-                                        <div className="flex flex-col gap-3">
-                                            <Button variant="flat" color="primary" startContent={<Users size={18} />}>
-                                                Allocate Seats Automatically
-                                            </Button>
-                                            <Button variant="flat" color="secondary" startContent={<CheckCircle size={18} />}>
-                                                Publish Exam Schedule
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </Tab>
-
-                                <Tab key="rooms" title="Rooms">
-                                    <div className="pt-4 flex flex-col items-center justify-center text-center h-40">
-                                        <MapPin size={32} className="text-gray-300 mb-2" />
-                                        <p className="text-gray-500 text-sm">No rooms allocated yet.</p>
-                                        <Button size="sm" variant="light" color="primary" className="mt-2">
-                                            Manage Rooms
-                                        </Button>
-                                    </div>
-                                </Tab>
-
-                                <Tab key="invigilators" title="Invigilators">
-                                    <div className="pt-4 flex flex-col items-center justify-center text-center h-40">
-                                        <Users size={32} className="text-gray-300 mb-2" />
-                                        <p className="text-gray-500 text-sm">No invigilators assigned.</p>
-                                        <Button size="sm" variant="light" color="primary" className="mt-2">
-                                            Assign Staff
-                                        </Button>
-                                    </div>
-                                </Tab>
-                            </Tabs>
+                        {/* Subject Information */}
+                        <div className="bg-gray-50 p-5 rounded-xl border border-gray-100">
+                            <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                                <FileText size={16} className="text-blue-600" /> Subject Information
+                            </h3>
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-start">
+                                    <span className="text-sm text-gray-500">Subject Name</span>
+                                    <span className="text-sm font-medium text-gray-800 text-right max-w-[60%]">
+                                        {exam.Subject?.SubjectName || exam.ExamName}
+                                    </span>
+                                </div>
+                                <div className="h-px bg-gray-200/60"></div>
+                                <div className="flex justify-between">
+                                    <span className="text-sm text-gray-500">Subject Code</span>
+                                    <span className="text-sm font-semibold text-blue-600">
+                                        {exam.Subject?.SubjectCode || 'N/A'}
+                                    </span>
+                                </div>
+                                <div className="h-px bg-gray-200/60"></div>
+                                <div className="flex justify-between">
+                                    <span className="text-sm text-gray-500">Department</span>
+                                    <span className="text-sm font-medium text-gray-800">
+                                        {exam.Subject?.Department?.DepartmentName || 'General'}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
+
+                        {/* Exam Details */}
+                        <div className="bg-gray-50 p-5 rounded-xl border border-gray-100">
+                            <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                                <BookOpen size={16} className="text-blue-600" /> Exam Configuration
+                            </h3>
+                            <div className="space-y-3">
+                                <div className="flex justify-between">
+                                    <span className="text-sm text-gray-500">Exam Name</span>
+                                    <span className="text-sm font-medium text-gray-800 text-right max-w-[60%]">{exam.ExamName}</span>
+                                </div>
+                                <div className="h-px bg-gray-200/60"></div>
+                                <div className="flex justify-between">
+                                    <span className="text-sm text-gray-500">Duration</span>
+                                    <span className="text-sm font-medium text-gray-800">{exam.Duration} Minutes</span>
+                                </div>
+                                <div className="h-px bg-gray-200/60"></div>
+                                <div className="flex justify-between">
+                                    <span className="text-sm text-gray-500">Session</span>
+                                    <span className="text-sm font-medium text-gray-800">{exam.Session === 'FN' ? 'Forenoon (FN)' : 'Afternoon (AN)'}</span>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
 
                     {/* Footer */}
                     <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
-                        <Button color="danger" variant="light" onPress={onClose}>
+                        <Button
+                            variant="bordered"
+                            className="border-gray-300 text-gray-700 font-medium px-6 hover:bg-gray-50"
+                            onPress={onClose}
+                        >
                             Close
                         </Button>
-                        <Button color="primary" onPress={() => console.log('Edit')}>
+                        <Button
+                            className="bg-blue-600 text-white font-semibold shadow-md px-6 hover:bg-blue-700"
+                            onPress={() => onEdit(exam)}
+                        >
                             Edit Details
                         </Button>
                     </div>

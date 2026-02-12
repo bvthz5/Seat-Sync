@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Chip, Tooltip, Pagination, Button } from "@heroui/react";
 import { Edit2, Trash2, CheckCircle, AlertTriangle, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -36,13 +36,27 @@ interface ExamListTableProps {
 const statusClasses: Record<string, string> = {
     "Completed": "bg-gray-100 text-gray-600 border-gray-200",
     "Scheduled": "bg-green-50 text-green-700 border-green-200",
-    "Finalized": "bg-green-50 text-green-700 border-green-200",
     "Review Needed": "bg-yellow-50 text-yellow-700 border-yellow-200",
     "Pending": "bg-gray-100 text-gray-600 border-gray-200",
     "In Progress": "bg-blue-50 text-blue-700 border-blue-200"
 };
 
 const ExamListTable: React.FC<ExamListTableProps> = ({ exams, loading, onEdit, onDelete, onAllocate, onRowClick }) => {
+
+    const [currentPage, setCurrentPage] = useState(1);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
+
+    // Reset to page 1 whenever exams data changes (e.g. filters applied)
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [exams.length]);
+
+    const totalPages = Math.max(1, Math.ceil(exams.length / rowsPerPage));
+
+    const paginatedExams = useMemo(() => {
+        const start = (currentPage - 1) * rowsPerPage;
+        return exams.slice(start, start + rowsPerPage);
+    }, [exams, currentPage, rowsPerPage]);
 
     if (loading) {
         return <div className="text-center py-20 text-gray-400">Loading exam schedule...</div>;
@@ -73,9 +87,9 @@ const ExamListTable: React.FC<ExamListTableProps> = ({ exams, loading, onEdit, o
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                        {exams.map((exam) => {
+                        {paginatedExams.map((exam) => {
                             const audit = exam.AuditStatus || 'Pending';
-                            const displayStatus = exam.Status === 'Scheduled' ? 'Finalized' : exam.Status;
+                            const displayStatus = exam.Status;
                             const deptName = exam.Subject?.Department?.DepartmentName || 'General';
                             const deptCode = exam.Subject?.Department?.DepartmentCode || 'GEN';
 
@@ -162,14 +176,15 @@ const ExamListTable: React.FC<ExamListTableProps> = ({ exams, loading, onEdit, o
 
                                     {/* Actions */}
                                     <td className="px-6 py-4 text-right">
-                                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <div className="flex items-center justify-end gap-2">
                                             <Tooltip content="Edit Exam">
                                                 <Button
                                                     isIconOnly
                                                     size="sm"
-                                                    variant="light"
+                                                    variant="flat"
+                                                    color="primary"
                                                     onPress={() => onEdit(exam)}
-                                                    className="text-gray-400 hover:text-blue-600"
+                                                    className="bg-blue-50 text-blue-600 hover:bg-blue-100"
                                                 >
                                                     <Edit2 size={18} />
                                                 </Button>
@@ -178,9 +193,10 @@ const ExamListTable: React.FC<ExamListTableProps> = ({ exams, loading, onEdit, o
                                                 <Button
                                                     isIconOnly
                                                     size="sm"
-                                                    variant="light"
+                                                    variant="flat"
+                                                    color="danger"
                                                     onPress={() => onDelete(exam.ExamID)}
-                                                    className="text-gray-400 hover:text-red-600"
+                                                    className="bg-red-50 text-red-600 hover:bg-red-100"
                                                 >
                                                     <Trash2 size={18} />
                                                 </Button>
@@ -196,32 +212,84 @@ const ExamListTable: React.FC<ExamListTableProps> = ({ exams, loading, onEdit, o
 
             {/* Pagination Footer */}
             <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50/30">
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <span>Rows per page:</span>
-                    <select
-                        id="rows-per-page"
-                        name="rows-per-page"
-                        aria-label="Rows per page"
-                        className="bg-white border border-gray-300 text-gray-700 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 p-1.5 px-2.5"
-                    >
-                        <option>10</option>
-                        <option>20</option>
-                        <option>50</option>
-                    </select>
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <span>Rows per page:</span>
+                        <select
+                            id="rows-per-page"
+                            name="rows-per-page"
+                            aria-label="Rows per page"
+                            className="bg-white border border-gray-300 text-gray-700 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 p-1.5 px-2.5"
+                            value={rowsPerPage}
+                            onChange={(e) => {
+                                setRowsPerPage(Number(e.target.value));
+                                setCurrentPage(1);
+                            }}
+                        >
+                            <option value={10}>10</option>
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                        </select>
+                    </div>
+                    <span className="text-xs text-gray-400">
+                        {Math.min((currentPage - 1) * rowsPerPage + 1, exams.length)}–{Math.min(currentPage * rowsPerPage, exams.length)} of {exams.length}
+                    </span>
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <Button isIconOnly size="sm" variant="light" isDisabled>
+                    <Button
+                        isIconOnly
+                        size="sm"
+                        variant="light"
+                        isDisabled={currentPage === 1}
+                        onPress={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    >
                         <ChevronLeft size={16} />
                     </Button>
                     <div className="flex gap-1">
-                        <Button isIconOnly size="sm" className="bg-blue-600 text-white font-bold text-xs" radius="sm">1</Button>
-                        <Button isIconOnly size="sm" variant="light" className="text-gray-500 text-xs" radius="sm">2</Button>
-                        <Button isIconOnly size="sm" variant="light" className="text-gray-500 text-xs" radius="sm">3</Button>
-                        <span className="text-gray-400 px-1 pt-1">...</span>
-                        <Button isIconOnly size="sm" variant="light" className="text-gray-500 text-xs" radius="sm">12</Button>
+                        {(() => {
+                            const pages: (number | string)[] = [];
+                            if (totalPages <= 5) {
+                                for (let i = 1; i <= totalPages; i++) pages.push(i);
+                            } else {
+                                pages.push(1);
+                                if (currentPage > 3) pages.push('...');
+                                for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+                                    pages.push(i);
+                                }
+                                if (currentPage < totalPages - 2) pages.push('...');
+                                pages.push(totalPages);
+                            }
+                            return pages.map((page, idx) =>
+                                typeof page === 'string' ? (
+                                    <span key={`ellipsis-${idx}`} className="text-gray-400 px-1 pt-1">...</span>
+                                ) : (
+                                    <Button
+                                        key={page}
+                                        isIconOnly
+                                        size="sm"
+                                        radius="sm"
+                                        className={page === currentPage
+                                            ? "bg-blue-600 text-white font-bold text-xs"
+                                            : "text-gray-500 text-xs"
+                                        }
+                                        variant={page === currentPage ? "solid" : "light"}
+                                        onPress={() => setCurrentPage(page)}
+                                    >
+                                        {page}
+                                    </Button>
+                                )
+                            );
+                        })()}
                     </div>
-                    <Button isIconOnly size="sm" variant="light" className="text-gray-600">
+                    <Button
+                        isIconOnly
+                        size="sm"
+                        variant="light"
+                        isDisabled={currentPage === totalPages}
+                        onPress={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        className="text-gray-600"
+                    >
                         <ChevronRight size={16} />
                     </Button>
                 </div>
