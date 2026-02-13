@@ -3,6 +3,13 @@ export interface User {
     Email: string;
     Role: 'exam_admin' | 'invigilator' | 'student';
     IsRootAdmin: boolean;
+    FullName?: string | null;
+}
+
+export interface UserProfile extends User {
+    FullName: string | null;
+    CreatedAt: string;
+    IsActive: boolean;
 }
 
 export interface LoginResponse {

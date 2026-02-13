@@ -199,6 +199,7 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                         id="import-exam-title"
                                         name="examTitle"
                                         type="text"
+                                        autoComplete="off"
                                         placeholder="e.g., S1 Supplementary"
                                         value={examTitle}
                                         onChange={(e) => setExamTitle(e.target.value)}

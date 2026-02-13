@@ -185,8 +185,8 @@ const ResetPassword: React.FC = () => {
                     </AnimatePresence>
 
                     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-                        <CustomInput label="New Password" id="newPass" type="password" value={password} onChange={(e: any) => setPassword(e.target.value)} icon={<LockIcon />} placeholder="••••••••••••" />
-                        <CustomInput label="Confirm Password" id="confirmPass" type="password" value={confirmPassword} onChange={(e: any) => setConfirmPassword(e.target.value)} icon={<LockIcon />} placeholder="••••••••••••" />
+                        <CustomInput label="New Password" id="newPass" name="newPassword" autoComplete="new-password" type="password" value={password} onChange={(e: any) => setPassword(e.target.value)} icon={<LockIcon />} placeholder="••••••••••••" />
+                        <CustomInput label="Confirm Password" id="confirmPass" name="confirmPassword" autoComplete="new-password" type="password" value={confirmPassword} onChange={(e: any) => setConfirmPassword(e.target.value)} icon={<LockIcon />} placeholder="••••••••••••" />
                         <Button
                             type="submit"
                             size="lg"

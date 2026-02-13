@@ -134,27 +134,7 @@ const AdminLayout: React.FC = () => {
                             </DropdownItem>
                         </DropdownMenu>
                     </Dropdown>
-                    <Dropdown placement="bottom-end">
-                        <DropdownTrigger>
-                            <Button isIconOnly variant="light" radius="full" className="text-[#5f6368] hover:bg-[#3c4043]/10">
-                                <Settings size={24} />
-                            </Button>
-                        </DropdownTrigger>
-                        <DropdownMenu
-                            aria-label="Settings Actions"
-                            variant="flat"
-                            className="w-48 z-[9999] bg-white shadow-xl rounded-xl border border-gray-100 p-2"
-                        >
-                            <DropdownItem
-                                key="change_password"
-                                startContent={<Key size={18} className="text-red-500" />}
-                                className="text-red-600 data-[hover=true]:bg-red-50"
-                                onPress={() => navigate('/admin/change-password')}
-                            >
-                                Change Password
-                            </DropdownItem>
-                        </DropdownMenu>
-                    </Dropdown>
+
 
                     {/* Profile Avatar */}
                     <Dropdown placement="bottom-end" classNames={{ content: " " }} disableAnimation>
@@ -182,19 +162,27 @@ const AdminLayout: React.FC = () => {
                                         name={user?.Email?.[0].toUpperCase()}
                                         src={undefined}
                                     />
-                                    <div className="flex flex-col gap-1 overflow-hidden">
-                                        <p className="font-bold text-gray-900 text-sm truncate">Root Administrator</p>
+                                    <div className="flex-1 w-full flex flex-col gap-1 overflow-hidden">
+                                        <p className="font-normal text-gray-900 text-sm truncate">{user?.FullName || 'User'}</p>
                                         <p className="text-xs text-gray-500 truncate">{user?.Email}</p>
-                                        <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-700 text-[10px] font-bold w-fit tracking-wide">
-                                            ADMINISTRATOR
+                                        <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-700 text-[10px] font-bold w-fit tracking-wide uppercase">
+                                            {user?.Role === 'exam_admin' ? 'Administrator' : user?.Role}
                                         </span>
                                     </div>
                                 </div>
                             </DropdownItem>
 
-                            <DropdownItem key="my_profile" startContent={<User size={18} className="text-gray-500" />} textValue="My Profile">
-                                <span className="text-sm font-medium text-gray-700">My Profile</span>
-                            </DropdownItem>
+                            {(user?.Role === 'exam_admin' || user?.IsRootAdmin) ? (
+                                <DropdownItem
+                                    key="my_profile"
+                                    startContent={<User size={18} className="text-gray-500" />}
+                                    textValue="My Profile"
+                                    onPress={() => navigate('/admin/profile')}
+                                >
+                                    <span className="text-sm font-medium text-gray-700">My Profile</span>
+                                </DropdownItem>
+                            ) : null}
+
                             <DropdownItem
                                 key="logout"
                                 showDivider

@@ -1,5 +1,5 @@
 import api, { AccessTokenStore } from './api';
-import { LoginResponse, User } from '../types/auth';
+import { LoginResponse, User, UserProfile } from '../types/auth';
 
 export const AuthService = {
     async login(email: string, password: string): Promise<LoginResponse> {
@@ -33,5 +33,14 @@ export const AuthService = {
 
     async changePassword(currentPassword: string, newPassword: string): Promise<void> {
         await api.post('/auth/change-password', { currentPassword, newPassword });
+    },
+
+    async getProfile(): Promise<UserProfile> {
+        const response = await api.get<UserProfile>('/auth/profile');
+        return response.data;
+    },
+
+    async updateProfile(data: Partial<UserProfile>): Promise<void> {
+        await api.put('/auth/profile', data);
     }
 };

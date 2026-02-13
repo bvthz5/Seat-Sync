@@ -132,7 +132,7 @@ const ForgotPassword: React.FC = () => {
                     </AnimatePresence>
 
                     <form onSubmit={handleSubmit} className="flex flex-col gap-8">
-                        <CustomInput label="Official Academic Email" id="email" type="email" value={email} onChange={(e: any) => setEmail(e.target.value)} icon={<EmailIcon />} error={emailError} placeholder="name@input.edu" />
+                        <CustomInput label="Official Academic Email" id="email" name="email" autoComplete="email" type="email" value={email} onChange={(e: any) => setEmail(e.target.value)} icon={<EmailIcon />} error={emailError} placeholder="name@input.edu" />
                         <Button
                             type="submit"
                             size="lg"

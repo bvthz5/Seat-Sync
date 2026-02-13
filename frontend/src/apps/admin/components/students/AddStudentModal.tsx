@@ -106,8 +106,11 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
 
                         <div className="space-y-4">
                             <div className="space-y-1.5">
-                                <label className="text-sm font-semibold text-gray-700 ml-1">Register Number</label>
+                                <label htmlFor="register-number" className="text-sm font-semibold text-gray-700 ml-1">Register Number</label>
                                 <Input
+                                    id="register-number"
+                                    name="registerNumber"
+                                    autoComplete="off"
                                     startContent={<Hash className="text-gray-400" size={15} />}
                                     placeholder="e.g. SJC24MCA2001"
                                     value={formData.RegisterNumber}
@@ -120,8 +123,11 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <label className="text-sm font-semibold text-gray-700 ml-1">Student Name</label>
+                                <label htmlFor="student-name" className="text-sm font-semibold text-gray-700 ml-1">Student Name</label>
                                 <Input
+                                    id="student-name"
+                                    name="fullName"
+                                    autoComplete="name"
                                     startContent={<User className="text-gray-400" size={15} />}
                                     placeholder="e.g. John Doe"
                                     value={formData.FullName}

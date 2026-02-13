@@ -200,11 +200,12 @@ const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesMan
 
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
                                             <div className="space-y-2">
-                                                <label htmlFor="series-name" className="text-xs font-semibold text-gray-500 uppercase tracking-wider ml-1">Series Name</label>
+                                                <label id="series-name-label" className="text-xs font-semibold text-gray-500 uppercase tracking-wider ml-1">Series Name</label>
                                                 <Input
                                                     id="series-name"
                                                     name="seriesName"
-                                                    aria-label="Series Name"
+                                                    autoComplete="off"
+                                                    aria-labelledby="series-name-label"
                                                     placeholder="e.g., Internal 1"
                                                     value={newName}
                                                     onValueChange={setNewName}
@@ -218,7 +219,7 @@ const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesMan
                                             </div>
                                             <div className="space-y-2">
                                                 <div className="flex justify-between items-center px-1">
-                                                    <label htmlFor="academic-year" className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Academic Year</label>
+                                                    <label id="academic-year-label" className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Academic Year</label>
                                                     <button
                                                         onClick={() => setIsCreatingYear(!isCreatingYear)}
                                                         className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all ${isCreatingYear
@@ -271,7 +272,7 @@ const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesMan
                                                     <Select
                                                         id="academic-year"
                                                         name="academicYear"
-                                                        aria-label="Academic Year"
+                                                        aria-labelledby="academic-year-label"
                                                         placeholder="Select Year"
                                                         selectedKeys={selectedYear ? new Set([selectedYear]) : new Set([])}
                                                         onChange={(e) => setSelectedYear(e.target.value)}
@@ -352,6 +353,10 @@ const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesMan
                                                                             <div className="flex items-center gap-2">
                                                                                 <input
                                                                                     type="text"
+                                                                                    id={`edit-series-${item.ExamSeriesID}`}
+                                                                                    name={`editSeriesName-${item.ExamSeriesID}`}
+                                                                                    autoComplete="off"
+                                                                                    aria-label="Edit Series Name"
                                                                                     value={editName}
                                                                                     onChange={(e) => setEditName(e.target.value)}
                                                                                     onKeyDown={(e) => { if (e.key === 'Enter') handleEditSave(); if (e.key === 'Escape') setEditTarget(null); }}

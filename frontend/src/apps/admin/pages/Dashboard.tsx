@@ -48,6 +48,7 @@ const Dashboard: React.FC = () => {
                 </div>
                 <div className="flex gap-3 items-center">
                     <Select
+                        name="seriesFilter"
                         selectedKeys={new Set([seriesFilter])}
                         onSelectionChange={(keys) => setSeriesFilter(String(Array.from(keys)[0]))}
                         size="md"

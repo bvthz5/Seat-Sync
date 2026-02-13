@@ -208,6 +208,10 @@ const Students: React.FC = () => {
             {/* Search & Filter Bar */}
             <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-3">
                 <Input
+                    id="student-search"
+                    name="studentSearch"
+                    autoComplete="off"
+                    aria-label="Search students"
                     classNames={{
                         base: "w-full sm:max-w-md",
                         inputWrapper: "bg-gray-50 group-data-[focus=true]:bg-white border border-transparent group-data-[focus=true]:border-blue-500 transition-all rounded-lg shadow-none h-10",
@@ -360,13 +364,13 @@ const Students: React.FC = () => {
                             </ModalHeader>
                             <ModalBody>
                                 <div className="space-y-4">
-                                    <Select placeholder="All Departments" selectedKeys={tempFilters.dept ? [tempFilters.dept] : []} onChange={(e) => setTempFilters(p => ({ ...p, dept: e.target.value }))} variant="bordered" classNames={{ trigger: "rounded-xl border-gray-200" }}>
+                                    <Select name="departmentFilter" aria-label="Department Filter" placeholder="All Departments" selectedKeys={tempFilters.dept ? [tempFilters.dept] : []} onChange={(e) => setTempFilters(p => ({ ...p, dept: e.target.value }))} variant="bordered" classNames={{ trigger: "rounded-xl border-gray-200" }}>
                                         {departments.map(d => <SelectItem key={d.DepartmentID}>{d.DepartmentName}</SelectItem>)}
                                     </Select>
-                                    <Select placeholder="All Programs" selectedKeys={tempFilters.program ? [tempFilters.program] : []} onChange={(e) => setTempFilters(p => ({ ...p, program: e.target.value }))} variant="bordered" classNames={{ trigger: "rounded-xl border-gray-200" }}>
+                                    <Select name="programFilter" aria-label="Program Filter" placeholder="All Programs" selectedKeys={tempFilters.program ? [tempFilters.program] : []} onChange={(e) => setTempFilters(p => ({ ...p, program: e.target.value }))} variant="bordered" classNames={{ trigger: "rounded-xl border-gray-200" }}>
                                         {programs.map(p => <SelectItem key={p.ProgramID}>{p.ProgramName}</SelectItem>)}
                                     </Select>
-                                    <Select placeholder="All Semesters" isDisabled={!tempFilters.program} selectedKeys={tempFilters.semester ? [tempFilters.semester] : []} onChange={(e) => setTempFilters(p => ({ ...p, semester: e.target.value }))} variant="bordered" classNames={{ trigger: "rounded-xl border-gray-200" }}>
+                                    <Select name="semesterFilter" aria-label="Semester Filter" placeholder="All Semesters" isDisabled={!tempFilters.program} selectedKeys={tempFilters.semester ? [tempFilters.semester] : []} onChange={(e) => setTempFilters(p => ({ ...p, semester: e.target.value }))} variant="bordered" classNames={{ trigger: "rounded-xl border-gray-200" }}>
                                         {filteredFilterSemesters.map(s => <SelectItem key={s.SemesterID}>{`Semester ${s.SemesterNumber}`}</SelectItem>)}
                                     </Select>
                                 </div>

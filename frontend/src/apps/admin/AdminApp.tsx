@@ -11,7 +11,7 @@ import Attendance from './pages/Attendance';
 import Reports from './pages/Reports';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
-import ChangePassword from './pages/ChangePassword';
+
 
 import Students from './pages/Students';
 import CollegeStructure from './pages/CollegeStructure';
@@ -26,6 +26,7 @@ import Security from './pages/Security';
 import ExamControl from './pages/ExamControl';
 import AuditLogs from './pages/AuditLogs';
 import DataCleanup from './pages/DataCleanup';
+import Profile from './pages/Profile';
 
 const AdminApp: React.FC = () => {
     return (
@@ -40,17 +41,16 @@ const AdminApp: React.FC = () => {
 
                     {/* PRIMARY OPERATIONS - All Exam Admins */}
                     <Route path="dashboard" element={<Dashboard />} />
-                    <Route path="students" element={<Students />} />
+                    <Route path="profile" element={<Profile />} />
                     <Route path="students" element={<Students />} />
                     <Route path="exams" element={<ExamSeriesList />} />
                     <Route path="exams/:seriesId" element={<Exams />} />
-                    <Route path="seating" element={<SeatingPlans />} />
                     <Route path="seating" element={<SeatingPlans />} />
                     <Route path="invigilators" element={<Invigilators />} />
                     <Route path="attendance" element={<Attendance />} />
                     <Route path="reports" element={<Reports />} />
 
-                    <Route path="change-password" element={<ChangePassword />} />
+
 
                     {/* ADMINISTRATION SECTION - Root Admin Only */}
                     <Route element={<RequireRoot />}>

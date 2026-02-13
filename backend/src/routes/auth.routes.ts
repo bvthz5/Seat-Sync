@@ -165,4 +165,41 @@ router.post("/reset-password", AuthController.resetPassword);
  */
 router.post("/change-password", AuthMiddleware.verifyAccessToken, AuthController.changePassword);
 
+/**
+ * @swagger
+ * /api/auth/profile:
+ *   get:
+ *     summary: Get user profile
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: User profile details
+ */
+router.get("/profile", AuthMiddleware.verifyAccessToken, AuthController.getProfile);
+
+/**
+ * @swagger
+ * /api/auth/profile:
+ *   put:
+ *     summary: Update user profile
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               FullName:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Profile updated
+ */
+router.put("/profile", AuthMiddleware.verifyAccessToken, AuthController.updateProfile);
+
 export default router;

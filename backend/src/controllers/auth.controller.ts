@@ -3,6 +3,7 @@ import { AuthService } from "../services/auth.service.js";
 import { AdminService } from "../services/admin.service.js";
 import { verifyRefreshToken } from "../utils/jwt.js";
 import type { LoginRequest, RefreshResponse } from "../interfaces/auth.interfaces.js";
+import { User, Invigilator, Student, Department } from "../models/index.js";
 
 export class AuthController {
     /**
@@ -230,6 +231,71 @@ export class AuthController {
         } catch (error: any) {
             console.error("Change password error:", error.message);
             res.status(400).json({ error: error.message });
+        }
+    }
+
+
+    /**
+     * GET /api/auth/profile
+     * Get current user profile with extended details
+     */
+    static async getProfile(req: Request, res: Response): Promise<void> {
+        try {
+            const userId = req.user?.UserID;
+            if (!userId) {
+                res.status(401).json({ error: "Unauthorized" });
+                return;
+            }
+
+            const user = await User.findByPk(userId, {
+                attributes: ['UserID', 'Email', 'FullName', 'Role', 'IsRootAdmin', 'IsActive', 'CreatedAt']
+            });
+
+            if (!user) {
+                res.status(404).json({ error: "User not found" });
+                return;
+            }
+
+            res.json({
+                ...user.toJSON()
+            });
+
+        } catch (error: any) {
+            console.error("Get profile error:", error.message);
+            res.status(500).json({ error: error.message });
+        }
+    }
+
+    /**
+     * PUT /api/auth/profile
+     * Update user profile
+     */
+    static async updateProfile(req: Request, res: Response): Promise<void> {
+        try {
+            const userId = req.user?.UserID;
+            if (!userId) {
+                res.status(401).json({ error: "Unauthorized" });
+                return;
+            }
+
+            const { FullName } = req.body;
+
+            const user = await User.findByPk(userId);
+            if (!user) {
+                res.status(404).json({ error: "User not found" });
+                return;
+            }
+
+            // Update fields
+            if (FullName !== undefined) user.FullName = FullName;
+
+            await user.save();
+
+            res.json({ message: "Profile updated successfully", user });
+
+        } catch (error: any) {
+            console.error("Update profile error:", error.message);
+            res.status(500).json({ error: error.message });
         }
     }
 }

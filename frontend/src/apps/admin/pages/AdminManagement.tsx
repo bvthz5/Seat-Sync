@@ -275,7 +275,7 @@ const AdminManagement: React.FC = () => {
                             <tr>
                                 <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Email</th>
                                 <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Full Name</th>
-                                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Role</th>
+                                <th className="px-6 py-4 text-center text-sm font-semibold text-slate-700">Role</th>
                                 <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Status</th>
                                 <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700">Created</th>
                                 <th className="px-6 py-4 text-right text-sm font-semibold text-slate-700">Actions</th>
@@ -306,7 +306,7 @@ const AdminManagement: React.FC = () => {
                                         <td className="px-6 py-4 text-sm text-slate-600">
                                             {admin.FullName || '-'}
                                         </td>
-                                        <td className="px-6 py-4">
+                                        <td className="px-6 py-4 text-center">
                                             {admin.IsRootAdmin ? (
                                                 <span className="inline-flex items-center gap-1 px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
                                                     <Shield size={12} />

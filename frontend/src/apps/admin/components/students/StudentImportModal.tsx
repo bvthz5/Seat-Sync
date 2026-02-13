@@ -117,6 +117,8 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
                             <input
                                 type="file"
                                 id="file-upload"
+                                name="fileUpload"
+                                aria-label="Upload Excel File"
                                 className="hidden"
                                 accept=".xlsx, .xls"
                                 onChange={handleFileChange}

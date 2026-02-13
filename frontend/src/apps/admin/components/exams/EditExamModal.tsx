@@ -111,6 +111,7 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
                                 <Input
                                     id="edit-exam-name"
                                     name="ExamName"
+                                    autoComplete="off"
                                     placeholder="e.g. End Semester Exam"
                                     value={formData.ExamName}
                                     onValueChange={(val) => handleChange('ExamName', val)}
@@ -133,6 +134,7 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
                                         id="edit-exam-date"
                                         type="date"
                                         name="ExamDate"
+                                        autoComplete="off"
                                         aria-label="Exam Date"
                                         value={formData.ExamDate}
                                         onValueChange={(val) => handleChange('ExamDate', val)}
@@ -181,6 +183,7 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
                                     id="edit-exam-duration"
                                     type="number"
                                     name="Duration"
+                                    autoComplete="off"
                                     aria-label="Duration"
                                     placeholder="180"
                                     value={formData.Duration}
