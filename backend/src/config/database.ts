@@ -330,6 +330,66 @@ async function ensureSchemaIntegrity() {
             END
         `, { type: QueryTypes.RAW });
 
+        // Add Room Columns (Hall Mode)
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Rooms' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'RoomType')
+                BEGIN
+                    ALTER TABLE [dbo].[Rooms] ADD [RoomType] NVARCHAR(20) DEFAULT 'ROOM' WITH VALUES;
+                    PRINT 'Added RoomType to Rooms';
+                END
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'IsLayoutLocked')
+                BEGIN
+                    ALTER TABLE [dbo].[Rooms] ADD [IsLayoutLocked] BIT DEFAULT 0 WITH VALUES;
+                    PRINT 'Added IsLayoutLocked to Rooms';
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
+        // Add Seat Columns (Hall Mode)
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Seats' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'IsActive')
+                BEGIN
+                    ALTER TABLE [dbo].[Seats] ADD [IsActive] BIT DEFAULT 1 WITH VALUES;
+                    PRINT 'Added IsActive to Seats';
+                END
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'ZoneID')
+                BEGIN
+                    ALTER TABLE [dbo].[Seats] ADD [ZoneID] INT NULL;
+                    PRINT 'Added ZoneID to Seats';
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
+        // Add BenchMode to Rooms (New Feature persistence)
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Rooms' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'BenchMode')
+                BEGIN
+                    ALTER TABLE [dbo].[Rooms] ADD [BenchMode] NVARCHAR(20) NOT NULL CONSTRAINT DF_Rooms_BenchMode DEFAULT 'PAIRED';
+                    PRINT 'Added BenchMode to Rooms';
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
+        // Add Color to Zones (Visualization Feature)
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Zones' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Zones]') AND name = 'Color')
+                BEGIN
+                    ALTER TABLE [dbo].[Zones] ADD [Color] NVARCHAR(20) NULL;
+                    PRINT 'Added Color to Zones';
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
     } catch (error) {
         console.warn("Schema integrity check warning (non-fatal):", error);
     }

@@ -164,6 +164,9 @@ app.use("/api/invigilators", invigilatorRoutes);
 app.use("/api/academic", unifiedAcademicRoutes);
 app.use("/api/series", seriesRoutes);
 
+import allocationRoutes from "./routes/allocation.routes.js";
+app.use("/api/allocation", allocationRoutes);
+
 import userManagementRoutes from "./routes/user_management.routes.js";
 app.use("/api/users", userManagementRoutes);
 

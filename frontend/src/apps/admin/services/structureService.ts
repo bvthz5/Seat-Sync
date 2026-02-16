@@ -1,4 +1,4 @@
-import { Block, Floor, Room } from "../types/collegeStructure";
+import { Block, Floor, Room, Zone } from "../types/collegeStructure";
 import api from "../../../services/api"; // Correct path to shared api instance
 
 const PREFIX = '/admin/college-structure';
@@ -86,7 +86,26 @@ export const structureService = {
 
     // --- LAYOUT ---
     getRoomLayout: async (roomId: number) => {
-        const response = await api.get<{ room: Room, seats: any[], seatCount: number }>(`${PREFIX}/rooms/${roomId}/layout`);
+        const response = await api.get<{ room: Room, seats: any[], zones: any[], seatCount: number }>(`${PREFIX}/rooms/${roomId}/layout`);
+        return response.data;
+    },
+
+    // --- ZONES ---
+    getZones: async (roomId: number) => {
+        const response = await api.get<Zone[]>(`${PREFIX}/rooms/${roomId}/zones`);
+        return response.data;
+    },
+    createZone: async (roomId: number, data: { ZoneCode: string, ZoneName: string, Color?: string }) => {
+        const response = await api.post<Zone>(`${PREFIX}/rooms/${roomId}/zones`, data);
+        return response.data;
+    },
+    deleteZone: async (zoneId: number) => {
+        await api.delete(`${PREFIX}/zones/${zoneId}`);
+    },
+
+    // --- SEAT UPDATES ---
+    updateSeatZones: async (roomId: number, updates: { SeatID: number, ZoneID?: number | null, IsActive?: boolean }[]) => {
+        const response = await api.put(`${PREFIX}/rooms/${roomId}/seats`, { updates });
         return response.data;
     },
 

@@ -54,5 +54,10 @@ export const ExamService = {
         document.body.appendChild(link);
         link.click();
         link.remove();
+    },
+
+    allocate: async (examId: number) => {
+        const response = await api.post('/allocation/create', { examId });
+        return response.data;
     }
 };

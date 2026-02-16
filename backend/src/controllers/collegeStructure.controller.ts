@@ -1,8 +1,10 @@
 import { Request, Response } from "express";
+import { sequelize } from "../config/database.js";
 import { Block } from "../models/Block.js";
 import { Floor } from "../models/Floor.js";
 import { Room } from "../models/Room.js";
 import { Seat } from "../models/Seat.js";
+import { Zone } from "../models/Zone.js";
 import { Exam } from "../models/Exam.js";
 import { SeatAllocation } from "../models/SeatAllocation.js";
 import { Op } from "sequelize";
@@ -243,6 +245,7 @@ export const getRoomLayout = async (req: Request, res: Response) => {
         if (!room) return res.status(404).json({ message: "Room not found" });
 
         const seats = await Seat.findAll({
+            attributes: ['SeatID', 'RoomID', 'RowLabel', 'BenchNumber', 'SeatNumber', 'IsActive', 'ZoneID'], // Explicitly select ZoneID
             where: { RoomID: roomId },
             order: [
                 ['RowLabel', 'ASC'],
@@ -251,9 +254,12 @@ export const getRoomLayout = async (req: Request, res: Response) => {
             ]
         });
 
+        const zones = await Zone.findAll({ where: { RoomID: roomId } });
+
         res.json({
             room,
             seats,
+            zones,
             seatCount: seats.length
         });
     } catch (error: any) {
@@ -293,17 +299,21 @@ export const createRoom = async (req: Request, res: Response) => {
 export const updateRoom = async (req: Request, res: Response) => {
     try {
         const id = Number(req.params.id);
-        const { RoomCode, Status, ExamUsable, TotalRows, BenchesPerRow, SeatsPerBench, Capacity } = req.body;
+        const { RoomCode, Status, ExamUsable, TotalRows, BenchesPerRow, SeatsPerBench, Capacity, RoomType, BenchMode } = req.body;
 
         const room = await Room.findByPk(id);
         if (!room) return res.status(404).json({ message: "Room not found" });
 
         // ... Layout check ...
-        const isLayoutChange = (
-            TotalRows !== undefined && TotalRows !== room.TotalRows ||
-            BenchesPerRow !== undefined && BenchesPerRow !== room.BenchesPerRow ||
-            SeatsPerBench !== undefined && SeatsPerBench !== room.SeatsPerBench
+        const isPhysicalLayoutChange = (
+            (TotalRows !== undefined && TotalRows !== room.TotalRows) ||
+            (BenchesPerRow !== undefined && BenchesPerRow !== room.BenchesPerRow) ||
+            (SeatsPerBench !== undefined && SeatsPerBench !== room.SeatsPerBench)
         );
+
+        const isLogicalLayoutChange = (BenchMode !== undefined && BenchMode !== room.BenchMode);
+
+        const isLayoutChange = isPhysicalLayoutChange || isLogicalLayoutChange;
 
         if (isLayoutChange) {
             const futureAllocations = await SeatAllocation.count({
@@ -332,9 +342,18 @@ export const updateRoom = async (req: Request, res: Response) => {
         if (Status) room.Status = Status;
         if (Capacity) room.Capacity = Capacity;
         if (ExamUsable !== undefined) room.ExamUsable = ExamUsable;
+        if (RoomType) room.RoomType = RoomType;
+        if (BenchMode) room.BenchMode = BenchMode;
+
+        if (isLayoutChange) {
+            // If layout changes, we might want to reset RoomType to ROOM if it was HALL to force re-zoning?
+            // Or just keep it. User said "Immutable RoomType ... Once Seating layout saved OR Any SeatingPlan exists".
+            // Here we are updating layout so we assume no SeatingPlan exists (checked above).
+            // So changing RoomType is allowed.
+        }
 
         let shouldRegenerateSeats = false;
-        if (isLayoutChange) {
+        if (isPhysicalLayoutChange) {
             room.TotalRows = TotalRows;
             room.BenchesPerRow = BenchesPerRow;
             room.SeatsPerBench = SeatsPerBench;
@@ -393,6 +412,94 @@ export const deleteRoom = async (req: Request, res: Response) => {
 
         res.json({ message: "Room deleted successfully" });
     } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// --- ZONES ---
+
+export const getZones = async (req: Request, res: Response) => {
+    try {
+        const roomId = Number(req.params.roomId);
+        const zones = await Zone.findAll({ where: { RoomID: roomId } });
+        res.json(zones);
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+export const createZone = async (req: Request, res: Response) => {
+    try {
+        const roomId = Number(req.params.roomId);
+        const { ZoneCode, ZoneName, Color } = req.body;
+
+        const zone = await Zone.create({
+            RoomID: roomId,
+            ZoneCode,
+            ZoneName,
+            Color
+        });
+
+        res.status(201).json(zone);
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+export const deleteZone = async (req: Request, res: Response) => {
+    try {
+        const id = Number(req.params.id);
+
+        // Check if any seats are using this zone
+        const seatCount = await Seat.count({ where: { ZoneID: id } });
+        if (seatCount > 0) {
+            return res.status(400).json({ message: "Cannot delete zone. It has assigned seats." });
+        }
+
+        await Zone.destroy({ where: { ZoneID: id } });
+        res.json({ message: "Zone deleted successfully" });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// --- SEAT MANAGEMENT ---
+
+export const updateSeatZones = async (req: Request, res: Response) => {
+    try {
+        const roomId = Number(req.params.roomId);
+        const { updates } = req.body; // Array of { SeatID, ZoneID, IsActive }
+
+        if (!Array.isArray(updates)) {
+            return res.status(400).json({ message: "Invalid updates format. Expected array." });
+        }
+
+        const room = await Room.findByPk(roomId);
+        if (!room) return res.status(404).json({ message: "Room not found" });
+
+        // Transactional update for safety
+        await sequelize.transaction(async (t) => {
+            const updatePromises = updates.map(update => {
+                const { SeatID, ZoneID, IsActive } = update;
+                const updateData: any = {};
+
+                // Allow null to clear the zone
+                if (ZoneID !== undefined) updateData.ZoneID = ZoneID;
+                if (IsActive !== undefined) updateData.IsActive = IsActive;
+
+                if (Object.keys(updateData).length > 0) {
+                    return Seat.update(updateData, { where: { SeatID }, transaction: t });
+                }
+                return Promise.resolve();
+            });
+
+            await Promise.all(updatePromises);
+        });
+
+        res.json({ message: "Seat configurations updated successfully" });
+
+    } catch (error: any) {
+        console.error("UPDATE SEAT ZONES ERROR:", error);
         res.status(500).json({ message: error.message });
     }
 };

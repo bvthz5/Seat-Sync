@@ -11,12 +11,14 @@ interface SeatAttributes {
   RowLabel: string;
   BenchNumber: number;
   SeatNumber: number;
+  IsActive: boolean;
+  ZoneID: number | null;
 }
 
 /**
  * Attributes required when creating a seat
  */
-interface SeatCreationAttributes extends Optional<SeatAttributes, "SeatID"> {}
+interface SeatCreationAttributes extends Optional<SeatAttributes, "SeatID" | "IsActive" | "ZoneID"> { }
 
 export class Seat extends Model<SeatAttributes, SeatCreationAttributes>
   implements SeatAttributes {
@@ -25,6 +27,8 @@ export class Seat extends Model<SeatAttributes, SeatCreationAttributes>
   declare RowLabel: string;
   declare BenchNumber: number;
   declare SeatNumber: number;
+  declare IsActive: boolean;
+  declare ZoneID: number | null;
 }
 
 Seat.init(
@@ -53,6 +57,19 @@ Seat.init(
     SeatNumber: {
       type: DataTypes.INTEGER,
       allowNull: false,
+    },
+    IsActive: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
+    ZoneID: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: "Zones",
+        key: "ZoneID",
+      },
     },
   },
   {

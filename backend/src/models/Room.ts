@@ -17,12 +17,15 @@ interface RoomAttributes {
   SeatsPerBench: number;
   Status: "Active" | "Inactive";
   ExamUsable: boolean;
+  RoomType: "ROOM" | "HALL";
+  BenchMode: "PAIRED" | "ALTERNATING";
+  IsLayoutLocked: boolean;
 }
 
 /**
  * Attributes required when creating a room
  */
-interface RoomCreationAttributes extends Optional<RoomAttributes, "RoomID" | "TotalRows" | "BenchesPerRow" | "SeatsPerBench"> { }
+interface RoomCreationAttributes extends Optional<RoomAttributes, "RoomID" | "TotalRows" | "BenchesPerRow" | "SeatsPerBench" | "RoomType" | "BenchMode" | "IsLayoutLocked"> { }
 
 export class Room extends Model<RoomAttributes, RoomCreationAttributes>
   implements RoomAttributes {
@@ -36,6 +39,9 @@ export class Room extends Model<RoomAttributes, RoomCreationAttributes>
   declare SeatsPerBench: number;
   declare Status: "Active" | "Inactive";
   declare ExamUsable: boolean;
+  declare RoomType: "ROOM" | "HALL";
+  declare BenchMode: "PAIRED" | "ALTERNATING";
+  declare IsLayoutLocked: boolean;
 }
 
 Room.init(
@@ -98,6 +104,21 @@ Room.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: true,
+    },
+    RoomType: {
+      type: DataTypes.ENUM("ROOM", "HALL"),
+      allowNull: false,
+      defaultValue: "ROOM",
+    },
+    BenchMode: {
+      type: DataTypes.ENUM("PAIRED", "ALTERNATING"),
+      allowNull: false,
+      defaultValue: "PAIRED",
+    },
+    IsLayoutLocked: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
     },
   },
   {

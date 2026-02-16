@@ -121,8 +121,15 @@ const Exams: React.FC = () => {
         }
     };
 
-    const handleAllocate = (id: number) => {
-        toast("Running allocation algorithm...", { icon: '⚙️' });
+    const handleAllocate = async (id: number) => {
+        const toastId = toast.loading("Running allocation algorithm...");
+        try {
+            await ExamService.allocate(id);
+            toast.success("Seat allocation completed successfully", { id: toastId });
+        } catch (error) {
+            console.error(error);
+            toast.error("Allocation failed", { id: toastId });
+        }
     };
 
     const handleEdit = (exam: any) => {

@@ -3,7 +3,8 @@ import { AuthMiddleware } from "../middlewares/auth.middleware.js";
 import {
     getBlocks, createBlock, updateBlock, deleteBlock,
     getFloors, createFloor, updateFloor, deleteFloor,
-    getRooms, createRoom, updateRoom, deleteRoom, getRoomLayout
+    getRooms, createRoom, updateRoom, deleteRoom, getRoomLayout,
+    getZones, createZone, deleteZone, updateSeatZones
 } from "../controllers/collegeStructure.controller.js";
 
 const router = express.Router();
@@ -517,5 +518,13 @@ router.put("/rooms/:id", updateRoom);
  *         description: Server error
  */
 router.delete("/rooms/:id", deleteRoom);
+
+// --- ZONES ---
+router.get("/rooms/:roomId/zones", getZones);
+router.post("/rooms/:roomId/zones", createZone);
+router.delete("/zones/:id", deleteZone);
+
+// --- SEAT MANAGEMENT ---
+router.put("/rooms/:roomId/seats", updateSeatZones);
 
 export default router;

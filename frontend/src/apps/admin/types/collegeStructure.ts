@@ -27,10 +27,21 @@ export interface Room {
     SeatsPerBench: number;
     Status: 'Active' | 'Inactive';
     ExamUsable: boolean;
+    RoomType: 'ROOM' | 'HALL';
+    BenchMode?: 'PAIRED' | 'ALTERNATING';
+    IsLayoutLocked?: boolean;
     Floor?: Floor;
 }
 
 // Stats interface for layout visualization
 export interface LayoutStats {
     totalSeats: number;
+}
+
+export interface Zone {
+    ZoneID: number;
+    RoomID: number;
+    ZoneCode: string;
+    ZoneName: string;
+    Color: string;
 }

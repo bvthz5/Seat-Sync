@@ -25,6 +25,7 @@ export { default as Notification } from "./Notification.js";
 export { default as ActiveSession } from "./ActiveSession.js";
 export { default as Faculty } from "./Faculty.js";
 export { default as ExamSeries } from "./ExamSeries.js";
+export { default as Zone } from "./Zone.js";
 
 // Associations
 import Department from "./Department.js";
