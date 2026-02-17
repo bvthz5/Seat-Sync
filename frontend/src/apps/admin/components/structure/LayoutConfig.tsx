@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Autocomplete, AutocompleteItem, Input, Button, Card, CardBody, CardHeader, Divider, Tooltip, Chip, Switch, Select, SelectItem, Badge } from '@heroui/react';
+import { Autocomplete, AutocompleteItem, Input, Button, Card, CardBody, CardHeader, Divider, Tooltip, Chip, Switch, Select, SelectItem, Badge, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from '@heroui/react';
 import { Trash2, MousePointer2, CheckCircle2, RotateCcw, Save, Layers, Building2, Armchair, Layout, Check, X, Shield, Plus, Grid3X3, Spline, ArrowRight, ArrowLeft, MonitorPlay, AlertTriangle, MapPin, ChevronRight, Hash, Maximize2, Minimize2, Eye, EyeOff, Ban } from 'lucide-react';
 import { structureService } from '../../services/structureService';
 import { Block, Floor, Room, Zone } from '../../types/collegeStructure';
@@ -48,6 +48,8 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
     });
 
     const [viewMode, setViewMode] = useState<ViewMode>('PHYSICAL');
+    const [showZoneModal, setShowZoneModal] = useState(false);
+    const [selectedZoneCount, setSelectedZoneCount] = useState(4);
     const [disabledSeatIds, setDisabledSeatIds] = useState<Set<string>>(new Set());
 
     // Zone Management State
@@ -158,6 +160,17 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                     setDisabledSeatIds(newDisabledSet);
                     setSeatZoneMap(newZoneMap);
                     setInitialSeatZoneMap(newZoneMap);
+
+                    // Populate Seat ID Map (Essential for handleSave)
+                    const newSeatIdMap = new Map<string, number>();
+                    if (data.seats) {
+                        data.seats.forEach((s: any) => {
+                            const rowLabel = s.RowLabel ? s.RowLabel.trim() : '';
+                            const seatId = `${rowLabel}-${s.BenchNumber}-${s.SeatNumber}`;
+                            newSeatIdMap.set(seatId, s.SeatID);
+                        });
+                    }
+                    setSeatIdMap(newSeatIdMap);
 
                     // Populate Zones
                     if (data.zones) {
@@ -340,7 +353,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
         }
     };
 
-    const handleAutoZone4Quadrants = async () => {
+    const handleAutoZone = async (zoneCount: number) => {
         if (!selectedRoomId || config.rows === 0 || config.benchesPerRow === 0) {
             toast.error("Please configure room dimensions first");
             return;
@@ -348,68 +361,83 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
 
         try {
             setLoading(true);
+            setShowZoneModal(false);
 
-            // Define 4 zones with distinct colors
-            const zoneDefinitions = [
-                { name: 'Zone A (Top-Left)', code: 'A', color: 'blue' },
-                { name: 'Zone B (Top-Right)', code: 'B', color: 'red' },
-                { name: 'Zone C (Bottom-Left)', code: 'C', color: 'green' },
-                { name: 'Zone D (Bottom-Right)', code: 'D', color: 'yellow' }
-            ];
-
-            // Create zones via API
-            const createdZones: Zone[] = [];
-            for (const zoneDef of zoneDefinitions) {
-                try {
-                    const newZone = await structureService.createZone(Number(selectedRoomId), {
-                        ZoneCode: zoneDef.code,
-                        ZoneName: zoneDef.name,
-                        Color: zoneDef.color
+            // STEP 1: Clear ALL seat zone assignments first (so zones can be deleted)
+            console.log('🧹 Clearing all seat zone assignments');
+            const updates: any[] = [];
+            generatedSeats.forEach(seat => {
+                const dbSeatId = seatIdMap.get(seat.id);
+                if (dbSeatId) {
+                    updates.push({
+                        SeatID: dbSeatId,
+                        ZoneID: null,
+                        IsActive: seat.isActive
                     });
-                    createdZones.push(newZone);
-                } catch (error: any) {
-                    // Zone might already exist, try to find it
-                    const existingZone = zones.find(z => z.ZoneCode === zoneDef.code);
-                    if (existingZone) {
-                        createdZones.push(existingZone);
-                    } else {
-                        throw error;
-                    }
+                }
+            });
+
+            if (updates.length > 0) {
+                await structureService.updateSeatZones(Number(selectedRoomId), updates);
+            }
+
+            // Clear local zone map
+            setSeatZoneMap(new Map());
+
+            // STEP 2: Delete ALL existing zones (now that seats are unassigned)
+            const allZones = await structureService.getZones(Number(selectedRoomId));
+            console.log('🗑️ Deleting', allZones.length, 'existing zones');
+
+            for (const zone of allZones) {
+                try {
+                    await structureService.deleteZone(zone.ZoneID);
+                } catch (error) {
+                    console.error('Failed to delete zone:', zone.ZoneID, error);
                 }
             }
 
-            setZones([...zones, ...createdZones.filter(z => !zones.find(existing => existing.ZoneID === z.ZoneID))]);
+            // STEP 2: Determine grid layout
+            const gridLayout = calculateGridLayout(zoneCount, config.rows, config.benchesPerRow);
+            console.log('📐 Grid layout for', zoneCount, 'zones:', gridLayout);
 
-            // Calculate midpoints for quadrant division
-            const rowMidpoint = Math.ceil(config.rows / 2);
-            const benchMidpoint = Math.ceil(config.benchesPerRow / 2);
+            // STEP 3: Create new zones
+            const colorPalette = ['blue', 'red', 'green', 'yellow', 'purple', 'orange', 'cyan', 'pink', 'indigo', 'teal', 'lime', 'amber', 'rose', 'violet', 'fuchsia', 'sky'];
+            const createdZones: Zone[] = [];
 
-            // Assign seats to zones based on quadrants
+            for (let i = 0; i < zoneCount; i++) {
+                const zoneLetter = String.fromCharCode(65 + i); // A, B, C, D...
+                const newZone = await structureService.createZone(Number(selectedRoomId), {
+                    ZoneCode: zoneLetter,
+                    ZoneName: `Zone ${zoneLetter}`,
+                    Color: colorPalette[i % colorPalette.length]
+                });
+                createdZones.push(newZone);
+            }
+
+            console.log('✅ Created', createdZones.length, 'new zones');
+
+            // STEP 4: Assign seats to zones based on grid
             const newZoneMap = new Map<string, number>();
+            const rowsPerZoneRow = Math.ceil(config.rows / gridLayout.rows);
+            const benchesPerZoneCol = Math.ceil(config.benchesPerRow / gridLayout.cols);
 
             generatedSeats.forEach(seat => {
-                const isTopHalf = seat.colIndex < rowMidpoint;
-                const isLeftHalf = seat.benchIndex < benchMidpoint;
+                if (!seat.isActive) return;
 
-                let zoneIndex: number;
-                if (isTopHalf && isLeftHalf) {
-                    zoneIndex = 0; // Zone A (Top-Left)
-                } else if (isTopHalf && !isLeftHalf) {
-                    zoneIndex = 1; // Zone B (Top-Right)
-                } else if (!isTopHalf && isLeftHalf) {
-                    zoneIndex = 2; // Zone C (Bottom-Left)
-                } else {
-                    zoneIndex = 3; // Zone D (Bottom-Right)
-                }
+                const zoneRow = Math.floor(seat.colIndex / rowsPerZoneRow);
+                const zoneCol = Math.floor(seat.benchIndex / benchesPerZoneCol);
+                const zoneIndex = Math.min(zoneRow * gridLayout.cols + zoneCol, zoneCount - 1);
 
                 const zone = createdZones[zoneIndex];
-                if (zone && seat.isActive) {
+                if (zone) {
                     newZoneMap.set(seat.id, zone.ZoneID);
                 }
             });
 
             setSeatZoneMap(newZoneMap);
-            toast.success(`Auto-zoned into 4 quadrants with ${newZoneMap.size} seats assigned`);
+            setZones(await structureService.getZones(Number(selectedRoomId)));
+
+            toast.success(`Created ${zoneCount} zones and assigned ${newZoneMap.size} seats`);
 
         } catch (error: any) {
             console.error("Failed to auto-zone", error);
@@ -417,6 +445,20 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
         } finally {
             setLoading(false);
         }
+    };
+
+    // Helper function to calculate optimal grid layout
+    const calculateGridLayout = (zoneCount: number, rows: number, cols: number) => {
+        const layouts: Record<number, { rows: number; cols: number }> = {
+            2: { rows: 1, cols: 2 },
+            4: { rows: 2, cols: 2 },
+            6: rows >= cols ? { rows: 3, cols: 2 } : { rows: 2, cols: 3 },
+            8: rows >= cols ? { rows: 4, cols: 2 } : { rows: 2, cols: 4 },
+            9: { rows: 3, cols: 3 },
+            12: rows >= cols ? { rows: 4, cols: 3 } : { rows: 3, cols: 4 },
+            16: { rows: 4, cols: 4 }
+        };
+        return layouts[zoneCount] || { rows: 2, cols: 2 };
     };
 
 
@@ -461,9 +503,9 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                 // Build seat updates from current state
                 const updates: any[] = [];
 
-                // Generate all possible seat IDs based on current config
-                const columns = 'ABCD'.split('').slice(0, config.rows);
-                columns.forEach((colLabel) => {
+                // Generate all possible seat IDs based on current config (A, B, C...)
+                for (let r = 0; r < config.rows; r++) {
+                    const colLabel = String.fromCharCode(65 + r);
                     for (let b = 0; b < config.benchesPerRow; b++) {
                         for (let s = 0; s < config.seatsPerBench; s++) {
                             const seatIndex = s + 1;
@@ -482,7 +524,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                             }
                         }
                     }
-                });
+                }
 
                 console.log('💾 Saving seat updates:', updates.length, 'seats');
                 console.log('  - Disabled seats:', disabledSeatIds.size);
@@ -507,24 +549,41 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
 
             // Refresh logic and reset initial states
             const data = await structureService.getRoomLayout(Number(selectedRoomId));
+            console.log('🔄 Reloaded room data after save:', {
+                seatsCount: data.seats?.length,
+                zonesCount: data.zones?.length,
+                sampleSeats: data.seats?.slice(0, 3)
+            });
+
             const newSeatIdMap = new Map<string, number>();
             const currentZoneMap = new Map<string, number>(); // Capture current state for initial
 
             if (data.seats) {
                 data.seats.forEach((s: any) => {
-                    const seatId = `${s.RowLabel}-${s.BenchNumber}-${s.SeatNumber}`;
+                    const rowLabel = s.RowLabel ? s.RowLabel.trim() : '';
+                    const seatId = `${rowLabel}-${s.BenchNumber}-${s.SeatNumber}`;
                     newSeatIdMap.set(seatId, s.SeatID);
-                    if (s.ZoneID) currentZoneMap.set(seatId, s.ZoneID);
+                    if (s.ZoneID) {
+                        currentZoneMap.set(seatId, s.ZoneID);
+                        console.log('🔄 Re-mapping zone after save:', seatId, '→', s.ZoneID);
+                    }
                 });
             }
+
+            console.log('🔄 Populated currentZoneMap size:', currentZoneMap.size, 'from', data.seats?.length, 'seats');
+            console.log('🔄 Sample zone mappings:', Array.from(currentZoneMap.entries()).slice(0, 5));
+
             setSeatIdMap(newSeatIdMap);
 
             if (dimensionsChanged) {
+                console.log('⚠️ Dimensions changed - clearing zone map');
                 setSeatZoneMap(new Map());
                 setInitialSeatZoneMap(new Map());
                 setDisabledSeatIds(new Set());
             } else {
                 // Sync with server state
+                console.log('✅ Dimensions unchanged - syncing zone map with server state');
+                console.log('✅ Setting seatZoneMap to currentZoneMap with size:', currentZoneMap.size);
                 setSeatZoneMap(currentZoneMap);
                 setInitialSeatZoneMap(currentZoneMap);
             }
@@ -708,17 +767,17 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                                         </div>
                                                     </div>
                                                     <p className="text-xs text-purple-600/80 leading-relaxed">
-                                                        Automatically divide this hall into <span className="font-bold">4 equal quadrants</span> (Top-Left, Top-Right, Bottom-Left, Bottom-Right)
+                                                        Automatically divide this hall into <span className="font-bold">multiple zones</span> with one click
                                                     </p>
                                                     <Button
                                                         id="auto-zone-btn"
                                                         size="lg"
                                                         isLoading={loading}
                                                         className="w-full font-bold text-white shadow-lg shadow-purple-500/30 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-xl"
-                                                        onPress={handleAutoZone4Quadrants}
+                                                        onPress={() => setShowZoneModal(true)}
                                                         startContent={<Grid3X3 size={20} />}
                                                     >
-                                                        Auto-Zone (4 Quadrants)
+                                                        Auto-Zone
                                                     </Button>
                                                 </div>
                                             )}
@@ -1076,7 +1135,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                 {/* VISUALIZATION PANEL (RIGHT) */}
                 <div
                     ref={containerRef}
-                    className={`${isFullScreen ? 'fixed inset-0 z-[100] rounded-none h-screen w-screen' : 'flex-1 min-h-[800px] rounded-3xl border border-slate-200 shadow-2xl shadow-slate-900/10 ring-1 ring-slate-900/5'} flex flex-col bg-[#0F172A] relative transition-all duration-500 overflow-hidden`}
+                    className={`${isFullScreen ? 'fixed inset-0 z-[100] rounded-none h-screen w-screen' : 'flex-1 xl:h-[calc(100vh-220px)] xl:min-h-[700px] rounded-3xl border border-slate-200 shadow-2xl shadow-slate-900/10 ring-1 ring-slate-900/5'} flex flex-col bg-[#0F172A] relative transition-all duration-500 overflow-hidden`}
                 >
                     {/* Navbar */}
                     <div className="relative z-20 flex justify-between items-center p-6 border-b border-white/5 bg-[#0F172A]/90 backdrop-blur-xl">
@@ -1289,6 +1348,103 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                     </div>
                 </div>
             </div>
+
+            {/* Zone Count Selection Modal */}
+            <Modal
+                isOpen={showZoneModal}
+                onClose={() => setShowZoneModal(false)}
+                size="2xl"
+                classNames={{
+                    base: "bg-gradient-to-br from-slate-900 to-slate-800",
+                    header: "border-b border-slate-700",
+                    body: "py-6",
+                    footer: "border-t border-slate-700"
+                }}
+            >
+                <ModalContent>
+                    {(onClose) => (
+                        <>
+                            <ModalHeader className="flex flex-col gap-1 text-white">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-purple-600/20 rounded-lg">
+                                        <Grid3X3 size={24} className="text-purple-400" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-bold">Auto-Zone Configuration</h3>
+                                        <p className="text-xs text-slate-400 font-normal">Choose how many zones to create</p>
+                                    </div>
+                                </div>
+                            </ModalHeader>
+                            <ModalBody>
+                                <div className="space-y-4">
+                                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 flex items-start gap-3">
+                                        <AlertTriangle size={18} className="text-amber-400 shrink-0 mt-0.5" />
+                                        <div className="text-xs text-amber-200">
+                                            <p className="font-bold mb-1">All existing zones will be deleted</p>
+                                            <p className="text-amber-300/80">This action will remove {zones.length} current zones and create {selectedZoneCount} new zones with fresh assignments.</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-4 gap-3">
+                                        {[2, 4, 6, 8, 9, 12, 16].map(count => {
+                                            const layout = calculateGridLayout(count, config.rows, config.benchesPerRow);
+                                            return (
+                                                <button
+                                                    key={count}
+                                                    onClick={() => setSelectedZoneCount(count)}
+                                                    className={`p-4 rounded-xl border-2 transition-all ${selectedZoneCount === count
+                                                        ? 'bg-purple-600 border-purple-500 shadow-lg shadow-purple-500/30'
+                                                        : 'bg-slate-800 border-slate-700 hover:border-purple-500/50 hover:bg-slate-700'
+                                                        }`}
+                                                >
+                                                    <div className="text-center">
+                                                        <div className="text-2xl font-bold text-white mb-1">{count}</div>
+                                                        <div className="text-[10px] text-slate-400">zones</div>
+                                                        <div className="text-[9px] text-slate-500 mt-1">{layout.rows}×{layout.cols} grid</div>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+
+                                    <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+                                        <div className="text-xs text-slate-300 mb-2 font-semibold">Preview: {selectedZoneCount} Zone Layout</div>
+                                        <div className="text-[10px] text-slate-400 mb-3">
+                                            Grid: {calculateGridLayout(selectedZoneCount, config.rows, config.benchesPerRow).rows} rows × {calculateGridLayout(selectedZoneCount, config.rows, config.benchesPerRow).cols} columns
+                                        </div>
+                                        <div className="flex items-center justify-center gap-2 text-[10px] text-slate-500">
+                                            <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-blue-500" /> Zone A</div>
+                                            <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-red-500" /> Zone B</div>
+                                            {selectedZoneCount >= 3 && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-green-500" /> Zone C</div>}
+                                            {selectedZoneCount >= 4 && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-yellow-500" /> Zone D</div>}
+                                            {selectedZoneCount > 4 && <div className="text-slate-600">+{selectedZoneCount - 4} more</div>}
+                                        </div>
+                                    </div>
+                                </div>
+                            </ModalBody>
+                            <ModalFooter>
+                                <Button
+                                    color="default"
+                                    variant="light"
+                                    onPress={onClose}
+                                    className="text-slate-400"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    color="secondary"
+                                    onPress={() => handleAutoZone(selectedZoneCount)}
+                                    isLoading={loading}
+                                    className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold"
+                                    startContent={!loading && <Grid3X3 size={18} />}
+                                >
+                                    Create {selectedZoneCount} Zones
+                                </Button>
+                            </ModalFooter>
+                        </>
+                    )}
+                </ModalContent>
+            </Modal>
         </div>
     );
 };
