@@ -368,28 +368,33 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                 { name: 'Zone D (Bottom-Right)', code: 'D', color: 'yellow' }
             ];
 
-            // Create zones via API
+            // FIRST: Fetch all existing zones from the server to avoid duplicates
+            const allZones = await structureService.getZones(Number(selectedRoomId));
+            console.log('🔍 Existing zones in room:', allZones);
+
+            // Try to reuse existing zones or create new ones
             const createdZones: Zone[] = [];
             for (const zoneDef of zoneDefinitions) {
-                try {
+                // Check if zone with this code already exists
+                const existingZone = allZones.find(z => z.ZoneCode === zoneDef.code);
+
+                if (existingZone) {
+                    console.log('♻️ Reusing existing zone:', zoneDef.code, existingZone.ZoneID);
+                    createdZones.push(existingZone);
+                } else {
+                    // Create new zone only if it doesn't exist
+                    console.log('➕ Creating new zone:', zoneDef.code);
                     const newZone = await structureService.createZone(Number(selectedRoomId), {
                         ZoneCode: zoneDef.code,
                         ZoneName: zoneDef.name,
                         Color: zoneDef.color
                     });
                     createdZones.push(newZone);
-                } catch (error: any) {
-                    // Zone might already exist, try to find it
-                    const existingZone = zones.find(z => z.ZoneCode === zoneDef.code);
-                    if (existingZone) {
-                        createdZones.push(existingZone);
-                    } else {
-                        throw error;
-                    }
                 }
             }
 
-            setZones([...zones, ...createdZones.filter(z => !zones.find(existing => existing.ZoneID === z.ZoneID))]);
+            // Update zones state with fresh list from server
+            setZones(await structureService.getZones(Number(selectedRoomId)));
 
             // Calculate midpoints for quadrant division
             const rowMidpoint = Math.ceil(config.rows / 2);
@@ -518,6 +523,12 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
 
             // Refresh logic and reset initial states
             const data = await structureService.getRoomLayout(Number(selectedRoomId));
+            console.log('🔄 Reloaded room data after save:', {
+                seatsCount: data.seats?.length,
+                zonesCount: data.zones?.length,
+                sampleSeats: data.seats?.slice(0, 3)
+            });
+
             const newSeatIdMap = new Map<string, number>();
             const currentZoneMap = new Map<string, number>(); // Capture current state for initial
 
@@ -526,17 +537,27 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                     const rowLabel = s.RowLabel ? s.RowLabel.trim() : '';
                     const seatId = `${rowLabel}-${s.BenchNumber}-${s.SeatNumber}`;
                     newSeatIdMap.set(seatId, s.SeatID);
-                    if (s.ZoneID) currentZoneMap.set(seatId, s.ZoneID);
+                    if (s.ZoneID) {
+                        currentZoneMap.set(seatId, s.ZoneID);
+                        console.log('🔄 Re-mapping zone after save:', seatId, '→', s.ZoneID);
+                    }
                 });
             }
+
+            console.log('🔄 Populated currentZoneMap size:', currentZoneMap.size, 'from', data.seats?.length, 'seats');
+            console.log('🔄 Sample zone mappings:', Array.from(currentZoneMap.entries()).slice(0, 5));
+
             setSeatIdMap(newSeatIdMap);
 
             if (dimensionsChanged) {
+                console.log('⚠️ Dimensions changed - clearing zone map');
                 setSeatZoneMap(new Map());
                 setInitialSeatZoneMap(new Map());
                 setDisabledSeatIds(new Set());
             } else {
                 // Sync with server state
+                console.log('✅ Dimensions unchanged - syncing zone map with server state');
+                console.log('✅ Setting seatZoneMap to currentZoneMap with size:', currentZoneMap.size);
                 setSeatZoneMap(currentZoneMap);
                 setInitialSeatZoneMap(currentZoneMap);
             }
