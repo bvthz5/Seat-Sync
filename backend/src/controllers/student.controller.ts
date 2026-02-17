@@ -667,6 +667,11 @@ export const updateStudent = async (req: Request, res: Response) => {
             return res.status(404).json({ message: "Student not found" });
         }
 
+        if (!student.UserID) {
+            await t.rollback();
+            return res.status(400).json({ message: "Student has no associated user" });
+        }
+
         const user = await User.findByPk(student.UserID, { transaction: t });
         if (!user) {
             await t.rollback();
@@ -703,20 +708,29 @@ export const updateStudent = async (req: Request, res: Response) => {
 export const deleteStudent = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
+        const studentId = parseInt(id as string, 10);
+
+        if (isNaN(studentId)) {
+            res.status(400).json({ message: "Invalid Student ID" });
+            return;
+        }
 
         await sequelize.transaction(async (t) => {
-            const student = await Student.findByPk(id as unknown as number, { transaction: t });
+            const student = await Student.findByPk(studentId, { transaction: t });
+
             if (!student) {
-                throw new Error("Student not found");
+                throw new Error("Student not found"); // Will be caught by catch block
             }
 
-            const userId = student.UserID;
+            const userId = student.UserID; // Assuming UserID is a number
 
             // Delete Student first (foreign key constraint likely on UserID)
             await student.destroy({ transaction: t });
 
             // Delete User
-            await User.destroy({ where: { UserID: userId }, transaction: t });
+            if (userId) {
+                await User.destroy({ where: { UserID: userId }, transaction: t });
+            }
         });
 
         res.json({ message: "Student deleted successfully" });

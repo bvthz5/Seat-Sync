@@ -122,7 +122,9 @@ export class ExamController {
                 ExamDate,
                 Session,
                 Duration,
-                Status: status
+                Status: status,
+                IsEmergencyMode: false,
+                AttendanceLocked: false
             });
 
             res.status(201).json(newExam);

@@ -2,9 +2,12 @@ import { Router } from "express";
 import {
     getExamStatusOverview,
     overrideExamStatus,
-    pauseExam,
-    resumeExam,
-    cancelExam
+    toggleExamVisibility,
+    triggerEmergencyAllocation,
+    disableRoomEmergency,
+    lockAttendance,
+    getExamActivityLogs,
+    broadcastNotification
 } from "../controllers/examControl.controller.js";
 import { AuthMiddleware } from "../middlewares/auth.middleware.js";
 
@@ -19,101 +22,79 @@ router.use(AuthMiddleware.requireRootAuth);
  *   get:
  *     summary: Get exam status overview
  *     tags: [Exam Control]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Overview of exam statuses
  */
 router.get("/overview", getExamStatusOverview);
 
 /**
  * @swagger
- * /api/exam-control/{examId}/override-status:
- *   patch:
- *     summary: Override exam status (Emergency)
+ * /api/exam-control/logs:
+ *   get:
+ *     summary: Get all activity logs
  *     tags: [Exam Control]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: examId
- *         required: true
- *         schema:
- *           type: integer
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               status:
- *                 type: string
- *     responses:
- *       200:
- *         description: Status overridden
  */
-router.patch("/:examId/override-status", overrideExamStatus);
+router.get("/logs", getExamActivityLogs);
 
 /**
  * @swagger
- * /api/exam-control/{examId}/pause:
- *   patch:
- *     summary: Pause active exam (Emergency)
+ * /api/exam-control/{examId}/logs:
+ *   get:
+ *     summary: Get activity logs for specific exam
  *     tags: [Exam Control]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: examId
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Exam paused
  */
-router.patch("/:examId/pause", pauseExam);
+router.get("/:examId/logs", getExamActivityLogs);
 
 /**
  * @swagger
- * /api/exam-control/{examId}/resume:
+ * /api/exam-control/{examId}/status:
  *   patch:
- *     summary: Resume paused exam
+ *     summary: Override exam status
  *     tags: [Exam Control]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: examId
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Exam resumed
  */
-router.patch("/:examId/resume", resumeExam);
+router.patch("/:examId/status", overrideExamStatus);
 
 /**
  * @swagger
- * /api/exam-control/{examId}/cancel:
+ * /api/exam-control/{examId}/visibility:
  *   patch:
- *     summary: Cancel exam (Emergency)
+ *     summary: Toggle exam visibility (Publish/Unpublish)
  *     tags: [Exam Control]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: examId
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Exam cancelled
  */
-router.patch("/:examId/cancel", cancelExam);
+router.patch("/:examId/visibility", toggleExamVisibility);
+
+/**
+ * @swagger
+ * /api/exam-control/{examId}/emergency/allocate:
+ *   post:
+ *     summary: Emergency Seating Regeneration
+ *     tags: [Exam Control]
+ */
+router.post("/:examId/emergency/allocate", triggerEmergencyAllocation);
+
+/**
+ * @swagger
+ * /api/exam-control/emergency/disable-room:
+ *   post:
+ *     summary: Emergency Room Disable (Global)
+ *     tags: [Exam Control]
+ */
+router.post("/emergency/disable-room", disableRoomEmergency);
+
+/**
+ * @swagger
+ * /api/exam-control/{examId}/lock-attendance:
+ *   patch:
+ *     summary: Force Lock Attendance
+ *     tags: [Exam Control]
+ */
+router.patch("/:examId/lock-attendance", lockAttendance);
+
+/**
+ * @swagger
+ * /api/exam-control/{examId}/broadcast:
+ *   post:
+ *     summary: Broadcast Notification
+ *     tags: [Exam Control]
+ */
+router.post("/:examId/broadcast", broadcastNotification);
 
 export default router;

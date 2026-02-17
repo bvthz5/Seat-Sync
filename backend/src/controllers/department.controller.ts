@@ -100,6 +100,10 @@ export const importDepartments = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "Invalid Excel file: No sheets found" });
         }
         const sheet = workbook.Sheets[sheetName];
+        if (!sheet) {
+            await t.rollback();
+            return res.status(400).json({ message: "Invalid Excel file: Sheet not found" });
+        }
         const data: any[] = XLSX.utils.sheet_to_json(sheet);
 
         let successCount = 0;
