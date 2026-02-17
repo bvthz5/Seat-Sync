@@ -1,6 +1,6 @@
 import React from 'react';
-import { Card, CardBody, CardHeader, Chip, Tooltip } from '@heroui/react';
-import { MoreHorizontal, AlertCircle } from 'lucide-react';
+import { Chip, Tooltip, Progress } from '@heroui/react';
+import { AlertCircle, Users, Box, ChevronRight } from 'lucide-react';
 
 const rooms = [
     { id: '101', name: 'Main Hall A', status: 'active', capacity: 60, occupied: 45, issue: false },
@@ -13,78 +13,101 @@ const rooms = [
 
 export const LiveMonitor: React.FC = () => {
     return (
-        <Card className="h-full border-none shadow-sm rounded-2xl bg-white overflow-hidden">
-            <CardHeader className="px-6 py-5 flex justify-between items-center border-b border-gray-100 bg-white sticky top-0 z-10">
-                <div className="flex flex-col gap-1">
-                    <h3 className="font-normal text-lg text-[#202124]">Live Occupancy</h3>
-                    <p className="text-xs text-[#5f6368]">Real-time room status across campus</p>
-                </div>
-                <button className="text-[#5f6368] hover:bg-gray-100 p-2 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20">
-                    <MoreHorizontal size={20} />
-                </button>
-            </CardHeader>
-            <CardBody className="p-0 overflow-auto custom-scrollbar">
+        <div className="w-full overflow-hidden">
+            <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
-                    <thead className="bg-[#f8f9fa] sticky top-0 z-10">
-                        <tr>
-                            <th className="px-6 py-3 text-xs font-semibold text-[#5f6368] uppercase tracking-wider">Room</th>
-                            <th className="px-6 py-3 text-xs font-semibold text-[#5f6368] uppercase tracking-wider">Status</th>
-                            <th className="px-6 py-3 text-xs font-semibold text-[#5f6368] uppercase tracking-wider text-right">Capacity</th>
-                            <th className="px-6 py-3 text-xs font-semibold text-[#5f6368] uppercase tracking-wider text-right w-1/3">Utilization</th>
+                    <thead>
+                        <tr className="bg-slate-50/50 border-b border-slate-100">
+                            <th className="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Facility Information</th>
+                            <th className="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Current Status</th>
+                            <th className="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Load Factor</th>
+                            <th className="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Utilization Index</th>
+                            <th className="px-6 py-3"></th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50">
+                    <tbody className="divide-y divide-slate-50">
                         {rooms.map((room) => (
-                            <tr key={room.id} className="hover:bg-[#f8f9fa] transition-colors group cursor-default">
+                            <tr key={room.id} className="hover:bg-slate-50/50 transition-colors group">
                                 <td className="px-6 py-4">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-sm font-medium text-[#202124]">{room.name}</span>
-                                        {room.issue && (
-                                            <Tooltip content=" overcrowding alert">
-                                                <AlertCircle size={14} className="text-orange-500" />
-                                            </Tooltip>
-                                        )}
+                                    <div className="flex items-center gap-3">
+                                        <div className={`p-2 rounded-lg ${room.status === 'active' ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
+                                            <Box size={16} />
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm font-bold text-slate-800 tracking-tight">{room.name}</span>
+                                                {room.issue && (
+                                                    <Tooltip content="Capacity Alert" color="danger" size="sm">
+                                                        <AlertCircle size={12} className="text-rose-500 animate-pulse" />
+                                                    </Tooltip>
+                                                )}
+                                            </div>
+                                            <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">REF ID: {room.id}</span>
+                                        </div>
                                     </div>
-                                    <span className="text-[10px] text-[#5f6368]">ID: {room.id}</span>
                                 </td>
                                 <td className="px-6 py-4">
-                                    <StatusPill status={room.status} />
-                                </td>
-                                <td className="px-6 py-4 text-right">
-                                    <span className="text-sm text-[#5f6368] font-medium">{room.occupied}</span>
-                                    <span className="text-xs text-gray-400 mx-1">/</span>
-                                    <span className="text-xs text-[#5f6368]">{room.capacity}</span>
+                                    <StatusIndicator status={room.status} />
                                 </td>
                                 <td className="px-6 py-4">
-                                    <div className="flex flex-col items-end gap-1.5">
-                                        <span className="text-xs font-semibold text-[#5f6368]">{Math.round((room.occupied / room.capacity) * 100)}%</span>
-                                        <div className="w-full h-1.5 bg-[#e8eaed] rounded-full overflow-hidden">
+                                    <div className="flex flex-col items-center">
+                                        <span className="text-sm font-bold text-slate-900 leading-none">{room.occupied}</span>
+                                        <span className="text-[9px] text-slate-400 font-bold uppercase mt-1">/ {room.capacity}</span>
+                                    </div>
+                                </td>
+                                <td className="px-6 py-4 min-w-[180px]">
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <span className={`text-[10px] font-bold uppercase tracking-wider ${(room.occupied / room.capacity) > 0.9 ? 'text-rose-600' : 'text-slate-500'}`}>
+                                                {Math.round((room.occupied / room.capacity) * 100)}% Capacity
+                                            </span>
+                                            <Users size={12} className="text-slate-300" />
+                                        </div>
+                                        <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
                                             <div
-                                                className={`h-full rounded-full transition-all duration-500 ${(room.occupied / room.capacity) > 0.9 ? 'bg-[#ea4335]' :
-                                                    (room.occupied / room.capacity) > 0.7 ? 'bg-[#fbbc04]' : 'bg-[#1a73e8]'
-                                                    }`}
+                                                className={`h-full rounded-full transition-all duration-700 ${(room.occupied / room.capacity) > 0.9 ? 'bg-rose-500' : 'bg-indigo-500'}`}
                                                 style={{ width: `${(room.occupied / room.capacity) * 100}%` }}
                                             />
                                         </div>
                                     </div>
                                 </td>
+                                <td className="px-6 py-4 text-right">
+                                    <button className="p-1 px-2 text-slate-400 hover:text-indigo-600 transition-colors">
+                                        <ChevronRight size={18} />
+                                    </button>
+                                </td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
-            </CardBody>
-        </Card>
+            </div>
+        </div>
     );
 };
 
-const StatusPill = ({ status }: { status: string }) => {
+const StatusIndicator: React.FC<{ status: string }> = ({ status }) => {
     switch (status) {
         case 'active':
-            return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-green-50 text-green-700 border border-green-200/50">Active</span>;
+            return (
+                <div className="flex items-center gap-2 text-emerald-600">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Active</span>
+                </div>
+            );
         case 'vacant':
-            return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-gray-50 text-gray-600 border border-gray-200/50">Vacant</span>;
+            return (
+                <div className="flex items-center gap-2 text-slate-400">
+                    <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400/70">Vacant</span>
+                </div>
+            );
         case 'prep':
-            return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-blue-50 text-blue-700 border border-blue-200/50">Prep</span>;
+            return (
+                <div className="flex items-center gap-2 text-indigo-500">
+                    <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Staging</span>
+                </div>
+            );
         default:
             return null;
     }

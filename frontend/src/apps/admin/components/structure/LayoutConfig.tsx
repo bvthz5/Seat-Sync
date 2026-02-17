@@ -340,6 +340,85 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
         }
     };
 
+    const handleAutoZone4Quadrants = async () => {
+        if (!selectedRoomId || config.rows === 0 || config.benchesPerRow === 0) {
+            toast.error("Please configure room dimensions first");
+            return;
+        }
+
+        try {
+            setLoading(true);
+
+            // Define 4 zones with distinct colors
+            const zoneDefinitions = [
+                { name: 'Zone A (Top-Left)', code: 'A', color: 'blue' },
+                { name: 'Zone B (Top-Right)', code: 'B', color: 'red' },
+                { name: 'Zone C (Bottom-Left)', code: 'C', color: 'green' },
+                { name: 'Zone D (Bottom-Right)', code: 'D', color: 'yellow' }
+            ];
+
+            // Create zones via API
+            const createdZones: Zone[] = [];
+            for (const zoneDef of zoneDefinitions) {
+                try {
+                    const newZone = await structureService.createZone(Number(selectedRoomId), {
+                        ZoneCode: zoneDef.code,
+                        ZoneName: zoneDef.name,
+                        Color: zoneDef.color
+                    });
+                    createdZones.push(newZone);
+                } catch (error: any) {
+                    // Zone might already exist, try to find it
+                    const existingZone = zones.find(z => z.ZoneCode === zoneDef.code);
+                    if (existingZone) {
+                        createdZones.push(existingZone);
+                    } else {
+                        throw error;
+                    }
+                }
+            }
+
+            setZones([...zones, ...createdZones.filter(z => !zones.find(existing => existing.ZoneID === z.ZoneID))]);
+
+            // Calculate midpoints for quadrant division
+            const rowMidpoint = Math.ceil(config.rows / 2);
+            const benchMidpoint = Math.ceil(config.benchesPerRow / 2);
+
+            // Assign seats to zones based on quadrants
+            const newZoneMap = new Map<string, number>();
+
+            generatedSeats.forEach(seat => {
+                const isTopHalf = seat.colIndex < rowMidpoint;
+                const isLeftHalf = seat.benchIndex < benchMidpoint;
+
+                let zoneIndex: number;
+                if (isTopHalf && isLeftHalf) {
+                    zoneIndex = 0; // Zone A (Top-Left)
+                } else if (isTopHalf && !isLeftHalf) {
+                    zoneIndex = 1; // Zone B (Top-Right)
+                } else if (!isTopHalf && isLeftHalf) {
+                    zoneIndex = 2; // Zone C (Bottom-Left)
+                } else {
+                    zoneIndex = 3; // Zone D (Bottom-Right)
+                }
+
+                const zone = createdZones[zoneIndex];
+                if (zone && seat.isActive) {
+                    newZoneMap.set(seat.id, zone.ZoneID);
+                }
+            });
+
+            setSeatZoneMap(newZoneMap);
+            toast.success(`Auto-zoned into 4 quadrants with ${newZoneMap.size} seats assigned`);
+
+        } catch (error: any) {
+            console.error("Failed to auto-zone", error);
+            toast.error(error.response?.data?.message || "Failed to auto-zone");
+        } finally {
+            setLoading(false);
+        }
+    };
+
 
 
     const handleSave = async () => {
@@ -615,6 +694,34 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                                     Back to Config
                                                 </Button>
                                             </div>
+
+                                            {/* Auto-Zone for Halls */}
+                                            {config.roomType === 'HALL' && (
+                                                <div className="p-5 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl border-2 border-purple-200 shadow-sm space-y-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="p-2 bg-purple-100 rounded-lg">
+                                                            <Grid3X3 size={16} className="text-purple-600" />
+                                                        </div>
+                                                        <div>
+                                                            <h5 className="text-xs font-bold text-purple-700 uppercase tracking-wide">Quick Auto-Zone</h5>
+                                                            <p className="text-[10px] text-purple-600/70">Exam Hall Mode</p>
+                                                        </div>
+                                                    </div>
+                                                    <p className="text-xs text-purple-600/80 leading-relaxed">
+                                                        Automatically divide this hall into <span className="font-bold">4 equal quadrants</span> (Top-Left, Top-Right, Bottom-Left, Bottom-Right)
+                                                    </p>
+                                                    <Button
+                                                        id="auto-zone-btn"
+                                                        size="lg"
+                                                        isLoading={loading}
+                                                        className="w-full font-bold text-white shadow-lg shadow-purple-500/30 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-xl"
+                                                        onPress={handleAutoZone4Quadrants}
+                                                        startContent={<Grid3X3 size={20} />}
+                                                    >
+                                                        Auto-Zone (4 Quadrants)
+                                                    </Button>
+                                                </div>
+                                            )}
 
                                             {/* Create Zone */}
                                             <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">

@@ -1,60 +1,67 @@
 import React from 'react';
-import { Card, CardBody, CardHeader, Button, Tooltip } from '@heroui/react';
-import { Printer, UserX, Play, TriangleAlert } from 'lucide-react';
+import {
+    Zap,
+    Users,
+    Printer,
+    AlertTriangle,
+    PlusCircle,
+    Shield
+} from 'lucide-react';
 
 export const QuickActions: React.FC = () => {
     return (
-        <Card className="h-full border-none shadow-sm rounded-2xl bg-white">
-            <CardHeader className="p-3 z-10 w-full shrink-0 overflow-inherit color-inherit subpixel-antialiased rounded-t-large px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-100 gap-4">
-                <h3 className="font-normal text-lg text-[#202124]">Quick Actions</h3>
-            </CardHeader>
-            <CardBody className="p-6">
-                <div className="grid grid-cols-2 gap-4">
-                    <ActionButton
-                        icon={<Play size={20} />}
-                        label="Auto-Allocate"
-                        subLabel="Next Slot"
-                        color="bg-blue-50 text-blue-600 hover:bg-blue-100"
-                    />
-                    <ActionButton
-                        icon={<UserX size={20} />}
-                        label="Swap Invigilator"
-                        subLabel="Manage Absence"
-                        color="bg-orange-50 text-orange-600 hover:bg-orange-100"
-                    />
-                    <ActionButton
-                        icon={<Printer size={20} />}
-                        label="Print Seat Plan"
-                        subLabel="2 Pending"
-                        color="bg-purple-50 text-purple-600 hover:bg-purple-100"
-                    />
-                    <ActionButton
-                        icon={<TriangleAlert size={20} />}
-                        label="Emergency Stop"
-                        subLabel="Pause System"
-                        color="bg-red-50 text-red-600 hover:bg-red-100"
-                    />
-                </div>
-            </CardBody>
-        </Card>
+        <div className="grid grid-cols-2 gap-3">
+            <ActionButton
+                icon={<Zap size={16} />}
+                label="Auto Allocate"
+                color="indigo"
+            />
+            <ActionButton
+                icon={<Users size={16} />}
+                label="Staffing"
+                color="slate"
+            />
+            <ActionButton
+                icon={<Printer size={16} />}
+                label="Print Assets"
+                color="slate"
+            />
+            <ActionButton
+                icon={<AlertTriangle size={16} />}
+                label="Crisis Mode"
+                color="orange"
+            />
+            <ActionButton
+                icon={<PlusCircle size={16} />}
+                label="New Series"
+                color="slate"
+            />
+            <ActionButton
+                icon={<Shield size={16} />}
+                label="Security"
+                color="slate"
+            />
+        </div>
     );
 };
 
 interface ActionButtonProps {
     icon: React.ReactNode;
     label: string;
-    subLabel: string;
-    color: string;
+    color: 'indigo' | 'slate' | 'orange';
 }
 
-const ActionButton: React.FC<ActionButtonProps> = ({ icon, label, subLabel, color }) => {
+const ActionButton: React.FC<ActionButtonProps> = ({ icon, label, color }) => {
+    const themes = {
+        indigo: 'text-indigo-600 bg-indigo-50/50 hover:bg-indigo-600 hover:text-white',
+        slate: 'text-slate-600 bg-slate-50 hover:bg-slate-800 hover:text-white',
+        orange: 'text-orange-600 bg-orange-50/50 hover:bg-orange-600 hover:text-white',
+    };
+
     return (
-        <button className={`flex flex-col items-start justify-center p-4 rounded-xl transition-all duration-200 border border-transparent hover:border-black/5 ${color}`}>
-            <div className="mb-3">
-                {icon}
-            </div>
-            <span className="font-semibold text-sm leading-tight">{label}</span>
-            <span className="text-[10px] opacity-80 mt-1 uppercase tracking-wider font-medium">{subLabel}</span>
+        <button className={`flex items-center gap-3 p-3 rounded-lg border border-transparent transition-all duration-200 text-left font-bold text-xs ${themes[color]}`}>
+            <div className="shrink-0">{icon}</div>
+            <span className="tracking-tight">{label}</span>
         </button>
     );
 };

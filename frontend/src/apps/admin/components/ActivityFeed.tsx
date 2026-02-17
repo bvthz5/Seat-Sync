@@ -1,57 +1,56 @@
 import React from 'react';
-import { Card, CardBody, CardHeader } from '@heroui/react';
-import { Check, Info, AlertTriangle, FileText, ArrowRight } from 'lucide-react';
+import { Avatar } from '@heroui/react';
+import { Clock, ShieldCheck, User } from 'lucide-react';
 
 const activities = [
-    { id: 1, type: 'success', text: "Generated seating plan for 'Math 101'", time: '10 min ago', icon: Check },
-    { id: 2, type: 'warning', text: "Auto-sync retried for 'Hall B'", time: '32 min ago', icon: AlertTriangle },
-    { id: 3, type: 'error', text: "Invigilator conflict in 'Lab 1'", time: '1 hour ago', icon: Info },
-    { id: 4, type: 'info', text: "Bulk student import completed", time: '2 hours ago', icon: FileText },
+    { id: 1, user: 'John Doe', action: 'Approved', target: 'Room 101 Allocation', time: '2m ago', type: 'success' },
+    { id: 2, user: 'Jane Smith', action: 'Modified', target: 'Staff Schedule', time: '15m ago', type: 'info' },
+    { id: 3, user: 'Admin', action: 'System Alert', target: 'Backup Completed', time: '1h ago', type: 'system' },
+    { id: 4, user: 'Mike Ross', action: 'Report', target: 'Exam Series B Generated', time: '3h ago', type: 'info' },
+    { id: 5, user: 'System', action: 'Audit', target: 'Log integrity verified', time: '5h ago', type: 'system' },
 ];
 
 export const ActivityFeed: React.FC = () => {
     return (
-        <Card className="h-full border-none shadow-sm rounded-2xl bg-white overflow-hidden">
-            <CardHeader className="p-3 z-10 w-full shrink-0 overflow-inherit color-inherit subpixel-antialiased rounded-t-large px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-100 gap-4 bg-white sticky top-0">
-                <div className="flex flex-col gap-1">
-                    <h3 className="font-normal text-lg text-[#202124]">Recent Activity</h3>
-                    <p className="text-xs text-[#5f6368]">Audit log of system events</p>
-                </div>
-                <button className="text-xs font-medium px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors">
-                    View All
-                </button>
-            </CardHeader>
-            <CardBody className="p-0 overflow-auto custom-scrollbar">
-                <div className="flex flex-col">
-                    {activities.map((item, index) => (
-                        <div
-                            key={item.id}
-                            className={`flex items-start gap-4 px-6 py-4 hover:bg-[#f8f9fa] transition-colors group cursor-pointer ${index !== activities.length - 1 ? 'border-b border-gray-50' : ''}`}
-                        >
-                            {/* Icon Container */}
-                            <div className={`mt-1 w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ${item.type === 'success' ? 'bg-green-100 text-green-700' :
-                                item.type === 'warning' ? 'bg-orange-100 text-orange-700' :
-                                    item.type === 'error' ? 'bg-red-100 text-red-700' :
-                                        'bg-blue-100 text-blue-700'
-                                }`}>
-                                <item.icon size={14} strokeWidth={2.5} />
-                            </div>
+        <div className="relative pl-4">
+            <div className="absolute left-[3px] top-2 bottom-2 w-px bg-slate-100"></div>
 
-                            {/* Content */}
+            <div className="space-y-6">
+                {activities.map((activity) => (
+                    <div key={activity.id} className="relative">
+                        {/* Minimalist Timeline Marker */}
+                        <div className={`absolute -left-[16px] top-1.5 h-1.5 w-1.5 rounded-full border border-white z-10 ${activity.type === 'success' ? 'bg-emerald-500' :
+                                activity.type === 'system' ? 'bg-indigo-500' :
+                                    'bg-slate-300'
+                            }`}></div>
+
+                        <div className="flex items-start gap-3">
+                            <Avatar
+                                src={`https://i.pravatar.cc/150?u=${activity.user}`}
+                                className="w-8 h-8 rounded-lg border border-slate-100"
+                                fallback={<User size={14} className="text-slate-400" />}
+                            />
+
                             <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-[#202124] leading-snug group-hover:text-blue-600 transition-colors">{item.text}</p>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-[11px] text-[#5f6368] font-medium bg-gray-100 px-1.5 rounded">{item.time}</span>
-                                    <span className="text-[10px] text-gray-400">• System Automated</span>
+                                <div className="flex items-center justify-between gap-2">
+                                    <p className="text-xs font-bold text-slate-800 truncate tracking-tight">{activity.user}</p>
+                                    <div className="flex items-center gap-1 text-slate-300 shrink-0">
+                                        <Clock size={10} />
+                                        <span className="text-[9px] font-bold uppercase">{activity.time}</span>
+                                    </div>
                                 </div>
+                                <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                                    <span className="font-bold text-indigo-600/70">{activity.action}</span> {activity.target}
+                                </p>
                             </div>
-
-                            {/* Chevron */}
-                            <ArrowRight size={14} className="self-center text-gray-300 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 transform" />
                         </div>
-                    ))}
-                </div>
-            </CardBody>
-        </Card>
+                    </div>
+                ))}
+            </div>
+
+            <button className="w-full mt-8 py-2.5 rounded-lg border border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:bg-slate-50 transition-colors">
+                Audit Logs Archive
+            </button>
+        </div>
     );
 };

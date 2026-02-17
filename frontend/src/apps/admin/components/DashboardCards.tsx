@@ -1,17 +1,19 @@
 import React, { useEffect } from 'react';
 import { Card, CardBody } from '@heroui/react';
 import { motion, useSpring, useTransform } from 'framer-motion';
-import { Users, FileText, Layout, UserCheck, Activity } from 'lucide-react';
+import { Users, FileText, Layout, UserCheck, Activity, ArrowUpRight, TrendingUp } from 'lucide-react';
 import { ExamService } from '../services/examService';
 
-// CountUp Component for animated numbers
-const CountUp = ({ value }: { value: number }) => {
-    const spring = useSpring(0, { mass: 0.8, stiffness: 75, damping: 15 });
-    const display = useTransform(spring, (current) => Math.floor(current).toLocaleString());
+// Professional CountUp
+const CountUp = ({ value, suffix = "" }: { value: number, suffix?: string }) => {
+    const spring = useSpring(0, { mass: 1, stiffness: 100, damping: 30 });
+    const display = useTransform(spring, (current) =>
+        Math.floor(current).toLocaleString() + suffix
+    );
 
     useEffect(() => {
         spring.set(value);
-    }, [spring, value]);
+    }, [value, spring]);
 
     return <motion.span>{display}</motion.span>;
 };
@@ -19,48 +21,69 @@ const CountUp = ({ value }: { value: number }) => {
 interface SummaryCardProps {
     title: string;
     value: number | string;
-    icon?: React.ReactNode;
-    change?: string;
-    iconColor: string; // Tailwind text color class
-    iconBg: string; // Tailwind bg color class
+    icon: React.ReactNode;
+    trend?: string;
+    color: 'indigo' | 'emerald' | 'orange' | 'slate';
+    loading?: boolean;
 }
 
-export const SummaryCard: React.FC<SummaryCardProps> = ({ title, value, icon, change, iconColor, iconBg }) => {
+const SummaryCard: React.FC<SummaryCardProps> = ({ title, value, icon, trend, color, loading }) => {
+    const colors = {
+        indigo: { bg: 'bg-indigo-50', text: 'text-indigo-600', bar: 'bg-indigo-600' },
+        emerald: { bg: 'bg-emerald-50', text: 'text-emerald-600', bar: 'bg-emerald-600' },
+        orange: { bg: 'bg-orange-50', text: 'text-orange-600', bar: 'bg-orange-600' },
+        slate: { bg: 'bg-slate-50', text: 'text-slate-600', bar: 'bg-slate-600' }
+    };
+
+    const theme = colors[color];
     const numValue = typeof value === 'string' ? parseInt(value.replace(/,/g, '')) : value;
     const isNumber = !isNaN(numValue as number);
 
     return (
-        <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            whileHover={{ y: -3 }}
-            transition={{ type: 'spring', stiffness: 300 }}
-        >
-            <Card className="border-none shadow-sm hover:shadow-md transition-shadow duration-300 rounded-2xl bg-white overflow-visible h-full">
-                <CardBody className="p-6 flex flex-row items-center gap-4">
-                    <div className={`p-4 rounded-xl ${iconBg} ${iconColor}`}>
-                        {icon}
+        <Card className="border-slate-200 shadow-sm rounded-xl overflow-hidden bg-white">
+            <CardBody className="p-0">
+                <div className={`h-1 w-full ${theme.bar}`} />
+                <div className="p-5">
+                    <div className="flex justify-between items-start mb-4">
+                        <div className={`p-2 rounded-lg ${theme.bg} ${theme.text}`}>
+                            {React.cloneElement(icon as any, { size: 18 })}
+                        </div>
+                        {trend && (
+                            <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                                <TrendingUp size={10} />
+                                {trend}
+                            </div>
+                        )}
                     </div>
-                    <div className="flex flex-col">
-                        <p className="text-[#5f6368] text-sm font-medium tracking-wide pb-1">{title}</p>
+
+                    <div className="space-y-1">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">
+                            {title}
+                        </p>
                         <div className="flex items-baseline gap-2">
-                            <h3 className="text-3xl font-normal text-[#202124]">
-                                {isNumber ? <CountUp value={numValue as number} /> : value}
+                            <h3 className="text-2xl font-bold text-slate-900 tracking-tight h-8">
+                                {loading ? (
+                                    <div className="w-16 h-8 bg-slate-100 animate-pulse rounded" />
+                                ) : isNumber ? (
+                                    <CountUp value={numValue as number} />
+                                ) : (
+                                    value
+                                )}
                             </h3>
-                            {change && (
-                                <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md">
-                                    {change}
-                                </span>
-                            )}
                         </div>
                     </div>
-                </CardBody>
-            </Card>
-        </motion.div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-50 flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Enterprise Meta</span>
+                        <ArrowUpRight size={14} className="text-slate-300" />
+                    </div>
+                </div>
+            </CardBody>
+        </Card>
     );
 };
 
-export const DashboardCards = ({ seriesId }: { seriesId?: number }) => {
+export const DashboardCards: React.FC<{ seriesId?: number }> = ({ seriesId }) => {
     const [stats, setStats] = React.useState<any>(null);
     const [loading, setLoading] = React.useState(true);
 
@@ -81,34 +104,38 @@ export const DashboardCards = ({ seriesId }: { seriesId?: number }) => {
     };
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <SummaryCard
-                title="Total Exams"
-                value={loading ? "..." : stats?.total || 0}
-                icon={<FileText size={24} />}
-                iconColor="text-blue-600"
-                iconBg="bg-blue-50"
+                title="Consolidated Exams"
+                value={stats?.total || 0}
+                icon={<FileText />}
+                color="indigo"
+                trend="+12%"
+                loading={loading}
             />
             <SummaryCard
-                title="Completed"
-                value={loading ? "..." : stats?.completed || 0}
-                icon={<UserCheck size={24} />}
-                iconColor="text-emerald-600"
-                iconBg="bg-emerald-50"
+                title="Successfully Completed"
+                value={stats?.completed || 0}
+                icon={<UserCheck />}
+                color="emerald"
+                trend="98%"
+                loading={loading}
             />
             <SummaryCard
-                title="Upcoming"
-                value={loading ? "..." : stats?.upcoming || 0}
-                icon={<Layout size={24} />}
-                iconColor="text-orange-600"
-                iconBg="bg-orange-50"
+                title="Upcoming Sessions"
+                value={stats?.upcoming || 0}
+                icon={<Layout />}
+                color="slate"
+                trend="4 slots"
+                loading={loading}
             />
             <SummaryCard
-                title="Active Today"
-                value={loading ? "..." : stats?.activeToday || 0}
-                icon={<Activity size={24} />}
-                iconColor="text-purple-600"
-                iconBg="bg-purple-50"
+                title="Active Hall Operations"
+                value={stats?.activeToday || 0}
+                icon={<Activity />}
+                color="orange"
+                trend="Live"
+                loading={loading}
             />
         </div>
     );
