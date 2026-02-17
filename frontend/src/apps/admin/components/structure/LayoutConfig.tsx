@@ -159,6 +159,17 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                     setSeatZoneMap(newZoneMap);
                     setInitialSeatZoneMap(newZoneMap);
 
+                    // Populate Seat ID Map (Essential for handleSave)
+                    const newSeatIdMap = new Map<string, number>();
+                    if (data.seats) {
+                        data.seats.forEach((s: any) => {
+                            const rowLabel = s.RowLabel ? s.RowLabel.trim() : '';
+                            const seatId = `${rowLabel}-${s.BenchNumber}-${s.SeatNumber}`;
+                            newSeatIdMap.set(seatId, s.SeatID);
+                        });
+                    }
+                    setSeatIdMap(newSeatIdMap);
+
                     // Populate Zones
                     if (data.zones) {
                         console.log('🎨 Zones Loaded:', data.zones);
@@ -461,9 +472,9 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                 // Build seat updates from current state
                 const updates: any[] = [];
 
-                // Generate all possible seat IDs based on current config
-                const columns = 'ABCD'.split('').slice(0, config.rows);
-                columns.forEach((colLabel) => {
+                // Generate all possible seat IDs based on current config (A, B, C...)
+                for (let r = 0; r < config.rows; r++) {
+                    const colLabel = String.fromCharCode(65 + r);
                     for (let b = 0; b < config.benchesPerRow; b++) {
                         for (let s = 0; s < config.seatsPerBench; s++) {
                             const seatIndex = s + 1;
@@ -482,7 +493,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                             }
                         }
                     }
-                });
+                }
 
                 console.log('💾 Saving seat updates:', updates.length, 'seats');
                 console.log('  - Disabled seats:', disabledSeatIds.size);
@@ -512,7 +523,8 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
 
             if (data.seats) {
                 data.seats.forEach((s: any) => {
-                    const seatId = `${s.RowLabel}-${s.BenchNumber}-${s.SeatNumber}`;
+                    const rowLabel = s.RowLabel ? s.RowLabel.trim() : '';
+                    const seatId = `${rowLabel}-${s.BenchNumber}-${s.SeatNumber}`;
                     newSeatIdMap.set(seatId, s.SeatID);
                     if (s.ZoneID) currentZoneMap.set(seatId, s.ZoneID);
                 });
