@@ -363,7 +363,28 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
             setLoading(true);
             setShowZoneModal(false);
 
-            // STEP 1: Delete ALL existing zones
+            // STEP 1: Clear ALL seat zone assignments first (so zones can be deleted)
+            console.log('🧹 Clearing all seat zone assignments');
+            const updates: any[] = [];
+            generatedSeats.forEach(seat => {
+                const dbSeatId = seatIdMap.get(seat.id);
+                if (dbSeatId) {
+                    updates.push({
+                        SeatID: dbSeatId,
+                        ZoneID: null,
+                        IsActive: seat.isActive
+                    });
+                }
+            });
+
+            if (updates.length > 0) {
+                await structureService.updateSeatZones(Number(selectedRoomId), updates);
+            }
+
+            // Clear local zone map
+            setSeatZoneMap(new Map());
+
+            // STEP 2: Delete ALL existing zones (now that seats are unassigned)
             const allZones = await structureService.getZones(Number(selectedRoomId));
             console.log('🗑️ Deleting', allZones.length, 'existing zones');
 
@@ -371,13 +392,9 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                 try {
                     await structureService.deleteZone(zone.ZoneID);
                 } catch (error) {
-                    // Ignore deletion errors (zone might have seats assigned)
-                    console.warn('Could not delete zone:', zone.ZoneID);
+                    console.error('Failed to delete zone:', zone.ZoneID, error);
                 }
             }
-
-            // Clear zone map since we're starting fresh
-            setSeatZoneMap(new Map());
 
             // STEP 2: Determine grid layout
             const gridLayout = calculateGridLayout(zoneCount, config.rows, config.benchesPerRow);
@@ -1376,8 +1393,8 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                                     key={count}
                                                     onClick={() => setSelectedZoneCount(count)}
                                                     className={`p-4 rounded-xl border-2 transition-all ${selectedZoneCount === count
-                                                            ? 'bg-purple-600 border-purple-500 shadow-lg shadow-purple-500/30'
-                                                            : 'bg-slate-800 border-slate-700 hover:border-purple-500/50 hover:bg-slate-700'
+                                                        ? 'bg-purple-600 border-purple-500 shadow-lg shadow-purple-500/30'
+                                                        : 'bg-slate-800 border-slate-700 hover:border-purple-500/50 hover:bg-slate-700'
                                                         }`}
                                                 >
                                                     <div className="text-center">
