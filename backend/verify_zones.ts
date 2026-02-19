@@ -8,7 +8,7 @@ async function verifyZones() {
     try {
         // List all rooms
         const rooms = await Room.findAll();
-        console.log('\n📍 Available Rooms:');
+        console.log('\nAvailable Rooms:');
         rooms.forEach(room => {
             console.log(`  - Room ${room.RoomID}: ${room.RoomCode}`);
         });
@@ -20,14 +20,14 @@ async function verifyZones() {
         });
 
         if (roomWithZones) {
-            console.log(`\n🔍 Checking Room: ${roomWithZones.RoomCode} (ID: ${roomWithZones.RoomID})`);
+            console.log(`\nChecking Room: ${roomWithZones.RoomCode} (ID: ${roomWithZones.RoomID})`);
 
             // Get zones for this room
             const zones = await Zone.findAll({
                 where: { RoomID: roomWithZones.RoomID }
             });
 
-            console.log(`\n🎨 Zones in this room (${zones.length}):`);
+            console.log(`\nZones in this room (${zones.length}):`);
             zones.forEach(zone => {
                 console.log(`  - Zone ${zone.ZoneID}: "${zone.ZoneName}" (${zone.ZoneCode}) - Color: ${zone.Color}`);
             });
@@ -41,7 +41,7 @@ async function verifyZones() {
                 order: [['RowLabel', 'ASC'], ['BenchNumber', 'ASC'], ['SeatNumber', 'ASC']]
             });
 
-            console.log(`\n💺 Seats with Zone Assignments (${seatsWithZones.length}):`);
+            console.log(`\nSeats with Zone Assignments (${seatsWithZones.length}):`);
 
             if (seatsWithZones.length > 0) {
                 const zoneGroups = new Map<number, any[]>();
@@ -56,7 +56,7 @@ async function verifyZones() {
 
                 zoneGroups.forEach((seats, zoneId) => {
                     const zone = zones.find(z => z.ZoneID === zoneId);
-                    console.log(`\n  🎨 Zone ${zoneId} - "${zone?.ZoneName}" (${zone?.ZoneCode}): ${seats.length} seats`);
+                    console.log(`\n  Zone ${zoneId} - "${zone?.ZoneName}" (${zone?.ZoneCode}): ${seats.length} seats`);
                     seats.slice(0, 5).forEach(seat => {
                         const seatIdGenerated = `${seat.RowLabel.trim()}-${seat.BenchNumber}-${seat.SeatNumber}`;
                         console.log(`    - Seat ${seat.SeatID}: Row="${seat.RowLabel}" Bench=${seat.BenchNumber} Num=${seat.SeatNumber} → ID="${seatIdGenerated}"`);
@@ -66,11 +66,11 @@ async function verifyZones() {
                     }
                 });
             } else {
-                console.log('  ❌ No seats have zone assignments!');
+                console.log('  No seats have zone assignments!');
             }
 
             // Check for any data issues
-            console.log('\n🔧 Data Quality Check:');
+            console.log('\nData Quality Check:');
             const allSeats = await Seat.findAll({ where: { RoomID: roomWithZones.RoomID } });
             const totalSeats = allSeats.length;
             const seatsWithZonesCount = seatsWithZones.length;
@@ -81,13 +81,13 @@ async function verifyZones() {
             console.log(`  - Seats without Zones: ${seatsWithoutZones}`);
 
             // Check specific seat IDs to verify format
-            console.log('\n📋 Sample Seat Data (first 10):');
+            console.log('\nSample Seat Data (first 10):');
             allSeats.slice(0, 10).forEach(seat => {
                 const seatId = `${seat.RowLabel.trim()}-${seat.BenchNumber}-${seat.SeatNumber}`;
                 console.log(`  - Seat ${seat.SeatID}: RowLabel="${seat.RowLabel}" (len=${seat.RowLabel.length}, trimmed: "${seat.RowLabel.trim()}"), Bench=${seat.BenchNumber}, Num=${seat.SeatNumber}, ZoneID=${seat.ZoneID || 'null'} → GeneratedID="${seatId}"`);
             });
         } else {
-            console.log('\n❌ Room not found. Here are some available rooms:');
+            console.log('\nRoom not found. Here are some available rooms:');
             const someRooms = await Room.findAll({ limit: 10 });
             someRooms.forEach(r => console.log(`  - ${r.RoomCode} (ID: ${r.RoomID})`));
         }

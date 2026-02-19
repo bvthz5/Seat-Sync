@@ -167,6 +167,9 @@ app.use("/api/series", seriesRoutes);
 import allocationRoutes from "./routes/allocation.routes.js";
 app.use("/api/allocation", allocationRoutes);
 
+import auditLogsRoutes from "./routes/auditLogs.routes.js";
+app.use("/api/audit", auditLogsRoutes);
+
 import userManagementRoutes from "./routes/user_management.routes.js";
 app.use("/api/users", userManagementRoutes);
 

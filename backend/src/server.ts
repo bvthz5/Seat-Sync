@@ -31,8 +31,15 @@ const startServer = async () => {
         console.warn("Continuing to start the HTTP server in degraded mode.");
     }
 
+    // Create HTTP server explicitly to attach Socket.IO
+    const { createServer } = await import("http");
+    const { initSocket } = await import("./config/socket.js");
+
+    const httpServer = createServer(app);
+    initSocket(httpServer);
+
     // Start server (keeps health endpoints available in degraded mode)
-    const server = app.listen(PORT, () => {
+    const server = httpServer.listen(PORT, () => {
         console.log(`SeatSync API running at http://localhost:${PORT}`);
         console.log(`Swagger UI available at http://localhost:${PORT}/api-docs`);
         // Automatically open Swagger UI in the default browser

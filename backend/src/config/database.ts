@@ -268,6 +268,24 @@ async function ensureSchemaIntegrity() {
 
                 IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[ActivityLogs]') AND name = 'UserAgent')
                 ALTER TABLE [dbo].[ActivityLogs] ADD [UserAgent] NVARCHAR(500) NULL;
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[ActivityLogs]') AND name = 'Severity')
+                BEGIN
+                    ALTER TABLE [dbo].[ActivityLogs] ADD [Severity] NVARCHAR(20) NOT NULL DEFAULT 'Info' WITH VALUES;
+                    PRINT 'Added Severity to ActivityLogs';
+                END
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[ActivityLogs]') AND name = 'Status')
+                BEGIN
+                    ALTER TABLE [dbo].[ActivityLogs] ADD [Status] NVARCHAR(20) NOT NULL DEFAULT 'Success' WITH VALUES;
+                    PRINT 'Added Status to ActivityLogs';
+                END
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[ActivityLogs]') AND name = 'Metadata')
+                BEGIN
+                    ALTER TABLE [dbo].[ActivityLogs] ADD [Metadata] NVARCHAR(MAX) NULL;
+                    PRINT 'Added Metadata to ActivityLogs';
+                END
             END
         `, { type: QueryTypes.RAW });
 

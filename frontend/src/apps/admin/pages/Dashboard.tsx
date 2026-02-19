@@ -76,6 +76,7 @@ const Dashboard: React.FC = () => {
                         <div className="h-8 w-px bg-slate-200 mx-1 hidden md:block"></div>
 
                         <Select
+                            aria-label="Select Exam Series"
                             placeholder="Select Exam Series"
                             size="sm"
                             className="w-56"

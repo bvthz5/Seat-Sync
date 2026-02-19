@@ -15,13 +15,16 @@ interface ActivityLogAttributes {
   UserAgent?: string;
   Timestamp: Date;
   Details?: string;
+  Severity: 'Info' | 'Warning' | 'Critical';
+  Status: 'Success' | 'Failure';
+  Metadata?: object; // New field for JSON structured data
 }
 
 /**
  * Attributes required when creating an activity log
  */
 interface ActivityLogCreationAttributes
-  extends Optional<ActivityLogAttributes, "LogID" | "Timestamp" | "EntityType" | "EntityID" | "IPAddress" | "UserAgent"> { }
+  extends Optional<ActivityLogAttributes, "LogID" | "Timestamp" | "EntityType" | "EntityID" | "IPAddress" | "UserAgent" | "Details" | "Severity" | "Status" | "Metadata"> { }
 
 export class ActivityLog
   extends Model<ActivityLogAttributes, ActivityLogCreationAttributes>
@@ -35,6 +38,9 @@ export class ActivityLog
   declare UserAgent?: string;
   declare Timestamp: Date;
   declare Details?: string;
+  declare Severity: 'Info' | 'Warning' | 'Critical';
+  declare Status: 'Success' | 'Failure';
+  declare Metadata?: object;
 }
 
 ActivityLog.init(
@@ -79,6 +85,20 @@ ActivityLog.init(
     },
     Details: {
       type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    Severity: {
+      type: DataTypes.ENUM('Info', 'Warning', 'Critical'),
+      allowNull: false,
+      defaultValue: 'Info',
+    },
+    Status: {
+      type: DataTypes.ENUM('Success', 'Failure'),
+      allowNull: false,
+      defaultValue: 'Success',
+    },
+    Metadata: {
+      type: DataTypes.JSON,
       allowNull: true,
     },
   },

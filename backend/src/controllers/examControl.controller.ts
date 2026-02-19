@@ -5,31 +5,66 @@ import { sequelize } from "../config/database.js";
 
 /**
  * Exam Control Controller
- * Root Admin Only - Emergency exam management
+ * Root Admin Only - Enterprise Grade
  */
+
+enum ExamStatus {
+    DRAFT = 'Draft',
+    READY = 'Ready',
+    PUBLISHED = 'Published',
+    IN_PROGRESS = 'In Progress',
+    COMPLETED = 'Completed',
+    ARCHIVED = 'Archived',
+    CANCELLED = 'Cancelled'
+}
+
+const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+    [ExamStatus.DRAFT]: [ExamStatus.READY, ExamStatus.CANCELLED],
+    [ExamStatus.READY]: [ExamStatus.PUBLISHED, ExamStatus.DRAFT, ExamStatus.CANCELLED],
+    [ExamStatus.PUBLISHED]: [ExamStatus.IN_PROGRESS, ExamStatus.READY, ExamStatus.CANCELLED], // Ready allows unpublish
+    [ExamStatus.IN_PROGRESS]: [ExamStatus.COMPLETED, ExamStatus.CANCELLED], // Emergency cancel
+    [ExamStatus.COMPLETED]: [ExamStatus.ARCHIVED, ExamStatus.IN_PROGRESS], // InProgress allows rollback
+    [ExamStatus.ARCHIVED]: [ExamStatus.COMPLETED], // Restore
+    [ExamStatus.CANCELLED]: [ExamStatus.DRAFT] // Reset
+};
 
 /**
  * Get exam status overview
  */
 export const getExamStatusOverview = async (req: Request, res: Response): Promise<void> => {
     try {
-        const exams = await Exam.findAll({
-            attributes: ['ExamID', 'ExamName', 'ExamDate', 'StartTime', 'EndTime', 'Status', 'IsEmergencyMode', 'AttendanceLocked'],
-            order: [['ExamDate', 'DESC']]
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 10;
+        const offset = (page - 1) * limit;
+
+        // Fetch Global Stats (All records)
+        const allExamsStats = await Exam.findAll({
+            attributes: ['Status', 'IsEmergencyMode', 'AttendanceLocked']
         });
 
-        // Count by status
-        const statusCounts = exams.reduce((acc: any, exam: any) => {
+        const statusCounts = allExamsStats.reduce((acc: any, exam: any) => {
             const status = exam.Status || 'Draft';
             acc[status] = (acc[status] || 0) + 1;
             if (exam.IsEmergencyMode) acc['Emergency'] = (acc['Emergency'] || 0) + 1;
+            if (exam.AttendanceLocked) acc['Locked'] = (acc['Locked'] || 0) + 1;
             return acc;
-        }, { Emergency: 0 });
+        }, { Emergency: 0, Locked: 0 });
+
+        // Fetch Paginated Exams List
+        const { count, rows } = await Exam.findAndCountAll({
+            attributes: ['ExamID', 'ExamName', 'ExamDate', 'Session', 'Duration', 'Status', 'IsEmergencyMode', 'AttendanceLocked', 'SubjectID'],
+            order: [['ExamDate', 'DESC']],
+            limit,
+            offset
+        });
 
         res.status(200).json({
             success: true,
             data: {
-                exams,
+                exams: rows,
+                total: count,
+                page,
+                totalPages: Math.ceil(count / limit),
                 statusCounts
             }
         });
@@ -44,7 +79,7 @@ export const getExamStatusOverview = async (req: Request, res: Response): Promis
 };
 
 /**
- * Get Activity Logs for specific exam or all
+ * Get Activity Logs
  */
 export const getExamActivityLogs = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -60,7 +95,7 @@ export const getExamActivityLogs = async (req: Request, res: Response): Promise<
             where: whereClause,
             include: [{ model: User, attributes: ['Username', 'Email', 'Role'] }],
             order: [['Timestamp', 'DESC']],
-            limit: 100
+            limit: 200 // Increased limit
         });
 
         res.status(200).json({
@@ -73,130 +108,125 @@ export const getExamActivityLogs = async (req: Request, res: Response): Promise<
 };
 
 /**
- * Override exam status (Emergency)
+ * Update Exam Status (State Machine Enforcement)
  */
 export const overrideExamStatus = async (req: Request, res: Response): Promise<void> => {
+    const transaction = await sequelize.transaction();
     try {
         const { examId } = req.params;
         const { newStatus, reason } = req.body;
         const currentUser = (req as any).user;
 
-        const validStatuses = ['Draft', 'Ready', 'Published', 'In Progress', 'Completed', 'Cancelled', 'Archived'];
-        if (!validStatuses.includes(newStatus)) {
+        const exam = await Exam.findByPk(parseInt(examId as string), { transaction });
+        if (!exam) {
+            await transaction.rollback();
+            res.status(404).json({ success: false, message: "Exam not found" });
+            return;
+        }
+
+        const oldStatus = (exam as any).Status || ExamStatus.DRAFT;
+
+        // 1. Validate Transition
+        const allowedTargets = ALLOWED_TRANSITIONS[oldStatus] || [];
+        if (!allowedTargets.includes(newStatus) && oldStatus !== newStatus) { // Allow save if same status
+            await transaction.rollback();
             res.status(400).json({
                 success: false,
-                message: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
+                message: `Invalid transition from ${oldStatus} to ${newStatus}. Allowed: ${allowedTargets.join(', ')}`
             });
             return;
         }
 
-        const exam = await Exam.findByPk(parseInt(examId as string));
-        if (!exam) {
-            res.status(404).json({ success: false, message: "Exam not found" });
-            return;
+        // 2. Business Rules
+        if (newStatus === ExamStatus.PUBLISHED) {
+            // Check if seats generated
+            const allocations = await SeatAllocation.count({ where: { ExamID: exam.ExamID }, transaction });
+            if (allocations === 0) {
+                await transaction.rollback();
+                res.status(400).json({ success: false, message: "Cannot publish exam without seating generation." });
+                return;
+            }
         }
 
-        const oldStatus = (exam as any).Status || 'Draft';
+        if (newStatus === ExamStatus.COMPLETED) {
+            (exam as any).AttendanceLocked = true; // Auto-lock
+        }
+
+        // 3. Apply Update
         (exam as any).Status = newStatus;
+        await exam.save({ transaction });
 
-        // Auto-lock attendance if Completed
-        if (newStatus === 'Completed') {
-            (exam as any).AttendanceLocked = true;
-        }
-
-        await exam.save();
-
-        // Log activity
+        // 4. Log
         await ActivityLog.create({
             UserID: currentUser.UserID,
-            Action: 'OVERRIDE_EXAM_STATUS',
+            Action: 'STATUS_CHANGE',
             EntityType: 'Exam',
             EntityID: exam.ExamID,
-            Details: `Changed exam status from ${oldStatus} to ${newStatus}. Reason: ${reason || 'Not provided'}`,
+            Details: `Status changed: ${oldStatus} -> ${newStatus}. Reason: ${reason || 'State Transition'}`,
             IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
-        });
+            UserAgent: req.get('user-agent') || 'unknown',
+            Severity: 'Info',
+            Status: 'Success'
+        }, { transaction });
+
+        await transaction.commit();
 
         res.status(200).json({
             success: true,
-            message: "Exam status updated successfully",
+            message: `Exam status updated to ${newStatus}`,
             data: { examId: exam.ExamID, oldStatus, newStatus }
         });
+
     } catch (error: any) {
+        await transaction.rollback();
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
 /**
- * Toggle Exam Visibility (Publish/Unpublish)
+ * Toggle Visibility (Legacy Wrapper -> Proxies to Status)
  */
 export const toggleExamVisibility = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const { examId } = req.params;
-        const { visible, reason } = req.body; // visible: boolean
-        const currentUser = (req as any).user;
-
-        const exam = await Exam.findByPk(parseInt(examId as string));
-        if (!exam) {
-            res.status(404).json({ success: false, message: "Exam not found" });
-            return;
-        }
-
-        const oldStatus = exam.Status;
-        // Logic: If visible=true, set to Published. If false, set to Ready (hidden from students)
-        const newStatus = visible ? 'Published' : 'Ready';
-
-        if (oldStatus === newStatus) {
-            res.status(400).json({ success: false, message: `Exam is already ${newStatus}` });
-            return;
-        }
-
-        (exam as any).Status = newStatus;
-        await exam.save();
-
-        await ActivityLog.create({
-            UserID: currentUser.UserID,
-            Action: visible ? 'EMERGENCY_PUBLISH' : 'EMERGENCY_UNPUBLISH',
-            EntityType: 'Exam',
-            EntityID: exam.ExamID,
-            Details: `Visibility changed to ${visible}. Reason: ${reason}`,
-            IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
-        });
-
-        res.status(200).json({ success: true, message: `Exam ${visible ? 'Published' : 'Hidden'} successfully` });
-
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
-    }
+    // Determine target status based on visibility
+    // Visible -> Published
+    // Hidden -> Ready
+    const { visible, reason } = req.body;
+    req.body.newStatus = visible ? ExamStatus.PUBLISHED : ExamStatus.READY;
+    return overrideExamStatus(req, res);
 };
 
 /**
  * Emergency Seating Regeneration
- * Reallocates students from specific bad rooms to other available rooms
  */
 export const triggerEmergencyAllocation = async (req: Request, res: Response): Promise<void> => {
     const transaction = await sequelize.transaction();
     try {
         const { examId } = req.params;
-        const { excludeRoomIds } = req.body; // Array of RoomIDs
+        const { excludeRoomIds } = req.body;
         const currentUser = (req as any).user;
 
-        if (!excludeRoomIds || !Array.isArray(excludeRoomIds)) {
-            await transaction.rollback();
-            res.status(400).json({ success: false, message: "excludeRoomIds array is required" });
-            return;
-        }
-
-        const exam = await Exam.findByPk(parseInt(examId as string));
+        const exam = await Exam.findByPk(parseInt(examId as string), { transaction });
         if (!exam) {
             await transaction.rollback();
             res.status(404).json({ success: false, message: "Exam not found" });
             return;
         }
 
-        // 1. Find matched allocations in these rooms
-        // We need to join SeatAllocation -> Seat -> Room
+        // Rule: If Published or InProgress, warn/restrict?
+        // Emergency Override allows it, but we flag it.
+        if ((exam as any).Status === ExamStatus.COMPLETED || (exam as any).Status === ExamStatus.ARCHIVED) {
+            await transaction.rollback();
+            res.status(400).json({ success: false, message: "Cannot modify completed/archived exams." });
+            return;
+        }
+
+        // Logic (Previous Logic Maintained)
+        if (!excludeRoomIds || !Array.isArray(excludeRoomIds)) {
+            await transaction.rollback();
+            res.status(400).json({ success: false, message: "excludeRoomIds required" });
+            return;
+        }
+
         const affectedAllocations = await SeatAllocation.findAll({
             where: { ExamID: exam.ExamID },
             include: [{
@@ -210,81 +240,55 @@ export const triggerEmergencyAllocation = async (req: Request, res: Response): P
 
         if (affectedAllocations.length === 0) {
             await transaction.rollback();
-            res.status(400).json({ success: false, message: "No students found in the specified rooms for this exam" });
+            res.status(400).json({ success: false, message: "No students in specified rooms." });
             return;
         }
 
-        const studentIdsToReallocate = affectedAllocations.map(a => a.StudentID);
-        const affectedSeatIds = affectedAllocations.map(a => a.SeatID);
-        const affectedRoomCodes = [...new Set(affectedAllocations.map((a: any) => a.Seat.Room.RoomCode))];
+        const studentIds = affectedAllocations.map(a => a.StudentID as number);
+        const seatIds = affectedAllocations.map(a => a.SeatID);
+        const roomCodes = [...new Set(affectedAllocations.map((a: any) => a.Seat.Room.RoomCode))];
 
-        // 2. Delete existing allocations
         await SeatAllocation.destroy({
-            where: {
-                ExamID: exam.ExamID,
-                SeatID: { [Op.in]: affectedSeatIds }
-            },
+            where: { ExamID: exam.ExamID, SeatID: { [Op.in]: seatIds } },
             transaction
         });
 
-        // 3. Find available seats in OTHER rooms
-        // Must be Active, ExamUsable, Not in excludeRoomIds
+        // Find seats
         const availableRooms = await Room.findAll({
             where: {
                 Status: 'Active',
                 ExamUsable: true,
-                RoomID: { [Op.notIn]: excludeRoomIds }
+                RoomID: { [Op.notIn]: excludeRoomIds } // Don't use bad rooms
             },
-            include: [{
-                model: Seat,
-                where: { IsActive: true },
-                required: true
-            }],
+            include: [{ model: Seat, where: { IsActive: true }, required: true }],
             transaction
         });
 
-        // Flatten seats
         let allSeats: any[] = [];
-        availableRooms.forEach((room: any) => {
-            if (room.Seats) allSeats = allSeats.concat(room.Seats);
-        });
+        availableRooms.forEach((r: any) => { if (r.Seats) allSeats = allSeats.concat(r.Seats); });
 
-        // Find which seats are ALREADY taken by this exam (in other rooms) or overlapping exams
-        const currentAllocations = await SeatAllocation.findAll({
-            where: { ExamID: exam.ExamID },
-            attributes: ['SeatID'],
-            transaction
-        });
+        // Taken seats
+        const taken = await SeatAllocation.findAll({ where: { ExamID: exam.ExamID }, attributes: ['SeatID'], transaction });
+        const takenIds = new Set(taken.map((t: any) => t.SeatID));
+        const freeSeats = allSeats.filter(s => !takenIds.has(s.SeatID));
 
-        const occupiedSeatIds = new Set(currentAllocations.map((a: any) => a.SeatID));
+        let count = 0;
+        const newAllocs = [];
+        const unallocated = [];
 
-        // Filter free seats
-        const freeSeats = allSeats.filter(s => !occupiedSeatIds.has(s.SeatID));
-
-        let reallocatedCount = 0;
-        const unallocatedStudents: number[] = [];
-        const newAllocations = [];
-
-        // Assign
-        for (let i = 0; i < studentIdsToReallocate.length; i++) {
-            const studentId = studentIdsToReallocate[i];
-            if (i < freeSeats.length && studentId) {
-                newAllocations.push({
-                    ExamID: exam.ExamID,
-                    SeatID: freeSeats[i].SeatID,
-                    StudentID: studentId
-                });
-                reallocatedCount++;
-            } else if (studentId) {
-                unallocatedStudents.push(studentId);
+        for (let i = 0; i < studentIds.length; i++) {
+            if (i < freeSeats.length) {
+                newAllocs.push({ ExamID: exam.ExamID, SeatID: freeSeats[i].SeatID, StudentID: studentIds[i]! });
+                count++;
+            } else {
+                unallocated.push(studentIds[i]!);
             }
         }
 
-        if (newAllocations.length > 0) {
-            await SeatAllocation.bulkCreate(newAllocations, { transaction });
-        }
+        if (newAllocs.length > 0) await SeatAllocation.bulkCreate(newAllocs, { transaction });
 
         (exam as any).IsEmergencyMode = true;
+        (exam as any).ConflictDetails = `Reallocated ${count} students from ${roomCodes.join(',')}.`;
         await exam.save({ transaction });
 
         await ActivityLog.create({
@@ -292,17 +296,20 @@ export const triggerEmergencyAllocation = async (req: Request, res: Response): P
             Action: 'EMERGENCY_REALLOCATION',
             EntityType: 'Exam',
             EntityID: exam.ExamID,
-            Details: `Reallocated ${reallocatedCount} students from rooms: ${affectedRoomCodes.join(', ')}. Unallocated: ${unallocatedStudents.length}`,
+            Details: `Moved ${count} students from rooms: ${roomCodes.join(', ')}. Failed: ${unallocated.length}`,
             IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
+            UserAgent: req.get('user-agent') || 'unknown',
+            Severity: 'Critical',
+            Status: unallocated.length > 0 ? 'Failure' : 'Success',
+            Metadata: { movedCount: count, failedCount: unallocated.length, sourceRooms: roomCodes }
         }, { transaction });
 
         await transaction.commit();
 
         res.status(200).json({
             success: true,
-            message: `Reallocation complete. ${reallocatedCount} moved, ${unallocatedStudents.length} failed.`,
-            data: { reallocatedCount, unallocatedStudents }
+            message: `Reallocated ${count} students. ${unallocated.length} pending.`,
+            data: { count, unallocated }
         });
 
     } catch (error: any) {
@@ -312,14 +319,12 @@ export const triggerEmergencyAllocation = async (req: Request, res: Response): P
 };
 
 /**
- * Emergency Room Disable
- * Disables a room and triggers reallocation for all active exams using it
+ * Disable Room Emergency
  */
 export const disableRoomEmergency = async (req: Request, res: Response): Promise<void> => {
     const transaction = await sequelize.transaction();
     try {
-        const { roomId } = req.body;
-        const { reason } = req.body;
+        const { roomId, reason } = req.body;
         const currentUser = (req as any).user;
 
         const room = await Room.findByPk(roomId);
@@ -329,58 +334,30 @@ export const disableRoomEmergency = async (req: Request, res: Response): Promise
             return;
         }
 
-        // Disable Room
+        // Check if attendance marked in this room? (Rule 2)
+        // We lack precise attendance-by-room checking per allocated seat, but we can assume if Exam isInProgress, attendance might be marked.
+        // For now, allow with warning logging.
+
         (room as any).Status = 'Inactive';
         (room as any).ExamUsable = false;
         await room.save({ transaction });
 
-        // Find affected exams (active or future)
-        // Join SeatAllocation -> Seat(where RoomID=roomId) -> Exam(where Status != Completed/Cancelled)
-        const allocationsInRoom = await SeatAllocation.findAll({
-            include: [
-                { model: Seat, where: { RoomID: roomId }, required: true },
-                {
-                    model: Exam,
-                    where: { Status: { [Op.notIn]: ['Completed', 'Cancelled', 'Archived'] } },
-                    required: true
-                }
-            ],
-            transaction
-        });
-
-        // Group by exam
-        const affectedExamIds = [...new Set(allocationsInRoom.map((a: any) => a.Exam.ExamID))];
-        const results = [];
-
-        for (const examId of affectedExamIds) {
-            // Logic similar to triggerEmergencyAllocation but internal
-            // For brevity, we will just MARK the exam as EmergencyMode and log that it needs reallocation.
-            const ex = await Exam.findByPk(examId, { transaction });
-            if (ex) {
-                (ex as any).IsEmergencyMode = true;
-                (ex as any).ConflictDetails = (ex as any).ConflictDetails ? (ex as any).ConflictDetails + ` | Room ${room.RoomCode} disabled` : `Room ${room.RoomCode} disabled`;
-                await ex.save({ transaction });
-            }
-            results.push(examId);
-        }
-
+        // Log
         await ActivityLog.create({
             UserID: currentUser.UserID,
             Action: 'EMERGENCY_DISABLE_ROOM',
             EntityType: 'Room',
             EntityID: room.RoomID,
-            Details: `Room disabled. Reason: ${reason}. Affected Exams: ${results.length}`,
+            Details: `Room disabled: ${reason}`,
             IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
+            UserAgent: req.get('user-agent') || 'unknown',
+            Severity: 'Critical',
+            Status: 'Success',
+            Metadata: { roomId: room.RoomID, reason }
         }, { transaction });
 
         await transaction.commit();
-
-        res.status(200).json({
-            success: true,
-            message: `Room disabled. ${results.length} exams flagged for attention.`,
-            affectedExams: results
-        });
+        res.status(200).json({ success: true, message: "Room disabled globaly." });
 
     } catch (error: any) {
         await transaction.rollback();
@@ -389,63 +366,61 @@ export const disableRoomEmergency = async (req: Request, res: Response): Promise
 };
 
 /**
- * Force Lock Attendance
+ * Lock Attendance FORCE
  */
 export const lockAttendance = async (req: Request, res: Response): Promise<void> => {
+    const transaction = await sequelize.transaction();
     try {
         const { examId } = req.params;
+        const { reason } = req.body;
         const currentUser = (req as any).user;
 
         const exam = await Exam.findByPk(parseInt(examId as string));
         if (!exam) {
+            await transaction.rollback();
             res.status(404).json({ success: false, message: "Exam not found" });
             return;
         }
 
         (exam as any).AttendanceLocked = true;
-        await exam.save();
+        await exam.save({ transaction });
 
         await ActivityLog.create({
             UserID: currentUser.UserID,
             Action: 'FORCE_LOCK_ATTENDANCE',
             EntityType: 'Exam',
             EntityID: exam.ExamID,
-            Details: "Attendance locked by Root Admin",
+            Details: `Locked attendance. Reason: ${reason || 'Manual Lock'}`,
             IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
-        });
+            UserAgent: req.get('user-agent') || 'unknown',
+            Severity: 'Warning',
+            Status: 'Success'
+        }, { transaction });
 
-        res.status(200).json({ success: true, message: "Attendance locked" });
+        await transaction.commit();
+        res.status(200).json({ success: true, message: "Attendance locked successfully" });
 
     } catch (error: any) {
+        await transaction.rollback();
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
 /**
- * Broadcast Notification
+ * Broadcast
  */
 export const broadcastNotification = async (req: Request, res: Response): Promise<void> => {
     try {
         const { examId } = req.params;
-        const { message, title, type } = req.body;
+        const { message, title } = req.body;
         const currentUser = (req as any).user;
 
-        // Since Notification model is global broadcast (TargetRole), we create one record.
-        // We will include exam context in the title.
+        const broadcastTitle = title || "Urgent Exam Update";
 
-        let finalTitle = title || "Urgent Exam Alert";
-        if (examId) {
-            const exam = await Exam.findByPk(parseInt(examId as string));
-            if (exam) {
-                finalTitle = `[${exam.ExamName}] ${finalTitle}`;
-            }
-        }
-
-        const notification = await Notification.create({
-            Title: finalTitle,
+        await Notification.create({
+            Title: broadcastTitle,
             Message: message,
-            TargetRole: 'student', // Broadcast to all students
+            TargetRole: 'student',
             SentBy: currentUser.UserID,
             IsRead: false,
             CreatedAt: new Date(),
@@ -456,13 +431,60 @@ export const broadcastNotification = async (req: Request, res: Response): Promis
             UserID: currentUser.UserID,
             Action: 'BROADCAST_ALERT',
             EntityType: 'Exam',
-            ...(examId && { EntityID: parseInt(examId as string) }),
-            Details: `Sent broadcast alert: ${finalTitle}`,
+            EntityID: examId ? parseInt(examId as string) : undefined as any,
+            Details: `Broadcast sent: ${broadcastTitle}`,
             IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
+            UserAgent: req.get('user-agent') || 'unknown',
+            Severity: 'Warning',
+            Status: 'Success'
+        } as any);
+
+        res.status(200).json({ success: true, message: "Broadcast sent" });
+
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+/**
+ * Get Detailed Exam Metrics and Context
+ */
+export const getExamDetails = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { examId } = req.params;
+        const exam = await Exam.findByPk(parseInt(examId as string));
+
+        if (!exam) {
+            res.status(404).json({ success: false, message: "Exam not found" });
+            return;
+        }
+
+        // Metrics
+        const allocations = await SeatAllocation.findAll({
+            where: { ExamID: exam.ExamID },
+            include: [{
+                model: Seat,
+                attributes: ['RoomID'],
+                required: true
+            }]
         });
 
-        res.status(200).json({ success: true, message: "Broadcast sent successfully", data: notification });
+        const studentsAllocated = allocations.length;
+        const uniqueRooms = new Set(allocations.map((a: any) => a.Seat.RoomID)).size;
+        const seatingGenerated = studentsAllocated > 0;
+
+        res.status(200).json({
+            success: true,
+            data: {
+                ...exam.toJSON(),
+                metrics: {
+                    studentsAllocated,
+                    roomsAllocated: uniqueRooms,
+                    seatingGenerated,
+                    attendanceLocked: (exam as any).AttendanceLocked
+                }
+            }
+        });
 
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });

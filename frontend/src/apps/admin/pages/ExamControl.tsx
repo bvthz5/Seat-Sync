@@ -1,51 +1,59 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardBody, Tabs, Tab, Button, Input, Chip, Textarea, Tooltip } from '@heroui/react';
-import {
-    ShieldAlert,
-    AlertTriangle,
-    Eye,
-    EyeOff,
-    Lock,
-    RefreshCw,
-    Mic,
-    Activity,
-    Search,
-    Play,
-    Pause,
-    XCircle,
-    CheckCircle2,
-    Building2,
-    Users
-} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { ExamControlService } from '../services/examControlService';
-// import { ConfirmationModal } from '../components/ConfirmationModal'; // Assuming it exists
-import toast from 'react-hot-toast';
-import { format } from 'date-fns';
+import { useAuth } from '../../../hooks/useAuth';
+import { toast } from '../../../utils/toast';
+import { useNavigate } from 'react-router-dom';
+import { ExamStatsCards } from '../components/exam-control/ExamStatsCards';
+import { ExamListTable } from '../components/exam-control/ExamListTable';
+import { ManagementConsole } from '../components/exam-control/ManagementConsole';
+import { EmergencyPanel } from '../components/exam-control/EmergencyPanel';
+import { AuditLogs } from '../components/exam-control/AuditLogs';
+import { Exam, ExamStatus, ActivityLog } from '../types/examControl';
+import { Tabs, Tab, Button, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Switch } from '@heroui/react';
+import { RefreshCcw, LayoutDashboard, ShieldAlert, Settings, AlertTriangle, ChevronDown, Lock } from 'lucide-react';
 
 const ExamControl: React.FC = () => {
-    const [stats, setStats] = useState<any>(null);
-    const [exams, setExams] = useState<any[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState('active');
+    const { user, isLoading: authLoading } = useAuth();
+    const navigate = useNavigate();
 
-    // Emergency Actions State
-    const [selectedExamId, setSelectedExamId] = useState<string>("");
-    const [regenerateRoomIds, setRegenerateRoomIds] = useState("");
-    const [disableRoomId, setDisableRoomId] = useState("");
-    const [broadcastMsg, setBroadcastMsg] = useState("");
+    const [exams, setExams] = useState<Exam[]>([]);
+    const [stats, setStats] = useState<any>({});
+    const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
+    const [logs, setLogs] = useState<ActivityLog[]>([]); // Global logs
+    const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState('overview');
+    const [page, setPage] = useState(1);
+    const [total, setTotal] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
 
-    // Refresh Data
-    const fetchData = async () => {
-        setLoading(true);
-        try {
-            const data = await ExamControlService.getOverview(); // returns { success: true, data: { exams, statusCounts } }
-            if (data.success) {
-                setExams(data.data.exams);
-                setStats(data.data.statusCounts);
+    // Crisis Mode
+    const [emergencyMode, setEmergencyMode] = useState(false);
+
+    useEffect(() => {
+        if (!authLoading && user) {
+            if (user.Role !== 'exam_admin') {
+                // Access check logic if needed
             }
+        }
+    }, [user, authLoading]);
+
+    const fetchData = async () => {
+        try {
+            setLoading(true);
+            const overview = await ExamControlService.getOverview(page, 10);
+            setExams(overview.data.exams);
+            setStats(overview.data.statusCounts);
+            setTotal(overview.data.total);
+            setTotalPages(overview.data.totalPages);
+
+            // Fetch global logs only if on dashboard or no exam selected
+            if (!selectedExam) {
+                const logData = await ExamControlService.getLogs();
+                setLogs(logData.data);
+            }
+
         } catch (error) {
-            console.error("Failed to fetch exam control data", error);
-            toast.error("Failed to load exam data");
+            toast.error("Failed to load Exam Control data");
         } finally {
             setLoading(false);
         }
@@ -53,441 +61,233 @@ const ExamControl: React.FC = () => {
 
     useEffect(() => {
         fetchData();
-    }, []);
+    }, [page]);
 
-    // Actions
-    const handleStatusChange = async (examId: number, status: string) => {
-        if (!confirm(`Are you sure you want to change status to ${status}?`)) return;
-        try {
-            await ExamControlService.updateStatus(examId, status, "Manual override from Control Panel");
-            toast.success(`Exam status updated to ${status}`);
-            fetchData();
-        } catch (e: any) {
-            toast.error(e.response?.data?.message || "Failed to update status");
-        }
-    };
-
-    const handleVisibility = async (examId: number, visible: boolean) => {
-        try {
-            await ExamControlService.toggleVisibility(examId, visible, "Manual visibility toggle");
-            toast.success(`Exam ${visible ? 'Published' : 'Hidden'} successfully`);
-            fetchData();
-        } catch (e: any) {
-            toast.error(e.response?.data?.message || "Failed to toggle visibility");
-        }
-    };
-
-    const handleEmergencyRegenerate = async () => {
-        if (!selectedExamId || !roomIdInput) {
-            toast.error("Select Exam and Enter Room ID(s)");
-            return;
-        }
-        if (!confirm(`EMERGENCY: Are you sure you want to regenerate seating for Exam ID ${selectedExamId} excluding Room IDs [${roomIdInput}]? This cannot be undone.`)) return;
-
-        const rooms = roomIdInput.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
-
-        try {
-            const res = await ExamControlService.emergencyAllocate(parseInt(selectedExamId), rooms);
-            if (res.success) {
-                toast.success(res.message);
-                fetchData();
-            }
-        } catch (e: any) {
-            toast.error(e.response?.data?.message || "Regeneration Failed");
-        }
-    };
-
-    const handleDisableRoom = async () => {
-        if (!roomIdInput) return toast.error("Enter Room ID");
-        if (!confirm(`CRITICAL: Disable Room ID ${roomIdInput} globally? This will affect ALL exams.`)) return;
-
-        try {
-            const res = await ExamControlService.disableRoom(parseInt(roomIdInput), "Emergency Manual Disable");
-            toast.success(res.message);
-        } catch (e: any) {
-            toast.error(e.response?.data?.message || "Disable Failed");
-        }
-    };
-
-    const handleBroadcast = async () => {
-        if (!broadcastMsg) return toast.error("Enter message");
-        try {
-            const targetExam = selectedExamId ? parseInt(selectedExamId) : 0;
-            await ExamControlService.broadcast(targetExam, "Admin Broadcast", broadcastMsg, "Emergency");
-            toast.success("Broadcast sent");
-            setBroadcastMsg("");
-        } catch (e: any) {
-            toast.error("Broadcast failed");
-        }
-    };
-
-    const handleLockAttendance = async (examId: number) => {
-        if (!confirm("Available only for Completed exams. Lock attendance now?")) return;
-        try {
-            await ExamControlService.lockAttendance(examId);
-            toast.success("Attendance locked");
-            fetchData();
-        } catch (e: any) {
-            toast.error("Lock failed");
-        }
-    };
-
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'Draft': return 'default';
-            case 'Ready': return 'primary';
-            case 'Published': return 'secondary';
-            case 'In Progress': return 'success';
-            case 'Completed': return 'success';
-            case 'Cancelled': return 'danger';
-            case 'Paused': return 'warning';
-            default: return 'default';
-        }
+    const handleExamSelect = (exam: Exam) => {
+        setSelectedExam(exam);
+        setActiveTab('manage');
     };
 
     return (
-        <div className="p-6 max-w-[1600px] mx-auto min-h-screen space-y-8">
+        <div className="min-h-screen bg-slate-50/50 p-6 md:p-8 space-y-8 font-sans">
             {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/50 backdrop-blur-sm p-4 rounded-2xl border border-slate-100 shadow-sm">
                 <div>
-                    <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-                        <ShieldAlert className="text-rose-600" size={32} />
+                    <h1 className="text-3xl font-black text-slate-800 tracking-tight">
                         Exam Control Center
                     </h1>
-                    <p className="text-slate-500 font-medium mt-1">
-                        Root-level operations, emergency handling, and lifecycle management.
-                    </p>
+                    <p className="text-slate-500 font-medium">Root Access • Enterprise Lifecycle Management</p>
                 </div>
                 <div className="flex gap-3">
                     <Button
-                        startContent={<RefreshCw size={18} />}
-                        onClick={fetchData}
-                        isLoading={loading}
                         variant="flat"
-                        className="bg-white border border-slate-200 shadow-sm font-semibold"
+                        color="secondary"
+                        onPress={fetchData}
+                        isLoading={loading}
+                        startContent={<RefreshCcw className="w-4 h-4" />}
+                        className="font-semibold"
                     >
-                        Refresh Data
+                        Sync Data
                     </Button>
                 </div>
             </div>
 
-            {/* Stats Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard
-                    title="Active / Running"
-                    value={stats?.['In Progress'] || 0}
-                    icon={<Activity className="text-emerald-500" />}
-                    color="bg-emerald-50 border-emerald-100"
-                />
-                <StatCard
-                    title="Published & Ready"
-                    value={(stats?.['Published'] || 0) + (stats?.['Ready'] || 0)}
-                    icon={<CheckCircle2 className="text-blue-500" />}
-                    color="bg-blue-50 border-blue-100"
-                />
-                <StatCard
-                    title="Draft / Planning"
-                    value={stats?.['Draft'] || 0}
-                    icon={<Building2 className="text-slate-500" />}
-                    color="bg-slate-50 border-slate-100"
-                />
-                <StatCard
-                    title="Emergency Mode"
-                    value={stats?.['Emergency'] || 0}
-                    icon={<AlertTriangle className="text-rose-500" />}
-                    color="bg-rose-50 border-rose-100"
-                    danger={true}
-                />
-            </div>
-
-            {/* Main Interface */}
             <Tabs
                 aria-label="Control Modes"
-                color="primary"
-                variant="underlined"
-                classNames={{
-                    tabList: "gap-6 w-full relative rounded-none p-0 border-b border-divider",
-                    cursor: "w-full bg-indigo-600",
-                    tab: "max-w-fit px-0 h-12",
-                    tabContent: "group-data-[selected=true]:text-indigo-600 font-bold text-base"
-                }}
                 selectedKey={activeTab}
-                onSelectionChange={(k) => setActiveTab(k as string)}
+                onSelectionChange={(key) => setActiveTab(key as string)}
+                variant="underlined"
+                color="secondary"
+                classNames={{
+                    tabList: "gap-8 w-full relative rounded-none p-0 border-b border-slate-200 mb-6",
+                    cursor: "w-full bg-indigo-600 h-1",
+                    tab: "max-w-fit px-2 h-10 text-slate-500 font-medium",
+                    tabContent: "group-data-[selected=true]:text-indigo-600 group-data-[selected=true]:font-bold text-base"
+                }}
             >
-                <Tab key="active" title={
-                    <div className="flex items-center gap-2">
-                        <Activity size={18} />
-                        <span>Lifecycle Management</span>
-                    </div>
-                }>
-                    <div className="mt-6 space-y-6">
-                        {/* Exam List */}
-                        <Card className="border-slate-200 shadow-sm">
-                            <CardBody className="p-0">
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-left text-sm">
-                                        <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
-                                            <tr>
-                                                <th className="px-6 py-4">Exam Name</th>
-                                                <th className="px-6 py-4">Date & Session</th>
-                                                <th className="px-6 py-4">Status</th>
-                                                <th className="px-6 py-4">Controls</th>
-                                                <th className="px-6 py-4 text-right">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100">
-                                            {exams.map((exam) => (
-                                                <tr key={exam.ExamID} className="hover:bg-slate-50 transition-colors">
-                                                    <td className="px-6 py-4">
-                                                        <div className="font-bold text-slate-900">{exam.ExamName}</div>
-                                                        <div className="text-xs text-slate-500">ID: {exam.ExamID}</div>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <div className="font-medium text-slate-700">{format(new Date(exam.ExamDate), 'MMM dd, yyyy')}</div>
-                                                        <div className="text-xs text-slate-500">{exam.StartTime} - {exam.EndTime}</div>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <Chip
-                                                            size="sm"
-                                                            color={getStatusColor(exam.Status) as any}
-                                                            variant="flat"
-                                                            className="font-bold uppercase"
-                                                        >
-                                                            {exam.Status}
-                                                        </Chip>
-                                                        {exam.IsEmergencyMode && (
-                                                            <Chip size="sm" color="danger" variant="dot" className="ml-2">Emerg.</Chip>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex gap-2">
-                                                            {exam.Status === 'Published' && (
-                                                                <Tooltip content="Hide from students">
-                                                                    <Button isIconOnly size="sm" variant="light" color="warning" onClick={() => handleVisibility(exam.ExamID, false)}>
-                                                                        <EyeOff size={18} />
-                                                                    </Button>
-                                                                </Tooltip>
-                                                            )}
-                                                            {exam.Status === 'Ready' && (
-                                                                <Tooltip content="Publish to students">
-                                                                    <Button isIconOnly size="sm" variant="light" color="success" onClick={() => handleVisibility(exam.ExamID, true)}>
-                                                                        <Eye size={18} />
-                                                                    </Button>
-                                                                </Tooltip>
-                                                            )}
-                                                            {exam.Status === 'In Progress' && (
-                                                                <>
-                                                                    <Tooltip content="Pause Exam">
-                                                                        <Button isIconOnly size="sm" variant="light" color="warning" onClick={() => handleStatusChange(exam.ExamID, 'Paused')}>
-                                                                            <Pause size={18} />
-                                                                        </Button>
-                                                                    </Tooltip>
-                                                                    <Tooltip content="End Exam">
-                                                                        <Button isIconOnly size="sm" variant="light" color="success" onClick={() => handleStatusChange(exam.ExamID, 'Completed')}>
-                                                                            <CheckCircle2 size={18} />
-                                                                        </Button>
-                                                                    </Tooltip>
-                                                                </>
-                                                            )}
-                                                            {['Draft', 'Ready'].includes(exam.Status) && (
-                                                                <Tooltip content="Start Exam">
-                                                                    <Button isIconOnly size="sm" variant="light" color="primary" onClick={() => handleStatusChange(exam.ExamID, 'In Progress')}>
-                                                                        <Play size={18} />
-                                                                    </Button>
-                                                                </Tooltip>
-                                                            )}
-                                                            {exam.Status === 'Completed' && (
-                                                                <Tooltip content="Lock Attendance">
-                                                                    <Button isIconOnly size="sm" variant="light" color="danger" isDisabled={exam.AttendanceLocked} onClick={() => handleLockAttendance(exam.ExamID)}>
-                                                                        {exam.AttendanceLocked ? <Lock size={18} /> : <div className="animate-pulse"><Lock size={18} /></div>}
-                                                                    </Button>
-                                                                </Tooltip>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-right">
-                                                        <Button
-                                                            size="sm"
-                                                            color="danger"
-                                                            variant="light"
-                                                            onClick={() => handleStatusChange(exam.ExamID, 'Cancelled')}
-                                                            isDisabled={exam.Status === 'Cancelled'}
-                                                        >
-                                                            Cancel
-                                                        </Button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                <Tab
+                    key="overview"
+                    title={
+                        <div className="flex items-center space-x-2">
+                            <LayoutDashboard className="w-5 h-5" />
+                            <span>Dashboard</span>
+                        </div>
+                    }
+                >
+                    <div className="space-y-8 mt-2">
+                        {/* Metrics Cards */}
+                        <ExamStatsCards
+                            total={exams.length}
+                            draft={stats.Draft || 0}
+                            ready={stats.Ready || 0}
+                            published={stats.Published || 0}
+                            inProgress={stats['In Progress'] || 0}
+                            completed={stats.Completed || 0}
+                            emergency={stats.Emergency || 0}
+                            locked={stats.Locked || 0}
+                        />
+
+                        {/* Lifecycle Distribution Bar */}
+                        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Lifecycle Distribution</h3>
+                            <div className="flex h-4 w-full rounded-full overflow-hidden bg-slate-100">
+                                <div style={{ width: `${((stats.Draft || 0) / total) * 100}%` }} className="bg-amber-300 h-full" title={`Draft: ${stats.Draft || 0}`} />
+                                <div style={{ width: `${((stats.Ready || 0) / total) * 100}%` }} className="bg-yellow-400 h-full" title={`Ready: ${stats.Ready || 0}`} />
+                                <div style={{ width: `${((stats.Published || 0) / total) * 100}%` }} className="bg-green-500 h-full" title={`Published: ${stats.Published || 0}`} />
+                                <div style={{ width: `${((stats['In Progress'] || 0) / total) * 100}%` }} className="bg-blue-500 h-full" title={`In Progress: ${stats['In Progress'] || 0}`} />
+                                <div style={{ width: `${((stats.Completed || 0) / total) * 100}%` }} className="bg-slate-600 h-full" title={`Completed: ${stats.Completed || 0}`} />
+                            </div>
+                            <div className="flex justify-between text-xs text-slate-400 font-mono mt-2">
+                                <span>Draft: {stats.Draft || 0}</span>
+                                <span>Ready: {stats.Ready || 0}</span>
+                                <span>Published: {stats.Published || 0}</span>
+                                <span>In Progress: {stats['In Progress'] || 0}</span>
+                                <span>Completed: {stats.Completed || 0}</span>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-8 grid-cols-1 xl:grid-cols-4 grid">
+                            <div className="xl:col-span-3">
+                                <ExamListTable
+                                    exams={exams}
+                                    onSelectExam={handleExamSelect}
+                                    currentSelectionId={selectedExam?.ExamID}
+                                    total={total}
+                                    page={page}
+                                    totalPages={totalPages}
+                                    onPageChange={setPage}
+                                />
+                            </div>
+                            <div className="xl:col-span-1">
+                                <div className="sticky top-6">
+                                    <div className="mb-2 flex items-center gap-2 text-slate-500 font-bold text-sm uppercase tracking-wider">
+                                        <ShieldAlert className="w-4 h-4" /> Global Audit Log
+                                    </div>
+                                    <AuditLogs logs={logs} />
                                 </div>
-                            </CardBody>
-                        </Card>
+                            </div>
+                        </div>
                     </div>
                 </Tab>
 
-                <Tab key="emergency" title={
-                    <div className="flex items-center gap-2 text-rose-600">
-                        <AlertTriangle size={18} />
-                        <span>Emergency Center</span>
-                    </div>
-                }>
-                    <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <Tab
+                    key="manage"
+                    title={
+                        <div className="flex items-center space-x-2">
+                            <Settings className="w-5 h-5" />
+                            <span>Management Console</span>
+                        </div>
+                    }
+                >
+                    {!selectedExam ? (
+                        <div className="flex flex-col items-center justify-center py-24 bg-white rounded-2xl border border-dashed border-slate-300 mt-2">
+                            <div className="bg-indigo-50 p-6 rounded-full mb-6">
+                                <Settings className="w-12 h-12 text-indigo-400" />
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-800">No Exam Selected</h3>
+                            <p className="text-slate-500 max-w-md text-center mt-2 mb-8">
+                                Select an exam to access strict lifecycle controls, candidate constraints, and rapid operational overrides.
+                            </p>
 
-                        {/* Seating Regeneration */}
-                        <Card className="border-rose-200 bg-rose-50/50 shadow-sm">
-                            <CardBody className="p-6 space-y-4">
-                                <div className="flex items-center gap-3 mb-2">
-                                    <div className="p-2 bg-rose-100 rounded-lg text-rose-600">
-                                        <RefreshCw size={24} />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-bold text-rose-900">Emergency Seating Update</h3>
-                                        <p className="text-sm text-rose-700">Reallocate students from compromised rooms.</p>
-                                    </div>
-                                </div>
-                                <div className="space-y-4 bg-white p-4 rounded-xl border border-rose-100">
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Target Exam</label>
-                                        <select
-                                            className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-slate-50"
-                                            value={selectedExamId}
-                                            onChange={(e) => setSelectedExamId(e.target.value)}
-                                        >
-                                            <option value="">Select Exam...</option>
-                                            {exams.map(e => <option key={e.ExamID} value={e.ExamID}>{e.ExamName}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Exclude Room IDs (comma separated)</label>
-                                        <Input
-                                            placeholder="e.g. 101, 102"
-                                            value={regenerateRoomIds}
-                                            onChange={(e) => setRegenerateRoomIds(e.target.value)}
-                                            size="sm"
-                                        />
-                                    </div>
-                                    <Button color="danger" className="w-full font-bold shadow-lg shadow-rose-500/20" onClick={handleEmergencyRegenerate}>
-                                        Execute Relocation
+                            <Dropdown>
+                                <DropdownTrigger>
+                                    <Button
+                                        variant="shadow"
+                                        color="primary"
+                                        size="lg"
+                                        endContent={<ChevronDown className="w-4 h-4" />}
+                                        className="font-bold text-white bg-indigo-600"
+                                    >
+                                        Select Exam to Manage
                                     </Button>
-                                </div>
-                            </CardBody>
-                        </Card>
-
-                        {/* Room Disable */}
-                        <Card className="border-amber-200 bg-amber-50/50 shadow-sm">
-                            <CardBody className="p-6 space-y-4">
-                                <div className="flex items-center gap-3 mb-2">
-                                    <div className="p-2 bg-amber-100 rounded-lg text-amber-600">
-                                        <XCircle size={24} />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-bold text-amber-900">Disable Specific Room</h3>
-                                        <p className="text-sm text-amber-700">Mark room as unusable and auto-reallocate active exams.</p>
-                                    </div>
-                                </div>
-                                <div className="space-y-4 bg-white p-4 rounded-xl border border-amber-100">
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Room ID</label>
-                                        <Input
-                                            placeholder="e.g. 105"
-                                            value={disableRoomId}
-                                            onChange={(e) => setDisableRoomId(e.target.value)}
-                                            size="sm"
-                                        />
-                                    </div>
-                                    <Button className="w-full bg-amber-500 text-white font-bold shadow-lg shadow-amber-500/20" onClick={handleDisableRoom}>
-                                        Disable & Reallocate
-                                    </Button>
-                                </div>
-                            </CardBody>
-                        </Card>
-
-                        {/* Broadcast */}
-                        <Card className="border-blue-200 bg-blue-50/50 shadow-sm col-span-1 lg:col-span-2">
-                            <CardBody className="p-6 space-y-4">
-                                <div className="flex items-center gap-3 mb-2">
-                                    <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
-                                        <Mic size={24} />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-bold text-blue-900">Emergency Broadcast</h3>
-                                        <p className="text-sm text-blue-700">Send urgent notification to student dashboards.</p>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white p-4 rounded-xl border border-blue-100">
-                                    <div className="space-y-4">
-                                        <div>
-                                            <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Context (Optional)</label>
-                                            <select
-                                                className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-slate-50"
-                                                value={selectedExamId}
-                                                onChange={(e) => setSelectedExamId(e.target.value)}
-                                            >
-                                                <option value="">Global Broadcast (No specific exam)</option>
-                                                {exams.map(e => <option key={e.ExamID} value={e.ExamID}>{e.ExamName}</option>)}
-                                            </select>
-                                        </div>
-                                        <Button color="primary" className="w-full font-bold" onClick={handleBroadcast}>
-                                            Transmit Message
-                                        </Button>
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Message Content</label>
-                                        <Textarea
-                                            placeholder="Type your emergency message here..."
-                                            minRows={4}
-                                            value={broadcastMsg}
-                                            onChange={(e) => setBroadcastMsg(e.target.value)}
-                                        />
-                                    </div>
-                                </div>
-                            </CardBody>
-                        </Card>
-
-                    </div>
+                                </DropdownTrigger>
+                                <DropdownMenu
+                                    aria-label="Select Exam"
+                                    className="max-h-80 overflow-y-auto"
+                                    onAction={(key) => {
+                                        const selected = exams.find(e => e.ExamID === Number(key));
+                                        if (selected) handleExamSelect(selected);
+                                    }}
+                                >
+                                    {exams.map(e => (
+                                        <DropdownItem key={e.ExamID} description={e.Session} startContent={<div className={`w-2 h-2 rounded-full ${e.Status === 'Published' ? 'bg-green-500' : 'bg-slate-300'}`} />}>
+                                            {e.ExamName}
+                                        </DropdownItem>
+                                    ))}
+                                </DropdownMenu>
+                            </Dropdown>
+                        </div>
+                    ) : (
+                        <div className="mt-2">
+                            <ManagementConsole
+                                exam={selectedExam}
+                                allExams={exams}
+                                onRefresh={fetchData}
+                                onSelectExam={handleExamSelect}
+                            />
+                        </div>
+                    )}
                 </Tab>
 
-                <Tab key="logs" title={
-                    <div className="flex items-center gap-2">
-                        <Users size={18} />
-                        <span>Audit Trail</span>
-                    </div>
-                }>
-                    <div className="mt-6">
-                        {/* Placeholder for logs component, can use ActivityFeed logic later */}
-                        <Card className="border-slate-200">
-                            <CardBody className="p-8 text-center text-slate-500">
-                                <Activity size={48} className="mx-auto mb-4 opacity-20" />
-                                <p>Audit logs are being recorded. Full browser coming soon.</p>
-                            </CardBody>
-                        </Card>
+                <Tab
+                    key="emergency"
+                    title={
+                        <div className="flex items-center space-x-2 text-red-600">
+                            <ShieldAlert className="w-5 h-5" />
+                            <span>Crisis Center</span>
+                        </div>
+                    }
+                >
+                    <div className={`mt-2 min-h-[500px] flex flex-col transition-all duration-500 rounded-3xl overflow-hidden ${emergencyMode ? 'bg-red-50 border-4 border-red-500' : 'bg-slate-100 border border-slate-200'}`}>
+                        {/* Emergency Toggle Header */}
+                        <div className={`p-8 flex justify-between items-center ${emergencyMode ? 'bg-red-600 text-white' : 'bg-white'}`}>
+                            <div>
+                                <h2 className={`text-2xl font-black ${emergencyMode ? 'text-white' : 'text-slate-800'}`}>Emergency Operations Center</h2>
+                                <p className={`font-medium ${emergencyMode ? 'text-red-100' : 'text-slate-500'}`}>
+                                    {emergencyMode ? 'CRITICAL MODE ACTIVE - ACTIONS LOGGED WITH HIGH PRIORITY' : 'Standard Mode - Emergency protocols standby'}
+                                </p>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <span className={`text-sm font-bold uppercase tracking-wider ${emergencyMode ? 'text-white' : 'text-slate-500'}`}>
+                                    {emergencyMode ? 'ARMED' : 'DISARMED'}
+                                </span>
+                                <Switch
+                                    isSelected={emergencyMode}
+                                    onValueChange={setEmergencyMode}
+                                    size="lg"
+                                    color="danger"
+                                    startContent={<ShieldAlert className="text-white" />}
+                                    endContent={<Lock className="text-slate-600" />}
+                                    classNames={{
+                                        wrapper: "group-data-[selected=true]:bg-white bg-slate-300",
+                                        thumb: "bg-white group-data-[selected=true]:bg-red-600",
+                                    }}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="p-8 flex-1 flex items-center justify-center">
+                            {!emergencyMode ? (
+                                <div className="text-center max-w-lg opacity-75">
+                                    <Lock className="w-24 h-24 mx-auto mb-6 text-slate-400" />
+                                    <h3 className="text-2xl font-bold text-slate-600">Panel Locked</h3>
+                                    <p className="text-slate-500 mt-2 font-medium">Toggle the emergency switch to access evacuation, global broadcast, and kill-switch controls.</p>
+                                </div>
+                            ) : (
+                                <div className="w-full max-w-4xl animate-in zoom-in-95 duration-200">
+                                    <EmergencyPanel
+                                        examId={selectedExam?.ExamID}
+                                        examName={selectedExam?.ExamName}
+                                        onActionComplete={fetchData}
+                                    />
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </Tab>
             </Tabs>
         </div>
     );
 };
-
-// Helper Component for Stats
-function StatCard({ title, value, icon, color, danger }: any) {
-    return (
-        <div className={`p-6 rounded-2xl border ${color} relative overflow-hidden group`}>
-            <div className="flex justify-between items-start z-10 relative">
-                <div>
-                    <p className={`text-sm font-bold uppercase tracking-wider ${danger ? 'text-rose-600' : 'text-slate-500'}`}>{title}</p>
-                    <p className={`text-3xl font-black mt-2 ${danger ? 'text-rose-700' : 'text-slate-900'}`}>{value}</p>
-                </div>
-                <div className={`p-3 rounded-xl bg-white/80 shadow-sm ${danger ? 'text-rose-600' : 'text-slate-600'}`}>
-                    {icon}
-                </div>
-            </div>
-            {/* Background decoration */}
-            <div className={`absolute -right-6 -bottom-6 opacity-10 scale-150 transform rotate-12 group-hover:scale-120 transition-transform duration-500`}>
-                {React.cloneElement(icon, { size: 100 })}
-            </div>
-        </div>
-    );
-}
 
 export default ExamControl;

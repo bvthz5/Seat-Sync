@@ -208,7 +208,120 @@ export const invalidateAllTokens = async (req: Request, res: Response): Promise<
 };
 
 /**
- * Get session statistics
+ * Get comprehensive dashboard stats
+ */
+export const getDashboardStats = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+
+        const last7Days = new Date(today);
+        last7Days.setDate(last7Days.getDate() - 7);
+
+        // 1. Active Sessions Count
+        const activeSessionsCount = await ActiveSession.count({
+            where: {
+                IsActive: true,
+                ExpiresAt: { [Op.gt]: new Date() }
+            }
+        });
+
+        // 2. Failed Logins (Last 24h)
+        const failedLogins24h = await ActivityLog.count({
+            where: {
+                Action: 'LOGIN_FAILED',
+                Timestamp: { [Op.gte]: yesterday }
+            }
+        });
+
+        // 3. Root Admin Logins (Last 24h)
+        // We need to join with User to check for root admin role
+        const rootLogins24h = await ActivityLog.count({
+            where: {
+                Action: 'LOGIN_SUCCESS',
+                Timestamp: { [Op.gte]: yesterday }
+            },
+            include: [{
+                model: User,
+                where: { Role: 'root_admin' }
+            }]
+        });
+
+        // 4. Security Alerts (Heuristic: Critical events + Failed logins > threshold)
+        const criticalEvents = await ActivityLog.count({
+            where: {
+                Severity: 'Critical',
+                Status: 'Failure', // Only failed critical actions or specifically flagged ones
+                Timestamp: { [Op.gte]: yesterday }
+            }
+        });
+        const openAlerts = criticalEvents + (failedLogins24h > 5 ? 1 : 0); // Example heuristic
+
+        // 5. Login Activity Graph (Last 7 Days)
+        const loginActivity = [];
+        for (let i = 6; i >= 0; i--) {
+            const date = new Date(today);
+            date.setDate(date.getDate() - i);
+            const startOfDay = new Date(date.setHours(0, 0, 0, 0));
+            const endOfDay = new Date(date.setHours(23, 59, 59, 999));
+
+            const successful = await ActivityLog.count({
+                where: {
+                    Action: 'LOGIN_SUCCESS',
+                    Timestamp: { [Op.between]: [startOfDay, endOfDay] }
+                }
+            });
+
+            const failed = await ActivityLog.count({
+                where: {
+                    Action: 'LOGIN_FAILED',
+                    Timestamp: { [Op.between]: [startOfDay, endOfDay] }
+                }
+            });
+
+            const root = await ActivityLog.count({
+                where: {
+                    Action: 'LOGIN_SUCCESS',
+                    Timestamp: { [Op.between]: [startOfDay, endOfDay] }
+                },
+                include: [{
+                    model: User,
+                    where: { Role: 'root_admin' }
+                }]
+            });
+
+            loginActivity.push({
+                date: startOfDay.toISOString().split('T')[0],
+                successful,
+                failed,
+                root
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: {
+                activeSessions: activeSessionsCount,
+                failedLogins24h,
+                rootLogins24h,
+                alerts: openAlerts,
+                loginActivity
+            }
+        });
+
+    } catch (error: any) {
+        console.error("Error fetching dashboard stats:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch dashboard stats",
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Get session statistics (Legacy - kept for backward compatibility if needed)
  */
 export const getSessionStats = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -235,15 +348,15 @@ export const getSessionStats = async (req: Request, res: Response): Promise<void
                     attributes: ['Role']
                 }
             ],
-            attributes: []
+            attributes: ['UserID'] // Minimal attributes
         });
 
-        // Count by role
-        const roleStats = byRole.reduce((acc: any, session: any) => {
+        // Count by role manually since we're fetching all
+        const roleStats: Record<string, number> = {};
+        byRole.forEach((session: any) => {
             const role = session.user?.Role || 'unknown';
-            acc[role] = (acc[role] || 0) + 1;
-            return acc;
-        }, {});
+            roleStats[role] = (roleStats[role] || 0) + 1;
+        });
 
         res.status(200).json({
             success: true,

@@ -20,6 +20,7 @@
     "react-router-dom": "^7.12.0",
     "react-spinners": "^0.17.0",
     "recharts": "^3.6.0",
+    "socket.io-client": "^4.8.3",
     "tailwind-merge": "^3.4.0",
     "three": "^0.182.0",
     "vanta": "^0.5.24",

@@ -7,7 +7,8 @@ import {
     disableRoomEmergency,
     lockAttendance,
     getExamActivityLogs,
-    broadcastNotification
+    broadcastNotification,
+    getExamDetails
 } from "../controllers/examControl.controller.js";
 import { AuthMiddleware } from "../middlewares/auth.middleware.js";
 
@@ -96,5 +97,15 @@ router.patch("/:examId/lock-attendance", lockAttendance);
  *     tags: [Exam Control]
  */
 router.post("/:examId/broadcast", broadcastNotification);
+
+
+/**
+ * @swagger
+ * /api/exam-control/{examId}/details:
+ *   get:
+ *     summary: Get Detailed Exam Context
+ *     tags: [Exam Control]
+ */
+router.get("/:examId/details", getExamDetails);
 
 export default router;
