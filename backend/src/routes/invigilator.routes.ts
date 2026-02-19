@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getAllInvigilators, createInvigilator, deleteInvigilator, getInvigilatorStats, toggleInvigilatorFlag, toggleInvigilatorEligibility } from "../controllers/invigilator.controller.js";
+import { getAllInvigilators, createInvigilator, deleteInvigilator, getInvigilatorStats, toggleInvigilatorFlag, toggleInvigilatorEligibility, bulkImportInvigilators } from "../controllers/invigilator.controller.js";
 import { AuthMiddleware } from "../middlewares/auth.middleware.js";
 
 const router = Router();
@@ -78,6 +78,7 @@ router.get("/stats", getInvigilatorStats);
  *         description: Email already exists
  */
 router.post("/", createInvigilator);
+router.post("/bulk-import", bulkImportInvigilators);
 
 /**
  * @swagger

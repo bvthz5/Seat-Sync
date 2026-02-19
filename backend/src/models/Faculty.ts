@@ -1,6 +1,5 @@
 import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from "../config/database.js";
-import { Department } from "./Department.js";
 
 /**
  * Faculty table attributes
@@ -9,9 +8,10 @@ interface FacultyAttributes {
     FacultyID: number;
     Name: string;
     Designation: string;
+    /** Plain-text department string imported from Excel */
+    Department: string;
     ProfileImageURL?: string;
     IsEligible: boolean;
-    DepartmentID: number;
 }
 
 /**
@@ -24,10 +24,9 @@ export class Faculty extends Model<FacultyAttributes, FacultyCreationAttributes>
     declare FacultyID: number;
     declare Name: string;
     declare Designation: string;
+    declare Department: string;
     declare ProfileImageURL?: string;
     declare IsEligible: boolean;
-    declare DepartmentID: number;
-    declare Department?: Department;
 }
 
 Faculty.init(
@@ -45,22 +44,19 @@ Faculty.init(
             type: DataTypes.STRING(150),
             allowNull: false,
         },
+        Department: {
+            type: DataTypes.STRING(150),
+            allowNull: false,
+            defaultValue: "",
+        },
         ProfileImageURL: {
-            type: DataTypes.STRING(2048), // URL can be long
+            type: DataTypes.STRING(2048),
             allowNull: true,
         },
         IsEligible: {
             type: DataTypes.BOOLEAN,
             allowNull: false,
             defaultValue: true,
-        },
-        DepartmentID: {
-            type: DataTypes.INTEGER,
-            allowNull: false,
-            references: {
-                model: "Departments",
-                key: "DepartmentID",
-            },
         },
     },
     {
@@ -69,12 +65,5 @@ Faculty.init(
         timestamps: false,
     }
 );
-
-/**
- * Associations
- */
-Faculty.belongsTo(Department, {
-    foreignKey: "DepartmentID",
-});
 
 export default Faculty;

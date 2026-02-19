@@ -250,6 +250,18 @@ async function ensureSchemaIntegrity() {
             BEGIN
                 IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Faculties]') AND name = 'IsEligible')
                 ALTER TABLE [dbo].[Faculties] ADD [IsEligible] BIT NOT NULL DEFAULT 1 WITH VALUES;
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Faculties]') AND name = 'Department')
+                BEGIN
+                    ALTER TABLE [dbo].[Faculties] ADD [Department] NVARCHAR(150) NOT NULL CONSTRAINT DF_Faculties_Department DEFAULT '' WITH VALUES;
+                    PRINT 'Added Department to Faculties';
+                END
+
+                -- Ensure DepartmentID is nullable (Fix for decoupling)
+                BEGIN
+                    ALTER TABLE [dbo].[Faculties] ALTER COLUMN [DepartmentID] INT NULL;
+                    PRINT 'Ensured Faculty.DepartmentID is nullable';
+                END
             END
         `, { type: QueryTypes.RAW });
 
@@ -326,6 +338,16 @@ async function ensureSchemaIntegrity() {
                 BEGIN
                     ALTER TABLE [dbo].[Exams] ADD [ConflictDetails] NVARCHAR(MAX) NULL;
                     PRINT 'Added ConflictDetails to Exams';
+                END
+
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') 
+                    AND name = 'ExamDate'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Exams] ADD [ExamDate] DATE NULL;
+                    PRINT 'Added ExamDate to Exams';
                 END
             END
         `, { type: QueryTypes.RAW });

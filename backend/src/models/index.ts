@@ -28,6 +28,7 @@ export { default as ExamSeries } from "./ExamSeries.js";
 export { default as Zone } from "./Zone.js";
 
 // Associations
+import ActivityLog from "./ActivityLog.js";
 import Department from "./Department.js";
 import Faculty from "./Faculty.js";
 import Invigilator from "./Invigilator.js";
@@ -38,15 +39,20 @@ import Room from "./Room.js";
 import Program from "./Program.js";
 
 // Define associations here to avoid circular imports in model files
+ActivityLog.belongsTo(User, {
+    foreignKey: "UserID",
+});
+
+User.hasMany(ActivityLog, {
+    foreignKey: "UserID",
+});
+
 Department.hasMany(Faculty, {
     foreignKey: "DepartmentID",
     as: "Faculties",
     onDelete: 'CASCADE'
 });
 
-Faculty.belongsTo(Department, {
-    foreignKey: "DepartmentID"
-});
 
 // Department-Invigilator Association
 Department.hasMany(Invigilator, {

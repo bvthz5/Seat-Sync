@@ -10,11 +10,7 @@ export interface Invigilator {
     isFlagged: boolean;
     isOnDuty?: boolean;
     totalExams?: number;
-    Department?: {
-        DepartmentID: number;
-        DepartmentCode: string;
-        DepartmentName: string;
-    };
+    Department?: string;
 }
 
 export interface InvigilatorStats {
@@ -55,5 +51,16 @@ export const invigilatorService = {
     toggleEligibility: async (id: number) => {
         const response = await api.patch(`/invigilators/${id}/toggle-eligibility`);
         return response.data;
+    },
+    bulkImport: async (rows: BulkImportRow[]) => {
+        const response = await api.post('/invigilators/bulk-import', { rows });
+        return response.data as { message: string; created: number; skipped: { row: number; reason: string }[] };
     }
 };
+
+export interface BulkImportRow {
+    FacultyID?: string | number;
+    Name: string;
+    Department: string;
+    Designation?: string;
+}

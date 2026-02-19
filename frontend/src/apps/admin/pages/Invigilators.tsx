@@ -1,20 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
     Button,
-    Card,
-    CardBody,
-    Table,
-    TableHeader,
-    TableColumn,
-    TableBody,
-    TableRow,
-    TableCell,
-    Chip,
-    Input,
-    Dropdown,
-    DropdownTrigger,
-    DropdownMenu,
-    DropdownItem,
     Modal,
     ModalContent,
     ModalHeader,
@@ -23,89 +9,119 @@ import {
     useDisclosure,
     Spinner,
     Pagination,
-    Select,
-    SelectItem,
-    Tabs,
-    Tab
+    Dropdown,
+    DropdownTrigger,
+    DropdownMenu,
+    DropdownItem,
+    Tooltip,
 } from '@heroui/react';
 import {
-    Plus,
     Search,
-    MoreVertical,
     Trash2,
-    AlertTriangle,
     ShieldCheck,
     Users,
-    Activity,
     UserMinus,
     Flag,
     CheckCircle2,
-    Clock,
-    FileText,
-    Download,
-    Eye,
-    Calendar,
     ChevronDown,
-    Briefcase,
-    Filter,
     Building2,
-    GraduationCap,
-    Award,
-    UserCheck
+    UserPlus,
+    Upload,
+    Filter,
+    MoreVertical,
+    Activity,
+    Clock,
+    Briefcase,
+    X,
+    TrendingUp,
+    ClipboardList,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { invigilatorService, Invigilator, InvigilatorStats } from '../services/invigilatorService';
-
 import AddInvigilatorModal from '../components/invigilators/AddInvigilatorModal';
+import BulkImportModal from '../components/invigilators/BulkImportModal';
+
+/* ─── helpers ──────────────────────────────────────────── */
+const staffId = (id: number) => `#IV-2024-${String(id).padStart(3, '0')}`;
+
+const mockEmail = (name: string) => {
+    const parts = name.trim().split(' ');
+    const first = parts[0]?.toLowerCase() || 'user';
+    const last = parts[1]?.toLowerCase() || 'x';
+    return `${first}.${last}@faculty.edu`;
+};
+
+const mockPhone = (id: number) => {
+    const digits = String(id).padStart(4, '0');
+    return `+91 98${digits.slice(0, 2)} ${digits.slice(2)}234`;
+};
+
+const initials = (name: string) =>
+    name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
+type StatusKey = 'active' | 'on-leave' | 'inactive';
+
+const resolveStatus = (inv: Invigilator): StatusKey => {
+    if (!inv.isEligible) return 'inactive';
+    if (inv.isFlagged) return 'on-leave';
+    return 'active';
+};
+
+const STATUS_CFG: Record<StatusKey, { label: string; dotBg: string; chipBg: string; chipText: string; badgeBg: string }> = {
+    'active': { label: 'Active', dotBg: '#22c55e', chipBg: '#f0fdf4', chipText: '#15803d', badgeBg: 'bg-emerald-500' },
+    'on-leave': { label: 'On Leave', dotBg: '#f59e0b', chipBg: '#fffbeb', chipText: '#b45309', badgeBg: 'bg-amber-400' },
+    'inactive': { label: 'Inactive', dotBg: '#94a3b8', chipBg: '#f8fafc', chipText: '#475569', badgeBg: 'bg-slate-400' },
+};
+
+/* ─── KPI Card ──────────────────────────────────────────── */
+interface KpiProps { label: string; value: string | number; icon: React.ReactNode; accent: string; loading?: boolean; }
+const KpiCard: React.FC<KpiProps> = ({ label, value, icon, accent, loading }) => (
+    <div className="bg-white rounded-2xl border border-slate-200/80 p-5 flex items-center gap-4 hover:shadow-md hover:border-slate-300 transition-all duration-200 group">
+        <div className={`w-12 h-12 rounded-xl ${accent} flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-200`}>
+            {icon}
+        </div>
+        <div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+            <p className="text-2xl font-bold text-slate-900">{loading ? <span className="text-slate-300">—</span> : value}</p>
+        </div>
+    </div>
+);
+
+/* ═══════════════════════════════════════════════════════ */
 
 const Invigilators: React.FC = () => {
     const [invigilators, setInvigilators] = useState<Invigilator[]>([]);
-    const [stats, setStats] = useState<InvigilatorStats>({
-        total: 0,
-        active: 0,
-        eligible: 0,
-        onDuty: 0,
-        flagged: 0
-    });
+    const [stats, setStats] = useState<InvigilatorStats>({ total: 0, active: 0, eligible: 0, onDuty: 0, flagged: 0 });
     const [isLoading, setIsLoading] = useState(true);
-    const [searchQuery, setSearchQuery] = useState("");
-    const [selectedDepartment, setSelectedDepartment] = useState<string>("");
-    const [selectedAvailability, setSelectedAvailability] = useState<string>("");
-    const [activeTab, setActiveTab] = useState<string>("all");
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedDept, setSelectedDept] = useState('');
+    const [selectedStatus, setSelectedStatus] = useState('');
     const [page, setPage] = useState(1);
-    const rowsPerPage = 5;
+    const rowsPerPage = 8;
 
-    // Modals
     const { isOpen: isAddOpen, onOpen: onAddOpen, onClose: onAddClose } = useDisclosure();
     const { isOpen: isDeleteOpen, onOpen: onOpenDelete, onClose: onCloseDelete } = useDisclosure();
     const { isOpen: isDetailsOpen, onOpen: onOpenDetails, onClose: onCloseDetails } = useDisclosure();
-    const { isOpen: isAssignmentsOpen, onOpen: onOpenAssignments, onClose: onCloseAssignments } = useDisclosure();
-    const [selectedInvigilator, setSelectedInvigilator] = useState<Invigilator | null>(null);
-
-    // Form State
+    const { isOpen: isBulkOpen, onOpen: onBulkOpen, onClose: onBulkClose } = useDisclosure();
+    const [selected, setSelected] = useState<Invigilator | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    /* ── data ──────────────────────────────────────────── */
     const fetchData = async () => {
         setIsLoading(true);
         try {
             const [data, statData] = await Promise.all([
                 invigilatorService.getAll(),
-                invigilatorService.getStats()
+                invigilatorService.getStats(),
             ]);
             setInvigilators(data);
             setStats(statData);
-        } catch (error) {
-            console.error("Failed to fetch invigilators", error);
-            toast.error("Failed to load invigilators");
-        } finally {
-            setIsLoading(false);
-        }
+        } catch { toast.error('Failed to load invigilators'); }
+        finally { setIsLoading(false); }
     };
+    useEffect(() => { fetchData(); }, []);
 
-    useEffect(() => {
-        fetchData();
-    }, []);
-
+    /* ── actions ───────────────────────────────────────── */
     const handleToggleFlag = async (id: number) => {
         try {
             const result = await invigilatorService.toggleFlag(id);
@@ -113,565 +129,378 @@ const Invigilators: React.FC = () => {
                 inv.InvigilatorID === id ? { ...inv, isFlagged: result.isFlagged } : inv
             ));
             toast.success(result.message);
-            const statData = await invigilatorService.getStats();
-            setStats(statData);
-        } catch (error) {
-            toast.error("Failed to update flag status");
-        }
+        } catch { toast.error('Failed to update flag status'); }
     };
 
     const handleDelete = async () => {
-        if (!selectedInvigilator) return;
+        if (!selected) return;
         setIsSubmitting(true);
         try {
-            await invigilatorService.delete(selectedInvigilator.InvigilatorID);
-            toast.success("Invigilator removed successfully");
+            await invigilatorService.delete(selected.InvigilatorID);
+            toast.success('Invigilator removed successfully');
             onCloseDelete();
             fetchData();
-        } catch (error: any) {
-            toast.error(error.response?.data?.message || "Failed to remove invigilator");
-        } finally {
-            setIsSubmitting(false);
-        }
+        } catch (e: any) {
+            toast.error(e.response?.data?.message || 'Failed to remove invigilator');
+        } finally { setIsSubmitting(false); }
     };
 
-    const handleViewDetails = (invigilator: Invigilator) => {
-        setSelectedInvigilator(invigilator);
-        onOpenDetails();
-    };
-
-    const handleViewAssignments = (invigilator: Invigilator) => {
-        setSelectedInvigilator(invigilator);
-        onOpenAssignments();
-    };
-
-    const handleToggleEligibility = async (invigilatorId: number) => {
+    const handleToggleEligibility = async (id: number) => {
         try {
-            const invigilator = invigilators.find(inv => inv.InvigilatorID === invigilatorId);
-            if (!invigilator) return;
-
-            await invigilatorService.toggleEligibility(invigilatorId);
-            toast.success(`${invigilator.Name} marked as ${invigilator.isEligible ? 'ineligible' : 'eligible'}`);
+            const inv = invigilators.find(i => i.InvigilatorID === id);
+            if (!inv) return;
+            await invigilatorService.toggleEligibility(id);
+            toast.success(`${inv.Name} marked as ${inv.isEligible ? 'ineligible' : 'eligible'}`);
             fetchData();
-        } catch (error) {
-            toast.error('Failed to toggle eligibility');
-        }
+        } catch { toast.error('Failed to toggle eligibility'); }
     };
 
-    // Get unique departments for filter dropdown
-    const uniqueDepartments = React.useMemo(() => {
-        const depts = invigilators
-            .map(inv => inv.Department)
-            .filter((dept, index, self) =>
-                dept && self.findIndex(d => d?.DepartmentID === dept.DepartmentID) === index
-            );
-        return depts as NonNullable<typeof depts[0]>[];
+    /* ── derived ───────────────────────────────────────── */
+    const uniqueDepts = React.useMemo(() => {
+        // Collect unique department strings
+        const depts = new Set<string>();
+        invigilators.forEach(inv => {
+            if (inv.Department) depts.add(inv.Department);
+        });
+        return Array.from(depts).sort();
     }, [invigilators]);
 
-    const filteredInvigilators = invigilators.filter(inv => {
-        // Search filter
-        const matchesSearch = !searchQuery ||
-            inv.Name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            inv.Designation?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            inv.Department?.DepartmentName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            inv.Department?.DepartmentCode?.toLowerCase().includes(searchQuery.toLowerCase());
-
-        // Department filter
-        const matchesDepartment = !selectedDepartment ||
-            inv.Department?.DepartmentID.toString() === selectedDepartment;
-
-        // Availability filter
-        let matchesAvailability = true;
-        if (selectedAvailability === "available") {
-            matchesAvailability = inv.isEligible && !inv.isOnDuty;
-        } else if (selectedAvailability === "assigned") {
-            matchesAvailability = inv.isOnDuty === true;
-        } else if (selectedAvailability === "ineligible") {
-            matchesAvailability = !inv.isEligible;
-        }
-
-        return matchesSearch && matchesDepartment && matchesAvailability;
+    const filtered = invigilators.filter(inv => {
+        const q = searchQuery.toLowerCase();
+        const matchSearch = !q ||
+            inv.Name?.toLowerCase().includes(q) ||
+            inv.Designation?.toLowerCase().includes(q) ||
+            inv.Department?.toLowerCase().includes(q) ||
+            staffId(inv.InvigilatorID).includes(q);
+        const matchDept = !selectedDept || inv.Department === selectedDept;
+        const st = resolveStatus(inv);
+        const matchStatus = !selectedStatus || st === selectedStatus;
+        return matchSearch && matchDept && matchStatus;
     });
 
-    const pages = Math.ceil(filteredInvigilators.length / rowsPerPage);
-    const items = React.useMemo(() => {
-        const start = (page - 1) * rowsPerPage;
-        const end = start + rowsPerPage;
-        return filteredInvigilators.slice(start, end);
-    }, [page, filteredInvigilators]);
+    const pages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
+    const pageItems = filtered.slice((page - 1) * rowsPerPage, page * rowsPerPage);
+    const hasFilters = searchQuery || selectedDept || selectedStatus;
 
+    /* ── export ────────────────────────────────────────── */
+    const exportCSV = () => {
+        const rows = [
+            ['Name', 'Staff ID', 'Designation', 'Department', 'Total Exams', 'Status'],
+            ...filtered.map(inv => [inv.Name, staffId(inv.InvigilatorID), inv.Designation, inv.Department || '', inv.totalExams || 0, STATUS_CFG[resolveStatus(inv)].label]),
+        ];
+        const blob = new Blob([rows.map(r => r.join(',')).join('\n')], { type: 'text/csv' });
+        const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'invigilators.csv' });
+        a.click();
+    };
+
+    /* ═══════════════════ RENDER ════════════════════════ */
     return (
-        <div className="flex flex-col gap-6 max-w-[1400px] mx-auto p-6 bg-[#F9FAFB] min-h-screen">
-            {/* Top Navigation / Search Header */}
-            <div className="flex items-center justify-between gap-4 mb-2">
-                <div className="relative w-full max-w-xl">
-                    <Input
-                        id="search-invigilators"
-                        name="search-invigilators"
-                        classNames={{
-                            inputWrapper: "bg-white hover:bg-gray-50 focus-within:!bg-white rounded-xl h-11 shadow-none transition-all",
-                            input: "text-gray-700 font-medium"
-                        }}
-                        variant="flat"
-                        placeholder="Search staff members, departments..."
-                        startContent={<Search size={18} className="text-gray-400" />}
-                        value={searchQuery}
-                        onValueChange={setSearchQuery}
-                        aria-label="Search invigilators"
-                    />
-                </div>
-            </div>
-
-            {/* Header Content */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Invigilator Management</h1>
-                    <p className="text-gray-500 text-sm">Manage staff eligibility, performance, and current assignments.</p>
-                </div>
-                <div className="flex gap-3">
-                    <Button
-                        variant="bordered"
-                        className="bg-white border-gray-200 text-gray-700 font-semibold h-11 px-6 rounded-xl shadow-sm"
-                        startContent={<Download size={18} />}
-                    >
-                        Export Report
-                    </Button>
-                    <Button
-                        className="bg-[#1e40af] text-white font-semibold h-11 px-6 rounded-xl shadow-md"
-                        startContent={<Plus size={18} />}
-                        onPress={onAddOpen}
-                    >
-                        Add Invigilator
-                    </Button>
-                </div>
-            </div>
-
-            {/* Tabs Section */}
-            <div className="mt-6">
-                <Tabs
-                    selectedKey={activeTab}
-                    onSelectionChange={(key) => setActiveTab(key as string)}
-                    variant="underlined"
-                    classNames={{
-                        tabList: "gap-8 w-full relative rounded-none p-0 border-b border-gray-200",
-                        cursor: "w-full bg-blue-600 h-1",
-                        tab: "max-w-fit px-0 h-12",
-                        tabContent: "group-data-[selected=true]:text-blue-600 font-semibold text-gray-500"
-                    }}
-                >
-                    <Tab
-                        key="all"
-                        title={
-                            <div className="flex items-center gap-2">
-                                <Users size={18} />
-                                <span>All Invigilators</span>
-                                <Chip size="sm" variant="flat" className="bg-gray-100 text-gray-600 font-bold text-xs">
-                                    {stats.total}
-                                </Chip>
-                            </div>
-                        }
-                    />
-                    <Tab
-                        key="requests"
-                        title={
-                            <div className="flex items-center gap-2">
-                                <FileText size={18} />
-                                <span>Requests</span>
-                                <Chip size="sm" variant="flat" className="bg-blue-100 text-blue-600 font-bold text-xs">
-                                    3
-                                </Chip>
-                            </div>
-                        }
-                    />
-                </Tabs>
-            </div>
-
-            {/* Content based on active tab */}
-            {activeTab === "all" ? (
-                <>
-                    {/* Stats Cards Section */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
-                        <Card className="shadow-sm border-none bg-white rounded-2xl overflow-hidden py-1 transition-all hover:shadow-md">
-                            <CardBody className="flex flex-row items-center gap-4 p-5">
-                                <div className="h-12 w-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
-                                    <Briefcase size={22} strokeWidth={2.5} />
-                                </div>
-                                <div className="flex flex-col flex-1 min-w-0">
-                                    <div className="flex justify-between items-start mb-1">
-                                        <span className="text-sm font-semibold text-gray-500 truncate">Total Invigilators</span>
-                                        <span className="text-[10px] font-bold text-blue-200 bg-blue-50 px-1.5 py-0.5 rounded ml-2">GLOBAL</span>
-                                    </div>
-                                    <span className="text-2xl font-bold text-gray-900">{stats.total}</span>
-                                </div>
-                            </CardBody>
-                        </Card>
-
-                        <Card className="shadow-sm border-none bg-white rounded-2xl overflow-hidden py-1 transition-all hover:shadow-md">
-                            <CardBody className="flex flex-row items-center gap-4 p-5">
-                                <div className="h-12 w-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
-                                    <ShieldCheck size={22} strokeWidth={2.5} />
-                                </div>
-                                <div className="flex flex-col flex-1 min-w-0">
-                                    <div className="flex justify-between items-start mb-1">
-                                        <span className="text-sm font-semibold text-gray-500 truncate">Eligible/Available</span>
-                                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded ml-2">ACTIVE</span>
-                                    </div>
-                                    <span className="text-2xl font-bold text-gray-900">{stats.eligible}</span>
-                                </div>
-                            </CardBody>
-                        </Card>
-
-                        <Card className="shadow-sm border-none bg-white rounded-2xl overflow-hidden py-1 transition-all hover:shadow-md">
-                            <CardBody className="flex flex-row items-center gap-4 p-5">
-                                <div className="h-12 w-12 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 shrink-0">
-                                    <Users size={22} strokeWidth={2.5} />
-                                </div>
-                                <div className="flex flex-col flex-1 min-w-0">
-                                    <div className="flex justify-between items-start mb-1">
-                                        <span className="text-sm font-semibold text-gray-500 truncate">On Duty</span>
-                                        <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded ml-2">LIVE</span>
-                                    </div>
-                                    <span className="text-2xl font-bold text-gray-900">{stats.onDuty}</span>
-                                </div>
-                            </CardBody>
-                        </Card>
-
-                        <Card className="shadow-sm border-none bg-white rounded-2xl overflow-hidden py-1 transition-all hover:shadow-md">
-                            <CardBody className="flex flex-row items-center gap-4 p-5">
-                                <div className="h-12 w-12 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600 shrink-0">
-                                    <AlertTriangle size={22} strokeWidth={2.5} />
-                                </div>
-                                <div className="flex flex-col flex-1 min-w-0">
-                                    <div className="flex justify-between items-start mb-1">
-                                        <span className="text-sm font-semibold text-gray-500 truncate">Flagged/Unavailable</span>
-                                        <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded ml-2">RESTRICTED</span>
-                                    </div>
-                                    <span className="text-2xl font-bold text-gray-900">{stats.flagged}</span>
-                                </div>
-                            </CardBody>
-                        </Card>
-                    </div>
-
-                    {/* Filter Bar */}
-                    <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-                        <div className="flex flex-wrap items-center gap-3">
-                            <div className="flex items-center gap-2 px-3">
-                                <span className="text-sm font-bold text-gray-600">Filters:</span>
-                            </div>
-                            <Select
-                                id="filter-department"
-                                name="filter-department"
-                                placeholder="All Departments"
-                                size="sm"
-                                className="w-56"
-                                variant="bordered"
-                                selectorIcon={<ChevronDown size={16} className="text-gray-500" />}
-                                aria-label="Filter by department"
-                                selectedKeys={selectedDepartment ? new Set([selectedDepartment]) : new Set()}
-                                onSelectionChange={(keys) => {
-                                    const selected = Array.from(keys as Set<string>)[0];
-                                    setSelectedDepartment(selected || "");
-                                }}
-                                classNames={{
-                                    trigger: "!bg-white hover:!bg-gray-50 focus:!bg-white min-h-10 rounded-xl transition-all relative w-full pr-10 shadow-none",
-                                    value: "text-gray-700 font-medium text-left text-sm group-data-[has-value=true]:text-gray-900",
-                                    selectorIcon: "!absolute !right-3 !top-1/2 !-translate-y-1/2 text-gray-500",
-                                    popoverContent: "bg-white shadow-xl border border-gray-100 rounded-xl"
-                                }}
-                                popoverProps={{
-                                    classNames: {
-                                        base: "z-[9999]",
-                                        content: "p-1 border-none shadow-xl rounded-xl bg-white w-full min-w-[var(--trigger-width)]"
-                                    },
-                                    placement: "bottom"
-                                }}
-                                listboxProps={{
-                                    classNames: {
-                                        base: "max-h-[300px] overflow-auto p-2",
-                                        list: "gap-1"
-                                    },
-                                    itemClasses: {
-                                        base: [
-                                            "rounded-lg",
-                                            "text-gray-700",
-                                            "font-medium",
-                                            "data-[hover=true]:bg-gray-50",
-                                            "data-[selectable=true]:focus:bg-gray-50",
-                                            "py-2"
-                                        ]
-                                    }
-                                }}
-                            >
-                                {uniqueDepartments.map((dept) => (
-                                    <SelectItem key={dept.DepartmentID.toString()} className="rounded-lg">
-                                        {dept.DepartmentCode}
-                                    </SelectItem>
-                                ))}
-                            </Select>
-
-                            <Select
-                                id="filter-availability"
-                                name="filter-availability"
-                                placeholder="Availability Status"
-                                size="sm"
-                                className="w-56"
-                                variant="bordered"
-                                selectorIcon={<ChevronDown size={16} className="text-gray-500" />}
-                                aria-label="Filter by availability"
-                                popoverProps={{
-                                    classNames: {
-                                        base: "z-[9999]",
-                                        content: "z-[9999] bg-white rounded-xl shadow-xl border border-gray-100"
-                                    }
-                                }}
-                                listboxProps={{
-                                    classNames: {
-                                        base: "max-h-[300px] overflow-auto p-2",
-                                        list: "gap-1"
-                                    }
-                                }}
-                                selectedKeys={selectedAvailability ? new Set([selectedAvailability]) : new Set()}
-                                onSelectionChange={(keys) => {
-                                    const selected = Array.from(keys as Set<string>)[0];
-                                    setSelectedAvailability(selected || "");
-                                }}
-                                classNames={{
-                                    trigger: "!bg-white hover:!bg-gray-50 focus:!bg-white min-h-10 rounded-xl transition-all relative w-full pr-10 shadow-none",
-                                    value: "text-gray-700 font-medium text-left text-sm group-data-[has-value=true]:text-gray-900",
-                                    selectorIcon: "!absolute !right-3 !top-1/2 !-translate-y-1/2 text-gray-500",
-                                    popoverContent: "bg-white shadow-xl border border-gray-100 rounded-xl"
-                                }}
-                            >
-                                <SelectItem key="available" className="rounded-lg">Available</SelectItem>
-                                <SelectItem key="assigned" className="rounded-lg">Assigned</SelectItem>
-                                <SelectItem key="ineligible" className="rounded-lg">Ineligible</SelectItem>
-                            </Select>
+        <div className="min-h-screen bg-[#F7F8FA]">
+            {/* ── Page Header ─────────────────────────────── */}
+            <div className="bg-white border-b border-slate-200">
+                <div className="max-w-[1300px] mx-auto px-8 py-6">
+                    <div className="flex items-start justify-between gap-6">
+                        <div>
+                            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Staff Directory</p>
+                            <h1 className="text-[28px] font-bold text-slate-900 leading-tight mb-1">Invigilator Management</h1>
+                            <p className="text-slate-500 text-sm max-w-[520px] leading-relaxed">
+                                Centrally oversee, filter, and manage all academic staff registered for exam invigilation duties.
+                            </p>
                         </div>
-                        <Button
-                            variant="light"
-                            color="primary"
-                            className="font-bold text-sm"
-                            onPress={() => {
-                                setSearchQuery("");
-                                setSelectedDepartment("");
-                                setSelectedAvailability("");
-                            }}
-                        >
-                            Clear All
-                        </Button>
+                        <div className="flex items-center gap-3 mt-1 shrink-0">
+                            <Button
+                                variant="bordered"
+                                className="border-slate-200 text-slate-600 font-semibold h-10 px-5 rounded-xl bg-white text-sm hover:bg-slate-50 transition-colors"
+                                startContent={<Upload size={15} />}
+                                onPress={onBulkOpen}
+                            >
+                                Import Bulk
+                            </Button>
+                            <Button
+                                className="bg-slate-900 hover:bg-slate-800 text-white font-semibold h-10 px-5 rounded-xl text-sm shadow-sm transition-colors"
+                                startContent={<UserPlus size={15} />}
+                                onPress={onAddOpen}
+                            >
+                                Add Invigilator
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="max-w-[1300px] mx-auto px-8 py-7 flex flex-col gap-6">
+
+                {/* ── KPI Row ─────────────────────────────────── */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <KpiCard loading={isLoading} label="Total Registered" value={stats.total.toLocaleString()} icon={<Briefcase size={20} className="text-slate-600" />} accent="bg-slate-100" />
+                    <KpiCard loading={isLoading} label="Active Now" value={stats.eligible} icon={<ShieldCheck size={20} className="text-emerald-600" />} accent="bg-emerald-50" />
+                    <KpiCard loading={isLoading} label="On Leave" value={stats.flagged} icon={<Clock size={20} className="text-amber-500" />} accent="bg-amber-50" />
+                    <KpiCard loading={isLoading} label="Departments" value={uniqueDepts.length} icon={<Building2 size={20} className="text-blue-600" />} accent="bg-blue-50" />
+                </div>
+
+                {/* ── Search + Filter bar ─────────────────────── */}
+                <div className="bg-white border border-slate-200 rounded-2xl px-5 py-3.5 flex items-center gap-4 shadow-sm">
+                    {/* Search */}
+                    <div className="flex-1 flex items-center gap-3 min-w-0">
+                        <Search size={16} className="text-slate-400 shrink-0" />
+                        <input
+                            className="flex-1 text-sm text-slate-800 placeholder-slate-400 bg-transparent outline-none min-w-0"
+                            placeholder="Search by name, ID or email address..."
+                            value={searchQuery}
+                            onChange={e => { setSearchQuery(e.target.value); setPage(1); }}
+                        />
+                        {searchQuery && (
+                            <button onClick={() => { setSearchQuery(''); setPage(1); }} className="text-slate-400 hover:text-slate-600 shrink-0">
+                                <X size={14} />
+                            </button>
+                        )}
                     </div>
 
-                    {/* Table Section */}
-                    <Card className="shadow-sm border-none bg-white rounded-3xl overflow-hidden h-fit">
-                        <Table
-                            aria-label="Invigilator Management Table"
-                            shadow="none"
-                            classNames={{
-                                th: "bg-[#F9FAFB] text-gray-400 font-bold text-[10px] h-14 uppercase tracking-wider px-8",
-                                td: "py-5 px-8",
-                                tr: "border-b border-gray-100 hover:bg-gray-50/50 transition-colors last:border-none",
-                            }}
-                        >
-                            <TableHeader>
-                                <TableColumn>NAME</TableColumn>
-                                <TableColumn>DEPARTMENT</TableColumn>
-                                <TableColumn>TOTAL EXAMS</TableColumn>
-                                <TableColumn>STATUS</TableColumn>
-                                <TableColumn align="end">ACTIONS</TableColumn>
-                            </TableHeader>
-                            <TableBody
-                                emptyContent={isLoading ? <Spinner /> : "No staff members found matching your criteria."}
-                                items={items}
+                    <div className="w-px h-5 bg-slate-200 shrink-0" />
+
+                    {/* Dept */}
+                    <label className="flex items-center gap-2 shrink-0">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Dept</span>
+                        <div className="relative">
+                            <select
+                                className="text-sm font-medium text-slate-700 bg-transparent outline-none appearance-none pr-5 cursor-pointer"
+                                value={selectedDept}
+                                onChange={e => { setSelectedDept(e.target.value); setPage(1); }}
                             >
-                                {(item) => (
-                                    <TableRow key={item.InvigilatorID}>
-                                        <TableCell>
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 min-w-[40px] rounded-lg overflow-hidden bg-slate-200 ring-2 ring-white shadow-sm">
-                                                    <img
-                                                        src={item.ProfileImageURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.Name)}&background=f1f5f9&color=64748b&bold=true`}
-                                                        alt={item.Name}
-                                                        className="w-full h-full object-cover"
-                                                        onError={(e) => {
-                                                            e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(item.Name)}&background=f1f5f9&color=64748b&bold=true`;
-                                                        }}
-                                                        loading="lazy"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <p className="font-bold text-sm text-gray-900">{item.Name}</p>
-                                                    <span className="text-gray-400 text-xs">{item.Designation}</span>
-                                                </div>
+                                <option value="">All Departments</option>
+                                {uniqueDepts.map(d => <option key={d} value={d}>{d}</option>)}
+                            </select>
+                            <ChevronDown size={12} className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                        </div>
+                    </label>
+
+                    <div className="w-px h-5 bg-slate-200 shrink-0" />
+
+                    {/* Status */}
+                    <label className="flex items-center gap-2 shrink-0">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Status</span>
+                        <div className="relative">
+                            <select
+                                className="text-sm font-medium text-slate-700 bg-transparent outline-none appearance-none pr-5 cursor-pointer"
+                                value={selectedStatus}
+                                onChange={e => { setSelectedStatus(e.target.value); setPage(1); }}
+                            >
+                                <option value="">All Statuses</option>
+                                <option value="active">Active</option>
+                                <option value="on-leave">On Leave</option>
+                                <option value="inactive">Inactive</option>
+                            </select>
+                            <ChevronDown size={12} className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                        </div>
+                    </label>
+
+                    <div className="w-px h-5 bg-slate-200 shrink-0" />
+
+                    <Tooltip content="Advanced filters" placement="bottom">
+                        <button className="text-slate-400 hover:text-slate-700 transition-colors shrink-0">
+                            <Filter size={16} />
+                        </button>
+                    </Tooltip>
+
+                    {hasFilters && (
+                        <button
+                            onClick={() => { setSearchQuery(''); setSelectedDept(''); setSelectedStatus(''); setPage(1); }}
+                            className="text-xs font-semibold text-slate-400 hover:text-rose-500 transition-colors shrink-0 flex items-center gap-1"
+                        >
+                            <X size={12} /> Clear
+                        </button>
+                    )}
+
+                    <span className="ml-auto text-xs text-slate-400 font-medium shrink-0">{filtered.length} records</span>
+                </div>
+
+                {/* ── Table Card ──────────────────────────────── */}
+                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+
+                    {/* Table head */}
+                    <div className="grid grid-cols-[2.2fr_1.1fr_1.4fr_1.8fr_1fr_64px] px-6 py-3.5 border-b border-slate-100 bg-slate-50/70">
+                        {['Invigilator', 'Staff ID', 'Department', 'Contact', 'Status', ''].map((h, i) => (
+                            <span key={i} className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{h}</span>
+                        ))}
+                    </div>
+
+                    {/* Body */}
+                    {isLoading ? (
+                        <div className="flex items-center justify-center py-24">
+                            <Spinner size="lg" classNames={{ circle1: 'border-b-slate-700', circle2: 'border-b-slate-400' }} />
+                        </div>
+                    ) : pageItems.length === 0 ? (
+                        <div className="py-20 text-center">
+                            <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+                                <Users size={28} className="text-slate-300" />
+                            </div>
+                            <p className="text-slate-500 font-semibold text-sm">No invigilators found</p>
+                            <p className="text-slate-400 text-xs mt-1">Try adjusting your search or filters</p>
+                        </div>
+                    ) : (
+                        pageItems.map((inv, idx) => {
+                            const st = resolveStatus(inv);
+                            const cfg = STATUS_CFG[st];
+                            const ini = initials(inv.Name);
+                            const isLast = idx === pageItems.length - 1;
+
+                            return (
+                                <div
+                                    key={inv.InvigilatorID}
+                                    className={`grid grid-cols-[2.2fr_1.1fr_1.4fr_1.8fr_1fr_64px] px-6 py-4 items-center transition-colors hover:bg-slate-50/80 ${!isLast ? 'border-b border-slate-100' : ''}`}
+                                >
+                                    {/* Invigilator */}
+                                    <div className="flex items-center gap-3.5 min-w-0">
+                                        {inv.ProfileImageURL ? (
+                                            <img
+                                                src={inv.ProfileImageURL}
+                                                alt={inv.Name}
+                                                className="w-9 h-9 rounded-full object-cover ring-2 ring-white shadow-sm shrink-0"
+                                                onError={e => (e.currentTarget.style.display = 'none')}
+                                            />
+                                        ) : (
+                                            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm">
+                                                {ini}
                                             </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <span className="text-sm font-medium text-gray-600">
-                                                {item.Department?.DepartmentName || "Not Assigned"}
-                                            </span>
-                                        </TableCell>
-                                        <TableCell>
-                                            <span className="text-sm font-bold text-gray-900 mx-auto block text-center max-w-[40px]">
-                                                {item.totalExams || 0}
-                                            </span>
-                                        </TableCell>
-                                        <TableCell>
-                                            {(!item.isEligible) ? (
-                                                <Chip
-                                                    variant="flat"
-                                                    className="bg-rose-50 text-rose-600 font-bold text-[10px] h-6 px-3 border-none"
-                                                >
-                                                    INELIGIBLE
-                                                </Chip>
-                                            ) : item.isFlagged ? (
-                                                <Chip
-                                                    variant="flat"
-                                                    className="bg-amber-50 text-amber-600 font-bold text-[10px] h-6 px-3 border-none"
-                                                >
-                                                    ON LEAVE
-                                                </Chip>
-                                            ) : item.isOnDuty ? (
-                                                <Chip
-                                                    variant="flat"
-                                                    className="bg-blue-50 text-blue-600 font-bold text-[10px] h-6 px-3 border-none"
-                                                >
-                                                    ASSIGNED
-                                                </Chip>
-                                            ) : (
-                                                <Chip
-                                                    variant="flat"
-                                                    className="bg-emerald-50 text-emerald-600 font-bold text-[10px] h-6 px-3 border-none"
-                                                >
-                                                    AVAILABLE
-                                                </Chip>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex justify-end items-center gap-1">
-                                                {/* View Details */}
-                                                <Button
-                                                    isIconOnly
-                                                    size="sm"
-                                                    variant="light"
-                                                    className="text-gray-400 hover:text-blue-600"
-                                                    onPress={() => handleViewDetails(item)}
-                                                    title="View full profile details"
-                                                >
-                                                    <Eye size={18} />
-                                                </Button>
+                                        )}
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-semibold text-slate-900 truncate">{inv.Name}</p>
+                                            <p className="text-xs text-slate-400 truncate mt-0.5">{inv.Designation || 'Faculty'}</p>
+                                        </div>
+                                    </div>
 
-                                                {/* Toggle Eligibility */}
-                                                <Button
-                                                    isIconOnly
-                                                    size="sm"
-                                                    variant="light"
-                                                    className={item.isEligible ? "text-emerald-500 hover:text-emerald-600" : "text-gray-400 hover:text-emerald-500"}
-                                                    onPress={() => handleToggleEligibility(item.InvigilatorID)}
-                                                    title={item.isEligible ? "Mark as ineligible" : "Mark as eligible"}
-                                                >
-                                                    {item.isEligible ? <CheckCircle2 size={18} /> : <UserMinus size={18} />}
-                                                </Button>
+                                    {/* Staff ID */}
+                                    <div>
+                                        <span className="font-mono text-xs text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">{staffId(inv.InvigilatorID)}</span>
+                                    </div>
 
-                                                {/* View Assignments */}
-                                                <Button
-                                                    isIconOnly
-                                                    size="sm"
-                                                    variant="light"
-                                                    className="text-gray-400 hover:text-purple-600"
-                                                    onPress={() => handleViewAssignments(item)}
-                                                    title="View exam assignments"
-                                                >
-                                                    <Calendar size={18} />
-                                                </Button>
+                                    {/* Department */}
+                                    <div>
+                                        <span className="text-sm text-slate-700">{inv.Department || '—'}</span>
+                                    </div>
 
-                                                {/* Flag/Unflag */}
-                                                <Button
-                                                    isIconOnly
-                                                    size="sm"
-                                                    variant="light"
-                                                    className={item.isFlagged ? "text-rose-500 bg-rose-50" : "text-gray-300 hover:text-rose-400"}
-                                                    onPress={() => handleToggleFlag(item.InvigilatorID)}
-                                                    title={item.isFlagged ? "Remove flag" : "Flag for review"}
-                                                >
-                                                    {item.isFlagged ? <AlertTriangle size={18} fill="currentColor" /> : <ShieldCheck size={18} />}
-                                                </Button>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
+                                    {/* Contact */}
+                                    <div>
+                                        <p className="text-xs text-slate-600 font-medium">{mockEmail(inv.Name)}</p>
+                                        <p className="text-xs text-slate-400 mt-0.5">{mockPhone(inv.InvigilatorID)}</p>
+                                    </div>
 
-                        {/* Footer Section */}
-                        <div className="flex flex-row justify-between items-center p-6 bg-white border-t border-gray-100">
-                            <span className="text-xs font-semibold text-gray-400">
-                                Showing {(page - 1) * rowsPerPage + 1} to {Math.min(page * rowsPerPage, filteredInvigilators.length)} of {filteredInvigilators.length} invigilators
-                            </span>
+                                    {/* Status chip */}
+                                    <div>
+                                        <span
+                                            className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full border"
+                                            style={{
+                                                background: cfg.chipBg,
+                                                color: cfg.chipText,
+                                                borderColor: cfg.chipBg === '#f0fdf4' ? '#bbf7d0' : cfg.chipBg === '#fffbeb' ? '#fde68a' : '#e2e8f0',
+                                            }}
+                                        >
+                                            <span className="w-1.5 h-1.5 rounded-full" style={{ background: cfg.dotBg }} />
+                                            {cfg.label}
+                                        </span>
+                                    </div>
+
+                                    {/* Action menu */}
+                                    <div className="flex justify-center">
+                                        <Dropdown placement="bottom-end">
+                                            <DropdownTrigger>
+                                                <button className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-all">
+                                                    <MoreVertical size={16} />
+                                                </button>
+                                            </DropdownTrigger>
+                                            <DropdownMenu aria-label="Invigilator actions" className="min-w-[190px]" itemClasses={{ base: 'rounded-lg' }}>
+                                                <DropdownItem
+                                                    key="view"
+                                                    startContent={<ClipboardList size={15} />}
+                                                    onPress={() => { setSelected(inv); onOpenDetails(); }}
+                                                    description="See full profile details"
+                                                >
+                                                    View Profile
+                                                </DropdownItem>
+                                                <DropdownItem
+                                                    key="toggle"
+                                                    startContent={inv.isEligible ? <UserMinus size={15} /> : <CheckCircle2 size={15} />}
+                                                    onPress={() => handleToggleEligibility(inv.InvigilatorID)}
+                                                    description={inv.isEligible ? 'Disable duty access' : 'Enable duty access'}
+                                                >
+                                                    {inv.isEligible ? 'Mark Ineligible' : 'Mark Eligible'}
+                                                </DropdownItem>
+                                                <DropdownItem
+                                                    key="flag"
+                                                    startContent={<Flag size={15} />}
+                                                    onPress={() => handleToggleFlag(inv.InvigilatorID)}
+                                                    description={inv.isFlagged ? 'Remove leave status' : 'Put on leave'}
+                                                >
+                                                    {inv.isFlagged ? 'Remove Leave Flag' : 'Flag for Leave'}
+                                                </DropdownItem>
+                                                <DropdownItem
+                                                    key="delete"
+                                                    className="text-danger"
+                                                    color="danger"
+                                                    startContent={<Trash2 size={15} />}
+                                                    onPress={() => { setSelected(inv); onOpenDelete(); }}
+                                                    description="Permanently remove account"
+                                                >
+                                                    Remove Account
+                                                </DropdownItem>
+                                            </DropdownMenu>
+                                        </Dropdown>
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
+
+                    {/* Footer */}
+                    <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+                        <span className="text-xs text-slate-400 font-medium">
+                            {filtered.length === 0
+                                ? 'No results'
+                                : `Showing ${(page - 1) * rowsPerPage + 1}–${Math.min(page * rowsPerPage, filtered.length)} of ${filtered.length} results`}
+                        </span>
+                        {pages > 1 && (
                             <Pagination
                                 total={pages}
                                 page={page}
                                 onChange={setPage}
+                                showControls
                                 classNames={{
-                                    wrapper: "gap-1",
-                                    item: "bg-transparent text-gray-500 font-bold text-xs w-8 h-8 min-w-[32px]",
-                                    cursor: "bg-blue-800 text-white font-bold text-xs w-8 h-8 rounded-lg",
+                                    wrapper: 'gap-1',
+                                    item: 'bg-white text-slate-600 font-semibold text-xs w-8 h-8 min-w-[32px] border border-slate-200 rounded-lg shadow-sm',
+                                    cursor: 'bg-slate-900 text-white font-bold text-xs w-8 h-8 rounded-lg border-none shadow-md',
+                                    prev: 'bg-white border border-slate-200 rounded-lg text-slate-500 shadow-sm',
+                                    next: 'bg-white border border-slate-200 rounded-lg text-slate-500 shadow-sm',
                                 }}
                             />
-                        </div>
-                    </Card>
-                </>
-            ) : (
-                // Requests View
-                <div className="mt-6">
-                    <Card className="shadow-sm border-none bg-white rounded-3xl overflow-hidden">
-                        <CardBody className="p-12">
-                            <div className="text-center">
-                                <div className="w-20 h-20 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-4">
-                                    <FileText size={40} className="text-blue-600" />
-                                </div>
-                                <h3 className="text-xl font-bold text-gray-900 mb-2">Invigilator Requests</h3>
-                                <p className="text-gray-500 mb-6">View and manage pending invigilator registration requests</p>
-                                <div className="flex items-center justify-center gap-4 mb-8">
-                                    <Chip variant="flat" className="bg-blue-100 text-blue-700 font-semibold px-4 py-2">
-                                        3 Pending Requests
-                                    </Chip>
-                                </div>
-                                <p className="text-sm text-gray-400">Backend integration required to display requests</p>
-                            </div>
-                        </CardBody>
-                    </Card>
+                        )}
+                    </div>
                 </div>
-            )}
 
-            {/* Add Invigilator Modal */}
-            <AddInvigilatorModal
-                isOpen={isAddOpen}
-                onClose={onAddClose}
-                onSuccess={fetchData}
-            />
+            </div>
 
-            <Modal isOpen={isDeleteOpen} onClose={onCloseDelete} size="sm">
-                <ModalContent className="rounded-3xl">
+            {/* ══════════════ MODALS ════════════════════════ */}
+
+            <AddInvigilatorModal isOpen={isAddOpen} onClose={onAddClose} onSuccess={fetchData} />
+
+            {/* Delete */}
+            <Modal isOpen={isDeleteOpen} onClose={onCloseDelete} size="sm" classNames={{ wrapper: 'z-[9999]', backdrop: 'z-[9998] bg-black/60' }}>
+                <ModalContent className="rounded-2xl">
                     {(onClose) => (
                         <>
-                            <ModalHeader className="flex flex-col gap-1 items-center pt-10 px-8">
-                                <div className="h-14 w-14 rounded-full bg-rose-50 flex items-center justify-center text-rose-500 mb-2">
-                                    <UserMinus size={28} />
+                            <ModalHeader className="flex flex-col items-center pt-8 pb-2 px-8 text-center gap-0">
+                                <div className="w-14 h-14 rounded-2xl bg-rose-50 flex items-center justify-center mb-4 border border-rose-100">
+                                    <Trash2 size={22} className="text-rose-500" />
                                 </div>
-                                <h3 className="text-lg font-bold text-gray-900">Remove Invigilator?</h3>
+                                <h3 className="text-lg font-bold text-slate-900">Remove Invigilator?</h3>
                             </ModalHeader>
-                            <ModalBody className="text-center px-8 pb-4">
-                                <p className="text-sm text-gray-500 leading-relaxed">
-                                    Are you sure you want to remove <span className="font-bold text-gray-900">{selectedInvigilator?.Name}</span>?
-                                    This action cannot be undone.
+                            <ModalBody className="text-center px-8 pb-2">
+                                <p className="text-sm text-slate-500 leading-relaxed">
+                                    This will permanently remove <span className="font-bold text-slate-900">{selected?.Name}</span> from the system. This action cannot be undone.
                                 </p>
                             </ModalBody>
-                            <ModalFooter className="justify-center gap-3 pb-10 pt-4 px-8">
-                                <Button variant="light" onPress={onClose} className="font-bold text-gray-400">Cancel</Button>
-                                <Button
-                                    className="bg-rose-500 text-white font-bold rounded-xl px-6 shadow-md shadow-rose-100"
-                                    onPress={handleDelete}
-                                    isLoading={isSubmitting}
-                                >
+                            <ModalFooter className="justify-center gap-3 pb-8 pt-4 px-8">
+                                <Button variant="bordered" onPress={onClose} className="font-semibold text-slate-600 border-slate-200 rounded-xl">Cancel</Button>
+                                <Button className="bg-rose-500 text-white font-bold rounded-xl px-6 shadow-sm shadow-rose-100" onPress={handleDelete} isLoading={isSubmitting}>
                                     Remove Account
                                 </Button>
                             </ModalFooter>
@@ -680,195 +509,115 @@ const Invigilators: React.FC = () => {
                 </ModalContent>
             </Modal>
 
-            {/* View Details Modal */}
-            <Modal
-                isOpen={isDetailsOpen}
-                onClose={onCloseDetails}
-                size="2xl"
-                backdrop="opaque"
-                scrollBehavior="inside"
-                classNames={{
-                    wrapper: "z-[9999]",
-                    backdrop: "z-[9998] bg-black/80"
-                }}
-            >
-                <ModalContent className="rounded-3xl bg-white">
-                    {(onClose) => (
-                        <>
-                            <ModalHeader className="flex flex-col gap-2 pt-6 px-6 pb-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
-                                <h2 className="text-2xl font-bold text-gray-900">Invigilator Profile</h2>
-                                <p className="text-sm text-gray-500">Complete information and assignment details</p>
-                            </ModalHeader>
-                            <ModalBody className="py-8 px-6 bg-white">
-                                {selectedInvigilator && (
-                                    <div className="space-y-8">
-                                        {/* Profile Header */}
-                                        <div className="flex items-start gap-6 p-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-100">
-                                            <div className="w-20 h-20 rounded-2xl overflow-hidden bg-white ring-4 ring-white shadow-lg">
-                                                <img
-                                                    src={selectedInvigilator.ProfileImageURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedInvigilator.Name)}&background=3b82f6&color=fff&bold=true&size=128`}
-                                                    alt={selectedInvigilator.Name}
-                                                    className="w-full h-full object-cover"
-                                                    onError={(e) => {
-                                                        e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedInvigilator.Name)}&background=3b82f6&color=fff&bold=true&size=128`;
-                                                    }}
-                                                />
-                                            </div>
-                                            <div className="flex-1">
-                                                <h3 className="text-xl font-bold text-gray-900 mb-1">{selectedInvigilator.Name}</h3>
-                                                <div className="flex items-center gap-2 text-gray-600 mb-3">
-                                                    <GraduationCap size={16} className="text-blue-600" />
-                                                    <p className="text-sm font-medium">{selectedInvigilator.Designation}</p>
+            {/* Profile */}
+            <Modal isOpen={isDetailsOpen} onClose={onCloseDetails} size="lg" backdrop="opaque" scrollBehavior="inside" classNames={{ wrapper: 'z-[9999]', backdrop: 'z-[9998] bg-black/60' }}>
+                <ModalContent className="rounded-2xl">
+                    {(onClose) => {
+                        if (!selected) return null;
+                        const st = resolveStatus(selected);
+                        const cfg = STATUS_CFG[st];
+                        const ini = initials(selected.Name);
+                        return (
+                            <>
+                                <ModalHeader className="pt-6 px-7 pb-4 border-b border-slate-100 flex items-center gap-3">
+                                    <div className="p-2 bg-slate-100 rounded-xl">
+                                        <ClipboardList size={16} className="text-slate-600" />
+                                    </div>
+                                    <div>
+                                        <p className="text-base font-bold text-slate-900">Invigilator Profile</p>
+                                        <p className="text-xs text-slate-400 font-normal">Complete information &amp; status</p>
+                                    </div>
+                                </ModalHeader>
+                                <ModalBody className="py-6 px-7">
+                                    <div className="space-y-5">
+                                        {/* Hero row */}
+                                        <div className="flex items-center gap-5 p-5 bg-slate-50 rounded-2xl border border-slate-200">
+                                            {selected.ProfileImageURL ? (
+                                                <img src={selected.ProfileImageURL} alt={selected.Name} className="w-16 h-16 rounded-2xl object-cover ring-4 ring-white shadow-md shrink-0" />
+                                            ) : (
+                                                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-white font-bold text-xl shadow-md shrink-0">
+                                                    {ini}
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    {selectedInvigilator.isEligible ? (
-                                                        <Chip
-                                                            variant="flat"
-                                                            startContent={<CheckCircle2 size={14} />}
-                                                            className="bg-emerald-100 text-emerald-700 font-semibold text-xs px-3 py-1"
-                                                        >
-                                                            ELIGIBLE
-                                                        </Chip>
-                                                    ) : (
-                                                        <Chip
-                                                            variant="flat"
-                                                            startContent={<AlertTriangle size={14} />}
-                                                            className="bg-rose-100 text-rose-700 font-semibold text-xs px-3 py-1"
-                                                        >
-                                                            INELIGIBLE
-                                                        </Chip>
-                                                    )}
-                                                    {selectedInvigilator.isOnDuty && (
-                                                        <Chip
-                                                            variant="flat"
-                                                            startContent={<Clock size={14} />}
-                                                            className="bg-blue-100 text-blue-700 font-semibold text-xs px-3 py-1"
-                                                        >
-                                                            ON DUTY
-                                                        </Chip>
-                                                    )}
+                                            )}
+                                            <div className="flex-1 min-w-0">
+                                                <h3 className="text-lg font-bold text-slate-900 truncate">{selected.Name}</h3>
+                                                <p className="text-sm text-slate-500 mt-0.5">{selected.Designation || 'Faculty'}</p>
+                                                <div className="flex items-center gap-2 mt-2">
+                                                    <span
+                                                        className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full border"
+                                                        style={{ background: cfg.chipBg, color: cfg.chipText, borderColor: st === 'active' ? '#bbf7d0' : st === 'on-leave' ? '#fde68a' : '#e2e8f0' }}
+                                                    >
+                                                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: cfg.dotBg }} />
+                                                        {cfg.label}
+                                                    </span>
+                                                    <span className="font-mono text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">{staffId(selected.InvigilatorID)}</span>
                                                 </div>
                                             </div>
                                         </div>
 
-                                        {/* Information Grid */}
-                                        <div className="grid grid-cols-2 gap-6">
-                                            {/* Department */}
-                                            <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-blue-300 transition-colors">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <div className="p-2 bg-blue-100 rounded-lg">
-                                                        <Building2 size={18} className="text-blue-600" />
-                                                    </div>
-                                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Department</label>
+                                        {/* Info grid */}
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {[
+                                                { label: 'Department', value: selected.Department || 'Not Assigned' },
+                                                { label: 'Dept Code', value: '—' },
+                                                { label: 'Total Exams', value: `${selected.totalExams ?? 0} assignments` },
+                                                { label: 'Eligibility', value: selected.isEligible ? '✓ Eligible for duty' : '✗ Not eligible', colored: true, isEligible: selected.isEligible },
+                                            ].map(item => (
+                                                <div key={item.label} className="bg-white rounded-xl p-4 border border-slate-200">
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">{item.label}</p>
+                                                    <p className={`text-sm font-semibold ${(item as any).colored ? ((item as any).isEligible ? 'text-emerald-600' : 'text-rose-500') : 'text-slate-800'}`}>
+                                                        {item.value}
+                                                    </p>
                                                 </div>
-                                                <p className="text-base font-semibold text-gray-900 ml-10">
-                                                    {selectedInvigilator.Department?.DepartmentName || 'Not Assigned'}
-                                                </p>
-                                            </div>
+                                            ))}
+                                        </div>
 
-                                            {/* Total Exams */}
-                                            <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-purple-300 transition-colors">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <div className="p-2 bg-purple-100 rounded-lg">
-                                                        <Calendar size={18} className="text-purple-600" />
-                                                    </div>
-                                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Total Exams</label>
-                                                </div>
-                                                <p className="text-base font-semibold text-gray-900 ml-10">
-                                                    {selectedInvigilator.totalExams || 0} Assignments
-                                                </p>
-                                            </div>
-
-                                            {/* Eligibility Status */}
-                                            <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-emerald-300 transition-colors">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <div className="p-2 bg-emerald-100 rounded-lg">
-                                                        <UserCheck size={18} className="text-emerald-600" />
-                                                    </div>
-                                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Eligibility</label>
-                                                </div>
-                                                <div className="ml-10">
-                                                    <Chip
-                                                        variant="flat"
-                                                        className={selectedInvigilator.isEligible ? "bg-emerald-100 text-emerald-700 font-semibold text-sm" : "bg-rose-100 text-rose-700 font-semibold text-sm"}
-                                                    >
-                                                        {selectedInvigilator.isEligible ? 'Eligible for Duty' : 'Not Eligible'}
-                                                    </Chip>
-                                                </div>
-                                            </div>
-
-                                            {/* Current Status */}
-                                            <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-blue-300 transition-colors">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <div className="p-2 bg-blue-100 rounded-lg">
-                                                        <Activity size={18} className="text-blue-600" />
-                                                    </div>
-                                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Current Status</label>
-                                                </div>
-                                                <div className="ml-10">
-                                                    <Chip
-                                                        variant="flat"
-                                                        className={selectedInvigilator.isOnDuty ? "bg-blue-100 text-blue-700 font-semibold text-sm" : "bg-gray-100 text-gray-700 font-semibold text-sm"}
-                                                    >
-                                                        {selectedInvigilator.isOnDuty ? 'Currently On Duty' : 'Available'}
-                                                    </Chip>
-                                                </div>
+                                        {/* Contact */}
+                                        <div className="bg-white rounded-xl p-4 border border-slate-200">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Contact Information</p>
+                                            <div className="flex flex-col gap-1.5">
+                                                <p className="text-sm text-slate-700 font-medium">{mockEmail(selected.Name)}</p>
+                                                <p className="text-sm text-slate-500">{mockPhone(selected.InvigilatorID)}</p>
                                             </div>
                                         </div>
+
+                                        {/* Quick actions */}
+                                        <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
+                                            <Button size="sm" variant="bordered"
+                                                className={`font-semibold rounded-xl text-xs h-9 ${selected.isEligible ? 'border-slate-200 text-rose-500' : 'border-slate-200 text-emerald-600'}`}
+                                                onPress={() => { handleToggleEligibility(selected.InvigilatorID); onClose(); }}
+                                                startContent={selected.isEligible ? <UserMinus size={13} /> : <CheckCircle2 size={13} />}
+                                            >
+                                                {selected.isEligible ? 'Mark Ineligible' : 'Mark Eligible'}
+                                            </Button>
+                                            <Button size="sm" variant="bordered"
+                                                className={`font-semibold rounded-xl text-xs h-9 ${selected.isFlagged ? 'border-slate-200 text-slate-600' : 'border-slate-200 text-amber-600'}`}
+                                                onPress={() => { handleToggleFlag(selected.InvigilatorID); onClose(); }}
+                                                startContent={<Flag size={13} />}
+                                            >
+                                                {selected.isFlagged ? 'Remove Leave Flag' : 'Flag for Leave'}
+                                            </Button>
+                                            <Button size="sm" variant="bordered"
+                                                className="font-semibold rounded-xl text-xs h-9 ml-auto border-rose-200 text-rose-500"
+                                                onPress={() => { onClose(); setTimeout(onOpenDelete, 200); }}
+                                                startContent={<Trash2 size={13} />}
+                                            >
+                                                Remove
+                                            </Button>
+                                        </div>
                                     </div>
-                                )}
-                            </ModalBody>
-                            <ModalFooter className="justify-end gap-3 pb-6 pt-4 px-6 border-t border-gray-200 bg-gray-50">
-                                <Button
-                                    variant="light"
-                                    onPress={onClose}
-                                    className="font-semibold text-gray-600 hover:text-gray-900"
-                                >
-                                    Close
-                                </Button>
-                            </ModalFooter>
-                        </>
-                    )}
+                                </ModalBody>
+                                <ModalFooter className="justify-end pb-6 pt-3 px-7 border-t border-slate-100">
+                                    <Button variant="light" onPress={onClose} className="font-semibold text-slate-500 text-sm rounded-xl">Close</Button>
+                                </ModalFooter>
+                            </>
+                        );
+                    }}
                 </ModalContent>
             </Modal>
 
-            {/* View Assignments Modal */}
-            <Modal
-                isOpen={isAssignmentsOpen}
-                onClose={onCloseAssignments}
-                size="3xl"
-                backdrop="opaque"
-                scrollBehavior="inside"
-                classNames={{
-                    wrapper: "z-[9999]",
-                    backdrop: "z-[9998] bg-black/80"
-                }}
-            >
-                <ModalContent className="rounded-3xl bg-white">
-                    {(onClose) => (
-                        <>
-                            <ModalHeader className="flex flex-col gap-1 pt-8 px-8 border-b border-gray-100 bg-white">
-                                <h2 className="text-xl font-bold text-gray-900">Exam Assignments</h2>
-                                <p className="text-sm font-normal text-gray-500">
-                                    {selectedInvigilator?.Name} - {selectedInvigilator?.totalExams || 0} total assignments
-                                </p>
-                            </ModalHeader>
-                            <ModalBody className="py-6 px-8 bg-white">
-                                <div className="space-y-4">
-                                    <div className="text-center py-12 text-gray-400">
-                                        <Calendar size={48} className="mx-auto mb-4 opacity-50" />
-                                        <p className="text-sm font-medium">Assignment details will be displayed here</p>
-                                        <p className="text-xs mt-2">This feature requires backend integration</p>
-                                    </div>
-                                </div>
-                            </ModalBody>
-                            <ModalFooter className="justify-end gap-3 pb-8 pt-4 px-8 border-t border-gray-100 bg-white">
-                                <Button variant="light" onPress={onClose} className="font-bold text-gray-400">Close</Button>
-                            </ModalFooter>
-                        </>
-                    )}
-                </ModalContent>
-            </Modal>
+            {/* Bulk Import */}
+            <BulkImportModal isOpen={isBulkOpen} onClose={onBulkClose} onSuccess={fetchData} />
         </div>
     );
 };

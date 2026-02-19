@@ -1,7 +1,8 @@
 import { Request, Response } from "express";
-import { User, Invigilator, Faculty, Department, InvigilatorAssignment, Exam } from "../models/index.js";
+import { User, Invigilator, Faculty, InvigilatorAssignment, Exam } from "../models/index.js";
 import { Op } from "sequelize";
 import bcrypt from "bcrypt";
+import { sequelize } from "../config/database.js";
 
 /**
  * Invigilator Controller
@@ -9,15 +10,12 @@ import bcrypt from "bcrypt";
 
 export const getAllInvigilators = async (req: Request, res: Response) => {
     try {
-        // Fetch all faculties with their departments
-        const faculties = await Faculty.findAll({
-            include: [
-                {
-                    model: Department,
-                    attributes: ["DepartmentID", "DepartmentCode", "DepartmentName"],
-                }
-            ]
-        });
+        // Fetch all faculties
+        const faculties = await Faculty.findAll();
+        console.log("Fetched Faculties count:", faculties.length);
+        if (faculties.length > 0) {
+            console.log("Sample Faculty:", faculties[0].toJSON());
+        }
 
         const today = new Date().toISOString().split('T')[0];
 
@@ -212,5 +210,74 @@ export const getInvigilatorStats = async (req: Request, res: Response) => {
     } catch (error: any) {
         console.error("Error fetching stats:", error);
         res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+/**
+ * Bulk import invigilators (Faculty records) from parsed Excel data.
+ * Expected body: { rows: [{ FacultyID, Name, Department, Designation? }] }
+ */
+export const bulkImportInvigilators = async (req: Request, res: Response) => {
+    const t = await sequelize.transaction();
+    try {
+        const { rows } = req.body;
+        if (!Array.isArray(rows) || rows.length === 0) {
+            await t.rollback();
+            return res.status(400).json({ message: "No rows provided" });
+        }
+
+        const created: number[] = [];
+        const skipped: { row: number; reason: string }[] = [];
+
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const { FacultyID, Name, Department: deptValue, Designation } = row;
+
+            try {
+                // Defensive check - ensure values are strings
+                const deptStr = deptValue ? String(deptValue).trim() : "";
+                const nameStr = Name ? String(Name).trim() : "";
+                const desigStr = Designation ? String(Designation).trim() : "Faculty";
+                const facultyIDNum = Number(FacultyID);
+
+                if (!nameStr || !deptStr || isNaN(facultyIDNum)) {
+                    skipped.push({ row: i + 2, reason: `Invalid data: Name=${nameStr}, Dept=${deptStr}, ID=${FacultyID}` });
+                    continue;
+                }
+
+                // Check for duplicate FacultyID
+                const existing = await Faculty.findByPk(facultyIDNum, { transaction: t });
+                if (existing) {
+                    skipped.push({ row: i + 2, reason: `FacultyID ${facultyIDNum} already exists` });
+                    continue;
+                }
+
+                await Faculty.create({
+                    FacultyID: facultyIDNum,
+                    Name: nameStr,
+                    Designation: desigStr,
+                    Department: deptStr,
+                    IsEligible: true,
+                }, { transaction: t });
+
+                created.push(i + 2);
+            } catch (rowError: any) {
+                console.error(`Row ${i + 2} failed:`, rowError);
+                skipped.push({ row: i + 2, reason: `Database error: ${rowError.message}` });
+            }
+        }
+
+        await t.commit();
+        res.status(201).json({
+            message: `Import complete: ${created.length} created, ${skipped.length} skipped.`,
+            created: created.length,
+            skipped,
+        });
+    } catch (error: any) {
+        await t.rollback();
+        console.error("Error bulk importing invigilators:", error);
+        // Add more detail to the error response
+        const message = error.errors ? error.errors.map((e: any) => e.message).join(", ") : error.message;
+        res.status(500).json({ message: "Internal server error", detail: message });
     }
 };
