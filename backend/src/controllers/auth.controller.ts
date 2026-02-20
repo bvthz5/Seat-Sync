@@ -12,7 +12,7 @@ export class AuthController {
      */
     static async login(req: Request, res: Response): Promise<void> {
         try {
-            const { email, password }: LoginRequest = req.body;
+            const { email, password, role }: LoginRequest = req.body;
 
             // Validate input
             if (!email || !password) {
@@ -23,7 +23,7 @@ export class AuthController {
             }
 
             // Authenticate user
-            const result = await AuthService.login({ email, password });
+            const result = await AuthService.login({ email, password, ...(role && { role }) });
 
             // Set refresh token as HttpOnly cookie
             res.cookie("refreshToken", result.refreshToken, {

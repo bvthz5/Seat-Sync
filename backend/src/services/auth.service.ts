@@ -17,13 +17,16 @@ export class AuthService {
      * Validate admin credentials and generate tokens
      */
     static async login(credentials: LoginRequest): Promise<LoginResponse> {
-        const { email, password } = credentials;
+        const { email, password, role } = credentials;
+
+        // Default role to exam_admin if not provided
+        const requiredRole = role || "exam_admin";
 
         // Find user by email
         const user = await User.findOne({
             where: {
                 Email: email,
-                Role: "exam_admin", // Only exam admins can log in
+                Role: requiredRole,
                 IsActive: true,
             },
         });
@@ -72,8 +75,13 @@ export class AuthService {
 
         // Find user
         const user = await User.findByPk(payload.UserID);
-        if (!user || !user.IsActive || user.Role !== "exam_admin") {
+        if (!user || !user.IsActive) {
             throw new Error("Invalid refresh token or user is inactive");
+        }
+
+        // Strict role check for refresh: Must be admin or invigilator (students use different auth usually, or same but verified)
+        if (!['exam_admin', 'invigilator'].includes(user.Role)) {
+            throw new Error("Invalid role for this portal");
         }
 
         // Generate new access token
