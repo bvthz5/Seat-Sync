@@ -44,6 +44,7 @@ export class AuthService {
             Email: user.Email,
             Role: user.Role,
             IsRootAdmin: user.IsRootAdmin,
+            IsPasswordChanged: user.IsPasswordChanged,
         };
 
         const accessToken = signAccessToken(payload);
@@ -57,6 +58,7 @@ export class AuthService {
                 Email: user.Email,
                 Role: user.Role,
                 IsRootAdmin: user.IsRootAdmin,
+                IsPasswordChanged: user.IsPasswordChanged,
             },
         };
     }
@@ -80,9 +82,12 @@ export class AuthService {
             Email: user.Email,
             Role: user.Role,
             IsRootAdmin: user.IsRootAdmin,
+            IsPasswordChanged: user.IsPasswordChanged,
         };
 
         const newAccessToken = signAccessToken(accessPayload);
+
+
 
         // Optionally rotate refresh token (generate new one)
         const newRefreshToken = signRefreshToken({ UserID: user.UserID });
@@ -191,7 +196,8 @@ export class AuthService {
 
         // 3. Update User Password
         await user.update({
-            PasswordHash: passwordHash
+            PasswordHash: passwordHash,
+            IsPasswordChanged: true
         });
 
         // 4. Mark token as used
@@ -220,7 +226,8 @@ export class AuthService {
 
         // 3. Update DB
         await user.update({
-            PasswordHash: passwordHash
+            PasswordHash: passwordHash,
+            IsPasswordChanged: true
         });
     }
 }

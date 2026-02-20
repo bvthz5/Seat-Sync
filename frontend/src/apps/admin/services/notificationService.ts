@@ -13,13 +13,15 @@ export interface Notification {
     id: number;
     title: string;
     message: string;
-    type: NotificationType;
+    type: string;
     category: NotificationCategory;
     priority: NotificationPriority;
     sentAt: string;
     isRead: boolean;
     readAt?: string;
     metadata?: any;
+    audience?: string[]; // Added
+    status?: string; // Added to match UI usage
 }
 
 export interface NotificationStats {
@@ -47,12 +49,14 @@ export const initNotificationSocket = (userId: number, onNewNotification: (n: No
             id: payload.id,
             title: payload.title,
             message: payload.message,
-            type: payload.type,
+            type: payload.type.toLowerCase(),
             category: payload.category,
             priority: payload.priority,
             sentAt: payload.createdAt,
             isRead: false,
-            metadata: payload.metadata
+            metadata: payload.metadata,
+            audience: ['Me'], // Socket notification is usually for 'me' or 'role' but payload doesn't carry target info sometimes
+            status: 'Delivered'
         };
 
         onNewNotification(notification);
@@ -84,6 +88,7 @@ export const createNotification = async (data: any): Promise<Notification> => {
 
 export const getMyNotifications = async (params: any = {}): Promise<{ data: Notification[], total: number }> => {
     const response = await axios.get(`${API_URL}/my`, { ...getHeaders(), params });
+    // Assuming my notifications are standardized
     return response.data;
 };
 
@@ -132,5 +137,17 @@ export const sendBroadcast = async (data: any) => {
 
 export const getNotifications = async () => {
     const res = await getAllNotificationsAdmin();
-    return res.data;
+    // Map PascalCase to camelCase and add audience
+    return res.data.map((n: any) => ({
+        id: n.NotificationID || n.id,
+        title: n.Title || n.title,
+        message: n.Message || n.message,
+        type: (n.Type || n.type)?.toLowerCase(),
+        category: n.Category || n.category,
+        priority: n.Priority || n.priority,
+        sentAt: n.SentAt || n.sentAt || n.createdAt,
+        isRead: n.IsRead || n.isRead,
+        audience: n.TargetType === 'ALL' ? ['All Users'] : n.TargetType === 'ROLE' ? [n.TargetId] : [n.TargetId ? n.TargetId : 'Unknown'],
+        status: 'delivered'
+    }));
 };

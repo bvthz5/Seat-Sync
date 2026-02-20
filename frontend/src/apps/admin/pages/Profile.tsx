@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
-import { UserProfile } from '../../../types/auth';
+import { UserProfile } from '../../../types/auth'; // Ensure this path is correct
 import { AuthService } from '../../../services/auth.service';
 import ProfileHeaderCard from '../components/profile/ProfileHeaderCard';
 import PersonalInfoForm from '../components/profile/PersonalInfoForm';
@@ -14,6 +14,11 @@ const Profile: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const { user } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
+
+    // Check for openChangePassword state
+    const shouldOpenPasswordModal = location.state?.openChangePassword || false;
+    // ... rest of component
 
     const fetchProfile = useCallback(async () => {
         try {
@@ -63,7 +68,10 @@ const Profile: React.FC = () => {
 
                     {/* Right Column: Security Settings (1/3 width) */}
                     <div className="lg:col-span-1">
-                        <SecuritySettingsCard profile={profile} />
+                        <SecuritySettingsCard
+                            profile={profile}
+                            defaultOpenPasswordModal={shouldOpenPasswordModal}
+                        />
                     </div>
                 </div>
             </div>

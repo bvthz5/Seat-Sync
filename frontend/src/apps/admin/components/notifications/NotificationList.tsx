@@ -28,7 +28,7 @@ export const NotificationList: React.FC = () => {
         setNotifications(data);
     };
 
-    const handleDelete = async (id: string) => {
+    const handleDelete = async (id: number) => {
         if (confirm("Are you sure you want to delete this notification?")) {
             await deleteNotification(id);
             toast.success("Notification deleted");
@@ -57,7 +57,7 @@ export const NotificationList: React.FC = () => {
             case "audience":
                 return (
                     <div className="flex flex-col">
-                        <p className="text-bold text-sm capitalize text-default-600">{item.audience.join(', ')}</p>
+                        <p className="text-bold text-sm capitalize text-default-600">{(item.audience || []).join(', ')}</p>
                     </div>
                 );
             case "status":

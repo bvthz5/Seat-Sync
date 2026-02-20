@@ -4,6 +4,7 @@ export interface User {
     Role: 'exam_admin' | 'invigilator' | 'student';
     IsRootAdmin: boolean;
     FullName?: string | null;
+    IsPasswordChanged?: boolean;
 }
 
 export interface UserProfile extends User {

@@ -248,7 +248,7 @@ export class AuthController {
             }
 
             const user = await User.findByPk(userId, {
-                attributes: ['UserID', 'Email', 'FullName', 'Role', 'IsRootAdmin', 'IsActive', 'CreatedAt']
+                attributes: ['UserID', 'Email', 'FullName', 'Role', 'IsRootAdmin', 'IsActive', 'IsPasswordChanged', 'CreatedAt']
             });
 
             if (!user) {
