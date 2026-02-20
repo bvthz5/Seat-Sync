@@ -93,7 +93,7 @@ export const getExamActivityLogs = async (req: Request, res: Response): Promise<
 
         const logs = await ActivityLog.findAll({
             where: whereClause,
-            include: [{ model: User, attributes: ['Username', 'Email', 'Role'] }],
+            include: [{ model: User, attributes: ['FullName', 'Email', 'Role'] }],
             order: [['Timestamp', 'DESC']],
             limit: 200 // Increased limit
         });

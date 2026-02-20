@@ -1,5 +1,5 @@
 
-import axios from 'axios';
+import api from '../../../services/api';
 import { io, Socket } from 'socket.io-client';
 import toast from 'react-hot-toast';
 
@@ -76,42 +76,40 @@ export const initNotificationSocket = (userId: number, onNewNotification: (n: No
 const API_URL = 'http://localhost:5000/api/notifications';
 
 // Helper to get token (adjust based on your auth implementation)
-const getHeaders = () => {
-    const token = localStorage.getItem('token');
-    return { headers: { Authorization: `Bearer ${token}` } };
-};
+// Removed manual header generation. API interceptor handles tokens.
+const getHeaders = () => ({});
 
 export const createNotification = async (data: any): Promise<Notification> => {
-    const response = await axios.post(API_URL, data, getHeaders());
+    const response = await api.post(API_URL, data);
     return response.data.data;
 };
 
 export const getMyNotifications = async (params: any = {}): Promise<{ data: Notification[], total: number }> => {
-    const response = await axios.get(`${API_URL}/my`, { ...getHeaders(), params });
+    const response = await api.get(`${API_URL}/my`, { params });
     // Assuming my notifications are standardized
     return response.data;
 };
 
 export const getNotificationStats = async (): Promise<NotificationStats> => {
-    const response = await axios.get(`${API_URL}/stats`, getHeaders());
+    const response = await api.get(`${API_URL}/stats`);
     return response.data.data;
 };
 
 export const markAsRead = async (id: number): Promise<void> => {
-    await axios.put(`${API_URL}/${id}/read`, {}, getHeaders());
+    await api.put(`${API_URL}/${id}/read`);
 };
 
 export const markAllAsRead = async (): Promise<void> => {
-    await axios.put(`${API_URL}/read-all`, {}, getHeaders());
+    await api.put(`${API_URL}/read-all`);
 };
 
 export const deleteNotification = async (id: number): Promise<void> => {
-    await axios.delete(`${API_URL}/${id}`, getHeaders());
+    await api.delete(`${API_URL}/${id}`);
 };
 
 // Admin: Get all notifications history
 export const getAllNotificationsAdmin = async (params: any = {}): Promise<{ data: Notification[], total: number }> => {
-    const response = await axios.get(`${API_URL}/admin/all`, { ...getHeaders(), params });
+    const response = await api.get(`${API_URL}/admin/all`, { params });
     return response.data;
 };
 

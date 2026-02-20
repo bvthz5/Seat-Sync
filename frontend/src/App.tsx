@@ -4,6 +4,9 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './hooks/useAuth';
 import AdminApp from './apps/admin/AdminApp';
 import InvigilatorLogin from './apps/invigilator/pages/InvigilatorLogin';
+import InvigilatorDashboard from './apps/invigilator/pages/InvigilatorDashboard';
+import AttendanceConsole from './apps/invigilator/pages/AttendanceConsole';
+import InvigilatorProfile from './apps/invigilator/pages/InvigilatorProfile';
 import LandingPage from './pages/LandingPage';
 import './App.css';
 
@@ -19,6 +22,9 @@ function App() {
 
           {/* Invigilator App */}
           <Route path="/invigilator/login" element={<InvigilatorLogin />} />
+          <Route path="/invigilator/dashboard" element={<InvigilatorDashboard />} />
+          <Route path="/invigilator/attendance" element={<AttendanceConsole />} />
+          <Route path="/invigilator/profile" element={<InvigilatorProfile />} />
 
           {/* Placeholders for other apps */}
           <Route path="/student/*" element={<div>Student App Placeholder</div>} />

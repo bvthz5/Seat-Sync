@@ -1,16 +1,9 @@
 
-import axios from 'axios';
+import api from '../../../services/api';
 
 const API_URL = 'http://localhost:5000/api/security';
 
-const getAuthHeaders = () => {
-    const token = localStorage.getItem('token');
-    return {
-        headers: {
-            Authorization: `Bearer ${token}`
-        }
-    };
-};
+// Interceptors handle token now
 
 export interface SecurityStats {
     activeSessions: number;
@@ -43,23 +36,23 @@ export interface ActiveSession {
 }
 
 export const getDashboardStats = async (): Promise<SecurityStats> => {
-    const response = await axios.get(`${API_URL}/dashboard-stats`, getAuthHeaders());
+    const response = await api.get(`${API_URL}/dashboard-stats`);
     return response.data.data;
 };
 
 export const getActiveSessions = async (): Promise<ActiveSession[]> => {
-    const response = await axios.get(`${API_URL}/sessions`, getAuthHeaders());
+    const response = await api.get(`${API_URL}/sessions`);
     return response.data.data;
 };
 
 export const terminateSession = async (sessionId: number): Promise<void> => {
-    await axios.delete(`${API_URL}/sessions/${sessionId}`, getAuthHeaders());
+    await api.delete(`${API_URL}/sessions/${sessionId}`);
 };
 
 export const terminateAllUserSessions = async (userId: number): Promise<void> => {
-    await axios.delete(`${API_URL}/users/${userId}/sessions`, getAuthHeaders());
+    await api.delete(`${API_URL}/users/${userId}/sessions`);
 };
 
 export const invalidateAllTokens = async (): Promise<void> => {
-    await axios.post(`${API_URL}/invalidate-all`, {}, getAuthHeaders());
+    await api.post(`${API_URL}/invalidate-all`);
 };

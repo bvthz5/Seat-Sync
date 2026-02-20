@@ -68,7 +68,7 @@ export const getAuditLogs = async (req: Request, res: Response): Promise<void> =
                 { Action: { [Op.like]: `%${search}%` } },
                 { Details: { [Op.like]: `%${search}%` } },
                 { IPAddress: { [Op.like]: `%${search}%` } },
-                { '$User.Username$': { [Op.like]: `%${search}%` } },
+                { '$User.FullName$': { [Op.like]: `%${search}%` } },
                 { '$User.Email$': { [Op.like]: `%${search}%` } }
             ];
         }
@@ -77,14 +77,14 @@ export const getAuditLogs = async (req: Request, res: Response): Promise<void> =
             where: whereClause,
             include: [{
                 model: User,
-                attributes: ['Username', 'Email', 'Role'],
+                attributes: ['FullName', 'Email', 'Role'],
                 where: userWhere,
                 required: false // Optional unless searching or filtering by role
             }],
             order: [['Timestamp', 'DESC']],
             limit,
             offset,
-            subQuery: false // Required when filtering by associated model columns (User.Username) in top-level where clause with pagination
+            subQuery: false // Required when filtering by associated model columns (User.FullName) in top-level where clause with pagination
         });
 
         res.status(200).json({
