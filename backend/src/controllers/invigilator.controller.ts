@@ -118,19 +118,19 @@ export const createInvigilator = async (req: Request, res: Response) => {
         const { FacultyID, Name, Department, Designation } = req.body;
 
         if (!FacultyID || !Name || !Department) {
-            return res.status(400).json({ message: "FacultyID, Name, and Department are required" });
+            return res.status(400).json({ message: "Staff Code, Name, and Department are required" });
         }
 
-        const facultyIDStr = String(FacultyID).trim();
+        const staffCodeStr = String(FacultyID).trim();
 
-        // Check for duplicate
-        const existing = await Faculty.findByPk(facultyIDStr);
+        // Check for duplicate by StaffCode
+        const existing = await Faculty.findOne({ where: { StaffCode: staffCodeStr } });
         if (existing) {
-            return res.status(409).json({ message: `FacultyID ${facultyIDStr} already exists` });
+            return res.status(409).json({ message: `Staff Code ${staffCodeStr} already exists` });
         }
 
         const faculty = await Faculty.create({
-            FacultyID: facultyIDStr,
+            StaffCode: staffCodeStr,
             Name: String(Name).trim(),
             Department: String(Department).trim(),
             Designation: Designation ? String(Designation).trim() : "Faculty",
@@ -144,7 +144,7 @@ export const createInvigilator = async (req: Request, res: Response) => {
     } catch (error: any) {
         console.error("Error creating invigilator:", error);
         if (error.name === 'SequelizeUniqueConstraintError') {
-            return res.status(409).json({ message: "FacultyID already exists" });
+            return res.status(409).json({ message: "Staff Code already exists" });
         }
         res.status(500).json({ message: "Internal server error" });
     }
@@ -237,22 +237,22 @@ export const bulkImportInvigilators = async (req: Request, res: Response) => {
                 const deptStr = deptValue ? String(deptValue).trim() : "";
                 const nameStr = Name ? String(Name).trim() : "";
                 const desigStr = Designation ? String(Designation).trim() : "Faculty";
-                const facultyIDStr = FacultyID ? String(FacultyID).trim() : "";
+                const staffCodeStr = FacultyID ? String(FacultyID).trim() : "";
 
-                if (!nameStr || !deptStr || !facultyIDStr) {
-                    skipped.push({ row: i + 2, reason: `Invalid data: Name=${nameStr}, Dept=${deptStr}, ID=${FacultyID}` });
+                if (!nameStr || !deptStr || !staffCodeStr) {
+                    skipped.push({ row: i + 2, reason: `Invalid data: Name=${nameStr}, Dept=${deptStr}, StaffCode=${FacultyID}` });
                     continue;
                 }
 
-                // Check for duplicate FacultyID
-                const existing = await Faculty.findByPk(facultyIDStr, { transaction: t });
+                // Check for duplicate StaffCode
+                const existing = await Faculty.findOne({ where: { StaffCode: staffCodeStr }, transaction: t });
                 if (existing) {
-                    skipped.push({ row: i + 2, reason: `FacultyID ${facultyIDStr} already exists` });
+                    skipped.push({ row: i + 2, reason: `StaffCode ${staffCodeStr} already exists` });
                     continue;
                 }
 
                 await Faculty.create({
-                    FacultyID: facultyIDStr,
+                    StaffCode: staffCodeStr,
                     Name: nameStr,
                     Designation: desigStr,
                     Department: deptStr,
