@@ -115,46 +115,36 @@ export const toggleInvigilatorEligibility = async (req: Request, res: Response) 
 
 export const createInvigilator = async (req: Request, res: Response) => {
     try {
-        const { FullName, Email, Password, Designation, DepartmentID } = req.body;
+        const { FacultyID, Name, Department, Designation } = req.body;
 
-        if (!FullName || !Email || !Password) {
-            return res.status(400).json({ message: "FullName, Email, and Password are required" });
+        if (!FacultyID || !Name || !Department) {
+            return res.status(400).json({ message: "FacultyID, Name, and Department are required" });
         }
 
-        // 1. Create User
-        const passwordHash = await bcrypt.hash(Password, 10);
-        const user = await User.create({
-            Email,
-            FullName,
-            PasswordHash: passwordHash,
-            Role: "invigilator",
-            IsActive: true
-        });
+        const facultyIDStr = String(FacultyID).trim();
 
-        // 2. Create Invigilator
-        const invigilator = await Invigilator.create({
-            UserID: user.UserID
-        });
+        // Check for duplicate
+        const existing = await Faculty.findByPk(facultyIDStr);
+        if (existing) {
+            return res.status(409).json({ message: `FacultyID ${facultyIDStr} already exists` });
+        }
 
-        // 3. Optional: If DepartmentID is provided, find or create Faculty record?
-        // For now, let's just keep it simple.
+        const faculty = await Faculty.create({
+            FacultyID: facultyIDStr,
+            Name: String(Name).trim(),
+            Department: String(Department).trim(),
+            Designation: Designation ? String(Designation).trim() : "Faculty",
+            IsEligible: true,
+        });
 
         res.status(201).json({
-            message: "Invigilator created successfully",
-            invigilator: {
-                ...invigilator.toJSON(),
-                User: {
-                    UserID: user.UserID,
-                    Email: user.Email,
-                    FullName: user.FullName,
-                    Role: user.Role
-                }
-            }
+            message: "Invigilator added successfully",
+            faculty: faculty.toJSON(),
         });
     } catch (error: any) {
         console.error("Error creating invigilator:", error);
         if (error.name === 'SequelizeUniqueConstraintError') {
-            return res.status(409).json({ message: "Email already exists" });
+            return res.status(409).json({ message: "FacultyID already exists" });
         }
         res.status(500).json({ message: "Internal server error" });
     }
@@ -247,22 +237,22 @@ export const bulkImportInvigilators = async (req: Request, res: Response) => {
                 const deptStr = deptValue ? String(deptValue).trim() : "";
                 const nameStr = Name ? String(Name).trim() : "";
                 const desigStr = Designation ? String(Designation).trim() : "Faculty";
-                const facultyIDNum = Number(FacultyID);
+                const facultyIDStr = FacultyID ? String(FacultyID).trim() : "";
 
-                if (!nameStr || !deptStr || isNaN(facultyIDNum)) {
+                if (!nameStr || !deptStr || !facultyIDStr) {
                     skipped.push({ row: i + 2, reason: `Invalid data: Name=${nameStr}, Dept=${deptStr}, ID=${FacultyID}` });
                     continue;
                 }
 
                 // Check for duplicate FacultyID
-                const existing = await Faculty.findByPk(facultyIDNum, { transaction: t });
+                const existing = await Faculty.findByPk(facultyIDStr, { transaction: t });
                 if (existing) {
-                    skipped.push({ row: i + 2, reason: `FacultyID ${facultyIDNum} already exists` });
+                    skipped.push({ row: i + 2, reason: `FacultyID ${facultyIDStr} already exists` });
                     continue;
                 }
 
                 await Faculty.create({
-                    FacultyID: facultyIDNum,
+                    FacultyID: facultyIDStr,
                     Name: nameStr,
                     Designation: desigStr,
                     Department: deptStr,

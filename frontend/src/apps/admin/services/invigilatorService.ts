@@ -22,9 +22,10 @@ export interface InvigilatorStats {
 }
 
 export interface CreateInvigilatorData {
-    FullName: string;
-    Email: string;
-    Password: string;
+    FacultyID: string;
+    Name: string;
+    Department: string;
+    Designation?: string;
 }
 
 export const invigilatorService = {
