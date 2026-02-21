@@ -1,0 +1,777 @@
+@import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@400;700;900&family=DM+Sans:wght@400;500&display=swap');
+
+.nf-wrapper {
+    --nf-bg: #05060f;
+    --nf-indigo: #3d5af1;
+    --nf-violet: #8b5cf6;
+    --nf-cyan: #22d3ee;
+    --nf-pink: #f472b6;
+    --nf-amber: #fbbf24;
+    --nf-white: #f8faff;
+    --nf-sub: #6b7cb5;
+
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: var(--nf-bg);
+    font-family: 'DM Sans', sans-serif;
+    color: var(--nf-white);
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 99999;
+}
+
+.nf-wrapper *,
+.nf-wrapper *::before,
+.nf-wrapper *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* BG */
+.nf-bg-wrap {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+}
+
+.nf-nebula {
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(ellipse 60% 50% at 20% 30%, rgba(61, 90, 241, .18) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 60% at 80% 70%, rgba(139, 92, 246, .14) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 40% at 60% 20%, rgba(34, 211, 238, .08) 0%, transparent 60%);
+    animation: nf-nebShift 12s ease-in-out infinite alternate;
+}
+
+@keyframes nf-nebShift {
+    from {
+        filter: hue-rotate(0deg) brightness(1);
+    }
+
+    to {
+        filter: hue-rotate(30deg) brightness(1.15);
+    }
+}
+
+#nf-stars {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* LAYOUT */
+.nf-page {
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+/* ILLUSTRATION */
+.nf-illustration {
+    flex: 0 0 auto;
+    width: min(460px, 44vw);
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform .15s ease-out;
+}
+
+/* PLANET */
+.nf-planet-wrap {
+    position: relative;
+    width: 260px;
+    height: 260px;
+    animation: nf-planetFloat 6s ease-in-out infinite;
+}
+
+@keyframes nf-planetFloat {
+
+    0%,
+    100% {
+        transform: translateY(0) rotate(-1deg);
+    }
+
+    50% {
+        transform: translateY(-22px) rotate(1deg);
+    }
+}
+
+.nf-planet {
+    width: 260px;
+    height: 260px;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 38% 35%, #4f7cff 0%, #2a3e8c 40%, #0d1540 80%, #080e2e 100%);
+    box-shadow:
+        inset -28px -18px 55px rgba(0, 0, 0, .6),
+        inset 10px 10px 35px rgba(100, 150, 255, .15),
+        0 0 55px rgba(61, 90, 241, .35),
+        0 0 110px rgba(61, 90, 241, .15);
+    overflow: hidden;
+    position: relative;
+}
+
+.nf-planet::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 60% 30%, rgba(255, 255, 255, .06) 8%, transparent 8.5%),
+        radial-gradient(circle at 30% 60%, rgba(255, 255, 255, .04) 5%, transparent 5.5%),
+        radial-gradient(circle at 75% 65%, rgba(255, 255, 255, .05) 6%, transparent 6.5%),
+        radial-gradient(circle at 20% 20%, rgba(255, 255, 255, .07) 10%, transparent 10.5%);
+}
+
+.nf-planet-marks {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background:
+        radial-gradient(ellipse 50px 30px at 45% 40%, rgba(80, 200, 255, .12) 0%, transparent 100%),
+        radial-gradient(ellipse 80px 40px at 60% 55%, rgba(100, 160, 255, .09) 0%, transparent 100%);
+}
+
+.nf-planet-shimmer {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(255, 255, 255, .12) 0%, transparent 50%);
+}
+
+/* RING */
+.nf-ring-wrap {
+    position: absolute;
+    width: 370px;
+    height: 88px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotateX(75deg);
+    animation: nf-ringFloat 6s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes nf-ringFloat {
+
+    0%,
+    100% {
+        transform: translate(-50%, -50%) rotateX(75deg) translateY(0);
+    }
+
+    50% {
+        transform: translate(-50%, -50%) rotateX(75deg) translateY(-22px);
+    }
+}
+
+.nf-ring {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 16px solid transparent;
+    background:
+        linear-gradient(var(--nf-bg), var(--nf-bg)) padding-box,
+        linear-gradient(135deg, var(--nf-violet), var(--nf-cyan), var(--nf-indigo)) border-box;
+    box-shadow: 0 0 30px rgba(139, 92, 246, .4), 0 0 60px rgba(34, 211, 238, .2);
+    animation: nf-ringGlow 3s ease-in-out infinite alternate;
+}
+
+@keyframes nf-ringGlow {
+    from {
+        box-shadow: 0 0 30px rgba(139, 92, 246, .4), 0 0 60px rgba(34, 211, 238, .2);
+    }
+
+    to {
+        box-shadow: 0 0 50px rgba(139, 92, 246, .7), 0 0 90px rgba(34, 211, 238, .4);
+    }
+}
+
+/* ASTRONAUT */
+.nf-astronaut {
+    position: absolute;
+    top: -28px;
+    right: -28px;
+    width: 125px;
+    height: 125px;
+    animation: nf-astroFloat 5s 1s ease-in-out infinite;
+}
+
+@keyframes nf-astroFloat {
+
+    0%,
+    100% {
+        transform: rotate(-8deg) translateY(0);
+    }
+
+    50% {
+        transform: rotate(8deg) translateY(-16px);
+    }
+}
+
+.nf-astro-body {
+    position: absolute;
+    width: 76px;
+    height: 86px;
+    top: 28px;
+    left: 24px;
+    border-radius: 38px 38px 36px 36px;
+    background: linear-gradient(160deg, #e8eeff 0%, #bccfff 60%, #8fa8f5 100%);
+    box-shadow: inset -6px -4px 16px rgba(0, 0, 50, .2), inset 2px 2px 8px rgba(255, 255, 255, .6);
+}
+
+.nf-astro-visor {
+    position: absolute;
+    width: 52px;
+    height: 42px;
+    top: 13px;
+    left: 12px;
+    border-radius: 26px 26px 21px 21px;
+    background: linear-gradient(135deg, rgba(34, 211, 238, .9) 0%, rgba(61, 90, 241, .8) 60%, rgba(10, 20, 80, .9) 100%);
+    box-shadow: inset 0 2px 8px rgba(255, 255, 255, .25), 0 0 14px rgba(34, 211, 238, .5);
+}
+
+.nf-astro-visor::after {
+    content: '';
+    position: absolute;
+    width: 15px;
+    height: 7px;
+    top: 8px;
+    left: 9px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, .3);
+    transform: rotate(-20deg);
+}
+
+.nf-astro-helmet {
+    position: absolute;
+    width: 86px;
+    height: 76px;
+    top: 2px;
+    left: 19px;
+    border-radius: 43px 43px 28px 28px;
+    border: 3px solid rgba(255, 255, 255, .25);
+    box-shadow: 0 0 20px rgba(61, 90, 241, .3);
+}
+
+.nf-astro-arm-l,
+.nf-astro-arm-r {
+    position: absolute;
+    width: 21px;
+    height: 48px;
+    top: 38px;
+    border-radius: 10px;
+    background: linear-gradient(160deg, #dce8ff, #a8bfff);
+    box-shadow: inset -3px -2px 8px rgba(0, 0, 50, .15);
+}
+
+.nf-astro-arm-l {
+    left: 7px;
+    transform: rotate(30deg);
+    transform-origin: top center;
+}
+
+.nf-astro-arm-r {
+    right: 7px;
+    transform: rotate(-30deg);
+    transform-origin: top center;
+}
+
+.nf-astro-pack {
+    position: absolute;
+    width: 22px;
+    height: 34px;
+    top: 42px;
+    left: 46px;
+    border-radius: 5px;
+    background: linear-gradient(160deg, #c4d8ff, #8fa8f5);
+}
+
+.nf-astro-leg-l,
+.nf-astro-leg-r {
+    position: absolute;
+    width: 25px;
+    height: 34px;
+    top: 104px;
+    border-radius: 12px 12px 9px 9px;
+    background: linear-gradient(160deg, #dce8ff, #a8bfff);
+}
+
+.nf-astro-leg-l {
+    left: 22px;
+    transform: rotate(-8deg);
+}
+
+.nf-astro-leg-r {
+    right: 22px;
+    transform: rotate(8deg);
+}
+
+/* TETHER */
+.nf-tether {
+    position: absolute;
+    top: 48px;
+    right: 0;
+    width: 52px;
+    height: 52px;
+    border-top: 2px dashed rgba(255, 255, 255, .22);
+    border-right: 2px dashed rgba(255, 255, 255, .22);
+    border-radius: 0 20px 0 0;
+    pointer-events: none;
+    animation: nf-tetherWave 5s 1s ease-in-out infinite;
+}
+
+@keyframes nf-tetherWave {
+
+    0%,
+    100% {
+        transform: skewX(0deg);
+    }
+
+    50% {
+        transform: skewX(4deg);
+    }
+}
+
+/* MOON */
+.nf-moon {
+    position: absolute;
+    bottom: -10px;
+    left: 28px;
+    width: 65px;
+    height: 65px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 38% 38%, #d4d9f7 0%, #a0a8d0 50%, #6a7099 100%);
+    box-shadow: inset -8px -6px 20px rgba(0, 0, 30, .4), 0 0 20px rgba(160, 168, 208, .3);
+    animation: nf-moonOrbit 12s linear infinite;
+}
+
+.nf-moon::after {
+    content: '';
+    position: absolute;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    top: 17px;
+    left: 13px;
+    background: rgba(255, 255, 255, .06);
+    box-shadow: 13px 9px 0 rgba(255, 255, 255, .04), 7px 26px 0 rgba(255, 255, 255, .03);
+}
+
+@keyframes nf-moonOrbit {
+    0% {
+        bottom: -10px;
+        left: 28px;
+    }
+
+    25% {
+        bottom: 38px;
+        left: -14px;
+    }
+
+    50% {
+        bottom: 78px;
+        left: 8px;
+    }
+
+    75% {
+        bottom: 38px;
+        left: 48px;
+    }
+
+    100% {
+        bottom: -10px;
+        left: 28px;
+    }
+}
+
+/* SATELLITES */
+.nf-sat {
+    position: absolute;
+    animation: nf-satOrbit linear infinite;
+}
+
+.nf-sat svg {
+    filter: drop-shadow(0 0 6px rgba(34, 211, 238, .5));
+}
+
+.nf-sat1 {
+    width: 34px;
+    height: 34px;
+    top: 18px;
+    left: 18px;
+    animation-duration: 8s;
+}
+
+.nf-sat2 {
+    width: 26px;
+    height: 26px;
+    bottom: 18px;
+    right: 28px;
+    animation-duration: 6s;
+    animation-delay: -3s;
+}
+
+@keyframes nf-satOrbit {
+    0% {
+        transform: rotate(0deg) translateX(10px) rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg) translateX(10px) rotate(-360deg);
+    }
+}
+
+/* SPARKS */
+.nf-sparks {
+    position: absolute;
+    inset: -40px;
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.nf-spark {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--nf-cyan);
+    animation: nf-sparkDrift linear infinite;
+}
+
+@keyframes nf-sparkDrift {
+    0% {
+        opacity: 0;
+        transform: translateY(0) scale(0);
+    }
+
+    10% {
+        opacity: 1;
+    }
+
+    90% {
+        opacity: .8;
+    }
+
+    100% {
+        opacity: 0;
+        transform: translateY(-120px) scale(0.3) translateX(var(--dx));
+    }
+}
+
+/* CONTENT */
+.nf-content {
+    flex: 1;
+    max-width: 480px;
+    padding-left: clamp(24px, 4vw, 60px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.nf-eyebrow {
+    font-family: 'Unbounded', sans-serif;
+    font-size: 11px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--nf-cyan);
+    margin-bottom: 18px;
+    opacity: 0;
+    animation: nf-slideIn .8s .2s cubic-bezier(.16, 1, .3, 1) forwards;
+}
+
+.nf-code-404 {
+    font-family: 'Unbounded', sans-serif;
+    font-size: clamp(70px, 10vw, 126px);
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -4px;
+    margin-bottom: 10px;
+    position: relative;
+    opacity: 0;
+    animation: nf-slideIn .8s .35s cubic-bezier(.16, 1, .3, 1) forwards;
+}
+
+.nf-code-404 .nf-n4 {
+    display: inline-block;
+    background: linear-gradient(135deg, var(--nf-white) 30%, var(--nf-indigo));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.nf-code-404 .nf-n0 {
+    display: inline-block;
+    background: linear-gradient(135deg, var(--nf-violet), var(--nf-pink), var(--nf-cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: nf-hue 5s linear infinite;
+}
+
+@keyframes nf-hue {
+    to {
+        filter: hue-rotate(360deg);
+    }
+}
+
+.nf-code-404::after {
+    content: '404';
+    position: absolute;
+    inset: 0;
+    font-family: 'Unbounded', sans-serif;
+    font-size: inherit;
+    font-weight: 900;
+    letter-spacing: -4px;
+    background: linear-gradient(135deg, var(--nf-violet), var(--nf-cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: blur(28px);
+    opacity: .4;
+    pointer-events: none;
+    z-index: -1;
+}
+
+.nf-headline {
+    font-family: 'Unbounded', sans-serif;
+    font-size: clamp(18px, 2.4vw, 26px);
+    font-weight: 700;
+    line-height: 1.3;
+    margin-bottom: 16px;
+    opacity: 0;
+    animation: nf-slideIn .8s .5s cubic-bezier(.16, 1, .3, 1) forwards;
+}
+
+.nf-sub {
+    font-size: 15px;
+    color: var(--nf-sub);
+    line-height: 1.8;
+    max-width: 360px;
+    margin-left: auto;
+    margin-right: auto;
+    margin-bottom: 32px;
+    opacity: 0;
+    animation: nf-slideIn .8s .65s cubic-bezier(.16, 1, .3, 1) forwards;
+}
+
+.nf-pills {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 32px;
+    opacity: 0;
+    animation: nf-slideIn .8s .8s cubic-bezier(.16, 1, .3, 1) forwards;
+}
+
+.nf-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    letter-spacing: .5px;
+    padding: 6px 14px;
+    border-radius: 40px;
+    background: rgba(255, 255, 255, .04);
+    border: 1px solid rgba(255, 255, 255, .08);
+    color: var(--nf-sub);
+}
+
+.nf-pill .nf-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+}
+
+.nf-pill-ok .nf-dot {
+    background: #22c55e;
+    box-shadow: 0 0 6px #22c55e;
+}
+
+.nf-pill-ok {
+    border-color: rgba(34, 197, 94, .25);
+    color: #86efac;
+}
+
+.nf-pill-warn .nf-dot {
+    background: var(--nf-amber);
+    box-shadow: 0 0 6px var(--nf-amber);
+}
+
+.nf-pill-warn {
+    border-color: rgba(251, 191, 36, .25);
+    color: #fde68a;
+}
+
+.nf-btns {
+    display: flex;
+    gap: 14px;
+    justify-content: center;
+    opacity: 0;
+    animation: nf-slideIn .8s .95s cubic-bezier(.16, 1, .3, 1) forwards;
+}
+
+.nf-btn {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    font-size: 14px;
+    padding: 14px 28px;
+    border-radius: 12px;
+    cursor: pointer;
+    border: none;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: transform .22s, box-shadow .22s;
+    position: relative;
+    overflow: hidden;
+}
+
+.nf-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(rgba(255, 255, 255, .1), transparent);
+    opacity: 0;
+    transition: opacity .2s;
+}
+
+.nf-btn:hover::before {
+    opacity: 1;
+}
+
+.nf-btn:hover {
+    transform: translateY(-3px);
+}
+
+.nf-btn-p {
+    background: linear-gradient(135deg, var(--nf-indigo), var(--nf-violet));
+    color: #fff;
+    box-shadow: 0 4px 20px rgba(61, 90, 241, .4);
+}
+
+.nf-btn-p:hover {
+    box-shadow: 0 8px 30px rgba(61, 90, 241, .6);
+}
+
+.nf-btn-s {
+    background: rgba(255, 255, 255, .05);
+    color: var(--nf-sub);
+    border: 1px solid rgba(255, 255, 255, .1);
+}
+
+.nf-btn-s:hover {
+    color: var(--nf-white);
+    border-color: rgba(255, 255, 255, .25);
+}
+
+/* LOGO */
+.nf-logo {
+    position: absolute;
+    top: 28px;
+    left: 32px;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Unbounded', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    opacity: 0;
+    animation: nf-slideIn .8s 0s cubic-bezier(.16, 1, .3, 1) forwards;
+}
+
+.nf-logo-box {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--nf-indigo), var(--nf-violet));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 900;
+    box-shadow: 0 0 20px rgba(61, 90, 241, .5);
+}
+
+
+@keyframes nf-slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(24px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media(max-width: 760px) {
+    .nf-page {
+        flex-direction: column;
+        gap: 24px;
+        padding-top: 90px;
+    }
+
+    .nf-illustration {
+        width: 220px;
+    }
+
+    .nf-planet-wrap {
+        width: 180px;
+        height: 180px;
+    }
+
+    .nf-planet {
+        width: 180px;
+        height: 180px;
+    }
+
+    .nf-ring-wrap {
+        width: 260px;
+        height: 60px;
+    }
+
+    .nf-astronaut {
+        width: 90px;
+        height: 90px;
+        top: -18px;
+        right: -18px;
+    }
+
+    .nf-content {
+        padding-left: 0;
+        align-items: center;
+        text-align: center;
+    }
+
+    .nf-sub {
+        text-align: center;
+    }
+
+    .nf-pills {
+        justify-content: center;
+    }
+
+    .nf-btns {
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+        max-width: 300px;
+    }
+}

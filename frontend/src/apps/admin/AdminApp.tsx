@@ -27,7 +27,7 @@ import ExamControl from './pages/ExamControl';
 import AuditLogs from './pages/AuditLogs';
 import DataCleanup from './pages/DataCleanup';
 import Profile from './pages/Profile';
-
+import NotFound from '../../pages/NotFound';
 const AdminApp: React.FC = () => {
     return (
         <Routes>
@@ -67,7 +67,7 @@ const AdminApp: React.FC = () => {
             </Route>
 
             {/* Catch all for admin */}
-            <Route path="*" element={<Navigate to="dashboard" replace />} />
+            <Route path="*" element={<NotFound />} />
         </Routes>
     );
 };

@@ -8,6 +8,7 @@ import InvigilatorDashboard from './apps/invigilator/pages/InvigilatorDashboard'
 import AttendanceConsole from './apps/invigilator/pages/AttendanceConsole';
 import InvigilatorProfile from './apps/invigilator/pages/InvigilatorProfile';
 import LandingPage from './pages/LandingPage';
+import NotFound from './pages/NotFound';
 import './App.css';
 
 function App() {
@@ -29,7 +30,7 @@ function App() {
           {/* Placeholders for other apps */}
           <Route path="/student/*" element={<div>Student App Placeholder</div>} />
 
-          <Route path="*" element={<div>404 Not Found</div>} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
         <Toaster position="top-right" />
       </AuthProvider>
