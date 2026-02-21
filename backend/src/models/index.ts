@@ -37,6 +37,7 @@ import Exam from "./Exam.js";
 import InvigilatorAssignment from "./InvigilatorAssignment.js";
 import Room from "./Room.js";
 import Program from "./Program.js";
+import ActivityLog from "./ActivityLog.js";
 
 // Define associations here to avoid circular imports in model files
 ActivityLog.belongsTo(User, {
@@ -110,3 +111,30 @@ Room.hasMany(InvigilatorAssignment, {
     foreignKey: "RoomID"
 });
 
+
+// Notification Associations
+import { Notification } from "./Notification.js";
+import { NotificationRecipient } from "./NotificationRecipient.js";
+
+export { default as NotificationRecipient } from "./NotificationRecipient.js";
+
+Notification.hasMany(NotificationRecipient, {
+    foreignKey: "NotificationID",
+    as: "Recipients",
+    onDelete: "CASCADE"
+});
+
+NotificationRecipient.belongsTo(Notification, {
+    foreignKey: "NotificationID",
+    as: "Notification"
+});
+
+User.hasMany(NotificationRecipient, {
+    foreignKey: "UserID",
+    as: "Notifications"
+});
+
+NotificationRecipient.belongsTo(User, {
+    foreignKey: "UserID",
+    as: "User"
+});

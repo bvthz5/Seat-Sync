@@ -32,8 +32,8 @@ export const AnalyticsChart: React.FC = () => {
         <div className="space-y-8 py-2">
 
             {/* Department Load Distribution */}
-            <div className="h-[140px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
+            <div className="h-[140px] w-full min-w-[200px]">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                     <BarChart data={data} layout="vertical" margin={{ top: 0, right: 30, left: -20, bottom: 0 }}>
                         <XAxis type="number" hide />
                         <YAxis
@@ -55,8 +55,8 @@ export const AnalyticsChart: React.FC = () => {
             </div>
 
             {/* Strategic Resource Utilization */}
-            <div className="relative h-[160px] flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
+            <div className="relative h-[160px] w-full min-w-[200px]">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                     <PieChart>
                         <Pie
                             data={pieData}

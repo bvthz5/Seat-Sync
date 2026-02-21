@@ -4,7 +4,8 @@ import {
     forceLogoutSession,
     forceLogoutUser,
     invalidateAllTokens,
-    getSessionStats
+    getSessionStats,
+    getDashboardStats
 } from "../controllers/security.controller.js";
 import { AuthMiddleware } from "../middlewares/auth.middleware.js";
 
@@ -26,6 +27,20 @@ router.use(AuthMiddleware.requireRootAuth);
  *         description: List of active sessions
  */
 router.get("/sessions", getAllActiveSessions);
+
+/**
+ * @swagger
+ * /api/security/dashboard-stats:
+ *   get:
+ *     summary: Get comprehensive security dashboard stats
+ *     tags: [Security]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Dashboard metrics and graph data
+ */
+router.get("/dashboard-stats", getDashboardStats);
 
 /**
  * @swagger

@@ -5,7 +5,6 @@ import {
     setCurrentAcademicYear,
     deleteAcademicYear,
     getAllDepartments,
-    getAllDepartments,
     createDepartment,
     getAllPrograms,
     createProgram,

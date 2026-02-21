@@ -2,8 +2,8 @@ import api, { AccessTokenStore } from './api';
 import { LoginResponse, User, UserProfile } from '../types/auth';
 
 export const AuthService = {
-    async login(email: string, password: string): Promise<LoginResponse> {
-        const response = await api.post<LoginResponse>('/auth/login', { email, password });
+    async login(email: string, password: string, role?: string): Promise<LoginResponse> {
+        const response = await api.post<LoginResponse>('/auth/login', { email, password, role });
         if (response.data.accessToken) {
             AccessTokenStore.setToken(response.data.accessToken);
         }

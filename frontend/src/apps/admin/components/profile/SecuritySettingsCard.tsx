@@ -6,10 +6,11 @@ import ChangePasswordModal from './ChangePasswordModal';
 
 interface SecuritySettingsCardProps {
     profile: UserProfile;
+    defaultOpenPasswordModal?: boolean;
 }
 
-const SecuritySettingsCard: React.FC<SecuritySettingsCardProps> = ({ profile }) => {
-    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+const SecuritySettingsCard: React.FC<SecuritySettingsCardProps> = ({ profile, defaultOpenPasswordModal = false }) => {
+    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(defaultOpenPasswordModal);
 
     return (
         <motion.div

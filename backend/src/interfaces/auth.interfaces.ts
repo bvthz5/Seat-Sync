@@ -1,6 +1,7 @@
 export interface LoginRequest {
     email: string;
     password: string;
+    role?: string;
 }
 
 export interface LoginResponse {
@@ -11,6 +12,7 @@ export interface LoginResponse {
         Email: string;
         Role: string;
         IsRootAdmin: boolean;
+        IsPasswordChanged: boolean;
     };
 }
 
@@ -23,6 +25,7 @@ export interface JWTPayload {
     Email: string;
     Role: string;
     IsRootAdmin: boolean;
+    IsPasswordChanged: boolean;
 }
 
 export interface RefreshTokenPayload {

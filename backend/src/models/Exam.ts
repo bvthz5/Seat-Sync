@@ -16,6 +16,8 @@ interface ExamAttributes {
   Status: string;
   AuditStatus?: 'Clean' | 'Conflict' | 'Pending';
   ConflictDetails?: string;
+  IsEmergencyMode: boolean;
+  AttendanceLocked: boolean;
 }
 
 /**
@@ -33,6 +35,8 @@ export class Exam extends Model<ExamAttributes, ExamCreationAttributes>
   declare Session: string;
   declare Duration: number;
   declare Status: string;
+  declare IsEmergencyMode: boolean;
+  declare AttendanceLocked: boolean;
 }
 
 Exam.init(
@@ -86,6 +90,16 @@ Exam.init(
     ConflictDetails: {
       type: DataTypes.TEXT,
       allowNull: true,
+    },
+    IsEmergencyMode: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    AttendanceLocked: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
     }
   },
   {

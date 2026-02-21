@@ -459,11 +459,7 @@ export const createSubject = async (req: Request, res: Response): Promise<void> 
             SubjectCode,
             SubjectName,
             DepartmentID,
-            SemesterID,
-            ProgramID,
-            AcademicYearID,
-            Credits: Credits || 0, // Default to 0 if not provided
-            IsActive: true
+            SemesterID
         });
 
         // Log activity

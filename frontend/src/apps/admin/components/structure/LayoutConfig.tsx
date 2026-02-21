@@ -145,17 +145,17 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                             const rowLabel = s.RowLabel ? s.RowLabel.trim() : '';
                             const seatId = `${rowLabel}-${s.BenchNumber}-${s.SeatNumber}`;
 
-                            console.log('📍 Loading Seat:', { seatId, IsActive: s.IsActive, ZoneID: s.ZoneID });
+                            console.log('Loading Seat:', { seatId, IsActive: s.IsActive, ZoneID: s.ZoneID });
 
                             if (s.IsActive === false) newDisabledSet.add(seatId);
                             if (s.ZoneID) {
                                 newZoneMap.set(seatId, Number(s.ZoneID));
-                                console.log('✅ Mapped Zone:', seatId, '→ Zone', s.ZoneID);
+                                console.log('Mapped Zone:', seatId, '→ Zone', s.ZoneID);
                             }
                         });
                     }
 
-                    console.log('🗺️ Total Zone Mappings:', newZoneMap.size, Array.from(newZoneMap.entries()));
+                    console.log('Total Zone Mappings:', newZoneMap.size, Array.from(newZoneMap.entries()));
 
                     setDisabledSeatIds(newDisabledSet);
                     setSeatZoneMap(newZoneMap);
@@ -174,7 +174,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
 
                     // Populate Zones
                     if (data.zones) {
-                        console.log('🎨 Zones Loaded:', data.zones);
+                        console.log('Zones Loaded:', data.zones);
                         setZones(data.zones);
                     } else {
                         setZones([]);
@@ -364,7 +364,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
             setShowZoneModal(false);
 
             // STEP 1: Clear ALL seat zone assignments first (so zones can be deleted)
-            console.log('🧹 Clearing all seat zone assignments');
+            console.log('Clearing all seat zone assignments');
             const updates: any[] = [];
             generatedSeats.forEach(seat => {
                 const dbSeatId = seatIdMap.get(seat.id);
@@ -386,7 +386,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
 
             // STEP 2: Delete ALL existing zones (now that seats are unassigned)
             const allZones = await structureService.getZones(Number(selectedRoomId));
-            console.log('🗑️ Deleting', allZones.length, 'existing zones');
+            console.log('Deleting', allZones.length, 'existing zones');
 
             for (const zone of allZones) {
                 try {
@@ -398,7 +398,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
 
             // STEP 2: Determine grid layout
             const gridLayout = calculateGridLayout(zoneCount, config.rows, config.benchesPerRow);
-            console.log('📐 Grid layout for', zoneCount, 'zones:', gridLayout);
+            console.log('Grid layout for', zoneCount, 'zones:', gridLayout);
 
             // STEP 3: Create new zones
             const colorPalette = ['blue', 'red', 'green', 'yellow', 'purple', 'orange', 'cyan', 'pink', 'indigo', 'teal', 'lime', 'amber', 'rose', 'violet', 'fuchsia', 'sky'];
@@ -414,7 +414,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                 createdZones.push(newZone);
             }
 
-            console.log('✅ Created', createdZones.length, 'new zones');
+            console.log('Created', createdZones.length, 'new zones');
 
             // STEP 4: Assign seats to zones based on grid
             const newZoneMap = new Map<string, number>();
@@ -526,7 +526,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                     }
                 }
 
-                console.log('💾 Saving seat updates:', updates.length, 'seats');
+                console.log('Saving seat updates:', updates.length, 'seats');
                 console.log('  - Disabled seats:', disabledSeatIds.size);
                 console.log('  - Zone assignments:', seatZoneMap.size);
                 console.log('  - Sample updates:', updates.slice(0, 3));
@@ -549,7 +549,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
 
             // Refresh logic and reset initial states
             const data = await structureService.getRoomLayout(Number(selectedRoomId));
-            console.log('🔄 Reloaded room data after save:', {
+            console.log('Reloaded room data after save:', {
                 seatsCount: data.seats?.length,
                 zonesCount: data.zones?.length,
                 sampleSeats: data.seats?.slice(0, 3)
@@ -565,25 +565,25 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                     newSeatIdMap.set(seatId, s.SeatID);
                     if (s.ZoneID) {
                         currentZoneMap.set(seatId, s.ZoneID);
-                        console.log('🔄 Re-mapping zone after save:', seatId, '→', s.ZoneID);
+                        console.log('Re-mapping zone after save:', seatId, '→', s.ZoneID);
                     }
                 });
             }
 
-            console.log('🔄 Populated currentZoneMap size:', currentZoneMap.size, 'from', data.seats?.length, 'seats');
-            console.log('🔄 Sample zone mappings:', Array.from(currentZoneMap.entries()).slice(0, 5));
+            console.log('Populated currentZoneMap size:', currentZoneMap.size, 'from', data.seats?.length, 'seats');
+            console.log('Sample zone mappings:', Array.from(currentZoneMap.entries()).slice(0, 5));
 
             setSeatIdMap(newSeatIdMap);
 
             if (dimensionsChanged) {
-                console.log('⚠️ Dimensions changed - clearing zone map');
+                console.log('Dimensions changed - clearing zone map');
                 setSeatZoneMap(new Map());
                 setInitialSeatZoneMap(new Map());
                 setDisabledSeatIds(new Set());
             } else {
                 // Sync with server state
-                console.log('✅ Dimensions unchanged - syncing zone map with server state');
-                console.log('✅ Setting seatZoneMap to currentZoneMap with size:', currentZoneMap.size);
+                console.log('Dimensions unchanged - syncing zone map with server state');
+                console.log('Setting seatZoneMap to currentZoneMap with size:', currentZoneMap.size);
                 setSeatZoneMap(currentZoneMap);
                 setInitialSeatZoneMap(currentZoneMap);
             }

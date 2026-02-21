@@ -24,8 +24,11 @@ import { LiveClock } from '../components/LiveClock';
 import { SeriesService } from '../services/seriesService';
 import { useAuth } from '../../../context/AuthContext';
 
+import { useNavigate } from 'react-router-dom';
+
 const Dashboard: React.FC = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [series, setSeries] = useState<any[]>([]);
     const [selectedSeries, setSelectedSeries] = useState<number>();
     const [loading, setLoading] = useState(false);
@@ -50,10 +53,32 @@ const Dashboard: React.FC = () => {
     };
 
     const IsRootAdmin = user?.Role?.toLowerCase() === 'root';
+    const showPasswordWarning = user?.Role === 'exam_admin' && !user?.IsPasswordChanged;
 
     return (
         <div className="min-h-screen bg-[#f8fafc] p-6 lg:p-8">
             <div className="max-w-[1600px] mx-auto space-y-8">
+
+                {showPasswordWarning && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-4">
+                        <div className="flex items-center gap-3">
+                            <ShieldAlert className="text-amber-600" size={24} />
+                            <div>
+                                <h3 className="text-amber-800 font-bold text-sm">Action Required</h3>
+                                <p className="text-amber-700 text-sm mt-0.5">
+                                    You are currently using a temporary password. Please update your credentials immediately to secure your account.
+                                </p>
+                            </div>
+                        </div>
+                        <Button
+                            size="sm"
+                            className="bg-amber-600 text-white font-bold shadow-sm"
+                            onPress={() => navigate('/admin/profile', { state: { openChangePassword: true } })}
+                        >
+                            Change Password
+                        </Button>
+                    </div>
+                )}
 
                 {/* Enterprise Header */}
                 <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 pb-2">
@@ -76,6 +101,7 @@ const Dashboard: React.FC = () => {
                         <div className="h-8 w-px bg-slate-200 mx-1 hidden md:block"></div>
 
                         <Select
+                            aria-label="Select Exam Series"
                             placeholder="Select Exam Series"
                             size="sm"
                             className="w-56"

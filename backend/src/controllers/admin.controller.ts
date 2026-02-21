@@ -29,8 +29,13 @@ export class AdminController {
                 return;
             }
 
-            const creatorEmail = req.user?.Email!;
-            const newAdmin = await AdminService.createAdmin({ email, fullName }, creatorEmail);
+            const context = {
+                email: req.user?.Email!,
+                ...(req.user?.UserID && { userId: req.user.UserID }),
+                ...(req.ip && { ip: req.ip }),
+                ...(req.get('user-agent') && { userAgent: req.get('user-agent') as string })
+            };
+            const newAdmin = await AdminService.createAdmin({ email, fullName }, context);
 
             res.status(201).json({
                 message: "Admin created successfully",
@@ -51,9 +56,14 @@ export class AdminController {
     static async resetPassword(req: Request, res: Response) {
         try {
             const adminId = Number(req.params.id);
-            const creatorEmail = req.user?.Email!;
+            const context = {
+                email: req.user?.Email!,
+                ...(req.user?.UserID && { userId: req.user.UserID }),
+                ...(req.ip && { ip: req.ip }),
+                ...(req.get('user-agent') && { userAgent: req.get('user-agent') as string })
+            };
 
-            await AdminService.resetPassword(adminId, creatorEmail);
+            await AdminService.resetPassword(adminId, context);
 
             res.json({ message: "Password reset successfully. New credentials sent via email." });
         } catch (error: any) {
@@ -78,7 +88,14 @@ export class AdminController {
                 return;
             }
 
-            await AdminService.toggleStatus(adminId, isActive, creator);
+            const context = {
+                email: creator.Email,
+                ...(creator.UserID && { userId: creator.UserID }),
+                ...(req.ip && { ip: req.ip }),
+                ...(req.get('user-agent') && { userAgent: req.get('user-agent') as string })
+            };
+
+            await AdminService.toggleStatus(adminId, isActive, context, creator);
 
             res.json({ message: `Admin ${isActive ? 'enabled' : 'disabled'} successfully` });
         } catch (error: any) {
@@ -96,7 +113,14 @@ export class AdminController {
                 return;
             }
 
-            await AdminService.deleteAdmin(adminId, creator);
+            const context = {
+                email: creator.Email,
+                ...(creator.UserID && { userId: creator.UserID }),
+                ...(req.ip && { ip: req.ip }),
+                ...(req.get('user-agent') && { userAgent: req.get('user-agent') as string })
+            };
+
+            await AdminService.deleteAdmin(adminId, context, creator);
 
             res.json({ message: "Admin deleted successfully" });
         } catch (error: any) {
@@ -107,7 +131,7 @@ export class AdminController {
     static async getActivity(req: Request, res: Response) {
         try {
             const adminId = Number(req.params.id);
-            const logs = await AdminService.getAdminActivity(adminId);
+            const logs = await AdminService.getAdminActivity(adminId, req.query);
             res.json(logs);
         } catch (error: any) {
             res.status(500).json({ error: error.message });

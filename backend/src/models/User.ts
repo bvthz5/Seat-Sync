@@ -12,6 +12,7 @@ interface UserAttributes {
   Role: "exam_admin" | "invigilator" | "student";
   IsRootAdmin: boolean;
   IsActive: boolean;
+  IsPasswordChanged: boolean;
   CreatedAt: Date;
 }
 
@@ -19,7 +20,7 @@ interface UserAttributes {
  * Attributes required when creating a user
  */
 interface UserCreationAttributes
-  extends Optional<UserAttributes, "UserID" | "IsRootAdmin" | "IsActive" | "CreatedAt"> { }
+  extends Optional<UserAttributes, "UserID" | "IsRootAdmin" | "IsActive" | "IsPasswordChanged" | "CreatedAt"> { }
 
 export class User extends Model<UserAttributes, UserCreationAttributes>
   implements UserAttributes {
@@ -30,6 +31,7 @@ export class User extends Model<UserAttributes, UserCreationAttributes>
   declare Role: "exam_admin" | "invigilator" | "student";
   declare IsRootAdmin: boolean;
   declare IsActive: boolean;
+  declare IsPasswordChanged: boolean;
   declare CreatedAt: Date;
 }
 
@@ -75,6 +77,12 @@ User.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: true,
+    },
+
+    IsPasswordChanged: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
     },
 
     CreatedAt: {

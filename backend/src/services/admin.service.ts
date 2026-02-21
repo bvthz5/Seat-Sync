@@ -150,7 +150,10 @@ export class AdminService {
         const password = this.generateSecurePassword();
         const hashedPassword = await bcrypt.hash(password, 12);
 
-        await admin.update({ PasswordHash: hashedPassword });
+        await admin.update({
+            PasswordHash: hashedPassword,
+            IsPasswordChanged: false
+        });
 
         // Invalidate Sessions
         await ActiveSession.update(
