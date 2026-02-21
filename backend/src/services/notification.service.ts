@@ -112,12 +112,7 @@ class NotificationService {
      * Get notifications for a specific user
      */
     async getUserNotifications(userId: number, query: any = {}) {
-        const {
-            page = 1,
-            limit = 20,
-            unreadOnly = false
-        } = query;
-
+        const { page = 1, limit = 20, unreadOnly = false } = query;
         const offset = (page - 1) * limit;
 
         const whereClause: any = { UserID: userId };
@@ -125,42 +120,47 @@ class NotificationService {
             whereClause.IsRead = false;
         }
 
-        const { count, rows } = await NotificationRecipient.findAndCountAll({
-            where: whereClause,
-            include: [{
-                model: Notification,
-                as: 'Notification',
-                // required: true
-            }],
-            order: [
-                ['IsRead', 'ASC'], // Unread first
-                [{ model: Notification, as: 'Notification' }, 'SentAt', 'DESC']
-            ],
-            limit: Number(limit),
-            offset: Number(offset)
-        });
+        try {
+            const { count, rows } = await NotificationRecipient.findAndCountAll({
+                where: whereClause,
+                include: [{
+                    model: Notification,
+                    as: 'Notification',
+                }],
+                order: [
+                    ['IsRead', 'ASC'], // Unread first
+                    [{ model: Notification, as: 'Notification' }, 'SentAt', 'DESC']
+                ],
+                limit: Number(limit),
+                offset: Number(offset)
+            });
 
-        return {
-            total: count,
-            page: Number(page),
-            totalPages: Math.ceil(count / limit),
-            data: rows.map(r => {
-                const n = (r as any).Notification;
-                return {
-                    id: n.NotificationID,
-                    recipientId: r.RecipientID,
-                    title: n.Title,
-                    message: n.Message,
-                    type: n.Type,
-                    category: n.Category,
-                    priority: n.Priority,
-                    sentAt: n.SentAt,
-                    isRead: r.IsRead,
-                    readAt: r.ReadAt,
-                    metadata: n.Metadata
-                };
-            })
-        };
+            return {
+                total: count,
+                page: Number(page),
+                totalPages: Math.ceil(count / limit),
+                data: rows.map(r => {
+                    const n = (r as any).Notification;
+                    if (!n) return null; // Defensive check
+                    return {
+                        id: n.NotificationID,
+                        recipientId: r.RecipientID,
+                        title: n.Title,
+                        message: n.Message,
+                        type: n.Type,
+                        category: n.Category,
+                        priority: n.Priority,
+                        sentAt: n.SentAt,
+                        isRead: r.IsRead,
+                        readAt: r.ReadAt,
+                        metadata: n.Metadata
+                    };
+                }).filter(Boolean)
+            };
+        } catch (e) {
+            console.warn(`Could not load notifications for user ${userId}:`, e);
+            return { total: 0, page: Number(page), totalPages: 0, data: [] };
+        }
     }
 
     /**
@@ -199,25 +199,29 @@ class NotificationService {
      * Get statistics for a user
      */
     async getUserStats(userId: number) {
-        const unreadCount = await NotificationRecipient.count({
-            where: { UserID: userId, IsRead: false }
-        });
+        try {
+            const unreadCount = await NotificationRecipient.count({
+                where: { UserID: userId, IsRead: false }
+            });
 
-        // Count critical alerts (unread)
-        // This requires joining with Notification table
-        const criticalCount = await NotificationRecipient.count({
-            where: { UserID: userId, IsRead: false },
-            include: [{
-                model: Notification,
-                as: 'Notification',
-                where: { Priority: 'CRITICAL' }
-            }]
-        });
+            // Count critical alerts (unread)
+            const criticalCount = await NotificationRecipient.count({
+                where: { UserID: userId, IsRead: false },
+                include: [{
+                    model: Notification,
+                    as: 'Notification',
+                    where: { Priority: 'CRITICAL' }
+                }]
+            });
 
-        return {
-            unread: unreadCount,
-            critical: criticalCount
-        };
+            return {
+                unread: unreadCount,
+                critical: criticalCount
+            };
+        } catch (e) {
+            console.warn(`Could not load notification stats for user ${userId}:`, e);
+            return { unread: 0, critical: 0 };
+        }
     }
 
     /**

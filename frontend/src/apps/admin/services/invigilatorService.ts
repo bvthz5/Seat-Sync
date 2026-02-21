@@ -52,6 +52,10 @@ export const invigilatorService = {
         const response = await api.patch(`/invigilators/${id}/toggle-eligibility`);
         return response.data;
     },
+    clearAll: async () => {
+        const response = await api.delete('/invigilators/clear-all');
+        return response.data as { message: string; deleted: number };
+    },
     bulkImport: async (rows: BulkImportRow[]) => {
         const response = await api.post('/invigilators/bulk-import', { rows });
         return response.data as { message: string; created: number; skipped: { row: number; reason: string }[] };

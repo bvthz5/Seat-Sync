@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getAllInvigilators, createInvigilator, deleteInvigilator, getInvigilatorStats, toggleInvigilatorFlag, toggleInvigilatorEligibility, bulkImportInvigilators } from "../controllers/invigilator.controller.js";
+import { getAllInvigilators, createInvigilator, deleteInvigilator, getInvigilatorStats, toggleInvigilatorFlag, toggleInvigilatorEligibility, bulkImportInvigilators, clearAllFaculties } from "../controllers/invigilator.controller.js";
 import { AuthMiddleware } from "../middlewares/auth.middleware.js";
 
 const router = Router();
@@ -144,6 +144,7 @@ router.patch("/:id/toggle-eligibility", toggleInvigilatorEligibility);
  *       404:
  *         description: Not found
  */
+router.delete("/clear-all", clearAllFaculties);
 router.delete("/:id", deleteInvigilator);
 
 export default router;

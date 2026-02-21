@@ -20,12 +20,17 @@ export const getAllInvigilators = async (req: Request, res: Response) => {
         const today = new Date().toISOString().split('T')[0];
 
         // Fetch all assignments to calculate total exams count and on-duty status
-        const allAssignments = await InvigilatorAssignment.findAll({
-            include: [{
-                model: Exam,
-                attributes: ["ExamID", "ExamDate"]
-            }]
-        });
+        let allAssignments: any[] = [];
+        try {
+            allAssignments = await InvigilatorAssignment.findAll({
+                include: [{
+                    model: Exam,
+                    attributes: ["ExamID", "ExamDate"]
+                }]
+            });
+        } catch (assignmentError) {
+            console.warn("Could not fetch invigilator assignments (may be empty):", assignmentError);
+        }
 
         // Map faculties to invigilator format
         const formattedInvigilators = faculties.map(faculty => {
@@ -56,7 +61,10 @@ export const getAllInvigilators = async (req: Request, res: Response) => {
 
         res.json(formattedInvigilators);
     } catch (error: any) {
-        console.error("Error fetching invigilators:", error);
+        console.error("==================== GET ALL INVIGILATORS ERROR ====================");
+        console.error(error);
+        if (error.original) console.error("ORIGINAL:", error.original);
+        console.error("=====================================================================");
         res.status(500).json({ message: "Internal server error" });
     }
 };
@@ -155,20 +163,16 @@ export const createInvigilator = async (req: Request, res: Response) => {
 export const deleteInvigilator = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const invigilator = await Invigilator.findByPk(id as string);
 
-        if (!invigilator) {
+        // The frontend sends FacultyID (aliased as InvigilatorID in getAllInvigilators)
+        const faculty = await Faculty.findByPk(id as string);
+
+        if (!faculty) {
             return res.status(404).json({ message: "Invigilator not found" });
         }
 
-        const userId = invigilator.UserID;
-
-        // Delete Invigilator record
-        await invigilator.destroy();
-
-        // Optionally delete User or just change role?
-        // Let's delete for now as per "Invigilator Management" context
-        await User.destroy({ where: { UserID: userId } });
+        // Delete the faculty record
+        await faculty.destroy();
 
         res.json({ message: "Invigilator deleted successfully" });
     } catch (error: any) {
@@ -186,15 +190,20 @@ export const getInvigilatorStats = async (req: Request, res: Response) => {
         const active = eligible; // For faculties, active = eligible
 
         const today = new Date().toISOString().split('T')[0];
-        const onDutyAssignments = await InvigilatorAssignment.findAll({
-            include: [{
-                model: Exam,
-                where: {
-                    ExamDate: today
-                }
-            }]
-        });
-        const onDuty = new Set(onDutyAssignments.map(a => a.InvigilatorID)).size;
+        let onDuty = 0;
+        try {
+            const onDutyAssignments = await InvigilatorAssignment.findAll({
+                include: [{
+                    model: Exam,
+                    where: {
+                        ExamDate: today
+                    }
+                }]
+            });
+            onDuty = new Set(onDutyAssignments.map(a => a.InvigilatorID)).size;
+        } catch (e) {
+            console.warn("Could not calculate onDuty stats:", e);
+        }
 
         const flagged = await Faculty.count({
             where: { IsEligible: false }
@@ -279,5 +288,22 @@ export const bulkImportInvigilators = async (req: Request, res: Response) => {
         // Add more detail to the error response
         const message = error.errors ? error.errors.map((e: any) => e.message).join(", ") : error.message;
         res.status(500).json({ message: "Internal server error", detail: message });
+    }
+};
+/**
+ * Clear all faculty records (to be called before a fresh bulk import)
+ */
+export const clearAllFaculties = async (req: Request, res: Response) => {
+    const t = await sequelize.transaction();
+    try {
+        // Delete assignments referencing faculty first to avoid FK violations
+        await InvigilatorAssignment.destroy({ where: {}, transaction: t });
+        const deleted = await Faculty.destroy({ where: {}, transaction: t });
+        await t.commit();
+        res.json({ message: `Cleared ${deleted} faculty record(s) successfully.`, deleted });
+    } catch (error: any) {
+        await t.rollback();
+        console.error("Error clearing faculties:", error);
+        res.status(500).json({ message: "Internal server error", detail: error.message });
     }
 };

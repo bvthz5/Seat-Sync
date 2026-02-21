@@ -103,6 +103,11 @@ const BulkImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
     const handleImport = async () => {
         if (!rows.length) return; setIsImporting(true);
         try {
+            // 1. Clear all existing faculty records first
+            const clearRes = await invigilatorService.clearAll();
+            toast.success(`Cleared ${clearRes.deleted} existing record(s). Importing fresh data...`);
+
+            // 2. Now bulk import the new rows
             const res = await invigilatorService.bulkImport(rows);
             setResult(res); setStep('result');
             if (res.created > 0) onSuccess();
