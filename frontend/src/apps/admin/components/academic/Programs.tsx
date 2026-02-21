@@ -187,13 +187,13 @@ export const Programs: React.FC<ProgramsProps> = ({ academicYearId }) => {
                             trigger: "h-10",
                             value: "text-sm"
                         }}
+                        items={[{ DepartmentCode: '', DepartmentName: 'All Departments' }, ...departments]}
                     >
-                        <SelectItem key="">All Departments</SelectItem>
-                        {departments.map(dept => (
-                            <SelectItem key={dept.DepartmentCode}>
-                                {dept.DepartmentCode} - {dept.DepartmentName}
+                        {(item) => (
+                            <SelectItem key={item.DepartmentCode}>
+                                {item.DepartmentCode ? `${item.DepartmentCode} - ${item.DepartmentName}` : item.DepartmentName}
                             </SelectItem>
-                        ))}
+                        )}
                     </Select>
                 </div>
             </div>
