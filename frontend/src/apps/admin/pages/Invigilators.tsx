@@ -612,8 +612,7 @@ const Invigilators: React.FC = () => {
                                     {/* Avatar */}
                                     {selected.ProfileImageURL ? (
                                         <img src={selected.ProfileImageURL} alt={selected.Name}
-                                            className="w-20 h-20 rounded-2xl object-cover ring-4 shadow-xl shrink-0"
-                                            style={{ ringColor: 'rgba(255,255,255,0.15)' }} />
+                                            className="w-20 h-20 rounded-2xl object-cover ring-2 ring-white/20 shadow-xl shrink-0" />
                                     ) : (
                                         <div
                                             className="w-20 h-20 rounded-2xl flex items-center justify-center text-white font-bold text-2xl shrink-0 shadow-xl"
