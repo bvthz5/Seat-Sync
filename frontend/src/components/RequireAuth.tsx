@@ -3,8 +3,13 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Spinner } from './GlobalLoader';
 
-const RequireAuth: React.FC = () => {
-    const { isAuthenticated, isLoading } = useAuth();
+interface RequireAuthProps {
+    allowedRoles?: string[];
+    redirectTo?: string;
+}
+
+const RequireAuth: React.FC<RequireAuthProps> = ({ allowedRoles, redirectTo = "/admin/login" }) => {
+    const { isAuthenticated, isLoading, user } = useAuth();
     const location = useLocation();
 
     if (isLoading) {
@@ -16,7 +21,12 @@ const RequireAuth: React.FC = () => {
         // Redirect them to the /login page, but save the current location they were
         // trying to go to when they were redirected. This allows us to send them
         // along to that page after they login, which is a nicer user experience.
-        return <Navigate to="/admin/login" state={{ from: location }} replace />;
+        return <Navigate to={redirectTo} state={{ from: location }} replace />;
+    }
+
+    if (allowedRoles && user && !allowedRoles.includes(user.Role)) {
+        // If they are logged in but don't have the right role, send to 404/not authorized
+        return <Navigate to="/404" replace />;
     }
 
     return <Outlet />;

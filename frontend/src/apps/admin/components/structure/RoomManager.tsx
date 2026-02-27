@@ -489,7 +489,7 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
             <div className="flex-1 min-h-0 relative">
                 {!selectedFloorId ? (
                     <div className="h-full flex flex-col items-center justify-center py-24 bg-gradient-to-b from-white to-slate-50/50 rounded-3xl border border-dashed border-slate-300 relative overflow-hidden group">
-                        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10" />
+                        <div className="absolute inset-0 opacity-10" />
                         <div className="w-24 h-24 bg-white rounded-3xl flex items-center justify-center shadow-xl shadow-indigo-100 mb-6 ring-4 ring-slate-50 z-10 group-hover:scale-105 transition-transform duration-300">
                             <div className="w-16 h-16 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center">
                                 <Building2 size={32} strokeWidth={1.5} />

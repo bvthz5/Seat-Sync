@@ -105,9 +105,15 @@ api.interceptors.response.use(
                 AccessTokenStore.clear(); // Clears localStorage
                 sessionStorage.removeItem('seat_sync_active'); // Ensure session is dead
 
-                // Only redirect if we are not explicitly told to handle it elsewhere
                 if (!window.location.pathname.includes('/login')) {
-                    window.location.href = '/admin/login';
+                    const currentPath = window.location.pathname.toLowerCase();
+                    if (currentPath.startsWith('/invigilator')) {
+                        window.location.href = '/invigilator/login';
+                    } else if (currentPath.startsWith('/student')) {
+                        window.location.href = '/student/login';
+                    } else {
+                        window.location.href = '/admin/login';
+                    }
                 }
 
                 return Promise.reject(refreshError);
@@ -119,7 +125,14 @@ api.interceptors.response.use(
             AccessTokenStore.clear();
             sessionStorage.removeItem('seat_sync_active');
             if (!window.location.pathname.includes('/login')) {
-                window.location.href = '/admin/login';
+                const currentPath = window.location.pathname.toLowerCase();
+                if (currentPath.startsWith('/invigilator')) {
+                    window.location.href = '/invigilator/login';
+                } else if (currentPath.startsWith('/student')) {
+                    window.location.href = '/student/login';
+                } else {
+                    window.location.href = '/admin/login';
+                }
             }
             return Promise.reject(error);
         }
@@ -143,7 +156,14 @@ api.interceptors.response.use(
             AccessTokenStore.clear();
             sessionStorage.removeItem('seat_sync_active');
             if (!window.location.pathname.includes('/login')) {
-                window.location.href = '/admin/login';
+                const currentPath = window.location.pathname.toLowerCase();
+                if (currentPath.startsWith('/invigilator')) {
+                    window.location.href = '/invigilator/login';
+                } else if (currentPath.startsWith('/student')) {
+                    window.location.href = '/student/login';
+                } else {
+                    window.location.href = '/admin/login';
+                }
             }
         }
 

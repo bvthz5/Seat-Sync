@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button, Link } from '@heroui/react'; // Ensure correct import
 import { motion, AnimatePresence, Variants, useMotionValue, useSpring, useTransform, useMotionTemplate } from 'framer-motion';
+import { useAuth } from '../../../hooks/useAuth';
 import { AuthService } from '../../../services/auth.service';
 import { ShieldCheck, UserCheck, Lock, Mail, Eye, EyeOff, FileCheck } from 'lucide-react';
 import { Spinner } from '../../../components/GlobalLoader';
@@ -219,12 +220,24 @@ const InteractiveRightBackground = ({ mouseX, mouseY }: { mouseX: any, mouseY: a
 
 const InvigilatorLogin = () => {
     const navigate = useNavigate();
+    const location = useLocation();
+    const { login, isAuthenticated, isLoading, user } = useAuth();
+
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [formError, setFormError] = useState('');
     const [emailError, setEmailError] = useState('');
     const [passwordError, setPasswordError] = useState('');
+
+    const from = location.state?.from?.pathname || '/invigilator/dashboard';
+
+    // Auto-redirect if already logged in securely
+    useEffect(() => {
+        if (!isLoading && isAuthenticated && user?.Role === 'invigilator') {
+            navigate(from, { replace: true });
+        }
+    }, [isLoading, isAuthenticated, user, navigate, from]);
 
     const mouseX = useMotionValue(-1000);
     const mouseY = useMotionValue(-1000);
@@ -268,10 +281,7 @@ const InvigilatorLogin = () => {
 
         setLoading(true);
         try {
-            const response = await AuthService.login(email, password, 'invigilator');
-            if (response.user.Role !== 'invigilator') {
-                throw new Error("Access denied: Invigilators only.");
-            }
+            await login(email, password, 'invigilator');
             // Add a small delay for smoother transition effect
             setTimeout(() => navigate('/invigilator/dashboard', { replace: true }), 800);
         } catch (error: any) {

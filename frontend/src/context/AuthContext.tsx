@@ -13,7 +13,7 @@ interface LogoutOptions {
 }
 
 interface AuthContextType extends AuthState {
-    login: (email: string, password: string) => Promise<void>;
+    login: (email: string, password: string, role?: string) => Promise<void>;
     logout: (options?: LogoutOptions) => Promise<void>;
     canAccess: (feature: FeatureKey) => boolean;
 }
@@ -109,9 +109,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return () => clearTimeout(timer);
     }, []);
 
-    const login = async (email: string, password: string) => {
+    const login = async (email: string, password: string, role?: string) => {
         try {
-            const data = await AuthService.login(email, password);
+            const data = await AuthService.login(email, password, role);
             setUser(data.user);
             setAccessToken(data.accessToken);
             AccessTokenStore.setToken(data.accessToken);

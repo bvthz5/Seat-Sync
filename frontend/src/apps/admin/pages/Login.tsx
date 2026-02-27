@@ -318,7 +318,7 @@ const AdminLogin: React.FC = () => {
     // If already authenticated, redirect to dashboard or the page they came from
     useEffect(() => {
         if (!isLoading && isAuthenticated) {
-            navigate('/admin/dashboard', { replace: true });
+            navigate(from, { replace: true });
         }
     }, [isLoading, isAuthenticated, navigate, from]);
 

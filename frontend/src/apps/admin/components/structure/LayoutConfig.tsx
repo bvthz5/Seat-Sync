@@ -1171,7 +1171,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                     </div>
 
                     {/* Canvas */}
-                    <div className="flex-1 relative overflow-auto custom-scrollbar p-12 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] bg-opacity-5">
+                    <div className="flex-1 relative overflow-auto custom-scrollbar p-12 bg-opacity-5">
                         {/* Background Grid */}
                         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[length:40px_40px] pointer-events-none" />
 
