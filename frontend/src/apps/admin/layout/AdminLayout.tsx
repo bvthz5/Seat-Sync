@@ -4,7 +4,7 @@ import { Button, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Avatar }
 import Sidebar from './Sidebar';
 import { useAuth } from '../../../hooks/useAuth';
 import { motion } from 'framer-motion';
-import { Menu, Bell, LogOut, User } from 'lucide-react';
+import { Menu, Bell, LogOut, User, ChevronDown } from 'lucide-react';
 import { GlobalNotificationDrawer } from '../components/notifications/GlobalNotificationDrawer';
 
 const AdminLayout: React.FC = () => {
@@ -14,81 +14,75 @@ const AdminLayout: React.FC = () => {
     const navigate = useNavigate();
 
     return (
-        <div className="flex h-screen w-full bg-[#f0f2f5] overflow-hidden font-sans text-[#202124] selection:bg-blue-100">
+        <div className="flex h-screen w-full bg-[#f4f6f9] overflow-hidden font-sans selection:bg-indigo-100">
             {/* Global Notification Drawer */}
             <GlobalNotificationDrawer isOpen={notificationOpen} onClose={() => setNotificationOpen(false)} />
 
-            {/* Top App Bar */}
-            <div className="fixed top-0 left-0 right-0 h-16 bg-white shadow-sm z-50 flex items-center px-4 justify-between transition-colors">
+            {/* Top App Bar — White navbar */}
+            <div className="fixed top-0 left-0 right-0 h-14 bg-white z-50 flex items-center px-5 justify-between border-b border-slate-200">
+                {/* Left: hamburger + brand */}
                 <div className="flex items-center gap-4">
-                    <Button
-                        isIconOnly
+                    <button
                         aria-label="Toggle navigation"
-                        variant="light"
-                        radius="full"
-                        onPress={() => setSidebarOpen(!sidebarOpen)}
-                        className="text-[#5f6368] hover:bg-[#3c4043]/10"
+                        onClick={() => setSidebarOpen(!sidebarOpen)}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-all"
                     >
-                        <Menu size={24} />
-                    </Button>
-                    <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                            <span className="text-white font-bold text-lg">S</span>
+                        <Menu size={18} />
+                    </button>
+                    <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-sm shadow-indigo-200">
+                            <span className="text-white font-black text-sm leading-none">S</span>
                         </div>
-                        <span className="text-[22px] fonts-normal text-[#5f6368] hidden md:block" style={{ fontFamily: 'Product Sans, sans-serif' }}>
-                            Seat<span className="font-medium text-[#202124]">Sync</span>
+                        <span className="hidden md:block text-sm font-semibold tracking-wide">
+                            <span className="text-slate-400">Seat</span><span className="text-slate-800">Sync</span>
                         </span>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                    {/* Notification Bell */}
-                    <Button
-                        isIconOnly
+                {/* Right: bell + profile */}
+                <div className="flex items-center gap-1">
+                    <button
                         aria-label="Notifications"
-                        variant="light"
-                        radius="full"
-                        onPress={() => setNotificationOpen(true)}
-                        className="text-[#5f6368] hover:bg-[#3c4043]/10 relative overflow-visible"
+                        onClick={() => setNotificationOpen(true)}
+                        className="relative w-9 h-9 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-all"
                     >
-                        <Bell size={24} />
-                        <span className="absolute top-2 right-2.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
-                    </Button>
+                        <Bell size={18} />
+                        <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500 border-[1.5px] border-white animate-pulse" />
+                    </button>
 
-                    {/* Profile Avatar */}
-                    <Dropdown placement="bottom-end" classNames={{ content: " " }} disableAnimation>
+                    <Dropdown placement="bottom-end" classNames={{ content: "" }} disableAnimation>
                         <DropdownTrigger aria-label="Profile actions">
-                            <div className="ml-2 cursor-pointer p-1 rounded-full hover:bg-[#f1f3f4] transition-colors">
-                                <Avatar
-                                    className="w-8 h-8 bg-blue-600 text-white text-sm font-medium relative"
-                                    name={user?.Email?.[0].toUpperCase()}
-                                    src={undefined}
-                                    classNames={{
-                                        name: "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 font-normal text-center text-inherit"
-                                    }}
-                                />
-                            </div>
+                            <button className="flex items-center gap-2.5 ml-1 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 transition-all group">
+                                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-400 to-violet-500 flex items-center justify-center text-white text-xs font-bold shadow-sm">
+                                    {user?.Email?.[0].toUpperCase() || 'A'}
+                                </div>
+                                <div className="hidden md:flex flex-col items-start">
+                                    <span className="text-slate-800 text-xs font-semibold leading-none">{user?.FullName?.split(' ')[0] || user?.Email?.split('@')[0]}</span>
+                                    <span className="text-slate-400 text-[10px] leading-none mt-0.5 font-medium">
+                                        {user?.Role === 'exam_admin' ? 'Administrator' : user?.IsRootAdmin ? 'Root Admin' : user?.Role}
+                                    </span>
+                                </div>
+                                <ChevronDown size={13} className="text-slate-400 group-hover:text-slate-600 transition-colors hidden md:block" />
+                            </button>
                         </DropdownTrigger>
                         <DropdownMenu
                             aria-label="Profile Actions"
                             variant="flat"
-                            className="w-80 z-[9999] bg-white shadow-xl rounded-2xl border border-gray-100 p-2"
+                            className="w-72 z-[9999] bg-white shadow-2xl shadow-black/10 rounded-2xl border border-slate-100 p-2"
                             itemClasses={{
-                                base: "gap-4 h-12 data-[hover=true]:bg-gray-50 rounded-lg",
+                                base: "gap-3 h-11 data-[hover=true]:bg-slate-50 rounded-xl",
                             }}
                         >
-                            <DropdownItem key="profile_header" className="h-auto opacity-100 cursor-default hover:!bg-white mb-2" isReadOnly textValue="Profile Header">
-                                <div className="flex gap-4 items-center p-2 rounded-xl bg-gray-50/50 border border-gray-100/50">
-                                    <Avatar
-                                        className="w-14 h-14 bg-blue-100 text-blue-600 text-lg font-bold"
-                                        name={user?.Email?.[0].toUpperCase()}
-                                        src={undefined}
-                                    />
-                                    <div className="flex-1 w-full flex flex-col gap-1 overflow-hidden">
-                                        <p className="font-normal text-gray-900 text-sm truncate">{user?.FullName || 'User'}</p>
-                                        <p className="text-xs text-gray-500 truncate">{user?.Email}</p>
-                                        <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-700 text-[10px] font-bold w-fit tracking-wide uppercase">
-                                            {user?.Role === 'exam_admin' ? 'Administrator' : user?.Role}
+                            <DropdownItem key="profile_header" className="h-auto opacity-100 cursor-default hover:!bg-transparent mb-1 p-0" isReadOnly textValue="Profile Header">
+                                <div className="flex gap-3 items-center p-3 rounded-xl bg-gradient-to-br from-indigo-50 to-violet-50 border border-indigo-100/60 m-1">
+                                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-lg font-black shadow-md shadow-indigo-200">
+                                        {user?.Email?.[0].toUpperCase() || 'A'}
+                                    </div>
+                                    <div className="flex-1 overflow-hidden">
+                                        <p className="font-semibold text-slate-900 text-sm truncate">{user?.FullName || 'User'}</p>
+                                        <p className="text-xs text-slate-500 truncate mt-0.5">{user?.Email}</p>
+                                        <span className="inline-block mt-1 px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-700 text-[10px] font-bold tracking-wide uppercase">
+                                            {user?.Role === 'exam_admin' ? 'Administrator' : user?.IsRootAdmin ? 'Root Admin' : user?.Role}
                                         </span>
                                     </div>
                                 </div>
@@ -97,20 +91,20 @@ const AdminLayout: React.FC = () => {
                             {(user?.Role === 'exam_admin' || user?.IsRootAdmin) ? (
                                 <DropdownItem
                                     key="my_profile"
-                                    startContent={<User size={18} className="text-gray-500" />}
+                                    startContent={<User size={16} className="text-slate-400" />}
                                     textValue="My Profile"
                                     onPress={() => navigate('/admin/profile')}
                                 >
-                                    <span className="text-sm font-medium text-gray-700">My Profile</span>
+                                    <span className="text-sm font-medium text-slate-700">My Profile</span>
                                 </DropdownItem>
                             ) : null}
 
                             <DropdownItem
                                 key="logout"
                                 showDivider
-                                className="text-red-600 data-[hover=true]:bg-red-50"
+                                className="text-red-600 data-[hover=true]:bg-red-50 rounded-xl"
                                 onPress={() => logout()}
-                                startContent={<LogOut size={18} className="text-red-600" />}
+                                startContent={<LogOut size={16} className="text-red-500" />}
                                 textValue="Sign out"
                             >
                                 <span className="text-sm font-medium">Sign out</span>
@@ -120,18 +114,24 @@ const AdminLayout: React.FC = () => {
                 </div>
             </div>
 
-            {/* Sidebar (Light, Floating or Fixed) */}
-            <div className={`fixed left-0 top-16 bottom-0 z-40 bg-white transition-all duration-200 ease-in-out ${sidebarOpen ? 'w-[256px]' : 'w-0 overflow-hidden'}`}>
-                <Sidebar isOpen={true} />
+            {/* Sidebar */}
+            <div
+                className="fixed left-0 top-14 bottom-0 z-40 transition-all duration-300 ease-in-out overflow-hidden"
+                style={{ width: sidebarOpen ? '240px' : '72px' }}
+            >
+                <Sidebar isOpen={sidebarOpen} />
             </div>
 
             {/* Main Content Area */}
-            <div className={`flex-1 flex flex-col h-full relative z-0 min-w-0 pt-16 transition-all duration-200 ${sidebarOpen ? 'ml-[256px]' : 'ml-0'}`}>
-                <main className="flex-1 overflow-auto bg-[#f0f2f5] p-8 transition-colors">
+            <div
+                className="flex-1 flex flex-col h-full relative z-0 min-w-0 pt-14 transition-all duration-300"
+                style={{ marginLeft: sidebarOpen ? '240px' : '72px' }}
+            >
+                <main className="flex-1 overflow-auto bg-[#f4f6f9]">
                     <motion.div
-                        initial={{ opacity: 0, y: 10 }}
+                        initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3 }}
+                        transition={{ duration: 0.25 }}
                     >
                         <Outlet />
                     </motion.div>

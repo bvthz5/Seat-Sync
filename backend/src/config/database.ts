@@ -265,6 +265,20 @@ async function ensureSchemaIntegrity() {
             END
         `, { type: QueryTypes.RAW });
 
+        // Add StaffCode to Faculties (for alphanumeric import IDs)
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Faculties' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Faculties]') AND name = 'StaffCode')
+                BEGIN
+                    ALTER TABLE [dbo].[Faculties] ADD [StaffCode] NVARCHAR(50) NULL;
+                    PRINT 'Added StaffCode to Faculties';
+                    
+                    -- Optional: Create unique index if needed later, but allowing NULLs helps with legacy data
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
         // Add ActivityLog Columns
         await sequelize.query(`
             IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'ActivityLogs' AND TABLE_SCHEMA = 'dbo')

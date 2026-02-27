@@ -1,18 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Button, Select, SelectItem, Card, CardBody, Divider } from '@heroui/react';
+import { Select, SelectItem } from '@heroui/react';
 import {
-    LayoutDashboard,
     RefreshCw,
     Download,
     Terminal,
     ShieldAlert,
-    Clock,
     Filter,
     Activity,
     Monitor,
     BarChart3,
     Zap,
-    History
+    History,
+    AlertCircle,
+    CheckCircle2,
+    Database
 } from 'lucide-react';
 import { DashboardCards } from '../components/DashboardCards';
 import { LiveMonitor } from '../components/LiveMonitor';
@@ -23,7 +24,6 @@ import { LiveExamDetails } from '../components/LiveExamDetails';
 import { LiveClock } from '../components/LiveClock';
 import { SeriesService } from '../services/seriesService';
 import { useAuth } from '../../../context/AuthContext';
-
 import { useNavigate } from 'react-router-dom';
 
 const Dashboard: React.FC = () => {
@@ -52,63 +52,49 @@ const Dashboard: React.FC = () => {
         }
     };
 
-    const IsRootAdmin = user?.Role?.toLowerCase() === 'root';
+    const IsRootAdmin = user?.Role?.toLowerCase() === 'root' || user?.IsRootAdmin;
     const showPasswordWarning = user?.Role === 'exam_admin' && !user?.IsPasswordChanged;
 
+    const greeting = () => {
+        const hour = new Date().getHours();
+        if (hour < 12) return 'Good morning';
+        if (hour < 17) return 'Good afternoon';
+        return 'Good evening';
+    };
+
     return (
-        <div className="min-h-screen bg-[#f8fafc] p-6 lg:p-8">
-            <div className="max-w-[1600px] mx-auto space-y-8">
-
-                {showPasswordWarning && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-4">
-                        <div className="flex items-center gap-3">
-                            <ShieldAlert className="text-amber-600" size={24} />
-                            <div>
-                                <h3 className="text-amber-800 font-bold text-sm">Action Required</h3>
-                                <p className="text-amber-700 text-sm mt-0.5">
-                                    You are currently using a temporary password. Please update your credentials immediately to secure your account.
-                                </p>
-                            </div>
-                        </div>
-                        <Button
-                            size="sm"
-                            className="bg-amber-600 text-white font-bold shadow-sm"
-                            onPress={() => navigate('/admin/profile', { state: { openChangePassword: true } })}
-                        >
-                            Change Password
-                        </Button>
-                    </div>
-                )}
-
-                {/* Enterprise Header */}
-                <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 pb-2">
+        <div className="min-h-screen bg-[#f4f6f9]">
+            {/* Page Header */}
+            <div className="bg-white border-b border-slate-200/80 px-8 py-5">
+                <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div>
-                        <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-                            <LayoutDashboard className="text-indigo-600" size={24} />
-                            Administrative Console
+                        <p className="text-xs font-semibold text-indigo-600 uppercase tracking-widest mb-1">Administrative Console</p>
+                        <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+                            {greeting()}, {user?.FullName?.split(' ')[0] || 'Admin'}
                         </h1>
-                        <p className="text-sm text-slate-500 mt-1 font-medium">
-                            Real-time examination monitoring and infrastructure oversight.
+                        <p className="text-sm text-slate-400 mt-0.5">
+                            Real-time examination monitoring & infrastructure oversight
                         </p>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3">
-                        <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
-                            <Clock size={16} className="text-slate-400" />
-                            <LiveClock />
-                        </div>
+                    <div className="flex flex-wrap items-center gap-2.5">
+                        <LiveClock />
 
-                        <div className="h-8 w-px bg-slate-200 mx-1 hidden md:block"></div>
+                        <div className="w-px h-7 bg-slate-200 hidden md:block" />
 
                         <Select
                             aria-label="Select Exam Series"
-                            placeholder="Select Exam Series"
+                            placeholder="Filter by series"
                             size="sm"
-                            className="w-56"
+                            className="w-52"
                             variant="bordered"
+                            classNames={{
+                                trigger: "bg-white border-slate-200 rounded-lg h-9 text-sm",
+                                value: "text-slate-700 text-sm",
+                            }}
                             selectedKeys={selectedSeries ? [selectedSeries.toString()] : []}
                             onChange={(e) => setSelectedSeries(Number(e.target.value))}
-                            startContent={<Filter size={14} className="text-slate-400" />}
+                            startContent={<Filter size={14} className="text-slate-400 shrink-0" />}
                             isLoading={loading}
                         >
                             {series.map((s) => (
@@ -118,139 +104,173 @@ const Dashboard: React.FC = () => {
                             ))}
                         </Select>
 
-                        <div className="flex items-center gap-2">
-                            <Button
-                                size="sm"
-                                variant="flat"
-                                isIconOnly
-                                className="bg-white border border-slate-200 text-slate-600"
-                                onClick={fetchSeries}
-                                isLoading={loading}
-                            >
-                                <RefreshCw size={16} />
-                            </Button>
-                            <Button
-                                size="sm"
-                                className="bg-indigo-600 text-white shadow-sm font-bold px-4 h-9 rounded-lg"
-                                startContent={<Download size={16} />}
-                            >
-                                Export Data
-                            </Button>
-                        </div>
+                        <button
+                            onClick={fetchSeries}
+                            disabled={loading}
+                            className="h-9 w-9 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:border-slate-300 transition-all disabled:opacity-50"
+                        >
+                            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                        </button>
+                        <button className="h-9 flex items-center gap-2 px-4 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-200">
+                            <Download size={14} />
+                            <span>Export</span>
+                        </button>
                     </div>
-                </header>
+                </div>
+            </div>
 
-                <Divider className="opacity-50" />
+            <div className="max-w-[1600px] mx-auto px-8 py-7 space-y-7">
 
-                {/* Primary Intelligence Metrics */}
-                <section>
-                    <DashboardCards seriesId={selectedSeries} />
-                </section>
+                {/* Password Warning Banner */}
+                {showPasswordWarning && (
+                    <div className="flex items-center justify-between gap-4 bg-amber-50 border border-amber-200 rounded-xl p-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                                <ShieldAlert className="text-amber-600" size={18} />
+                            </div>
+                            <div>
+                                <p className="text-sm font-semibold text-amber-900">Action Required — Temporary Password</p>
+                                <p className="text-xs text-amber-700 mt-0.5">You are using a default password. Update your credentials immediately to secure your account.</p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => navigate('/admin/profile', { state: { openChangePassword: true } })}
+                            className="shrink-0 px-4 py-2 rounded-lg bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 transition-colors"
+                        >
+                            Change Password
+                        </button>
+                    </div>
+                )}
 
-                <div className="grid grid-cols-12 gap-8">
-                    {/* Main Monitoring Column */}
-                    <main className="col-span-12 lg:col-span-8 space-y-8">
+                {/* Metric Cards */}
+                <DashboardCards seriesId={selectedSeries} />
 
-                        {/* Live Examination Monitoring */}
-                        <Card className="border-slate-200 shadow-sm rounded-xl overflow-hidden bg-white">
-                            <div className="px-6 py-4 border-b border-slate-100 bg-white flex justify-between items-center">
-                                <div className="flex items-center gap-2">
-                                    <Monitor className="text-indigo-600" size={18} />
-                                    <h2 className="text-base font-bold text-slate-800 tracking-tight">Real-Time Hall Monitoring</h2>
+                {/* Main Content Grid */}
+                <div className="grid grid-cols-12 gap-6">
+
+                    {/* Left column  */}
+                    <div className="col-span-12 lg:col-span-8 space-y-6">
+
+                        {/* Live Hall Monitor */}
+                        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
+                                        <Monitor size={15} className="text-indigo-600" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-sm font-bold text-slate-800">Real-Time Hall Monitoring</h2>
+                                        <p className="text-[11px] text-slate-400 mt-0.5">Live feed of all active exam halls</p>
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Live Feed</span>
+                                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                    <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Live</span>
                                 </div>
                             </div>
-                            <CardBody className="p-0">
-                                <LiveMonitor />
-                            </CardBody>
-                        </Card>
+                            <LiveMonitor />
+                        </div>
 
-                        {/* Detailed Session Intelligence */}
-                        <Card className="border-slate-200 shadow-sm rounded-xl overflow-hidden bg-white">
-                            <div className="px-6 py-4 border-b border-slate-100 bg-white flex items-center gap-2">
-                                <Activity className="text-indigo-600" size={18} />
-                                <h2 className="text-base font-bold text-slate-800 tracking-tight">Active Session Intelligence</h2>
+                        {/* Active Session Intelligence */}
+                        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                            <div className="flex items-center gap-2.5 px-6 py-4 border-b border-slate-100">
+                                <div className="w-7 h-7 rounded-lg bg-violet-50 flex items-center justify-center">
+                                    <Activity size={15} className="text-violet-600" />
+                                </div>
+                                <div>
+                                    <h2 className="text-sm font-bold text-slate-800">Active Session Intelligence</h2>
+                                    <p className="text-[11px] text-slate-400 mt-0.5">Detailed view of ongoing exam sessions</p>
+                                </div>
                             </div>
-                            <CardBody className="p-0">
-                                <LiveExamDetails />
-                            </CardBody>
-                        </Card>
+                            <LiveExamDetails />
+                        </div>
 
-                        {/* Root Infrastructure (Conditional) */}
+                        {/* Root Infrastructure Panel */}
                         {IsRootAdmin && (
-                            <Card className="border-slate-800 bg-[#0f172a] shadow-xl rounded-xl overflow-hidden dark">
-                                <div className="px-6 py-4 border-b border-slate-700/50 flex justify-between items-center">
-                                    <div className="flex items-center gap-2">
-                                        <ShieldAlert className="text-amber-500" size={20} />
-                                        <h2 className="text-base font-bold text-slate-100">Root Infrastructure Control</h2>
+                            <div className="rounded-2xl overflow-hidden border border-slate-800 bg-[#0f172a] shadow-xl">
+                                <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-7 h-7 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                                            <ShieldAlert size={15} className="text-amber-400" />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-sm font-bold text-slate-100">Root Infrastructure Control</h2>
+                                            <p className="text-[11px] text-slate-500 mt-0.5">Privileged system-level operations</p>
+                                        </div>
                                     </div>
-                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-2 py-1 bg-slate-800 rounded">Privileged Access</span>
+                                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.18em] px-2.5 py-1 bg-slate-800/80 rounded-lg border border-slate-700">
+                                        Root Access
+                                    </span>
                                 </div>
-                                <CardBody className="p-8">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                        <RootUtilityCard icon={<Terminal />} title="Audit Logs" desc="Security & access tracing" color="text-amber-400" />
-                                        <RootUtilityCard icon={<Activity />} title="System Health" desc="Compute & memory utilization" color="text-emerald-400" />
-                                        <RootUtilityCard icon={<Zap />} title="Database" desc="Refine indexes & cleanup" color="text-blue-400" />
-                                    </div>
-                                </CardBody>
-                            </Card>
+                                <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <RootUtilityCard icon={<Terminal size={18} />} title="Audit Logs" desc="Security & access tracing" color="text-amber-400" bg="bg-amber-500/10 border-amber-500/20" />
+                                    <RootUtilityCard icon={<CheckCircle2 size={18} />} title="System Health" desc="Compute & memory utilization" color="text-emerald-400" bg="bg-emerald-500/10 border-emerald-500/20" />
+                                    <RootUtilityCard icon={<Database size={18} />} title="Database" desc="Indexes & data cleanup" color="text-blue-400" bg="bg-blue-500/10 border-blue-500/20" />
+                                </div>
+                            </div>
                         )}
-                    </main>
+                    </div>
 
-                    {/* Secondary Insights Column */}
-                    <aside className="col-span-12 lg:col-span-4 space-y-8">
+                    {/* Right sidebar column */}
+                    <div className="col-span-12 lg:col-span-4 space-y-6">
 
-                        {/* High-Level Controls */}
-                        <Card className="border-slate-200 shadow-sm rounded-xl overflow-hidden bg-white">
-                            <div className="px-6 py-4 border-b border-slate-100 bg-white flex items-center gap-2">
-                                <Zap className="text-indigo-600" size={18} />
-                                <h2 className="text-base font-bold text-slate-800 tracking-tight">Quick Actions</h2>
+                        {/* Quick Actions */}
+                        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                            <div className="flex items-center gap-2.5 px-5 py-4 border-b border-slate-100">
+                                <div className="w-7 h-7 rounded-lg bg-orange-50 flex items-center justify-center">
+                                    <Zap size={15} className="text-orange-500" />
+                                </div>
+                                <h2 className="text-sm font-bold text-slate-800">Quick Actions</h2>
                             </div>
-                            <CardBody className="p-6">
+                            <div className="p-5">
                                 <QuickActions />
-                            </CardBody>
-                        </Card>
-
-                        {/* Visual Distribution Intelligence */}
-                        <Card className="border-slate-200 shadow-sm rounded-xl overflow-hidden bg-white">
-                            <div className="px-6 py-4 border-b border-slate-100 bg-white flex items-center gap-2">
-                                <BarChart3 className="text-indigo-600" size={18} />
-                                <h2 className="text-base font-bold text-slate-800 tracking-tight">Distribution Analytics</h2>
                             </div>
-                            <CardBody className="p-6">
+                        </div>
+
+                        {/* Distribution Analytics */}
+                        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                            <div className="flex items-center gap-2.5 px-5 py-4 border-b border-slate-100">
+                                <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
+                                    <BarChart3 size={15} className="text-indigo-600" />
+                                </div>
+                                <h2 className="text-sm font-bold text-slate-800">Distribution Analytics</h2>
+                            </div>
+                            <div className="p-5">
                                 <AnalyticsChart />
-                            </CardBody>
-                        </Card>
-
-                        {/* Activity Audit Feed */}
-                        <Card className="border-slate-200 shadow-sm rounded-xl overflow-hidden bg-white">
-                            <div className="px-6 py-4 border-b border-slate-100 bg-white flex items-center gap-2">
-                                <History className="text-indigo-600" size={18} />
-                                <h2 className="text-base font-bold text-slate-800 tracking-tight">Activity Log</h2>
                             </div>
-                            <CardBody className="p-6">
-                                <ActivityFeed />
-                            </CardBody>
-                        </Card>
+                        </div>
 
-                    </aside>
+                        {/* Activity Log */}
+                        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                            <div className="flex items-center gap-2.5 px-5 py-4 border-b border-slate-100">
+                                <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center">
+                                    <History size={15} className="text-slate-600" />
+                                </div>
+                                <h2 className="text-sm font-bold text-slate-800">Activity Log</h2>
+                            </div>
+                            <div className="p-5">
+                                <ActivityFeed />
+                            </div>
+                        </div>
+
+                    </div>
                 </div>
             </div>
         </div>
     );
 };
 
-function RootUtilityCard({ icon, title, desc, color }: any) {
+function RootUtilityCard({ icon, title, desc, color, bg }: any) {
     return (
-        <div className="p-5 rounded-xl bg-slate-800/50 border border-slate-700/50 hover:bg-slate-800 transition-colors group cursor-pointer">
-            <div className={`${color} mb-3 group-hover:scale-110 transition-transform`}>{icon}</div>
-            <p className="text-sm font-bold text-slate-100">{title}</p>
-            <p className="text-xs text-slate-500 mt-1">{desc}</p>
+        <div className={`flex items-start gap-3 p-4 rounded-xl border ${bg} hover:brightness-125 transition-all cursor-pointer group`}>
+            <div className={`mt-0.5 shrink-0 ${color} group-hover:scale-110 transition-transform`}>{icon}</div>
+            <div>
+                <p className="text-sm font-semibold text-slate-100">{title}</p>
+                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{desc}</p>
+            </div>
         </div>
     );
 }
 
 export default Dashboard;
+

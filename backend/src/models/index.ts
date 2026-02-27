@@ -47,11 +47,6 @@ User.hasMany(ActivityLog, {
     foreignKey: "UserID",
 });
 
-Department.hasMany(Faculty, {
-    foreignKey: "DepartmentID",
-    as: "Faculties",
-    onDelete: 'CASCADE'
-});
 
 
 // Department-Invigilator Association

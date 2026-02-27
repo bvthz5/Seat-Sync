@@ -10,6 +10,13 @@ import {
     useDisclosure,
     Spinner,
     Pagination,
+<<<<<<< Updated upstream
+=======
+    Dropdown,
+    DropdownTrigger,
+    DropdownMenu,
+    DropdownItem,
+>>>>>>> Stashed changes
     Tooltip,
 } from '@heroui/react';
 import {
@@ -41,24 +48,37 @@ import BulkImportModal from '../components/invigilators/BulkImportModal';
 /* ─── helpers ──────────────────────────────────────────── */
 const staffId = (id: number) => `#IV-2024-${String(id).padStart(3, '0')}`;
 
+<<<<<<< Updated upstream
 const mockEmail = (name?: string) => {
     if (!name) return 'user@faculty.edu';
+=======
+const mockEmail = (name: string) => {
+>>>>>>> Stashed changes
     const parts = name.trim().split(' ');
     const first = parts[0]?.toLowerCase() || 'user';
     const last = parts[1]?.toLowerCase() || 'x';
     return `${first}.${last}@faculty.edu`;
 };
 
+<<<<<<< Updated upstream
 const mockPhone = (id?: number) => {
     if (!id) return '+91 9800 000234';
+=======
+const mockPhone = (id: number) => {
+>>>>>>> Stashed changes
     const digits = String(id).padStart(4, '0');
     return `+91 98${digits.slice(0, 2)} ${digits.slice(2)}234`;
 };
 
+<<<<<<< Updated upstream
 const initials = (name?: string) => {
     if (!name) return 'NA';
     return name.split(' ').map(n => n[0]).filter(Boolean).join('').toUpperCase().slice(0, 2);
 };
+=======
+const initials = (name: string) =>
+    name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+>>>>>>> Stashed changes
 
 type StatusKey = 'active' | 'on-leave' | 'inactive';
 
@@ -170,9 +190,15 @@ const Invigilators: React.FC = () => {
     const filtered = invigilators.filter(inv => {
         const q = searchQuery.toLowerCase();
         const matchSearch = !q ||
+<<<<<<< Updated upstream
             inv.Name?.toLowerCase()?.includes(q) ||
             inv.Designation?.toLowerCase()?.includes(q) ||
             inv.Department?.toLowerCase()?.includes(q) ||
+=======
+            inv.Name?.toLowerCase().includes(q) ||
+            inv.Designation?.toLowerCase().includes(q) ||
+            inv.Department?.toLowerCase().includes(q) ||
+>>>>>>> Stashed changes
             staffId(inv.InvigilatorID).includes(q);
         const matchDept = !selectedDept || inv.Department === selectedDept;
         const st = resolveStatus(inv);
@@ -317,11 +343,19 @@ const Invigilators: React.FC = () => {
                 </div>
 
                 {/* ── Table Card ──────────────────────────────── */}
+<<<<<<< Updated upstream
                 <div className="bg-white border border-slate-200 rounded-2xl shadow-sm">
 
                     {/* Table head */}
                     <div className="grid grid-cols-[2.2fr_1.1fr_1.4fr_1.8fr_1fr_200px] px-6 py-3.5 border-b border-slate-100 bg-slate-50/70">
                         {['Invigilator', 'Staff ID', 'Department', 'Contact', 'Status', 'Actions'].map((h, i) => (
+=======
+                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+
+                    {/* Table head */}
+                    <div className="grid grid-cols-[2.2fr_1.1fr_1.4fr_1.8fr_1fr_64px] px-6 py-3.5 border-b border-slate-100 bg-slate-50/70">
+                        {['Invigilator', 'Staff ID', 'Department', 'Contact', 'Status', ''].map((h, i) => (
+>>>>>>> Stashed changes
                             <span key={i} className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{h}</span>
                         ))}
                     </div>
@@ -349,7 +383,11 @@ const Invigilators: React.FC = () => {
                             return (
                                 <div
                                     key={inv.InvigilatorID}
+<<<<<<< Updated upstream
                                     className={`group grid grid-cols-[2.2fr_1.1fr_1.4fr_1.8fr_1fr_200px] px-6 py-4 items-center transition-colors hover:bg-slate-50/80 ${!isLast ? 'border-b border-slate-100' : ''}`}
+=======
+                                    className={`grid grid-cols-[2.2fr_1.1fr_1.4fr_1.8fr_1fr_64px] px-6 py-4 items-center transition-colors hover:bg-slate-50/80 ${!isLast ? 'border-b border-slate-100' : ''}`}
+>>>>>>> Stashed changes
                                 >
                                     {/* Invigilator */}
                                     <div className="flex items-center gap-3.5 min-w-0">
@@ -370,6 +408,7 @@ const Invigilators: React.FC = () => {
                                             <p className="text-xs text-slate-400 truncate mt-0.5">{inv.Designation || 'Faculty'}</p>
                                         </div>
                                     </div>
+<<<<<<< Updated upstream
 
                                     {/* Staff ID */}
                                     <div>
@@ -500,6 +539,91 @@ const Invigilators: React.FC = () => {
                         })
                     )}
 
+=======
+
+                                    {/* Staff ID */}
+                                    <div>
+                                        <span className="font-mono text-xs text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">{staffId(inv.InvigilatorID)}</span>
+                                    </div>
+
+                                    {/* Department */}
+                                    <div>
+                                        <span className="text-sm text-slate-700">{inv.Department || '—'}</span>
+                                    </div>
+
+                                    {/* Contact */}
+                                    <div>
+                                        <p className="text-xs text-slate-600 font-medium">{mockEmail(inv.Name)}</p>
+                                        <p className="text-xs text-slate-400 mt-0.5">{mockPhone(inv.InvigilatorID)}</p>
+                                    </div>
+
+                                    {/* Status chip */}
+                                    <div>
+                                        <span
+                                            className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full border"
+                                            style={{
+                                                background: cfg.chipBg,
+                                                color: cfg.chipText,
+                                                borderColor: cfg.chipBg === '#f0fdf4' ? '#bbf7d0' : cfg.chipBg === '#fffbeb' ? '#fde68a' : '#e2e8f0',
+                                            }}
+                                        >
+                                            <span className="w-1.5 h-1.5 rounded-full" style={{ background: cfg.dotBg }} />
+                                            {cfg.label}
+                                        </span>
+                                    </div>
+
+                                    {/* Action menu */}
+                                    <div className="flex justify-center">
+                                        <Dropdown placement="bottom-end">
+                                            <DropdownTrigger>
+                                                <button className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-all">
+                                                    <MoreVertical size={16} />
+                                                </button>
+                                            </DropdownTrigger>
+                                            <DropdownMenu aria-label="Invigilator actions" className="min-w-[190px]" itemClasses={{ base: 'rounded-lg' }}>
+                                                <DropdownItem
+                                                    key="view"
+                                                    startContent={<ClipboardList size={15} />}
+                                                    onPress={() => { setSelected(inv); onOpenDetails(); }}
+                                                    description="See full profile details"
+                                                >
+                                                    View Profile
+                                                </DropdownItem>
+                                                <DropdownItem
+                                                    key="toggle"
+                                                    startContent={inv.isEligible ? <UserMinus size={15} /> : <CheckCircle2 size={15} />}
+                                                    onPress={() => handleToggleEligibility(inv.InvigilatorID)}
+                                                    description={inv.isEligible ? 'Disable duty access' : 'Enable duty access'}
+                                                >
+                                                    {inv.isEligible ? 'Mark Ineligible' : 'Mark Eligible'}
+                                                </DropdownItem>
+                                                <DropdownItem
+                                                    key="flag"
+                                                    startContent={<Flag size={15} />}
+                                                    onPress={() => handleToggleFlag(inv.InvigilatorID)}
+                                                    description={inv.isFlagged ? 'Remove leave status' : 'Put on leave'}
+                                                >
+                                                    {inv.isFlagged ? 'Remove Leave Flag' : 'Flag for Leave'}
+                                                </DropdownItem>
+                                                <DropdownItem
+                                                    key="delete"
+                                                    className="text-danger"
+                                                    color="danger"
+                                                    startContent={<Trash2 size={15} />}
+                                                    onPress={() => { setSelected(inv); onOpenDelete(); }}
+                                                    description="Permanently remove account"
+                                                >
+                                                    Remove Account
+                                                </DropdownItem>
+                                            </DropdownMenu>
+                                        </Dropdown>
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
+
+>>>>>>> Stashed changes
                     {/* Footer */}
                     <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
                         <span className="text-xs text-slate-400 font-medium">
@@ -524,6 +648,7 @@ const Invigilators: React.FC = () => {
                         )}
                     </div>
                 </div>
+<<<<<<< Updated upstream
 
             </div>
 
@@ -637,8 +762,140 @@ const Invigilators: React.FC = () => {
                                             <span className="font-mono text-[11px] text-white/50 bg-white/10 px-2.5 py-1 rounded-full">
                                                 {staffId(selected.InvigilatorID)}
                                             </span>
+=======
+
+            </div>
+
+            {/* ══════════════ MODALS ════════════════════════ */}
+
+            <AddInvigilatorModal isOpen={isAddOpen} onClose={onAddClose} onSuccess={fetchData} />
+
+            {/* Delete */}
+            <Modal isOpen={isDeleteOpen} onClose={onCloseDelete} size="sm" classNames={{ wrapper: 'z-[9999]', backdrop: 'z-[9998] bg-black/60' }}>
+                <ModalContent className="rounded-2xl">
+                    {(onClose) => (
+                        <>
+                            <ModalHeader className="flex flex-col items-center pt-8 pb-2 px-8 text-center gap-0">
+                                <div className="w-14 h-14 rounded-2xl bg-rose-50 flex items-center justify-center mb-4 border border-rose-100">
+                                    <Trash2 size={22} className="text-rose-500" />
+                                </div>
+                                <h3 className="text-lg font-bold text-slate-900">Remove Invigilator?</h3>
+                            </ModalHeader>
+                            <ModalBody className="text-center px-8 pb-2">
+                                <p className="text-sm text-slate-500 leading-relaxed">
+                                    This will permanently remove <span className="font-bold text-slate-900">{selected?.Name}</span> from the system. This action cannot be undone.
+                                </p>
+                            </ModalBody>
+                            <ModalFooter className="justify-center gap-3 pb-8 pt-4 px-8">
+                                <Button variant="bordered" onPress={onClose} className="font-semibold text-slate-600 border-slate-200 rounded-xl">Cancel</Button>
+                                <Button className="bg-rose-500 text-white font-bold rounded-xl px-6 shadow-sm shadow-rose-100" onPress={handleDelete} isLoading={isSubmitting}>
+                                    Remove Account
+                                </Button>
+                            </ModalFooter>
+                        </>
+                    )}
+                </ModalContent>
+            </Modal>
+
+            {/* Profile */}
+            <Modal isOpen={isDetailsOpen} onClose={onCloseDetails} size="lg" backdrop="opaque" scrollBehavior="inside" classNames={{ wrapper: 'z-[9999]', backdrop: 'z-[9998] bg-black/60' }}>
+                <ModalContent className="rounded-2xl">
+                    {(onClose) => {
+                        if (!selected) return null;
+                        const st = resolveStatus(selected);
+                        const cfg = STATUS_CFG[st];
+                        const ini = initials(selected.Name);
+                        return (
+                            <>
+                                <ModalHeader className="pt-6 px-7 pb-4 border-b border-slate-100 flex items-center gap-3">
+                                    <div className="p-2 bg-slate-100 rounded-xl">
+                                        <ClipboardList size={16} className="text-slate-600" />
+                                    </div>
+                                    <div>
+                                        <p className="text-base font-bold text-slate-900">Invigilator Profile</p>
+                                        <p className="text-xs text-slate-400 font-normal">Complete information &amp; status</p>
+                                    </div>
+                                </ModalHeader>
+                                <ModalBody className="py-6 px-7">
+                                    <div className="space-y-5">
+                                        {/* Hero row */}
+                                        <div className="flex items-center gap-5 p-5 bg-slate-50 rounded-2xl border border-slate-200">
+                                            {selected.ProfileImageURL ? (
+                                                <img src={selected.ProfileImageURL} alt={selected.Name} className="w-16 h-16 rounded-2xl object-cover ring-4 ring-white shadow-md shrink-0" />
+                                            ) : (
+                                                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-white font-bold text-xl shadow-md shrink-0">
+                                                    {ini}
+                                                </div>
+                                            )}
+                                            <div className="flex-1 min-w-0">
+                                                <h3 className="text-lg font-bold text-slate-900 truncate">{selected.Name}</h3>
+                                                <p className="text-sm text-slate-500 mt-0.5">{selected.Designation || 'Faculty'}</p>
+                                                <div className="flex items-center gap-2 mt-2">
+                                                    <span
+                                                        className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full border"
+                                                        style={{ background: cfg.chipBg, color: cfg.chipText, borderColor: st === 'active' ? '#bbf7d0' : st === 'on-leave' ? '#fde68a' : '#e2e8f0' }}
+                                                    >
+                                                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: cfg.dotBg }} />
+                                                        {cfg.label}
+                                                    </span>
+                                                    <span className="font-mono text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">{staffId(selected.InvigilatorID)}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Info grid */}
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {[
+                                                { label: 'Department', value: selected.Department || 'Not Assigned' },
+                                                { label: 'Dept Code', value: '—' },
+                                                { label: 'Total Exams', value: `${selected.totalExams ?? 0} assignments` },
+                                                { label: 'Eligibility', value: selected.isEligible ? '✓ Eligible for duty' : '✗ Not eligible', colored: true, isEligible: selected.isEligible },
+                                            ].map(item => (
+                                                <div key={item.label} className="bg-white rounded-xl p-4 border border-slate-200">
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">{item.label}</p>
+                                                    <p className={`text-sm font-semibold ${(item as any).colored ? ((item as any).isEligible ? 'text-emerald-600' : 'text-rose-500') : 'text-slate-800'}`}>
+                                                        {item.value}
+                                                    </p>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Contact */}
+                                        <div className="bg-white rounded-xl p-4 border border-slate-200">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Contact Information</p>
+                                            <div className="flex flex-col gap-1.5">
+                                                <p className="text-sm text-slate-700 font-medium">{mockEmail(selected.Name)}</p>
+                                                <p className="text-sm text-slate-500">{mockPhone(selected.InvigilatorID)}</p>
+                                            </div>
+>>>>>>> Stashed changes
+                                        </div>
+
+                                        {/* Quick actions */}
+                                        <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
+                                            <Button size="sm" variant="bordered"
+                                                className={`font-semibold rounded-xl text-xs h-9 ${selected.isEligible ? 'border-slate-200 text-rose-500' : 'border-slate-200 text-emerald-600'}`}
+                                                onPress={() => { handleToggleEligibility(selected.InvigilatorID); onClose(); }}
+                                                startContent={selected.isEligible ? <UserMinus size={13} /> : <CheckCircle2 size={13} />}
+                                            >
+                                                {selected.isEligible ? 'Mark Ineligible' : 'Mark Eligible'}
+                                            </Button>
+                                            <Button size="sm" variant="bordered"
+                                                className={`font-semibold rounded-xl text-xs h-9 ${selected.isFlagged ? 'border-slate-200 text-slate-600' : 'border-slate-200 text-amber-600'}`}
+                                                onPress={() => { handleToggleFlag(selected.InvigilatorID); onClose(); }}
+                                                startContent={<Flag size={13} />}
+                                            >
+                                                {selected.isFlagged ? 'Remove Leave Flag' : 'Flag for Leave'}
+                                            </Button>
+                                            <Button size="sm" variant="bordered"
+                                                className="font-semibold rounded-xl text-xs h-9 ml-auto border-rose-200 text-rose-500"
+                                                onPress={() => { onClose(); setTimeout(onOpenDelete, 200); }}
+                                                startContent={<Trash2 size={13} />}
+                                            >
+                                                Remove
+                                            </Button>
                                         </div>
                                     </div>
+<<<<<<< Updated upstream
                                 </div>
                             </div>
 
@@ -711,6 +968,21 @@ const Invigilators: React.FC = () => {
             {/* Bulk Import */}
             <BulkImportModal isOpen={isBulkOpen} onClose={onBulkClose} onSuccess={fetchData} />
         </div >
+=======
+                                </ModalBody>
+                                <ModalFooter className="justify-end pb-6 pt-3 px-7 border-t border-slate-100">
+                                    <Button variant="light" onPress={onClose} className="font-semibold text-slate-500 text-sm rounded-xl">Close</Button>
+                                </ModalFooter>
+                            </>
+                        );
+                    }}
+                </ModalContent>
+            </Modal>
+
+            {/* Bulk Import */}
+            <BulkImportModal isOpen={isBulkOpen} onClose={onBulkClose} onSuccess={fetchData} />
+        </div>
+>>>>>>> Stashed changes
     );
 };
 

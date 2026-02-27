@@ -1,5 +1,9 @@
 import { Router } from "express";
+<<<<<<< Updated upstream
 import { getAllInvigilators, createInvigilator, deleteInvigilator, getInvigilatorStats, toggleInvigilatorFlag, toggleInvigilatorEligibility, bulkImportInvigilators, clearAllFaculties } from "../controllers/invigilator.controller.js";
+=======
+import { getAllInvigilators, createInvigilator, deleteInvigilator, getInvigilatorStats, toggleInvigilatorFlag, toggleInvigilatorEligibility, bulkImportInvigilators } from "../controllers/invigilator.controller.js";
+>>>>>>> Stashed changes
 import { AuthMiddleware } from "../middlewares/auth.middleware.js";
 
 const router = Router();

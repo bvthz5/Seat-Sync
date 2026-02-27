@@ -5,7 +5,8 @@ import { sequelize } from "../config/database.js";
  * Faculty table attributes
  */
 interface FacultyAttributes {
-    FacultyID: string;
+    FacultyID: number;
+    StaffCode?: string;
     Name: string;
     Designation: string;
     /** Plain-text department string imported from Excel */
@@ -17,11 +18,12 @@ interface FacultyAttributes {
 /**
  * Attributes required when creating a faculty
  */
-interface FacultyCreationAttributes extends Optional<FacultyAttributes, "IsEligible"> { }
+interface FacultyCreationAttributes extends Optional<FacultyAttributes, "FacultyID" | "IsEligible" | "StaffCode"> { }
 
 export class Faculty extends Model<FacultyAttributes, FacultyCreationAttributes>
     implements FacultyAttributes {
-    declare FacultyID: string;
+    declare FacultyID: number;
+    declare StaffCode?: string;
     declare Name: string;
     declare Designation: string;
     declare Department: string;
@@ -32,8 +34,14 @@ export class Faculty extends Model<FacultyAttributes, FacultyCreationAttributes>
 Faculty.init(
     {
         FacultyID: {
-            type: DataTypes.STRING(50),
+            type: DataTypes.INTEGER,
+            autoIncrement: true,
             primaryKey: true,
+        },
+        StaffCode: {
+            type: DataTypes.STRING(50),
+            allowNull: true,
+            unique: true,
         },
         Name: {
             type: DataTypes.STRING(150),
