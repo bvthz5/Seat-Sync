@@ -100,3 +100,22 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* Dark-themed scrollbar for dark panels (e.g., seating page) */
+.dark-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dark-scrollbar::-webkit-scrollbar-track {
+  background: #1e293b;
+  border-radius: 3px;
+}
+
+.dark-scrollbar::-webkit-scrollbar-thumb {
+  background: #64748b;
+  border-radius: 3px;
+}
+
+.dark-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

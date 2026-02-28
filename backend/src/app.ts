@@ -173,6 +173,9 @@ app.use("/api/audit", auditLogsRoutes);
 import userManagementRoutes from "./routes/user_management.routes.js";
 app.use("/api/users", userManagementRoutes);
 
+import seatingRoutes from "./routes/seating.routes.js";
+app.use("/api/seating", seatingRoutes);
+
 // --- Error Handling Middleware ---
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
     console.error("GLOBAL ERROR:", err);
