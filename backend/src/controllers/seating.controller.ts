@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { Room, Seat, Student, User, Department, Exam, SeatAllocation, ExamSeries } from "../models/index.js";
+import { Room, Seat, Student, User, Department, Exam, SeatAllocation, ExamSeries, Subject } from "../models/index.js";
 import { Op } from "sequelize";
 import { sequelize } from "../config/database.js";
 
@@ -389,7 +389,7 @@ export const saveAllocation = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "No exams found for this slot" });
         }
 
-        const primaryExamId = examIds[0]; // Use first exam as FK anchor
+        const primaryExamId = examIds[0] as number; // Use first exam as FK anchor
 
         const seats = await Seat.findAll({
             where: { RoomID: Number(hallId), IsActive: true },
@@ -540,7 +540,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
             await transaction.rollback();
             return res.status(400).json({ message: "No exams found for this date + session" });
         }
-        const primaryExamId = examIds[0];
+        const primaryExamId = examIds[0] as number;
 
         // Already-allocated students
         const existingAllocations = await SeatAllocation.findAll({ where: { ExamID: { [Op.in]: examIds } }, transaction });
@@ -666,7 +666,7 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
             await transaction.rollback();
             return res.status(400).json({ message: "No exams found for this date + session" });
         }
-        const primaryExamId = examIds[0];
+        const primaryExamId = examIds[0] as number;
 
         // Get all existing allocations
         const existingAllocations = await SeatAllocation.findAll({
@@ -711,10 +711,10 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
 
         const newRecords: { ExamID: number; SeatID: number; StudentID: number }[] = [];
         for (let i = 0; i < leftSeats.length; i++) {
-            newRecords.push({ ExamID: primaryExamId, SeatID: leftSeats[i], StudentID: shuffledLeftStudents[i] as number });
+            newRecords.push({ ExamID: primaryExamId, SeatID: leftSeats[i] as number, StudentID: shuffledLeftStudents[i] as number });
         }
         for (let i = 0; i < rightSeats.length; i++) {
-            newRecords.push({ ExamID: primaryExamId, SeatID: rightSeats[i], StudentID: shuffledRightStudents[i] as number });
+            newRecords.push({ ExamID: primaryExamId, SeatID: rightSeats[i] as number, StudentID: shuffledRightStudents[i] as number });
         }
 
         // Remove old existing ones and insert new ones
@@ -733,6 +733,205 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
     } catch (error: any) {
         await transaction.rollback();
         console.error("SHUFFLE GLOBAL ERROR:", error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+/* ════════════════════════════════════════════════════════════
+ *  POST /api/seating/quick-add-slot
+ *  Body: { examDate, session, seriesId? }
+ *  Creates a placeholder Exam record so SeatingPlans can use the slot
+ * ════════════════════════════════════════════════════════════ */
+export const quickAddExamSlot = async (req: Request, res: Response) => {
+    try {
+        const { examDate, session, seriesId } = req.body;
+        if (!examDate || !session) {
+            return res.status(400).json({ message: "examDate and session are required" });
+        }
+
+        // 1. Ensure a generic generic SEATING_SLOT subject exists
+        // Use Department 1 and Semester 1 as fallbacks (these usually exist)
+        const [genericDept] = await Department.findOrCreate({
+            where: { DepartmentCode: 'SEAT-DEPT' },
+            defaults: { DepartmentCode: 'SEAT-DEPT', DepartmentName: 'Seating Management Default Dept' }
+        });
+
+        const [genericSubject] = await Subject.findOrCreate({
+            where: { SubjectCode: 'SEAT-SLOT' },
+            defaults: {
+                SubjectCode: 'SEAT-SLOT',
+                SubjectName: 'Generic Seating Slot',
+                DepartmentID: genericDept.DepartmentID,
+                SemesterID: 1
+            }
+        });
+
+        // 2. See if exam already exists for this slot
+        const existing = await Exam.findOne({
+            where: {
+                SubjectID: genericSubject.SubjectID,
+                ExamDate: examDate,
+                Session: session
+            }
+        });
+
+        if (existing) {
+            return res.json({ message: "Slot already exists", exam: existing });
+        }
+
+        // 3. Create placeholder exam
+        const newExam = await Exam.create({
+            SubjectID: genericSubject.SubjectID,
+            ExamSeriesID: seriesId ? parseInt(seriesId) : undefined,
+            ExamName: `Seating Slot - ${examDate} ${session}`,
+            ExamDate: examDate as any,
+            Session: session,
+            Duration: 180,
+            Status: new Date(examDate) < new Date() ? 'Completed' : 'Scheduled'
+        } as any);
+
+        res.json({ message: "Slot created successfully", exam: newExam });
+    } catch (error: any) {
+        console.error("QUICK ADD SLOT ERROR:", error);
+        res.status(500).json({ message: "Failed to create slot: " + error.message });
+    }
+};
+
+/* ════════════════════════════════════════════════════════════
+ *  POST /api/seating/import-excel
+ *  Body: { examDate, session, hallIds?: number[], rows: [{ registerNumber, side }] }
+ * ════════════════════════════════════════════════════════════ */
+export const importSeatingFromExcel = async (req: Request, res: Response) => {
+    const transaction = await sequelize.transaction();
+    try {
+        const { examDate, session, hallIds, rows } = req.body;
+
+        if (!examDate || !session || !rows || !Array.isArray(rows)) {
+            await transaction.rollback();
+            return res.status(400).json({ message: "examDate, session, and rows array are required" });
+        }
+
+        const examIds = await resolveExamIds(examDate, session);
+        if (examIds.length === 0) {
+            await transaction.rollback();
+            return res.status(400).json({ message: "No exams/slots found for this date + session. Create a slot first." });
+        }
+        const primaryExamId = examIds[0] as number;
+
+        // 1. Fetch ALL students to match register numbers
+        const inputRegNumbers = rows.map((r: any) => String(r.registerNumber).trim());
+        const allStudents = await Student.findAll({
+            where: { RegisterNumber: { [Op.in]: inputRegNumbers } },
+            attributes: ['StudentID', 'RegisterNumber'],
+            transaction
+        });
+
+        const studentMap = new Map<string, number>();
+        allStudents.forEach(s => studentMap.set(s.RegisterNumber, s.StudentID));
+
+        // 2. Separate into left and right student IDs, and record notFound
+        const leftStudentIds: number[] = [];
+        const rightStudentIds: number[] = [];
+        const notFound: string[] = [];
+
+        for (const row of rows) {
+            const rn = String(row.registerNumber).trim();
+            const side = String(row.side).trim().toLowerCase();
+            const studentId = studentMap.get(rn);
+
+            if (!studentId) {
+                notFound.push(rn);
+                continue;
+            }
+
+            if (side === 'l' || side === 'left') {
+                leftStudentIds.push(studentId);
+            } else if (side === 'r' || side === 'right') {
+                rightStudentIds.push(studentId);
+            } else {
+                // Default unknown side to left, or could throw error
+                leftStudentIds.push(studentId);
+            }
+        }
+
+        if (leftStudentIds.length === 0 && rightStudentIds.length === 0) {
+            await transaction.rollback();
+            return res.status(400).json({ message: "No matching students found to assign", notFound });
+        }
+
+        // 3. Find target halls
+        const targetHalls = hallIds && hallIds.length > 0
+            ? await Room.findAll({ where: { RoomID: { [Op.in]: hallIds } }, transaction })
+            : await Room.findAll({ where: { Status: 'Active' }, order: [["RoomCode", "ASC"]], transaction });
+
+        if (targetHalls.length === 0) {
+            await transaction.rollback();
+            return res.status(400).json({ message: "No target halls found" });
+        }
+
+        // 4. Distribute across halls
+        let leftIdx = 0;
+        let rightIdx = 0;
+        const newRecords: { ExamID: number; SeatID: number; StudentID: number }[] = [];
+
+        for (const hall of targetHalls) {
+            if (leftIdx >= leftStudentIds.length && rightIdx >= rightStudentIds.length) break;
+
+            await ensureSeatsExist(hall);
+
+            const seats = await Seat.findAll({
+                where: { RoomID: hall.RoomID, IsActive: true },
+                order: [["RowLabel", "ASC"], ["BenchNumber", "ASC"], ["SeatNumber", "ASC"]],
+                transaction,
+            });
+
+            // Clear existing allocations for this hall + slot
+            const seatIds = seats.map(s => s.SeatID);
+            if (seatIds.length > 0) {
+                await SeatAllocation.destroy({
+                    where: { ExamID: { [Op.in]: examIds }, SeatID: { [Op.in]: seatIds } },
+                    transaction,
+                });
+            }
+
+            const benchMap: Record<string, Record<number, any[]>> = {};
+            for (const seat of seats) {
+                if (!benchMap[seat.RowLabel]) benchMap[seat.RowLabel] = {};
+                const rowMap = benchMap[seat.RowLabel]!;
+                if (!rowMap[seat.BenchNumber]) rowMap[seat.BenchNumber] = [];
+                rowMap[seat.BenchNumber]!.push(seat);
+            }
+
+            for (const row of Object.keys(benchMap).sort()) {
+                for (const benchNum of Object.keys(benchMap[row]!).map(Number).sort((a, b) => a - b)) {
+                    const benchSeats = (benchMap[row]![benchNum] || []).sort((a: any, b: any) => a.SeatNumber - b.SeatNumber);
+                    for (const seat of benchSeats) {
+                        if (seat.SeatNumber === 1 && leftIdx < leftStudentIds.length) {
+                            newRecords.push({ ExamID: primaryExamId, SeatID: seat.SeatID, StudentID: leftStudentIds[leftIdx++] as number });
+                        } else if (seat.SeatNumber !== 1 && rightIdx < rightStudentIds.length) {
+                            newRecords.push({ ExamID: primaryExamId, SeatID: seat.SeatID, StudentID: rightStudentIds[rightIdx++] as number });
+                        }
+                    }
+                }
+            }
+        }
+
+        // Insert allocations
+        if (newRecords.length > 0) {
+            await SeatAllocation.bulkCreate(newRecords, { transaction });
+        }
+
+        await transaction.commit();
+        res.json({
+            message: "Excel seating imported successfully",
+            totalAssigned: newRecords.length,
+            notFoundCount: notFound.length,
+            notFound
+        });
+
+    } catch (error: any) {
+        await transaction.rollback();
+        console.error("IMPORT SEATING ERROR:", error);
         res.status(500).json({ message: error.message });
     }
 };

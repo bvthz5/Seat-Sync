@@ -14,6 +14,8 @@ import {
     getAllocationSummary,
     bulkAssign,
     shuffleGlobal,
+    quickAddExamSlot,
+    importSeatingFromExcel
 } from "../controllers/seating.controller.js";
 
 const router = express.Router();
@@ -50,6 +52,13 @@ router.post("/bulk-assign", bulkAssign);
 
 // Globally shuffle assigned students
 router.post("/shuffle-global", shuffleGlobal);
+
+// Quick add exam slot
+router.post("/quick-add-slot", quickAddExamSlot);
+
+// Import seating from Excel
+router.post("/import-excel", importSeatingFromExcel);
+
 
 // Save seating allocation
 router.post("/save", saveAllocation);

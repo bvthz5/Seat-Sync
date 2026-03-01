@@ -9,11 +9,12 @@ import {
     LayoutGrid, Zap, Save, Trash2, Printer,
     Building2, Users, CheckCircle2, AlertCircle, RefreshCw,
     Calendar, Sun, Moon, Armchair, ClipboardList, ChevronRight, Ban, Eye,
-    MoreVertical, Pencil, Power, XCircle, Shuffle
+    MoreVertical, Pencil, Power, XCircle, Shuffle, FileSpreadsheet
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { SeatingService } from '../services/seatingService';
 import api from '../../../services/api';
+import SeatingImportModal from '../components/seating/SeatingImportModal';
 
 /* ─── Types ───────────────────────────────────────── */
 interface Hall { RoomID: number; RoomCode: string; Capacity: number; TotalRows: number; BenchesPerRow: number; SeatsPerBench: number; }
@@ -73,6 +74,8 @@ const SeatingPlans: React.FC = () => {
     const [assigning, setAssigning] = useState(false);
     const [shuffling, setShuffling] = useState(false);
     const [loadingSummary, setLoadingSummary] = useState(false);
+    const [addingSlot, setAddingSlot] = useState(false);
+    const [showImportModal, setShowImportModal] = useState(false);
 
     /* detail modal */
     const [detailHall, setDetailHall] = useState<HallSummary | null>(null);
@@ -132,6 +135,31 @@ const SeatingPlans: React.FC = () => {
     }, [selectedDate, selectedSession]);
 
     useEffect(() => { loadSummary(); }, [loadSummary]);
+
+    /* quick add slot */
+    const handleQuickAddSlot = async () => {
+        if (!selectedDate) {
+            toast.error("Please type or select a date first");
+            return;
+        }
+        setAddingSlot(true);
+        try {
+            await SeatingService.quickAddSlot({
+                examDate: selectedDate,
+                session: selectedSession,
+                seriesId: selectedSeries ? Number(selectedSeries) : undefined
+            });
+            toast.success(`Exam slot created for ${fmtDate(selectedDate)} ${selectedSession}`);
+            // Refresh dates list
+            const dates = await SeatingService.getExamDates(selectedSeries ? Number(selectedSeries) : undefined);
+            setExamDates(Array.isArray(dates) ? dates : []);
+            loadSummary();
+        } catch (error: any) {
+            toast.error(error?.response?.data?.message || "Failed to create slot");
+        } finally {
+            setAddingSlot(false);
+        }
+    };
 
     /* bulk assign */
     const handleBulkAssign = async () => {
@@ -297,23 +325,34 @@ const SeatingPlans: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {/* Date */}
                                 <div className="space-y-1">
-                                    <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                                        <Calendar size={10} className="text-slate-500" /> Date
+                                    <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest flex items-center justify-between">
+                                        <span className="flex items-center gap-1.5"><Calendar size={10} className="text-slate-500" /> Date</span>
                                     </span>
-                                    <Select aria-label="Exam Date" placeholder="Select date" variant="bordered"
-                                        selectedKeys={selectedDate ? [selectedDate] : []}
-                                        onSelectionChange={(k) => setSelectedDate(Array.from(k)[0] as string || '')}
-                                        classNames={{
-                                            trigger: "bg-[#0d1424] border border-[#1e293b] shadow-inner rounded-lg data-[hover=true]:border-indigo-500/50 data-[hover=true]:bg-[#0f172a] transition-all h-9 text-slate-200 text-xs",
-                                            popoverContent: "bg-[#0d1424] border border-[#1e293b] text-slate-200"
-                                        }}>
-                                        {availableDates.map(d => {
-                                            const slot = examDates.find(ed => ed.examDate === d && ed.session === selectedSession);
-                                            return <SelectItem key={d} className="data-[hover=true]:bg-indigo-500/10 data-[hover=true]:text-indigo-300">{fmtDate(d)} — {slot?.examCount || 0} exam{(slot?.examCount || 0) !== 1 ? 's' : ''}</SelectItem>;
-                                        })}
-                                    </Select>
+                                    <div className="flex gap-2">
+                                        <div className="flex-1">
+                                            <input
+                                                type="date"
+                                                value={selectedDate}
+                                                onChange={(e) => setSelectedDate(e.target.value)}
+                                                className="w-full bg-[#0d1424] border border-[#1e293b] shadow-inner rounded-lg px-3 hover:border-indigo-500/50 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all h-9 text-slate-200 text-xs"
+                                                style={{ colorScheme: 'dark' }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Quick Add missing slot button */}
+                                    {selectedDate && !currentSlot && (
+                                        <Button
+                                            size="sm"
+                                            className="w-full mt-2 bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-500/20 shadow-none font-medium text-xs h-8"
+                                            onPress={handleQuickAddSlot}
+                                            isLoading={addingSlot}
+                                            startContent={!addingSlot && <Zap size={12} />}
+                                        >
+                                            Quick Add Slot
+                                        </Button>
+                                    )}
                                 </div>
 
                                 {selectedDate && currentSlot && (
@@ -416,22 +455,32 @@ const SeatingPlans: React.FC = () => {
                                 )}
 
                                 {/* Assign & Shuffle Buttons */}
-                                <div className="flex gap-2">
-                                    <Button onPress={handleBulkAssign} isLoading={assigning}
-                                        isDisabled={!selectedDate || (!leftDept && !rightDept)}
-                                        className="flex-1 font-bold text-white shadow-[0_0_20px_rgba(79,70,229,0.2)] bg-indigo-600 hover:bg-indigo-500 rounded-xl h-10 border border-indigo-500/50 hover:shadow-[0_0_30px_rgba(79,70,229,0.4)] transition-all data-[disabled=true]:opacity-50 text-sm"
-                                        startContent={!assigning ? <Zap size={16} fill="currentColor" /> : undefined} size="md"
+                                <div className="flex flex-col gap-2 mt-2">
+                                    <Button onPress={() => setShowImportModal(true)}
+                                        isDisabled={!selectedDate || !currentSlot}
+                                        className="w-full font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-xl h-9 border border-emerald-500/30 transition-all data-[disabled=true]:opacity-50 text-xs shadow-none"
+                                        startContent={<FileSpreadsheet size={14} />} size="sm"
                                     >
-                                        {assigning ? 'Assigning…' : `Assign${selectedHallIds.size > 0 ? '' : ' All'}`}
+                                        Import Seating from Excel
                                     </Button>
 
-                                    <Button onPress={handleShuffleGlobal} isLoading={shuffling}
-                                        isDisabled={!selectedDate || totalFilled === 0}
-                                        className="font-bold text-white shadow-[0_0_20px_rgba(236,72,153,0.2)] bg-pink-600 hover:bg-pink-500 rounded-xl h-10 w-10 min-w-10 px-0 border border-pink-500/50 hover:shadow-[0_0_30px_rgba(236,72,153,0.4)] transition-all data-[disabled=true]:opacity-50 text-sm"
-                                        title="Shuffle All Assigned Students"
-                                    >
-                                        {!shuffling && <Shuffle size={16} />}
-                                    </Button>
+                                    <div className="flex gap-2">
+                                        <Button onPress={handleBulkAssign} isLoading={assigning}
+                                            isDisabled={!selectedDate || (!leftDept && !rightDept)}
+                                            className="flex-1 font-bold text-white shadow-[0_0_20px_rgba(79,70,229,0.2)] bg-indigo-600 hover:bg-indigo-500 rounded-xl h-10 border border-indigo-500/50 hover:shadow-[0_0_30px_rgba(79,70,229,0.4)] transition-all data-[disabled=true]:opacity-50 text-sm"
+                                            startContent={!assigning ? <Zap size={16} fill="currentColor" /> : undefined} size="md"
+                                        >
+                                            {assigning ? 'Assigning…' : `Assign${selectedHallIds.size > 0 ? '' : ' All'}`}
+                                        </Button>
+
+                                        <Button onPress={handleShuffleGlobal} isLoading={shuffling}
+                                            isDisabled={!selectedDate || totalFilled === 0}
+                                            className="font-bold text-white shadow-[0_0_20px_rgba(236,72,153,0.2)] bg-pink-600 hover:bg-pink-500 rounded-xl h-10 w-10 min-w-10 px-0 border border-pink-500/50 hover:shadow-[0_0_30px_rgba(236,72,153,0.4)] transition-all data-[disabled=true]:opacity-50 text-sm"
+                                            title="Shuffle All Assigned Students"
+                                        >
+                                            {!shuffling && <Shuffle size={16} />}
+                                        </Button>
+                                    </div>
                                 </div>
                             </CardBody>
                         </Card>
@@ -907,6 +956,16 @@ const SeatingPlans: React.FC = () => {
                     )}
                 </ModalContent>
             </Modal>
+
+            {/* Import Seating Modal */}
+            <SeatingImportModal
+                isOpen={showImportModal}
+                onClose={() => setShowImportModal(false)}
+                onSuccess={() => loadSummary()}
+                examDate={selectedDate}
+                session={selectedSession}
+                selectedHalls={selectedHallIds.size > 0 ? Array.from(selectedHallIds) : undefined}
+            />
 
         </div>
     );

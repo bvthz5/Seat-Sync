@@ -381,6 +381,26 @@ async function ensureSchemaIntegrity() {
                     ALTER TABLE [dbo].[Exams] ADD [ExamDate] DATE NULL;
                     PRINT 'Added ExamDate to Exams';
                 END
+
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') 
+                    AND name = 'IsEmergencyMode'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Exams] ADD [IsEmergencyMode] BIT NOT NULL CONSTRAINT DF_Exams_IsEmergencyMode DEFAULT 0;
+                    PRINT 'Added IsEmergencyMode to Exams';
+                END
+
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') 
+                    AND name = 'AttendanceLocked'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Exams] ADD [AttendanceLocked] BIT NOT NULL CONSTRAINT DF_Exams_AttendanceLocked DEFAULT 0;
+                    PRINT 'Added AttendanceLocked to Exams';
+                END
             END
         `, { type: QueryTypes.RAW });
 

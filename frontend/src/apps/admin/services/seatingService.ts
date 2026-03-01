@@ -65,4 +65,16 @@ export const SeatingService = {
         const r = await api.delete(`${PREFIX}/allocation/${examDate}/${session}/${hallId}`);
         return r.data;
     },
+
+    /** Quick add a seating slot (placeholder exam) */
+    quickAddSlot: async (payload: { examDate: string; session: string; seriesId?: number }) => {
+        const r = await api.post(`${PREFIX}/quick-add-slot`, payload);
+        return r.data;
+    },
+
+    /** Import seating from Excel */
+    importSeatingExcel: async (payload: { examDate: string; session: string; hallIds?: number[]; rows: any[] }) => {
+        const r = await api.post(`${PREFIX}/import-excel`, payload);
+        return r.data;
+    },
 };
