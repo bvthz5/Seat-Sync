@@ -4,17 +4,17 @@ import { Faculty } from "../models/Faculty.js";
 // Create Single Faculty
 export const createFaculty = async (req: Request, res: Response): Promise<any> => {
     try {
-        const { Name, Designation, ProfileImageURL, DepartmentID, isEligible } = req.body;
+        const { Name, Designation, ProfileImageURL, Department, isEligible } = req.body;
 
-        if (!Name || !DepartmentID) {
-            return res.status(400).json({ message: "Name and DepartmentID are required" });
+        if (!Name || !Department) {
+            return res.status(400).json({ message: "Name and Department are required" });
         }
 
         const faculty = await Faculty.create({
             Name,
             Designation,
             ProfileImageURL,
-            DepartmentID,
+            Department,
             IsEligible: isEligible !== undefined ? isEligible : true
         });
 
