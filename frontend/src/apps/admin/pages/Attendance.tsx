@@ -250,6 +250,8 @@ const ROWS_PER_PAGE = 4;
 const Attendance: React.FC = () => {
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
+    const [mounted, setMounted] = useState(false);
+    React.useEffect(() => { setMounted(true); }, []);
 
     const filtered = useMemo(() => {
         const q = search.toLowerCase();
@@ -494,33 +496,37 @@ const Attendance: React.FC = () => {
                                 <TrendingUp size={18} className="text-gray-700" />
                                 <h2 className="text-base font-bold text-gray-900">Attendance Trends</h2>
                             </div>
-                            <ResponsiveContainer width="100%" height={220}>
-                                <BarChart data={WEEKLY_DATA} barSize={32} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
-                                    <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#f1f5f9" />
-                                    <XAxis
-                                        dataKey="day"
-                                        tick={{ fontSize: 11, fontWeight: 700, fill: '#94a3b8' }}
-                                        axisLine={false}
-                                        tickLine={false}
-                                    />
-                                    <YAxis
-                                        tick={{ fontSize: 11, fill: '#94a3b8' }}
-                                        axisLine={false}
-                                        tickLine={false}
-                                        domain={[0, 100]}
-                                        tickFormatter={(v) => `${v}%`}
-                                    />
-                                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(99,102,241,0.04)' }} />
-                                    <Bar dataKey="rate" radius={[6, 6, 0, 0]}>
-                                        {WEEKLY_DATA.map((entry, index) => (
-                                            <Cell
-                                                key={`cell-${index}`}
-                                                fill={entry.today ? '#4f46e5' : entry.rate === 0 ? '#e2e8f0' : '#c7d2fe'}
-                                            />
-                                        ))}
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
+                            {mounted ? (
+                                <ResponsiveContainer width="99%" height={220} minWidth={1} minHeight={1}>
+                                    <BarChart data={WEEKLY_DATA} barSize={32} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
+                                        <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#f1f5f9" />
+                                        <XAxis
+                                            dataKey="day"
+                                            tick={{ fontSize: 11, fontWeight: 700, fill: '#94a3b8' }}
+                                            axisLine={false}
+                                            tickLine={false}
+                                        />
+                                        <YAxis
+                                            tick={{ fontSize: 11, fill: '#94a3b8' }}
+                                            axisLine={false}
+                                            tickLine={false}
+                                            domain={[0, 100]}
+                                            tickFormatter={(v) => `${v}%`}
+                                        />
+                                        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(99,102,241,0.04)' }} />
+                                        <Bar dataKey="rate" radius={[6, 6, 0, 0]}>
+                                            {WEEKLY_DATA.map((entry, index) => (
+                                                <Cell
+                                                    key={`cell-${index}`}
+                                                    fill={entry.today ? '#4f46e5' : entry.rate === 0 ? '#e2e8f0' : '#c7d2fe'}
+                                                />
+                                            ))}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="h-[220px] w-full animate-pulse bg-slate-50 rounded-xl" />
+                            )}
                             {/* Today label under chart */}
                             <div className="flex items-center gap-2 mt-2">
                                 <span className="w-3 h-3 rounded bg-indigo-600 inline-block" />
