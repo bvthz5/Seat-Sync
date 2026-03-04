@@ -48,7 +48,7 @@ api.interceptors.request.use(
     (error: AxiosError) => Promise.reject(error)
 );
 
-// Response Interceptor: Handle 401 & Refresh
+// Response Interceptor #1: Handle 401 & Refresh
 api.interceptors.response.use(
     (response) => response,
     async (error: AxiosError) => {

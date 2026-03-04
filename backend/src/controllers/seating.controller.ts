@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { Room, Seat, Student, User, Department, Exam, SeatAllocation, ExamSeries, Subject } from "../models/index.js";
+import { Room, Seat, Student, User, Department, Exam, SeatAllocation, ExamSeries, Subject, Semester, Program } from "../models/index.js";
 import { Op, QueryTypes } from "sequelize";
 import { sequelize } from "../config/database.js";
 import bcrypt from "bcrypt";
@@ -784,24 +784,49 @@ export const quickAddExamSlot = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "examDate and session are required" });
         }
 
-        // 1. Ensure a generic generic SEATING_SLOT subject exists
-        // Use Department 1 and Semester 1 as fallbacks (these usually exist)
-        const [genericDept] = await Department.findOrCreate({
-            where: { DepartmentCode: 'SEAT-DEPT' },
-            defaults: { DepartmentCode: 'SEAT-DEPT', DepartmentName: 'Seating Management Default Dept' }
+        // ── Step 1: Ensure a system Program exists (needed by Semester FK) ──
+        const [systemProgram] = await Program.findOrCreate({
+            where: { ProgramCode: 'SYS-SEAT' },
+            defaults: {
+                ProgramName: 'System Seating Program',
+                ProgramCode: 'SYS-SEAT',
+                IsActive: true,
+            }
         });
 
+        // ── Step 2: Ensure a system Semester exists (needed by Subject FK) ──
+        const [systemSemester] = await Semester.findOrCreate({
+            where: { SemesterName: 'SYSTEM-SEAT-SEM' },
+            defaults: {
+                SemesterName: 'SYSTEM-SEAT-SEM',
+                SemesterNumber: 0,
+                ProgramID: systemProgram.ProgramID,
+                IsActive: true,
+            }
+        });
+
+        // ── Step 3: Ensure a system Department exists ──
+        const [genericDept] = await Department.findOrCreate({
+            where: { DepartmentCode: 'SEAT-DEPT' },
+            defaults: {
+                DepartmentCode: 'SEAT-DEPT',
+                DepartmentName: 'Seating Management Department',
+                IsActive: true,
+            }
+        });
+
+        // ── Step 4: Ensure a system Subject exists ──
         const [genericSubject] = await Subject.findOrCreate({
             where: { SubjectCode: 'SEAT-SLOT' },
             defaults: {
                 SubjectCode: 'SEAT-SLOT',
                 SubjectName: 'Generic Seating Slot',
                 DepartmentID: genericDept.DepartmentID,
-                SemesterID: 1
+                SemesterID: systemSemester.SemesterID,
             }
         });
 
-        // 2. See if exam already exists for this slot
+        // ── Step 5: Check if exam slot already exists for this date+session ──
         const existing = await Exam.findOne({
             where: {
                 SubjectID: genericSubject.SubjectID,
@@ -814,7 +839,7 @@ export const quickAddExamSlot = async (req: Request, res: Response) => {
             return res.json({ message: "Slot already exists", exam: existing });
         }
 
-        // 3. Create placeholder exam
+        // ── Step 6: Create the placeholder exam ──
         const newExam = await Exam.create({
             SubjectID: genericSubject.SubjectID,
             ExamSeriesID: seriesId ? parseInt(seriesId) : undefined,
@@ -822,7 +847,7 @@ export const quickAddExamSlot = async (req: Request, res: Response) => {
             ExamDate: examDate as any,
             Session: session,
             Duration: 180,
-            Status: new Date(examDate) < new Date() ? 'Completed' : 'Scheduled'
+            Status: new Date(examDate) < new Date() ? 'Completed' : 'Scheduled',
         } as any);
 
         res.json({ message: "Slot created successfully", exam: newExam });
@@ -864,7 +889,7 @@ export const importSeatingFromExcel = async (req: Request, res: Response) => {
             name: String(r.name ?? '').trim(),
         })).filter(r => r.original.length > 0);
 
-        console.log(`[SeatingImport] rawInputRows count: ${rawInputRows.length}, sample:`, rawInputRows.slice(0,3));
+        console.log(`[SeatingImport] rawInputRows count: ${rawInputRows.length}, sample:`, rawInputRows.slice(0, 3));
 
         if (rawInputRows.length === 0) {
             await transaction.rollback();
@@ -887,7 +912,7 @@ export const importSeatingFromExcel = async (req: Request, res: Response) => {
 
         // 3. Auto-create Student records for any register number not yet in the DB
         const missingRows = rawInputRows.filter(r => !studentMap.has(normalize(r.original)));
-        console.log(`[SeatingImport] missing (to auto-create): ${missingRows.length}, sample:`, missingRows.slice(0,3));
+        console.log(`[SeatingImport] missing (to auto-create): ${missingRows.length}, sample:`, missingRows.slice(0, 3));
         let autoCreatedCount = 0;
 
         // Pre-compute a single placeholder hash (bcrypt is slow, reuse across bulk creation)
@@ -929,7 +954,7 @@ export const importSeatingFromExcel = async (req: Request, res: Response) => {
         }
 
         console.log(`[SeatingImport] autoCreatedCount: ${autoCreatedCount}, studentMap size: ${studentMap.size}`);
-        console.log(`[SeatingImport] sample studentMap keys:`, [...studentMap.keys()].slice(0,5));
+        console.log(`[SeatingImport] sample studentMap keys:`, [...studentMap.keys()].slice(0, 5));
 
         // 4. Separate into left and right student IDs, and record notFound
         const leftStudentIds: number[] = [];
@@ -960,8 +985,8 @@ export const importSeatingFromExcel = async (req: Request, res: Response) => {
 
         if (leftStudentIds.length === 0 && rightStudentIds.length === 0) {
             await transaction.rollback();
-            return res.status(400).json({ 
-                message: `Debug — Input:${rawInputRows.length} rows, DB students:${(allStudents as any[]).length}, AutoCreated:${autoCreatedCount}, NotFound:${notFound.length}. Sample input: ${JSON.stringify(rawInputRows.slice(0,2))}. NotFound sample: ${JSON.stringify(notFound.slice(0,3))}`,
+            return res.status(400).json({
+                message: `Debug — Input:${rawInputRows.length} rows, DB students:${(allStudents as any[]).length}, AutoCreated:${autoCreatedCount}, NotFound:${notFound.length}. Sample input: ${JSON.stringify(rawInputRows.slice(0, 2))}. NotFound sample: ${JSON.stringify(notFound.slice(0, 3))}`,
                 notFound
             });
         }

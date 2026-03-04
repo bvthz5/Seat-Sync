@@ -2,6 +2,7 @@
 import api from '../../../services/api';
 import { io, Socket } from 'socket.io-client';
 import toast from 'react-hot-toast';
+import { startTransition } from 'react';
 
 // --- Types ---
 
@@ -39,33 +40,37 @@ export const initNotificationSocket = (userId: number, onNewNotification: (n: No
     socket = io(SOCKET_URL);
 
     socket.on('connect', () => {
-        console.log('Notification Socket Connected');
         socket?.emit('join_room', `user_${userId}`);
     });
 
     socket.on('notification', (payload: any) => {
-        // Map payload to Notification interface if needed
-        const notification: Notification = {
-            id: payload.id,
-            title: payload.title,
-            message: payload.message,
-            type: payload.type.toLowerCase(),
-            category: payload.category,
-            priority: payload.priority,
-            sentAt: payload.createdAt,
-            isRead: false,
-            metadata: payload.metadata,
-            audience: ['Me'], // Socket notification is usually for 'me' or 'role' but payload doesn't carry target info sometimes
-            status: 'Delivered'
-        };
+        // Defer out of the socket.io 'message' handler immediately
+        setTimeout(() => {
+            const notification: Notification = {
+                id: payload.id,
+                title: payload.title,
+                message: payload.message,
+                type: payload.type.toLowerCase(),
+                category: payload.category,
+                priority: payload.priority,
+                sentAt: payload.createdAt,
+                isRead: false,
+                metadata: payload.metadata,
+                audience: ['Me'],
+                status: 'Delivered'
+            };
 
-        onNewNotification(notification);
+            // Mark as a non-urgent transition so React doesn't render
+            // synchronously inside this setTimeout callback
+            startTransition(() => onNewNotification(notification));
 
-        if (notification.priority === 'CRITICAL' || notification.type === 'EMERGENCY') {
-            toast.error(`EMERGENCY: ${notification.title}`, { duration: 10000 });
-        } else {
-            toast(`New Notification: ${notification.title}`, { icon: '🔔' });
-        }
+            // Toast is urgent — stays outside the transition
+            if (notification.priority === 'CRITICAL' || notification.type === 'EMERGENCY') {
+                toast.error(`EMERGENCY: ${notification.title}`, { duration: 10000 });
+            } else {
+                toast(`New Notification: ${notification.title}`, { icon: '🔔' });
+            }
+        }, 0);
     });
 
     return socket;
@@ -115,17 +120,12 @@ export const getAllNotificationsAdmin = async (params: any = {}): Promise<{ data
 
 // --- Legacy Support Mocks (to prevent breaking other modules) ---
 export const getRecipientCount = async (filters: any) => {
-    // Mock logic: Simulate DB query delay
-    await new Promise(resolve => setTimeout(resolve, 600));
-
-    // Return mock counts based on filters for realism
     if (filters.type === 'all') return 2450;
     if (filters.type === 'student') return 2200;
     if (filters.type === 'invigilator') return 150;
     if (filters.type === 'admin') return 12;
-    if (filters.type === 'exam') return Math.floor(Math.random() * (400 - 50) + 50); // Random class size
+    if (filters.type === 'exam') return Math.floor(Math.random() * (400 - 50) + 50);
     if (filters.type === 'department') return Math.floor(Math.random() * (600 - 100) + 100);
-
     return 0;
 };
 

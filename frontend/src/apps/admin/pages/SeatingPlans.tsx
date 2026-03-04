@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useTransition } from 'react';
 import {
     Card, CardBody, CardHeader, Button, Select, SelectItem,
     Chip, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter,
@@ -59,6 +59,7 @@ const fmtDate = (iso: string) => {
 
 /* ═══════════════════════════════════════════════════ */
 const SeatingPlans: React.FC = () => {
+    const [, startTransition] = useTransition();
     const [seriesList, setSeriesList] = useState<Series[]>([]);
     const [examDates, setExamDates] = useState<ExamDateSlot[]>([]);
     const [halls, setHalls] = useState<Hall[]>([]);
@@ -133,14 +134,14 @@ const SeatingPlans: React.FC = () => {
     }, [selectedSeries]);
 
     const loadSummary = useCallback(async () => {
-        if (!selectedDate) { setHallSummary([]); return; }
+        if (!selectedDate) { startTransition(() => setHallSummary([])); return; }
         setLoadingSummary(true);
         try {
             const data = await SeatingService.getAllocationSummary(selectedDate, selectedSession);
-            setHallSummary(Array.isArray(data) ? data : []);
+            startTransition(() => setHallSummary(Array.isArray(data) ? data : []));
         } catch { toast.error('Failed to load summary'); }
         finally { setLoadingSummary(false); }
-    }, [selectedDate, selectedSession]);
+    }, [selectedDate, selectedSession, startTransition]);
 
     useEffect(() => { loadSummary(); }, [loadSummary]);
 
@@ -150,7 +151,7 @@ const SeatingPlans: React.FC = () => {
             toast.error("Please type or select a date first");
             return;
         }
-        setAddingSlot(true);
+        startTransition(() => setAddingSlot(true));
         try {
             await SeatingService.quickAddSlot({
                 examDate: selectedDate,
@@ -158,14 +159,13 @@ const SeatingPlans: React.FC = () => {
                 seriesId: selectedSeries ? Number(selectedSeries) : undefined
             });
             toast.success(`Exam slot created for ${fmtDate(selectedDate)} ${selectedSession}`);
-            // Refresh dates list
             const dates = await SeatingService.getExamDates(selectedSeries ? Number(selectedSeries) : undefined);
-            setExamDates(Array.isArray(dates) ? dates : []);
+            startTransition(() => setExamDates(Array.isArray(dates) ? dates : []));
             loadSummary();
         } catch (error: any) {
             toast.error(error?.response?.data?.message || "Failed to create slot");
         } finally {
-            setAddingSlot(false);
+            startTransition(() => setAddingSlot(false));
         }
     };
 
@@ -175,29 +175,28 @@ const SeatingPlans: React.FC = () => {
         const ids = selectedHallIds.size > 0 ? [...selectedHallIds] : hallSummary.map(h => h.hallId);
         if (ids.length === 0) { toast.error('No halls available'); return; }
         if (!leftDept && !rightDept) { toast.error('Select at least one department'); return; }
-        setAssigning(true);
+        startTransition(() => setAssigning(true));
         try {
             const r = await SeatingService.bulkAssign({
                 examDate: selectedDate, session: selectedSession, hallIds: ids,
                 leftDeptId: leftDept ? Number(leftDept) : null, rightDeptId: rightDept ? Number(rightDept) : null,
             });
             toast.success(`Assigned ${r.totalLeftAssigned + r.totalRightAssigned} students across ${r.hallResults.length} halls`);
-            loadSummary();
+            startTransition(() => loadSummary());
         } catch (e: any) { toast.error(e?.response?.data?.message || 'Bulk assign failed'); }
-        finally { setAssigning(false); }
+        finally { startTransition(() => setAssigning(false)); }
     };
 
     /* global shuffle */
     const executeShuffleGlobal = async () => {
         if (!selectedDate || !selectedSession) return;
-        setShuffling(true);
-        setShowShuffleConfirm(false); // Close the modal
+        startTransition(() => { setShuffling(true); setShowShuffleConfirm(false); });
         try {
             const r = await SeatingService.shuffleGlobal({ examDate: selectedDate, session: selectedSession });
-            toast.success(r.message || 'Halls shuffled locally successfully');
-            loadSummary();
+            toast.success(r.message || 'Halls shuffled successfully');
+            startTransition(() => loadSummary());
         } catch (e: any) { toast.error(e?.response?.data?.message || 'Shuffle failed'); }
-        finally { setShuffling(false); }
+        finally { startTransition(() => setShuffling(false)); }
     };
 
     const handleShuffleGlobal = () => {
@@ -210,9 +209,15 @@ const SeatingPlans: React.FC = () => {
         setDetailHall(hs); setDetailLoading(true); setDetailBenches([]); setDetailAssignments({});
         try {
             const layout = await SeatingService.getHallLayout(hs.hallId);
-            setDetailBenches(layout.benches || []); setDetailTotalSeats(layout.totalSeats || 0);
+            startTransition(() => {
+                setDetailBenches(layout.benches || []);
+                setDetailTotalSeats(layout.totalSeats || 0);
+            });
             if (selectedDate) {
-                try { const alloc = await SeatingService.getAllocationForHall(selectedDate, selectedSession, hs.hallId); if (alloc?.assignments) setDetailAssignments(alloc.assignments); } catch { }
+                try {
+                    const alloc = await SeatingService.getAllocationForHall(selectedDate, selectedSession, hs.hallId);
+                    if (alloc?.assignments) startTransition(() => setDetailAssignments(alloc.assignments));
+                } catch { }
             }
         } catch { toast.error('Failed to load hall'); }
         finally { setDetailLoading(false); }
@@ -269,12 +274,12 @@ const SeatingPlans: React.FC = () => {
         const ra = rs ? detailAssignments[rs.SeatID] : undefined;
         return {
             bench: `${b.rowLabel}${b.benchNumber}`,
-            leftReg:  la?.registerNumber ?? '',
-            leftName: la?.studentName    ?? '',
-            leftDept: la?.deptCode       ?? '',
-            rightReg:  ra?.registerNumber ?? '',
-            rightName: ra?.studentName    ?? '',
-            rightDept: ra?.deptCode       ?? '',
+            leftReg: la?.registerNumber ?? '',
+            leftName: la?.studentName ?? '',
+            leftDept: la?.deptCode ?? '',
+            rightReg: ra?.registerNumber ?? '',
+            rightName: ra?.studentName ?? '',
+            rightDept: ra?.deptCode ?? '',
         };
     });
 
@@ -325,9 +330,9 @@ const SeatingPlans: React.FC = () => {
         doc.setDrawColor(226, 232, 240);
         doc.line(0, 36, pageW, 36);
         const infoCols = [
-            { label: 'HALL',     value: detailHall?.hallCode ?? '' },
-            { label: 'DATE',     value: selectedDate ? fmtDate(selectedDate) : '' },
-            { label: 'SESSION',  value: selectedSession === 'FN' ? 'Forenoon' : 'Afternoon' },
+            { label: 'HALL', value: detailHall?.hallCode ?? '' },
+            { label: 'DATE', value: selectedDate ? fmtDate(selectedDate) : '' },
+            { label: 'SESSION', value: selectedSession === 'FN' ? 'Forenoon' : 'Afternoon' },
             { label: 'STUDENTS', value: `${detailFilled} / ${detailTotalSeats}` },
         ];
         infoCols.forEach((col, i) => {
@@ -591,11 +596,11 @@ const SeatingPlans: React.FC = () => {
                     wsData.push([
                         `${b.rowLabel}${b.benchNumber}`,
                         la?.registerNumber ?? '',
-                        la?.studentName    ?? '',
-                        la?.deptCode       ?? '',
+                        la?.studentName ?? '',
+                        la?.deptCode ?? '',
                         ra?.registerNumber ?? '',
-                        ra?.studentName    ?? '',
-                        ra?.deptCode       ?? '',
+                        ra?.studentName ?? '',
+                        ra?.deptCode ?? '',
                     ]);
                 }
 
@@ -666,9 +671,11 @@ const SeatingPlans: React.FC = () => {
                     <div className="relative w-full sm:w-[320px] shrink-0">
                         <div className="relative">
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
                             </span>
                             <input
+                                id="student-search"
+                                name="student-search"
                                 type="text"
                                 value={searchQ}
                                 onChange={e => setSearchQ(e.target.value)}
@@ -678,12 +685,12 @@ const SeatingPlans: React.FC = () => {
                             />
                             {searching && (
                                 <span className="absolute right-3 top-1/2 -translate-y-1/2">
-                                    <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                                    <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" /></svg>
                                 </span>
                             )}
                             {!searching && searchQ && (
                                 <button onClick={() => { setSearchQ(''); setSearchResults([]); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18M6 6l12 12" /></svg>
                                 </button>
                             )}
                         </div>
@@ -751,7 +758,7 @@ const SeatingPlans: React.FC = () => {
                                             trigger: "bg-[#0d1424] border border-[#1e293b] shadow-inner rounded-lg data-[hover=true]:border-indigo-500/50 data-[hover=true]:bg-[#0f172a] transition-all h-9 text-slate-200 text-xs",
                                             popoverContent: "bg-[#0d1424] border border-[#1e293b] text-slate-200"
                                         }}>
-                                        {seriesList.map(s => <SelectItem key={String(s.ExamSeriesID)} className="data-[hover=true]:bg-indigo-500/10 data-[hover=true]:text-indigo-300">{s.SeriesName}</SelectItem>)}
+                                        {seriesList.map(s => <SelectItem key={String(s.ExamSeriesID)} textValue={s.SeriesName} className="data-[hover=true]:bg-indigo-500/10 data-[hover=true]:text-indigo-300">{s.SeriesName}</SelectItem>)}
                                     </Select>
                                 </div>
 
@@ -784,6 +791,8 @@ const SeatingPlans: React.FC = () => {
                                     <div className="flex gap-2">
                                         <div className="flex-1">
                                             <input
+                                                id="exam-date"
+                                                name="exam-date"
                                                 type="date"
                                                 value={selectedDate}
                                                 onChange={(e) => setSelectedDate(e.target.value)}
@@ -844,7 +853,7 @@ const SeatingPlans: React.FC = () => {
                                                 trigger: "bg-[#0d1424] border border-[#1e293b] shadow-inner rounded-lg data-[hover=true]:border-emerald-500/50 data-[hover=true]:bg-[#0f172a] transition-all h-9 text-slate-200 text-xs",
                                                 popoverContent: "bg-[#0d1424] border border-[#1e293b] text-slate-200"
                                             }}>
-                                            {departments.map(d => <SelectItem key={String(d.DepartmentID)} className="data-[hover=true]:bg-emerald-500/10 data-[hover=true]:text-emerald-300">{d.DepartmentName} ({d.studentCount})</SelectItem>)}
+                                            {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={`${d.DepartmentName} (${d.studentCount})`} className="data-[hover=true]:bg-emerald-500/10 data-[hover=true]:text-emerald-300">{d.DepartmentName} ({d.studentCount})</SelectItem>)}
                                         </Select>
                                     </div>
                                     <div className="space-y-1">
@@ -858,7 +867,7 @@ const SeatingPlans: React.FC = () => {
                                                 trigger: "bg-[#0d1424] border border-[#1e293b] shadow-inner rounded-lg data-[hover=true]:border-emerald-500/50 data-[hover=true]:bg-[#0f172a] transition-all h-9 text-slate-200 text-xs",
                                                 popoverContent: "bg-[#0d1424] border border-[#1e293b] text-slate-200"
                                             }}>
-                                            {departments.map(d => <SelectItem key={String(d.DepartmentID)} className="data-[hover=true]:bg-emerald-500/10 data-[hover=true]:text-emerald-300">{d.DepartmentName} ({d.studentCount})</SelectItem>)}
+                                            {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={`${d.DepartmentName} (${d.studentCount})`} className="data-[hover=true]:bg-emerald-500/10 data-[hover=true]:text-emerald-300">{d.DepartmentName} ({d.studentCount})</SelectItem>)}
                                         </Select>
                                     </div>
                                 </div>
@@ -940,7 +949,7 @@ const SeatingPlans: React.FC = () => {
                         {/* ── Stats Row (compact) ── */}
                         {selectedDate && hallSummary.length > 0 && (
                             <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#0b1221]/80 border border-[#1e293b] backdrop-blur-xl">
-                                <Progress value={totalCapacity > 0 ? (totalFilled / totalCapacity) * 100 : 0} size="sm" className="flex-1"
+                                <Progress aria-label="Overall seating capacity" value={totalCapacity > 0 ? (totalFilled / totalCapacity) * 100 : 0} size="sm" className="flex-1"
                                     classNames={{ indicator: `rounded-full transition-all duration-500 ${totalFilled >= totalCapacity ? 'bg-emerald-500' : 'bg-indigo-500'} shadow-[0_0_8px_currentColor]`, track: "rounded-full bg-[#0d1424] border border-[#1e293b]" }}
                                 />
                                 <div className="flex items-center gap-3 shrink-0">
@@ -1029,7 +1038,7 @@ const SeatingPlans: React.FC = () => {
                                                     </span>
                                                     <span className="text-[9px] font-semibold text-slate-500 uppercase tracking-widest">filled</span>
                                                 </div>
-                                                <Progress value={totalCapacity > 0 ? (totalFilled / totalCapacity) * 100 : 0} size="sm" className="w-20"
+                                                <Progress aria-label="Hall seating fill level" value={totalCapacity > 0 ? (totalFilled / totalCapacity) * 100 : 0} size="sm" className="w-20"
                                                     classNames={{ indicator: `rounded-full transition-all duration-500 ${totalFilled >= totalCapacity ? 'bg-emerald-500' : totalFilled > 0 ? 'bg-amber-400' : 'bg-slate-400'}`, track: "bg-[#1e293b]" }}
                                                 />
                                             </div>
@@ -1093,7 +1102,7 @@ const SeatingPlans: React.FC = () => {
                                                     </div>
 
                                                     <div className="cursor-pointer" onClick={() => openHallDetail(h)}>
-                                                        <Progress value={pct} size="sm"
+                                                        <Progress aria-label="Room occupancy percentage" value={pct} size="sm"
                                                             color={isFull ? 'success' : hasData ? 'warning' : 'default'}
                                                             classNames={{ indicator: "rounded-full transition-all duration-500", track: "rounded-full bg-[#1e293b]" }}
                                                             className="mb-4"
@@ -1366,7 +1375,7 @@ const SeatingPlans: React.FC = () => {
                                     <div style={{ borderBottom: '3px double #1e293b', padding: '28px 40px 20px', display: 'flex', alignItems: 'center', gap: '20px' }}>
                                         <div style={{ width: 56, height: 56, borderRadius: 12, background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+                                                <rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
                                             </svg>
                                         </div>
                                         <div style={{ flex: 1 }}>

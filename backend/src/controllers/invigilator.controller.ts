@@ -14,11 +14,7 @@ export const getAllInvigilators = async (req: Request, res: Response) => {
         const faculties = await Faculty.findAll();
         console.log("Fetched Faculties count:", faculties.length);
         if (faculties.length > 0) {
-<<<<<<< Updated upstream
             console.log("Sample Faculty:", faculties[0]?.toJSON());
-=======
-            console.log("Sample Faculty:", faculties[0].toJSON());
->>>>>>> Stashed changes
         }
 
         const today = new Date().toISOString().split('T')[0];
@@ -241,7 +237,6 @@ export const bulkImportInvigilators = async (req: Request, res: Response) => {
                 const deptStr = deptValue ? String(deptValue).trim() : "";
                 const nameStr = Name ? String(Name).trim() : "";
                 const desigStr = Designation ? String(Designation).trim() : "Faculty";
-<<<<<<< Updated upstream
                 const staffCodeStr = FacultyID ? String(FacultyID).trim() : "";
 
                 if (!nameStr || !deptStr || !staffCodeStr) {
@@ -253,28 +248,11 @@ export const bulkImportInvigilators = async (req: Request, res: Response) => {
                 const existing = await Faculty.findOne({ where: { StaffCode: staffCodeStr }, transaction: t });
                 if (existing) {
                     skipped.push({ row: i + 2, reason: `StaffCode ${staffCodeStr} already exists` });
-=======
-                const facultyIDNum = Number(FacultyID);
-
-                if (!nameStr || !deptStr || isNaN(facultyIDNum)) {
-                    skipped.push({ row: i + 2, reason: `Invalid data: Name=${nameStr}, Dept=${deptStr}, ID=${FacultyID}` });
-                    continue;
-                }
-
-                // Check for duplicate FacultyID
-                const existing = await Faculty.findByPk(facultyIDNum, { transaction: t });
-                if (existing) {
-                    skipped.push({ row: i + 2, reason: `FacultyID ${facultyIDNum} already exists` });
->>>>>>> Stashed changes
                     continue;
                 }
 
                 await Faculty.create({
-<<<<<<< Updated upstream
                     StaffCode: staffCodeStr,
-=======
-                    FacultyID: facultyIDNum,
->>>>>>> Stashed changes
                     Name: nameStr,
                     Designation: desigStr,
                     Department: deptStr,
@@ -302,7 +280,6 @@ export const bulkImportInvigilators = async (req: Request, res: Response) => {
         res.status(500).json({ message: "Internal server error", detail: message });
     }
 };
-<<<<<<< Updated upstream
 /**
  * Clear all faculty records (to be called before a fresh bulk import)
  */
@@ -320,5 +297,3 @@ export const clearAllFaculties = async (req: Request, res: Response) => {
         res.status(500).json({ message: "Internal server error", detail: error.message });
     }
 };
-=======
->>>>>>> Stashed changes

@@ -236,6 +236,8 @@ export default function AttendanceConsole() {
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                             <input
+                                id="attendance-search"
+                                name="attendance-search"
                                 type="text"
                                 placeholder="Search seat or Reg No..."
                                 value={searchQuery}

@@ -138,7 +138,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClos
                                     <span>Processing file...</span>
                                     <span>{Math.round(Math.random() * 30 + 10)}%</span>
                                 </div>
-                                <Progress size="sm" isIndeterminate color="primary" className="w-full" />
+                                <Progress aria-label="File upload progress" size="sm" isIndeterminate color="primary" className="w-full" />
                             </div>
                         )}
 

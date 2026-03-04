@@ -4,7 +4,6 @@ import { X, Upload, FileSpreadsheet, CheckCircle, AlertCircle, Info, Hash, Alert
 import { SeatingService } from '../../services/seatingService';
 import toast from 'react-hot-toast';
 import { Button } from '@heroui/react';
-import * as XLSX from 'xlsx';
 
 interface SeatingImportModalProps {
     isOpen: boolean;
@@ -57,6 +56,7 @@ const SeatingImportModal: React.FC<SeatingImportModalProps> = ({
     const parseExcel = async (file: File) => {
         setIsParsing(true);
         try {
+            const XLSX = await import('xlsx');
             const data = await file.arrayBuffer();
             const workbook = XLSX.read(data, { type: 'array' });
 
@@ -304,8 +304,8 @@ const SeatingImportModal: React.FC<SeatingImportModalProps> = ({
                                                             <td className="px-4 py-3">{row.name}</td>
                                                             <td className="px-4 py-3">
                                                                 <span className={`px-2 py-0.5 rounded text-xs font-bold ${row.side.toLowerCase().startsWith('l')
-                                                                        ? 'bg-blue-500/20 text-blue-400'
-                                                                        : 'bg-green-500/20 text-green-400'
+                                                                    ? 'bg-blue-500/20 text-blue-400'
+                                                                    : 'bg-green-500/20 text-green-400'
                                                                     }`}>
                                                                     {row.side.toUpperCase() || 'L'}
                                                                 </span>
@@ -341,8 +341,8 @@ const SeatingImportModal: React.FC<SeatingImportModalProps> = ({
                         {importResult?.active && (
                             <div className="space-y-4">
                                 <div className={`p-4 rounded-xl flex items-start gap-4 ${importResult.notFoundCount > 0
-                                        ? 'bg-orange-900/20 border border-orange-500/30'
-                                        : 'bg-green-900/20 border border-green-500/30'
+                                    ? 'bg-orange-900/20 border border-orange-500/30'
+                                    : 'bg-green-900/20 border border-green-500/30'
                                     }`}>
                                     {importResult.notFoundCount > 0 ? (
                                         <AlertTriangle className="w-6 h-6 text-orange-400 shrink-0 mt-0.5" />

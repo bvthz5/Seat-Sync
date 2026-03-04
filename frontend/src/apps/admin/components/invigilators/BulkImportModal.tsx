@@ -17,7 +17,6 @@ import {
     ArrowLeft,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import * as XLSX from 'xlsx';
 import { invigilatorService, BulkImportRow } from '../../services/invigilatorService';
 
 interface Props { isOpen: boolean; onClose: () => void; onSuccess: () => void; }
@@ -32,7 +31,8 @@ const STEPS: { key: Step; label: string }[] = [
 ];
 const stepIdx = (s: Step) => STEPS.findIndex(x => x.key === s);
 
-const downloadTemplate = () => {
+const downloadTemplate = async () => {
+    const XLSX = await import('xlsx');
     const ws = XLSX.utils.aoa_to_sheet([
         ['FacultyID', 'Name', 'Department', 'Designation'],
         ['101', 'Dr. Sarah Johnson', 'CS', 'Professor'],
@@ -65,8 +65,9 @@ const BulkImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
     const parseFile = (f: File) => {
         setFile(f);
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = async (e) => {
             try {
+                const XLSX = await import('xlsx');
                 const data = new Uint8Array(e.target?.result as ArrayBuffer);
                 const wb = XLSX.read(data, { type: 'array' });
                 const ws = wb.Sheets[wb.SheetNames[0]];

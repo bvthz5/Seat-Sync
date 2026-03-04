@@ -250,6 +250,8 @@ const Invigilators: React.FC = () => {
                     <div className="flex-1 flex items-center gap-3 min-w-0">
                         <Search size={16} className="text-slate-400 shrink-0" />
                         <input
+                            id="invigilators-search"
+                            name="invigilators-search"
                             className="flex-1 text-sm text-slate-800 placeholder-slate-400 bg-transparent outline-none min-w-0"
                             placeholder="Search by name, ID or email address..."
                             value={searchQuery}
