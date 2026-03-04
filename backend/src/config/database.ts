@@ -464,6 +464,30 @@ async function ensureSchemaIntegrity() {
             END
         `, { type: QueryTypes.RAW });
 
+        // Make Students.DepartmentID, ProgramID, SemesterID, BatchYear nullable
+        // (required so students can be auto-created from seating import without academic setup)
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Students' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                -- Drop FK constraints referencing nullable columns before altering them (MSSQL requirement)
+                DECLARE @sql NVARCHAR(MAX) = '';
+                SELECT @sql += 'ALTER TABLE [dbo].[Students] DROP CONSTRAINT ' + fk.name + '; '
+                FROM sys.foreign_keys fk
+                INNER JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id
+                INNER JOIN sys.columns c ON fkc.parent_object_id = c.object_id AND fkc.parent_column_id = c.column_id
+                WHERE fk.parent_object_id = OBJECT_ID(N'[dbo].[Students]')
+                  AND c.name IN ('DepartmentID','ProgramID','SemesterID')
+                  AND c.is_nullable = 0;
+                IF LEN(@sql) > 0 EXEC sp_executesql @sql;
+
+                ALTER TABLE [dbo].[Students] ALTER COLUMN [DepartmentID] INT NULL;
+                ALTER TABLE [dbo].[Students] ALTER COLUMN [ProgramID] INT NULL;
+                ALTER TABLE [dbo].[Students] ALTER COLUMN [SemesterID] INT NULL;
+                ALTER TABLE [dbo].[Students] ALTER COLUMN [BatchYear] INT NULL;
+                PRINT 'Made Students DepartmentID/ProgramID/SemesterID/BatchYear nullable';
+            END
+        `, { type: QueryTypes.RAW });
+
     } catch (error) {
         console.warn("Schema integrity check warning (non-fatal):", error);
     }

@@ -1,7 +1,8 @@
 import { Request, Response } from "express";
 import { Room, Seat, Student, User, Department, Exam, SeatAllocation, ExamSeries, Subject } from "../models/index.js";
-import { Op } from "sequelize";
+import { Op, QueryTypes } from "sequelize";
 import { sequelize } from "../config/database.js";
+import bcrypt from "bcrypt";
 
 /* ────────────────────────────────────────────────────────────
  * Helper: resolve exam IDs for a given date + session
@@ -286,8 +287,14 @@ export const autoAssign = async (req: Request, res: Response) => {
         let leftIdx = 0, rightIdx = 0;
         const assignments: Record<number, any> = {};
 
-        for (const row of Object.keys(benchMap).sort()) {
-            for (const benchNum of Object.keys(benchMap[row] ?? {}).map(Number).sort((a, b) => a - b)) {
+        // Column-by-column: A1, B1, C1... then A2, B2, C2...
+        const allRows = Object.keys(benchMap).sort();
+        const allBenchNums = [...new Set(
+            allRows.flatMap(r => Object.keys(benchMap[r] ?? {}).map(Number))
+        )].sort((a, b) => a - b);
+
+        for (const benchNum of allBenchNums) {
+            for (const row of allRows) {
                 const benchSeats = ((benchMap[row] ?? {})[benchNum] ?? []).sort((a: any, b: any) => a.SeatNumber - b.SeatNumber);
                 for (const seat of benchSeats) {
                     if (seat.SeatNumber === 1 && leftIdx < leftStudents.length) {
@@ -610,9 +617,15 @@ export const bulkAssign = async (req: Request, res: Response) => {
             const records: { ExamID: number; SeatID: number; StudentID: number }[] = [];
             let hallLeft = 0, hallRight = 0;
 
-            for (const row of Object.keys(benchMap).sort()) {
-                for (const benchNum of Object.keys(benchMap[row]!).map(Number).sort((a, b) => a - b)) {
-                    const benchSeats = (benchMap[row]![benchNum] || []).sort((a: any, b: any) => a.SeatNumber - b.SeatNumber);
+            // Column-by-column: A1, B1, C1... then A2, B2, C2...
+            const allRows = Object.keys(benchMap).sort();
+            const allBenchNums = [...new Set(
+                allRows.flatMap(r => Object.keys(benchMap[r]!).map(Number))
+            )].sort((a, b) => a - b);
+
+            for (const benchNum of allBenchNums) {
+                for (const row of allRows) {
+                    const benchSeats = (benchMap[row]?.[benchNum] || []).sort((a: any, b: any) => a.SeatNumber - b.SeatNumber);
                     for (const seat of benchSeats) {
                         if (seat.SeatNumber === 1 && leftIdx < leftStudents.length) {
                             records.push({ ExamID: primaryExamId, SeatID: seat.SeatID, StudentID: leftStudents[leftIdx++].StudentID as number });
@@ -691,30 +704,52 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
         const leftAllocations = existingAllocations.filter(a => seatNumMap.get(a.SeatID) === 1);
         const rightAllocations = existingAllocations.filter(a => seatNumMap.get(a.SeatID) !== 1);
 
-        const shuffleArray = (array: any[]) => {
-            const arr = [...array];
-            for (let i = arr.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [arr[i], arr[j]] = [arr[j], arr[i]];
-            }
-            return arr;
+        // Fetch full seat info so we can sort column-by-column per hall
+        const allSeatInfo = await Seat.findAll({
+            where: { SeatID: { [Op.in]: seatIds } },
+            transaction,
+        });
+        const seatInfoMap = new Map<number, any>();
+        for (const s of allSeatInfo) seatInfoMap.set(s.SeatID, s);
+
+        // Determine hall order (by RoomCode) so multi-hall is consistent
+        const roomIds = [...new Set(allSeatInfo.map((s: any) => s.RoomID))];
+        const rooms = await Room.findAll({ where: { RoomID: { [Op.in]: roomIds } }, transaction });
+        const roomOrder = new Map<number, string>();
+        for (const r of rooms) roomOrder.set(r.RoomID, r.RoomCode);
+
+        // Column-by-column sort: roomCode → benchNumber → rowLabel → seatNumber
+        const columnSort = (seatId: number) => {
+            const s = seatInfoMap.get(seatId);
+            if (!s) return '';
+            return `${roomOrder.get(s.RoomID) ?? ''}_${String(s.BenchNumber).padStart(6, '0')}_${s.RowLabel}_${s.SeatNumber}`;
         };
 
-        const leftStudents = leftAllocations.map(a => a.StudentID);
-        const rightStudents = rightAllocations.map(a => a.StudentID);
+        // Sort seats column-by-column
+        const leftSeats = leftAllocations.map(a => a.SeatID).sort((a, b) => columnSort(a as number).localeCompare(columnSort(b as number)));
+        const rightSeats = rightAllocations.map(a => a.SeatID).sort((a, b) => columnSort(a as number).localeCompare(columnSort(b as number)));
 
-        const shuffledLeftStudents = shuffleArray(leftStudents);
-        const shuffledRightStudents = shuffleArray(rightStudents);
+        // Sort students by their CURRENT seat order (preserves the original sequence)
+        const leftStudents = leftAllocations
+            .sort((a, b) => columnSort(a.SeatID as number).localeCompare(columnSort(b.SeatID as number)))
+            .map(a => a.StudentID);
+        const rightStudents = rightAllocations
+            .sort((a, b) => columnSort(a.SeatID as number).localeCompare(columnSort(b.SeatID as number)))
+            .map(a => a.StudentID);
 
-        const leftSeats = leftAllocations.map(a => a.SeatID);
-        const rightSeats = rightAllocations.map(a => a.SeatID);
+        // Rotate the group by a random offset — order is preserved but they start at a different room/position
+        const rotate = (arr: any[], offset: number) => [...arr.slice(offset), ...arr.slice(0, offset)];
+        const leftOffset = leftStudents.length > 1 ? Math.floor(Math.random() * leftStudents.length) : 0;
+        const rightOffset = rightStudents.length > 1 ? Math.floor(Math.random() * rightStudents.length) : 0;
+        const rotatedLeft = rotate(leftStudents, leftOffset);
+        const rotatedRight = rotate(rightStudents, rightOffset);
 
         const newRecords: { ExamID: number; SeatID: number; StudentID: number }[] = [];
         for (let i = 0; i < leftSeats.length; i++) {
-            newRecords.push({ ExamID: primaryExamId, SeatID: leftSeats[i] as number, StudentID: shuffledLeftStudents[i] as number });
+            newRecords.push({ ExamID: primaryExamId, SeatID: leftSeats[i] as number, StudentID: rotatedLeft[i] as number });
         }
         for (let i = 0; i < rightSeats.length; i++) {
-            newRecords.push({ ExamID: primaryExamId, SeatID: rightSeats[i] as number, StudentID: shuffledRightStudents[i] as number });
+            newRecords.push({ ExamID: primaryExamId, SeatID: rightSeats[i] as number, StudentID: rotatedRight[i] as number });
         }
 
         // Remove old existing ones and insert new ones
@@ -818,26 +853,93 @@ export const importSeatingFromExcel = async (req: Request, res: Response) => {
         }
         const primaryExamId = examIds[0] as number;
 
-        // 1. Fetch ALL students to match register numbers
-        const inputRegNumbers = rows.map((r: any) => String(r.registerNumber).trim());
-        const allStudents = await Student.findAll({
-            where: { RegisterNumber: { [Op.in]: inputRegNumbers } },
-            attributes: ['StudentID', 'RegisterNumber'],
-            transaction
+        // normalize: strip all non-alphanumeric chars and uppercase
+        // so "SJC/24/MCA-2001", "SJC 24 MCA 2001", "sjc24mca2001" all match "SJC24MCA2001"
+        const normalize = (rn: string) => rn.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+
+        // 1. Collect input register numbers, drop blanks
+        const rawInputRows = rows.map((r: any) => ({
+            original: String(r.registerNumber ?? '').trim(),
+            side: String(r.side ?? '').trim(),
+            name: String(r.name ?? '').trim(),
+        })).filter(r => r.original.length > 0);
+
+        console.log(`[SeatingImport] rawInputRows count: ${rawInputRows.length}, sample:`, rawInputRows.slice(0,3));
+
+        if (rawInputRows.length === 0) {
+            await transaction.rollback();
+            return res.status(400).json({ message: "No valid register numbers found in the uploaded rows" });
+        }
+
+        // 2. Fetch ALL existing students and build a normalized lookup map
+        const allStudents = await sequelize.query<{ StudentID: number; RegisterNumber: string }>(
+            `SELECT StudentID, RegisterNumber FROM Students`,
+            { type: QueryTypes.SELECT, transaction }
+        );
+
+        console.log(`[SeatingImport] students in DB: ${allStudents.length}`);
+
+        // normalized key -> StudentID
+        const studentMap = new Map<string, number>();
+        allStudents.forEach((s: any) => {
+            studentMap.set(normalize(String(s.RegisterNumber)), Number(s.StudentID));
         });
 
-        const studentMap = new Map<string, number>();
-        allStudents.forEach(s => studentMap.set(s.RegisterNumber, s.StudentID));
+        // 3. Auto-create Student records for any register number not yet in the DB
+        const missingRows = rawInputRows.filter(r => !studentMap.has(normalize(r.original)));
+        console.log(`[SeatingImport] missing (to auto-create): ${missingRows.length}, sample:`, missingRows.slice(0,3));
+        let autoCreatedCount = 0;
 
-        // 2. Separate into left and right student IDs, and record notFound
+        // Pre-compute a single placeholder hash (bcrypt is slow, reuse across bulk creation)
+        const placeholderHash = missingRows.length > 0 ? await bcrypt.hash('seating_import', 4) : '';
+
+        for (const row of missingRows) {
+            const regNo = row.original;
+            const fullName = row.name || regNo;
+
+            try {
+                // Find-or-create a placeholder User
+                const placeholderEmail = `${regNo.toLowerCase().replace(/\s+/g, '')}@seating.internal`;
+                let user = await User.findOne({ where: { Email: placeholderEmail }, transaction }) as any;
+                if (!user) {
+                    user = await User.create({
+                        Email: placeholderEmail,
+                        FullName: fullName,
+                        PasswordHash: placeholderHash,
+                        Role: 'student',
+                        IsRootAdmin: false,
+                    } as any, { transaction }) as any;
+                }
+
+                const newStudent = await Student.create({
+                    UserID: user.UserID,
+                    RegisterNumber: regNo,
+                } as any, { transaction }) as any;
+
+                studentMap.set(normalize(regNo), Number(newStudent.StudentID));
+                autoCreatedCount++;
+                console.log(`[SeatingImport] Auto-created student: ${regNo} -> StudentID ${newStudent.StudentID}`);
+            } catch (createErr: any) {
+                console.error(`[SeatingImport] Failed to auto-create student for ${regNo}:`, createErr.message);
+                await transaction.rollback();
+                return res.status(500).json({
+                    message: `Failed to auto-create student for "${regNo}": ${createErr.message}`
+                });
+            }
+        }
+
+        console.log(`[SeatingImport] autoCreatedCount: ${autoCreatedCount}, studentMap size: ${studentMap.size}`);
+        console.log(`[SeatingImport] sample studentMap keys:`, [...studentMap.keys()].slice(0,5));
+
+        // 4. Separate into left and right student IDs, and record notFound
         const leftStudentIds: number[] = [];
         const rightStudentIds: number[] = [];
         const notFound: string[] = [];
 
-        for (const row of rows) {
-            const rn = String(row.registerNumber).trim();
-            const side = String(row.side).trim().toLowerCase();
-            const studentId = studentMap.get(rn);
+        for (const row of rawInputRows) {
+            const rn = row.original;
+            const side = row.side.toLowerCase();
+            const studentId = studentMap.get(normalize(rn));
 
             if (!studentId) {
                 notFound.push(rn);
@@ -854,9 +956,14 @@ export const importSeatingFromExcel = async (req: Request, res: Response) => {
             }
         }
 
+        console.log(`[SeatingImport] leftStudentIds: ${leftStudentIds.length}, rightStudentIds: ${rightStudentIds.length}, notFound: ${notFound.length}`);
+
         if (leftStudentIds.length === 0 && rightStudentIds.length === 0) {
             await transaction.rollback();
-            return res.status(400).json({ message: "No matching students found to assign", notFound });
+            return res.status(400).json({ 
+                message: `Debug — Input:${rawInputRows.length} rows, DB students:${(allStudents as any[]).length}, AutoCreated:${autoCreatedCount}, NotFound:${notFound.length}. Sample input: ${JSON.stringify(rawInputRows.slice(0,2))}. NotFound sample: ${JSON.stringify(notFound.slice(0,3))}`,
+                notFound
+            });
         }
 
         // 3. Find target halls
@@ -902,9 +1009,15 @@ export const importSeatingFromExcel = async (req: Request, res: Response) => {
                 rowMap[seat.BenchNumber]!.push(seat);
             }
 
-            for (const row of Object.keys(benchMap).sort()) {
-                for (const benchNum of Object.keys(benchMap[row]!).map(Number).sort((a, b) => a - b)) {
-                    const benchSeats = (benchMap[row]![benchNum] || []).sort((a: any, b: any) => a.SeatNumber - b.SeatNumber);
+            // Column-by-column order: A1, B1, C1... then A2, B2, C2...
+            const allRows = Object.keys(benchMap).sort();
+            const allBenchNums = [...new Set(
+                allRows.flatMap(r => Object.keys(benchMap[r]!).map(Number))
+            )].sort((a, b) => a - b);
+
+            for (const benchNum of allBenchNums) {
+                for (const row of allRows) {
+                    const benchSeats = (benchMap[row]?.[benchNum] || []).sort((a: any, b: any) => a.SeatNumber - b.SeatNumber);
                     for (const seat of benchSeats) {
                         if (seat.SeatNumber === 1 && leftIdx < leftStudentIds.length) {
                             newRecords.push({ ExamID: primaryExamId, SeatID: seat.SeatID, StudentID: leftStudentIds[leftIdx++] as number });
@@ -925,6 +1038,7 @@ export const importSeatingFromExcel = async (req: Request, res: Response) => {
         res.json({
             message: "Excel seating imported successfully",
             totalAssigned: newRecords.length,
+            autoCreatedCount,
             notFoundCount: notFound.length,
             notFound
         });
@@ -932,6 +1046,83 @@ export const importSeatingFromExcel = async (req: Request, res: Response) => {
     } catch (error: any) {
         await transaction.rollback();
         console.error("IMPORT SEATING ERROR:", error);
+
+        res.status(500).json({ message: error.message });
+    }
+};
+
+/* ════════════════════════════════════════════════════════════
+ *  GET /api/seating/search-student?examDate=&session=&q=
+ *  Search for a student by register number or name and return
+ *  their current hall, bench, row and side for that exam slot.
+ * ════════════════════════════════════════════════════════════ */
+export const searchStudent = async (req: Request, res: Response) => {
+    try {
+        const { examDate, session, q } = req.query as { examDate: string; session: string; q: string };
+        console.log('[SearchStudent] query params:', { examDate, session, q });
+
+        if (!examDate || !session || !q || String(q).trim().length < 2) {
+            console.log('[SearchStudent] missing params - returning 400');
+            return res.status(400).json({ message: "examDate, session and q (min 2 chars) are required" });
+        }
+
+        const safeTerm = String(q).trim().replace(/'/g, "''");
+
+        // Find matching students by RegisterNumber or FullName
+        const matchedStudents = await sequelize.query<{ StudentID: number; RegisterNumber: string; FullName: string }>(
+            `SELECT s.StudentID, s.RegisterNumber, ISNULL(u.FullName, s.RegisterNumber) AS FullName
+             FROM Students s
+             LEFT JOIN Users u ON s.UserID = u.UserID
+             WHERE s.RegisterNumber LIKE N'%${safeTerm}%'
+                OR ISNULL(u.FullName, '') LIKE N'%${safeTerm}%'`,
+            { type: QueryTypes.SELECT }
+        );
+
+        if (matchedStudents.length === 0) return res.json({ results: [] });
+
+        console.log(`[SearchStudent] found ${matchedStudents.length} students`);
+        const studentIds = (matchedStudents as any[]).map((s: any) => Number(s.StudentID));
+
+        // Get exam IDs for this slot (for allocation lookup)
+        const examIds = await resolveExamIds(examDate, session);
+
+        // Build allocation map if exams exist
+        const allocMap = new Map<number, any>();
+        if (examIds.length > 0) {
+            const allocations = await sequelize.query<{
+                StudentID: number; SeatID: number; RowLabel: string;
+                BenchNumber: number; SeatNumber: number; RoomID: number; RoomCode: string;
+            }>(
+                `SELECT sa.StudentID, sa.SeatID, st.RowLabel, st.BenchNumber, st.SeatNumber,
+                        r.RoomID, r.RoomName AS RoomCode
+                 FROM SeatAllocations sa
+                 JOIN Seats st ON sa.SeatID = st.SeatID
+                 JOIN Rooms r  ON st.RoomID = r.RoomID
+                 WHERE sa.ExamID IN (${examIds.join(',')}) AND sa.StudentID IN (${studentIds.join(',')})`,
+                { type: QueryTypes.SELECT }
+            );
+            for (const a of allocations as any[]) allocMap.set(Number(a.StudentID), a);
+        }
+
+        const results = (matchedStudents as any[]).map((s: any) => {
+            const alloc = allocMap.get(Number(s.StudentID));
+            return {
+                studentId: s.StudentID,
+                registerNumber: s.RegisterNumber,
+                name: s.FullName,
+                allocated: !!alloc,
+                hallCode: alloc?.RoomCode ?? null,
+                hallId: alloc?.RoomID ?? null,
+                rowLabel: alloc?.RowLabel ?? null,
+                benchNumber: alloc?.BenchNumber ?? null,
+                side: alloc ? (Number(alloc.SeatNumber) === 1 ? 'Left' : 'Right') : null,
+                seatLabel: alloc ? `${alloc.RowLabel}${alloc.BenchNumber}` : null,
+            };
+        });
+
+        res.json({ results });
+    } catch (error: any) {
+        console.error("SEARCH STUDENT ERROR:", error);
         res.status(500).json({ message: error.message });
     }
 };

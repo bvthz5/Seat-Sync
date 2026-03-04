@@ -119,3 +119,30 @@ body {
 .dark-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* ─── Print: show only the seating document ─────────────────── */
+@media print {
+  /* Hide everything via visibility so display:none on parent
+     doesn't block visibility:visible on the child */
+  body, body * { visibility: hidden !important; }
+
+  #seat-sync-print-area,
+  #seat-sync-print-area * {
+    visibility: visible !important;
+  }
+
+  #seat-sync-print-area {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    background: #fff !important;
+    z-index: 999999 !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  @page { size: A4 landscape; margin: 12mm 14mm; }
+}

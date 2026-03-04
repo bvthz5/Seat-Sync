@@ -39,6 +39,7 @@ const SeatingImportModal: React.FC<SeatingImportModalProps> = ({
     const [importResult, setImportResult] = useState<{
         success: boolean;
         totalAssigned: number;
+        autoCreatedCount: number;
         notFoundCount: number;
         notFound: string[];
         active: boolean
@@ -62,21 +63,42 @@ const SeatingImportModal: React.FC<SeatingImportModalProps> = ({
             const sheetName = workbook.SheetNames[0];
             const sheet = workbook.Sheets[sheetName];
 
-            // Raw reading
-            const rawData: any[] = XLSX.utils.sheet_to_json(sheet);
+            // Use raw: false so cells are returned as formatted strings (preserves leading zeros,
+            // avoids numbers being returned as JS numbers)
+            const rawData: any[] = XLSX.utils.sheet_to_json(sheet, { raw: false, defval: '' });
 
-            const processedData: ParsedRow[] = rawData.map((row, index) => {
-                // Fuzzy column matching
-                const regNo = String(
-                    row['RegisterNumber'] || row['Register Number'] || row['RegNo'] || row['Reg No'] || ''
+            const processedData: ParsedRow[] = rawData.map((row, _index) => {
+                // Case-insensitive, whitespace-collapsed column name matching
+                const normalizedRow: Record<string, string> = {};
+                Object.keys(row).forEach(key => {
+                    normalizedRow[key.toLowerCase().replace(/[\s_\-\.]+/g, '')] = String(row[key]);
+                });
+
+                const regNo = (
+                    normalizedRow['registernumber'] ||
+                    normalizedRow['regno'] ||
+                    normalizedRow['regnumber'] ||
+                    normalizedRow['rollnumber'] ||
+                    normalizedRow['rollno'] ||
+                    normalizedRow['registerationno'] ||
+                    normalizedRow['registrationno'] ||
+                    normalizedRow['studentid'] ||
+                    ''
                 ).trim();
 
-                const name = String(
-                    row['Name'] || row['Student Name'] || row['StudentName'] || ''
+                const name = (
+                    normalizedRow['name'] ||
+                    normalizedRow['studentname'] ||
+                    normalizedRow['fullname'] ||
+                    ''
                 ).trim();
 
-                const side = String(
-                    row['Side'] || row['Seat Side'] || row['SeatSide'] || row['Position'] || ''
+                const side = (
+                    normalizedRow['side'] ||
+                    normalizedRow['seatside'] ||
+                    normalizedRow['position'] ||
+                    normalizedRow['seatlocation'] ||
+                    ''
                 ).trim();
 
                 let status: 'pending' | 'error' | 'ok' = 'ok';
@@ -94,7 +116,7 @@ const SeatingImportModal: React.FC<SeatingImportModalProps> = ({
                     status,
                     errorMessage
                 };
-            }).filter(r => r.registerNumber || r.name || r.side); // Filter completely empty rows
+            }).filter(r => r.registerNumber || r.name); // Filter completely empty rows
 
             setParsedData(processedData);
 
@@ -114,6 +136,7 @@ const SeatingImportModal: React.FC<SeatingImportModalProps> = ({
         // Filter out completely invalid rows
         const validRows = parsedData.filter(r => r.status !== 'error').map(r => ({
             registerNumber: r.registerNumber,
+            name: r.name,
             side: r.side
         }));
 
@@ -135,26 +158,24 @@ const SeatingImportModal: React.FC<SeatingImportModalProps> = ({
                 active: true,
                 success: true,
                 totalAssigned: response.totalAssigned,
+                autoCreatedCount: response.autoCreatedCount || 0,
                 notFoundCount: response.notFoundCount,
                 notFound: response.notFound || []
             });
 
+            if (response.autoCreatedCount > 0) {
+                toast.success(`${response.autoCreatedCount} new students auto-registered from Excel.`, { duration: 4000 });
+            }
+            toast.success(`Successfully assigned ${response.totalAssigned} students to seats!`);
+            onSuccess();
             if (response.notFoundCount === 0) {
-                toast.success(`Successfully assigned ${response.totalAssigned} students!`);
-                setTimeout(() => {
-                    onSuccess();
-                    onClose();
-                }, 2000);
-            } else {
-                toast.success(`Assigned ${response.totalAssigned} students.`);
-                toast.error(`${response.notFoundCount} students were not found in the system.`, { duration: 5000 });
-                onSuccess(); // Still call success to refresh the UI with those who *were* assigned
+                setTimeout(() => onClose(), 2500);
             }
 
         } catch (error: any) {
             console.error(error);
             const errorMessage = error.response?.data?.message || "Failed to import seating data.";
-            toast.error(errorMessage);
+            toast.error(errorMessage, { duration: 7000 });
         } finally {
             setIsImporting(false);
         }
@@ -336,6 +357,12 @@ const SeatingImportModal: React.FC<SeatingImportModalProps> = ({
                                         <p className="text-gray-300">
                                             Successfully assigned <span className="font-bold text-white">{importResult.totalAssigned}</span> students to seats.
                                         </p>
+
+                                        {importResult.autoCreatedCount > 0 && (
+                                            <p className="text-sm text-blue-300 mt-1">
+                                                <span className="font-bold text-white">{importResult.autoCreatedCount}</span> new students were auto-registered from the Excel file.
+                                            </p>
+                                        )}
 
                                         {importResult.notFoundCount > 0 && (
                                             <div className="mt-4">

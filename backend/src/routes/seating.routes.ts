@@ -15,7 +15,8 @@ import {
     bulkAssign,
     shuffleGlobal,
     quickAddExamSlot,
-    importSeatingFromExcel
+    importSeatingFromExcel,
+    searchStudent
 } from "../controllers/seating.controller.js";
 
 const router = express.Router();
@@ -58,6 +59,9 @@ router.post("/quick-add-slot", quickAddExamSlot);
 
 // Import seating from Excel
 router.post("/import-excel", importSeatingFromExcel);
+
+// Search student by reg number or name within a slot
+router.get("/search-student", searchStudent);
 
 
 // Save seating allocation

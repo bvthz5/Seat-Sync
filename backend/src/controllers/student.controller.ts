@@ -8,6 +8,10 @@ import { sequelize } from '../config/database.js';
 import { Op } from 'sequelize';
 import bcrypt from 'bcrypt';
 import * as XLSX from 'xlsx';
+import SeatAllocation from '../models/SeatAllocation.js';
+import ExamRegistration from '../models/ExamRegistration.js';
+import Attendance from '../models/Attendance.js';
+import StudentSubject from '../models/StudentSubject.js';
 
 export const getAllStudents = async (req: Request, res: Response) => {
     try {
@@ -744,9 +748,13 @@ export const deleteStudent = async (req: Request, res: Response) => {
 
 export const deleteAllStudents = async (req: Request, res: Response) => {
     try {
-        // Use Managed Transaction to prevent "rollback without begin" errors
         await sequelize.transaction(async (t) => {
-            // Only Delete Students. Users remain.
+            // Delete all child records that reference StudentID first
+            await SeatAllocation.destroy({ where: {}, transaction: t });
+            await ExamRegistration.destroy({ where: {}, transaction: t });
+            await Attendance.destroy({ where: {}, transaction: t });
+            await StudentSubject.destroy({ where: {}, transaction: t });
+            // Now safe to delete students
             await Student.destroy({ where: {}, truncate: false, transaction: t });
         });
 

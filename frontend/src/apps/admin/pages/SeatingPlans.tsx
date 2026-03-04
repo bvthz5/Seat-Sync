@@ -9,12 +9,13 @@ import {
     LayoutGrid, Zap, Save, Trash2, Printer,
     Building2, Users, CheckCircle2, AlertCircle, RefreshCw,
     Calendar, Sun, Moon, Armchair, ClipboardList, ChevronRight, Ban, Eye,
-    MoreVertical, Pencil, Power, XCircle, Shuffle, FileSpreadsheet
+    MoreVertical, Pencil, Power, XCircle, Shuffle, FileSpreadsheet, FileDown, Sheet
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { SeatingService } from '../services/seatingService';
 import api from '../../../services/api';
 import SeatingImportModal from '../components/seating/SeatingImportModal';
+
 
 /* ─── Types ───────────────────────────────────────── */
 interface Hall { RoomID: number; RoomCode: string; Capacity: number; TotalRows: number; BenchesPerRow: number; SeatsPerBench: number; }
@@ -77,6 +78,11 @@ const SeatingPlans: React.FC = () => {
     const [addingSlot, setAddingSlot] = useState(false);
     const [showImportModal, setShowImportModal] = useState(false);
 
+    /* student search */
+    const [searchQ, setSearchQ] = useState('');
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [searching, setSearching] = useState(false);
+
     /* detail modal */
     const [detailHall, setDetailHall] = useState<HallSummary | null>(null);
     const [detailBenches, setDetailBenches] = useState<Bench[]>([]);
@@ -85,6 +91,8 @@ const SeatingPlans: React.FC = () => {
     const [detailLoading, setDetailLoading] = useState(false);
     const [showPrintModal, setShowPrintModal] = useState(false);
     const [showShuffleConfirm, setShowShuffleConfirm] = useState(false);
+    const [globalDownloading, setGlobalDownloading] = useState(false);
+    const [seatingDownloading, setSeatingDownloading] = useState(false);
 
     /* edit capacity modal */
     const [editHall, setEditHall] = useState<HallSummary | null>(null);
@@ -253,18 +261,462 @@ const SeatingPlans: React.FC = () => {
         } catch { toast.error('Failed to update capacity'); }
     };
 
+    /* ── Build row data shared by both exporters ── */
+    const buildExportRows = () => detailBenches.map(b => {
+        const ls = b.seats.find(s => s.SeatNumber === 1);
+        const rs = b.seats.find(s => s.SeatNumber === 2);
+        const la = ls ? detailAssignments[ls.SeatID] : undefined;
+        const ra = rs ? detailAssignments[rs.SeatID] : undefined;
+        return {
+            bench: `${b.rowLabel}${b.benchNumber}`,
+            leftReg:  la?.registerNumber ?? '',
+            leftName: la?.studentName    ?? '',
+            leftDept: la?.deptCode       ?? '',
+            rightReg:  ra?.registerNumber ?? '',
+            rightName: ra?.studentName    ?? '',
+            rightDept: ra?.deptCode       ?? '',
+        };
+    });
+
+    const downloadExcel = async () => {
+        const XLSX = await import('xlsx');
+        const rows = buildExportRows();
+        const wsData = [
+            [`Seating Arrangement — ${detailHall?.hallCode}`],
+            [`Date: ${selectedDate ? fmtDate(selectedDate) : ''}   Session: ${selectedSession === 'FN' ? 'Forenoon' : 'Afternoon'}   Students: ${detailFilled}/${detailTotalSeats}`],
+            [],
+            ['Bench', 'Left — Reg No', 'Left — Student Name', 'Left Dept', 'Right — Reg No', 'Right — Student Name', 'Right Dept'],
+            ...rows.map(r => [r.bench, r.leftReg, r.leftName, r.leftDept, r.rightReg, r.rightName, r.rightDept]),
+        ];
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        ws['!cols'] = [{ wch: 7 }, { wch: 15 }, { wch: 28 }, { wch: 9 }, { wch: 15 }, { wch: 28 }, { wch: 9 }];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Seating');
+        XLSX.writeFile(wb, `Seating_${detailHall?.hallCode}_${selectedDate}_${selectedSession}.xlsx`);
+        toast.success('Excel downloaded');
+    };
+
+    const downloadPDF = async () => {
+        const { default: jsPDF } = await import('jspdf');
+        const { default: autoTable } = await import('jspdf-autotable');
+        const rows = buildExportRows();
+        const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const pageW = doc.internal.pageSize.getWidth();
+
+        // ── Header band ──
+        doc.setFillColor(15, 23, 42);
+        doc.rect(0, 0, pageW, 22, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(13);
+        doc.setFont('helvetica', 'bold');
+        doc.text('SEAT-SYNC  EXAMINATION CONTROL', 14, 10);
+        doc.setFontSize(7.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(148, 163, 184);
+        doc.text('Official Seating Arrangement Document', 14, 16);
+        doc.setTextColor(226, 232, 240);
+        doc.setFontSize(7.5);
+        doc.text(`Doc: ${detailHall?.hallCode}-${(selectedDate ?? '').replace(/-/g, '')}-${selectedSession}`, pageW - 14, 10, { align: 'right' });
+        doc.text(`Generated: ${new Date().toLocaleString('en-IN')}`, pageW - 14, 16, { align: 'right' });
+
+        // ── Info strip ──
+        doc.setFillColor(248, 250, 252);
+        doc.rect(0, 22, pageW, 14, 'F');
+        doc.setDrawColor(226, 232, 240);
+        doc.line(0, 36, pageW, 36);
+        const infoCols = [
+            { label: 'HALL',     value: detailHall?.hallCode ?? '' },
+            { label: 'DATE',     value: selectedDate ? fmtDate(selectedDate) : '' },
+            { label: 'SESSION',  value: selectedSession === 'FN' ? 'Forenoon' : 'Afternoon' },
+            { label: 'STUDENTS', value: `${detailFilled} / ${detailTotalSeats}` },
+        ];
+        infoCols.forEach((col, i) => {
+            const x = 14 + i * (pageW / 4);
+            doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(148, 163, 184);
+            doc.text(col.label, x, 28);
+            doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+            doc.text(col.value, x, 34);
+        });
+
+        // ── Table ──
+        autoTable(doc, {
+            startY: 40,
+            head: [['Bench', 'Left Reg No', 'Left Student Name', 'Dept', 'Right Reg No', 'Right Student Name', 'Dept']],
+            body: rows.map(r => [r.bench, r.leftReg, r.leftName, r.leftDept, r.rightReg, r.rightName, r.rightDept]),
+            styles: { fontSize: 7.5, cellPadding: 2, font: 'helvetica', textColor: [30, 41, 59] },
+            headStyles: { fillColor: [15, 23, 42], textColor: [226, 232, 240], fontStyle: 'bold', fontSize: 7, halign: 'left' },
+            alternateRowStyles: { fillColor: [248, 250, 252] },
+            columnStyles: {
+                0: { cellWidth: 13, halign: 'center', fontStyle: 'bold', fillColor: [241, 245, 249] },
+                1: { cellWidth: 26, font: 'courier' },
+                2: { cellWidth: 42 },
+                3: { cellWidth: 12, halign: 'center' },
+                4: { cellWidth: 26, font: 'courier' },
+                5: { cellWidth: 42 },
+                6: { cellWidth: 12, halign: 'center' },
+            },
+            didDrawPage: (data: any) => {
+                const pCount = (doc as any).internal.getNumberOfPages();
+                doc.setFontSize(6.5); doc.setTextColor(148, 163, 184);
+                doc.text(
+                    `Page ${data.pageNumber} of ${pCount}  ·  CONFIDENTIAL — FOR OFFICIAL USE ONLY`,
+                    pageW / 2, doc.internal.pageSize.getHeight() - 6, { align: 'center' }
+                );
+            },
+        });
+
+        // ── Signature strip on last page ──
+        const finalY = (doc as any).lastAutoTable.finalY + 10;
+        const sigRoles = ['Invigilator', 'Chief Invigilator', 'Controller of Examinations'];
+        const sigW = (pageW - 28) / 3;
+        sigRoles.forEach((role, i) => {
+            const x = 14 + i * (sigW + 0);
+            doc.setDrawColor(71, 85, 105);
+            doc.line(x, finalY + 14, x + sigW - 4, finalY + 14);
+            doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(71, 85, 105);
+            doc.text(role.toUpperCase(), x + (sigW - 4) / 2, finalY + 19, { align: 'center' });
+        });
+
+        doc.save(`Seating_${detailHall?.hallCode}_${selectedDate}_${selectedSession}.pdf`);
+        toast.success('PDF downloaded');
+    };
+
+    /* ── Helper: build compact register-number ranges ──
+       e.g. ["23CS001","23CS002","23CS003","23CS005"] → ["23CS001-003", "23CS005"] */
+    const buildRegRanges = (regs: string[]): string[] => {
+        if (!regs.length) return [];
+        const sorted = [...regs].sort();
+        const ranges: string[] = [];
+        let start = sorted[0], prev = sorted[0];
+        for (let i = 1; i < sorted.length; i++) {
+            const curr = sorted[i];
+            const pm = prev.match(/^(.*?)(\d+)$/);
+            const cm = curr.match(/^(.*?)(\d+)$/);
+            if (pm && cm && pm[1] === cm[1] && parseInt(cm[2]) === parseInt(pm[2]) + 1) {
+                prev = curr;
+            } else {
+                ranges.push(start === prev ? start : `${start}-${prev.match(/\d+$/)?.[0]}`);
+                start = curr; prev = curr;
+            }
+        }
+        ranges.push(start === prev ? start : `${start}-${prev.match(/\d+$/)?.[0]}`);
+        return ranges;
+    };
+
+    /* ── Fetch all hall allocations and return consolidated rows ── */
+    const buildGlobalRows = async () => {
+        const active = [...hallSummary].sort((a, b) => a.hallCode.localeCompare(b.hallCode));
+        const rows: { slNo: number; hallCode: string; regRanges: string; count: number; total: number; isFirstRow: boolean; rowSpan: number }[] = [];
+        await Promise.all(active.map(async (hall) => {
+            if (!selectedDate) return;
+            let assignments: Record<number, Assignment> = {};
+            try { const alloc = await SeatingService.getAllocationForHall(selectedDate, selectedSession, hall.hallId); assignments = alloc?.assignments ?? {}; } catch { }
+            const deptMap: Record<string, string[]> = {};
+            Object.values(assignments).forEach(a => {
+                if (!deptMap[a.deptCode]) deptMap[a.deptCode] = [];
+                deptMap[a.deptCode].push(a.registerNumber);
+            });
+            (hall as any).__deptMap = deptMap;
+            (hall as any).__total = Object.keys(assignments).length;
+        }));
+        let slNo = 1;
+        active.forEach(hall => {
+            const deptMap: Record<string, string[]> = (hall as any).__deptMap ?? {};
+            const total: number = (hall as any).__total ?? 0;
+            const depts = Object.entries(deptMap).sort(([a], [b]) => a.localeCompare(b));
+            if (!depts.length) {
+                rows.push({ slNo: slNo++, hallCode: hall.hallCode, regRanges: '—', count: 0, total, isFirstRow: true, rowSpan: 1 });
+                return;
+            }
+            depts.forEach(([, regs], idx) => {
+                const ranges = buildRegRanges(regs);
+                const rangeStr = ranges.join(', ');
+                rows.push({ slNo, hallCode: hall.hallCode, regRanges: rangeStr, count: regs.length, total, isFirstRow: idx === 0, rowSpan: depts.length });
+            });
+            slNo++;
+        });
+        return rows;
+    };
+
+    const downloadGlobalExcel = async () => {
+        if (!selectedDate) return;
+        setGlobalDownloading(true);
+        try {
+            const XLSX = await import('xlsx');
+            const rows = await buildGlobalRows();
+            const header = ['Sl.No', 'Hall / Room No.', 'Register Numbers', 'Count', 'Total'];
+            const wsData: any[][] = [
+                [`CONSOLIDATED SEATING ARRANGEMENT`],
+                [`Date: ${fmtDate(selectedDate)}   Session: ${selectedSession === 'FN' ? 'Forenoon' : 'Afternoon'}`],
+                [],
+                header,
+                ...rows.map(r => [r.isFirstRow ? r.slNo : '', r.isFirstRow ? r.hallCode : '', r.regRanges, r.count, r.isFirstRow ? r.total : '']),
+            ];
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            ws['!cols'] = [{ wch: 7 }, { wch: 14 }, { wch: 50 }, { wch: 8 }, { wch: 8 }];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Consolidated');
+            XLSX.writeFile(wb, `Consolidated_Seating_${selectedDate}_${selectedSession}.xlsx`);
+            toast.success('Excel downloaded');
+        } catch { toast.error('Failed to generate Excel'); }
+        finally { setGlobalDownloading(false); }
+    };
+
+    const downloadGlobalPDF = async () => {
+        if (!selectedDate) return;
+        setGlobalDownloading(true);
+        try {
+            const { default: jsPDF } = await import('jspdf');
+            const { default: autoTable } = await import('jspdf-autotable');
+            const rows = await buildGlobalRows();
+            const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+            const pageW = doc.internal.pageSize.getWidth();
+            const sessionLabel = selectedSession === 'FN' ? 'Forenoon' : 'Afternoon';
+
+            // ── Header block ──
+            doc.setFillColor(15, 23, 42);
+            doc.rect(0, 0, pageW, 36, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+            doc.text("St. Joseph's College of Engineering And Technology, Palai", pageW / 2, 10, { align: 'center' });
+            doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(203, 213, 225);
+            doc.text('Examination Control Division', pageW / 2, 16, { align: 'center' });
+            doc.setFillColor(99, 102, 241);
+            doc.rect(14, 20, pageW - 28, 0.4, 'F');
+            doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+            doc.text('CONSOLIDATED SEATING ARRANGEMENT', pageW / 2, 28, { align: 'center' });
+            doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(148, 163, 184);
+            doc.text(`${fmtDate(selectedDate)}  \u00b7  ${sessionLabel}`, pageW / 2, 34, { align: 'center' });
+
+            // ── Table ──
+            // Pre-process rows to handle row-spanning look (same Sl.No + Hall for merged groups)
+            const bodyRows: any[] = [];
+            rows.forEach(r => {
+                bodyRows.push([
+                    r.isFirstRow ? String(r.slNo) : '',
+                    r.isFirstRow ? r.hallCode : '',
+                    r.regRanges,
+                    String(r.count),
+                    r.isFirstRow ? String(r.total) : '',
+                ]);
+            });
+
+            autoTable(doc, {
+                startY: 40,
+                head: [['Sl.\nNo.', 'HALL /\nROOM No.', 'REGISTER NUMBERS', 'COUNT', 'TOTAL']],
+                body: bodyRows,
+                styles: { fontSize: 8, cellPadding: 2.5, font: 'helvetica', textColor: [15, 23, 42], lineColor: [203, 213, 225], lineWidth: 0.3 },
+                headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8, halign: 'center', valign: 'middle' },
+                alternateRowStyles: { fillColor: [248, 250, 252] },
+                columnStyles: {
+                    0: { cellWidth: 10, halign: 'center', fontStyle: 'bold' },
+                    1: { cellWidth: 22, halign: 'center', fontStyle: 'bold' },
+                    2: { cellWidth: 'auto' },
+                    3: { cellWidth: 14, halign: 'center' },
+                    4: { cellWidth: 14, halign: 'center', fontStyle: 'bold' },
+                },
+                didDrawPage: (data: any) => {
+                    const pCount = (doc as any).internal.getNumberOfPages();
+                    doc.setFontSize(6.5); doc.setTextColor(148, 163, 184);
+                    doc.text(
+                        `Page ${data.pageNumber} of ${pCount}  \u00b7  CONFIDENTIAL \u2014 FOR OFFICIAL USE ONLY`,
+                        pageW / 2, doc.internal.pageSize.getHeight() - 6, { align: 'center' }
+                    );
+                },
+            });
+
+            // ── Summary total row ──
+            const finalY = (doc as any).lastAutoTable.finalY;
+            doc.setFillColor(241, 245, 249);
+            doc.rect(14, finalY, pageW - 28, 8, 'F');
+            doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.3);
+            doc.rect(14, finalY, pageW - 28, 8);
+            doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+            doc.text(`Total Students Assigned: ${totalFilled}   /   Total Capacity: ${totalCapacity}`, pageW / 2, finalY + 5.5, { align: 'center' });
+
+            doc.save(`Consolidated_Seating_${selectedDate}_${selectedSession}.pdf`);
+            toast.success('PDF downloaded');
+        } catch { toast.error('Failed to generate PDF'); }
+        finally { setGlobalDownloading(false); }
+    };
+
+    /* ── Download Seating Excel: one sheet per allocated hall ── */
+    const downloadSeatingExcel = async () => {
+        if (!selectedDate) return;
+        setSeatingDownloading(true);
+        try {
+            const XLSXmod = await import('xlsx');
+            const XLSX = XLSXmod.default ?? XLSXmod;
+            const wb = XLSX.utils.book_new();
+
+            const allocatedHalls = hallSummary
+                .filter(h => h.filledSeats > 0)
+                .sort((a, b) => a.hallCode.localeCompare(b.hallCode));
+
+            if (!allocatedHalls.length) {
+                toast.error('No halls have assigned seats');
+                setSeatingDownloading(false);
+                return;
+            }
+
+            const usedSheetNames = new Set<string>();
+            // Process halls sequentially to avoid concurrent mutation of wb
+            for (const hall of allocatedHalls) {
+                let benches: Bench[] = [];
+                let assignments: Record<number, Assignment> = {};
+
+                try {
+                    const layout = await SeatingService.getHallLayout(hall.hallId);
+                    benches = layout.benches || [];
+                } catch { /* hall may have no layout yet */ }
+
+                try {
+                    const alloc = await SeatingService.getAllocationForHall(selectedDate, selectedSession, hall.hallId);
+                    assignments = alloc?.assignments ?? {};
+                } catch { /* no allocations yet */ }
+
+                const wsData: any[][] = [
+                    [`St. Joseph's College of Engineering And Technology, Palai`],
+                    [`Seating Arrangement — ${hall.hallCode}`],
+                    [`Date: ${fmtDate(selectedDate)}    Session: ${selectedSession === 'FN' ? 'Forenoon' : 'Afternoon'}    Capacity: ${hall.totalSeats}    Assigned: ${hall.filledSeats}`],
+                    [],
+                    ['Bench', 'Left — Reg No', 'Left — Student Name', 'Left Dept', 'Right — Reg No', 'Right — Student Name', 'Right Dept'],
+                ];
+
+                for (const b of benches) {
+                    const ls = b.seats.find(s => s.SeatNumber === 1);
+                    const rs = b.seats.find(s => s.SeatNumber === 2);
+                    const la = ls ? assignments[ls.SeatID] : undefined;
+                    const ra = rs ? assignments[rs.SeatID] : undefined;
+                    wsData.push([
+                        `${b.rowLabel}${b.benchNumber}`,
+                        la?.registerNumber ?? '',
+                        la?.studentName    ?? '',
+                        la?.deptCode       ?? '',
+                        ra?.registerNumber ?? '',
+                        ra?.studentName    ?? '',
+                        ra?.deptCode       ?? '',
+                    ]);
+                }
+
+                const ws = XLSX.utils.aoa_to_sheet(wsData);
+                ws['!cols'] = [
+                    { wch: 8 }, { wch: 16 }, { wch: 28 }, { wch: 9 },
+                    { wch: 16 }, { wch: 28 }, { wch: 9 },
+                ];
+                let sheetName = hall.hallCode.replace(/[:\\/?*[\]|]/g, '').slice(0, 31);
+                // Ensure unique sheet name
+                if (usedSheetNames.has(sheetName)) {
+                    let counter = 2;
+                    while (usedSheetNames.has(`${sheetName.slice(0, 28)}_${counter}`)) counter++;
+                    sheetName = `${sheetName.slice(0, 28)}_${counter}`;
+                }
+                usedSheetNames.add(sheetName);
+                XLSX.utils.book_append_sheet(wb, ws, sheetName);
+            }
+
+            XLSX.writeFile(wb, `Seating_${selectedDate}_${selectedSession}.xlsx`);
+            toast.success(`Downloaded ${allocatedHalls.length} hall sheet(s)`);
+        } catch (err: any) {
+            console.error('downloadSeatingExcel error:', err);
+            toast.error('Failed to generate Excel: ' + (err?.message || 'Unknown error'));
+        } finally {
+            setSeatingDownloading(false);
+        }
+    };
+
+    /* student search */
+    useEffect(() => {
+        if (!searchQ.trim() || searchQ.trim().length < 2) { setSearchResults([]); return; }
+        if (!selectedDate) { setSearchResults([]); return; }
+        const timer = setTimeout(async () => {
+            setSearching(true);
+            try {
+                console.log('[Search] calling with:', { selectedDate, selectedSession, q: searchQ.trim() });
+                const data = await SeatingService.searchStudent(selectedDate, selectedSession, searchQ.trim());
+                console.log('[Search] response:', data);
+                setSearchResults(data.results || []);
+            } catch (err: any) {
+                console.error('Search error:', err?.response?.data || err?.message || err);
+                toast.error('Search: ' + (err?.response?.data?.message || err?.message || 'Unknown error'), { duration: 6000 });
+                setSearchResults([]);
+            }
+            finally { setSearching(false); }
+        }, 350);
+        return () => clearTimeout(timer);
+    }, [searchQ, selectedDate, selectedSession]);
+
     /* ═══════════ RENDER ══════════════════════════════ */
     return (
         <div className="pb-12 bg-[#05080f] min-h-[calc(100vh-3.5rem)] font-sans text-slate-300 antialiased selection:bg-indigo-500/30 selection:text-indigo-200" style={{ backgroundImage: 'radial-gradient(circle at top right, rgba(30,58,138,0.1), transparent 40%), radial-gradient(circle at bottom left, rgba(49,46,129,0.15), transparent 40%)' }}>
             {/* Header */}
             <div className="pt-6 px-8 max-w-[1920px] mx-auto">
-                <h1 className="text-2xl font-semibold text-white tracking-tight flex items-center gap-3">
-                    <span className="w-2 h-6 bg-indigo-500 rounded-full shadow-[0_0_15px_rgba(99,102,241,0.5)]"></span>
-                    Seating Arrangement
-                </h1>
-                <p className="text-slate-400 text-sm font-medium mt-2 max-w-2xl leading-relaxed">
-                    Select an exam slot and departments, then assign students across halls at once.
-                </p>
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                    <div>
+                        <h1 className="text-2xl font-semibold text-white tracking-tight flex items-center gap-3">
+                            <span className="w-2 h-6 bg-indigo-500 rounded-full shadow-[0_0_15px_rgba(99,102,241,0.5)]"></span>
+                            Seating Arrangement
+                        </h1>
+                        <p className="text-slate-400 text-sm font-medium mt-2 max-w-2xl leading-relaxed">
+                            Select an exam slot and departments, then assign students across halls at once.
+                        </p>
+                    </div>
+
+                    {/* ── Student Search ── */}
+                    <div className="relative w-full sm:w-[320px] shrink-0">
+                        <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                            </span>
+                            <input
+                                type="text"
+                                value={searchQ}
+                                onChange={e => setSearchQ(e.target.value)}
+                                placeholder={selectedDate ? 'Search by reg no. or name…' : 'Select a date to search'}
+                                disabled={!selectedDate}
+                                className="w-full h-9 pl-9 pr-8 bg-[#0b1221]/90 border border-[#1e293b] rounded-xl text-slate-200 text-xs placeholder:text-slate-600 focus:outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                            />
+                            {searching && (
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                                    <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                                </span>
+                            )}
+                            {!searching && searchQ && (
+                                <button onClick={() => { setSearchQ(''); setSearchResults([]); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Search results dropdown */}
+                        {searchResults.length > 0 && (
+                            <div className="absolute top-[calc(100%+6px)] left-0 right-0 z-50 bg-[#0b1221] border border-[#1e293b] rounded-xl shadow-2xl shadow-black/50 overflow-hidden max-h-72 overflow-y-auto">
+                                {searchResults.map((r, i) => (
+                                    <div key={r.studentId} className={`px-3 py-2.5 flex items-center justify-between gap-3 ${i > 0 ? 'border-t border-[#1e293b]' : ''} hover:bg-[#0f172a] transition-colors`}>
+                                        <div className="min-w-0">
+                                            <p className="text-xs font-semibold text-white truncate">{r.registerNumber}</p>
+                                            <p className="text-[10px] text-slate-400 truncate">{r.name}</p>
+                                        </div>
+                                        {r.allocated ? (
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                <span className="px-2 py-0.5 rounded-md bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-[10px] font-bold tracking-wide">{r.hallCode}</span>
+                                                <span className="px-2 py-0.5 rounded-md bg-slate-700/60 border border-slate-600/40 text-slate-300 text-[10px] font-semibold">{r.seatLabel}</span>
+                                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border ${r.side === 'Left' ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-300' : 'bg-violet-500/10 border-violet-500/30 text-violet-300'}`}>{r.side}</span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-[10px] text-slate-500 italic shrink-0">Not assigned</span>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        {searchQ.trim().length >= 2 && !searching && searchResults.length === 0 && selectedDate && (
+                            <div className="absolute top-[calc(100%+6px)] left-0 right-0 z-50 bg-[#0b1221] border border-[#1e293b] rounded-xl shadow-2xl px-4 py-3 text-center text-[11px] text-slate-500">
+                                No students found for "{searchQ}"
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
 
             <div className="px-8 py-6 max-w-[1920px] mx-auto">
@@ -532,21 +984,60 @@ const SeatingPlans: React.FC = () => {
                                             </h2>
                                             <p className="text-[12px] text-slate-400 font-medium mt-2 pl-[44px]">{hallSummary.length} halls · {totalFilled}/{totalCapacity} seats filled</p>
                                         </div>
-                                        <div className="flex items-center gap-3 px-4 py-2 rounded-xl bg-[#0d1424] border border-[#1e293b]">
-                                            <div className="text-right">
-                                                <span className={`text-[15px] font-bold block ${totalFilled >= totalCapacity && totalCapacity > 0 ? 'text-emerald-400' : totalFilled > 0 ? 'text-amber-400' : 'text-slate-300'}`}>
-                                                    {totalCapacity > 0 ? Math.round((totalFilled / totalCapacity) * 100) : 0}%
-                                                </span>
-                                                <span className="text-[9px] font-semibold text-slate-500 uppercase tracking-widest">filled</span>
+                                        <div className="flex items-center gap-3">
+                                            {/* Per-hall seating download */}
+                                            <Button size="sm" isDisabled={seatingDownloading || totalFilled === 0}
+                                                onPress={downloadSeatingExcel}
+                                                className="font-semibold text-[11px] bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl h-9 px-4 transition-all"
+                                                startContent={seatingDownloading ? <RefreshCw size={13} className="animate-spin" /> : <FileSpreadsheet size={13} />}>
+                                                {seatingDownloading ? 'Generating…' : 'Download Seating'}
+                                            </Button>
+
+                                            {/* Global download dropdown */}
+                                            <Dropdown placement="bottom-end">
+                                                <DropdownTrigger>
+                                                    <Button size="sm" isDisabled={globalDownloading || totalFilled === 0}
+                                                        className="font-semibold text-[11px] bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl h-9 px-4 transition-all"
+                                                        startContent={globalDownloading ? <RefreshCw size={13} className="animate-spin" /> : <FileDown size={13} />}>
+                                                        {globalDownloading ? 'Generating…' : 'Download Report'}
+                                                    </Button>
+                                                </DropdownTrigger>
+                                                <DropdownMenu aria-label="Download format"
+                                                    classNames={{ base: 'bg-[#0f1729] border border-[#1e293b] rounded-xl shadow-2xl min-w-[180px]', list: 'gap-1 p-1' }}
+                                                    onAction={(key) => { if (key === 'pdf') downloadGlobalPDF(); else if (key === 'excel') downloadGlobalExcel(); }}>
+                                                    <DropdownItem key="pdf"
+                                                        startContent={<FileDown size={14} className="text-rose-400" />}
+                                                        className="text-slate-300 data-[hover]:bg-[#1e293b] data-[hover]:text-white rounded-lg"
+                                                        textValue="Download PDF">
+                                                        <span className="text-[12px] font-semibold">Download PDF</span>
+                                                        <p className="text-[10px] text-slate-500">Consolidated A4 document</p>
+                                                    </DropdownItem>
+                                                    <DropdownItem key="excel"
+                                                        startContent={<FileSpreadsheet size={14} className="text-emerald-400" />}
+                                                        className="text-slate-300 data-[hover]:bg-[#1e293b] data-[hover]:text-white rounded-lg"
+                                                        textValue="Download Excel">
+                                                        <span className="text-[12px] font-semibold">Download Excel</span>
+                                                        <p className="text-[10px] text-slate-500">Spreadsheet format</p>
+                                                    </DropdownItem>
+                                                </DropdownMenu>
+                                            </Dropdown>
+
+                                            <div className="flex items-center gap-3 px-4 py-2 rounded-xl bg-[#0d1424] border border-[#1e293b]">
+                                                <div className="text-right">
+                                                    <span className={`text-[15px] font-bold block ${totalFilled >= totalCapacity && totalCapacity > 0 ? 'text-emerald-400' : totalFilled > 0 ? 'text-amber-400' : 'text-slate-300'}`}>
+                                                        {totalCapacity > 0 ? Math.round((totalFilled / totalCapacity) * 100) : 0}%
+                                                    </span>
+                                                    <span className="text-[9px] font-semibold text-slate-500 uppercase tracking-widest">filled</span>
+                                                </div>
+                                                <Progress value={totalCapacity > 0 ? (totalFilled / totalCapacity) * 100 : 0} size="sm" className="w-20"
+                                                    classNames={{ indicator: `rounded-full transition-all duration-500 ${totalFilled >= totalCapacity ? 'bg-emerald-500' : totalFilled > 0 ? 'bg-amber-400' : 'bg-slate-400'}`, track: "bg-[#1e293b]" }}
+                                                />
                                             </div>
-                                            <Progress value={totalCapacity > 0 ? (totalFilled / totalCapacity) * 100 : 0} size="sm" className="w-20"
-                                                classNames={{ indicator: `rounded-full transition-all duration-500 ${totalFilled >= totalCapacity ? 'bg-emerald-500' : totalFilled > 0 ? 'bg-amber-400' : 'bg-slate-400'}`, track: "bg-[#1e293b]" }}
-                                            />
                                         </div>
                                     </div>
 
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-5">
-                                        {hallSummary.map((h) => {
+                                        {[...hallSummary].sort((a, b) => b.filledSeats - a.filledSeats).map((h) => {
                                             const pct = h.totalSeats > 0 ? Math.round((h.filledSeats / h.totalSeats) * 100) : 0;
                                             const isFull = pct >= 100;
                                             const hasData = pct > 0;
@@ -861,47 +1352,130 @@ const SeatingPlans: React.FC = () => {
                 </ModalContent>
             </Modal>
 
-            {/* ═══ Print Modal (Clean White layout for actual printing) ═══ */}
-            <Modal isOpen={showPrintModal} onOpenChange={setShowPrintModal} backdrop="blur" size="2xl" scrollBehavior="inside">
+            {/* ═══ Print Modal (Professional Official Document Layout) ═══ */}
+            <Modal isOpen={showPrintModal} onOpenChange={setShowPrintModal} backdrop="blur" size="4xl" scrollBehavior="outside"
+                classNames={{ base: 'bg-white shadow-2xl rounded-2xl my-8', header: 'hidden', footer: 'border-t border-slate-200 bg-slate-50/80 px-6 py-4 sticky bottom-0 z-10' }}>
                 <ModalContent>
-                    {(onClose) => (<>
-                        <ModalHeader>
-                            <div>
-                                <h2 className="text-base font-bold text-slate-900">Seating Chart — {detailHall?.hallCode}</h2>
-                                <p className="text-xs text-slate-500 mt-1">{selectedDate && fmtDate(selectedDate)} · {selectedSession} · {detailFilled} students</p>
-                            </div>
-                        </ModalHeader>
-                        <ModalBody className="p-0 sm:p-6">
-                            <table className="w-full text-xs border-collapse">
-                                <thead>
-                                    <tr className="bg-slate-50">
-                                        {['Bench', 'Left Reg No', 'Left Name', 'Right Reg No', 'Right Name'].map(h => (
-                                            <th key={h} className="border border-slate-200 px-3 py-2 text-left font-bold text-slate-600 uppercase tracking-wider">{h}</th>
+                    {(onClose) => (
+                        <>
+                            <ModalBody className="p-0 overflow-visible">
+                                {/* ── Printable Area ── */}
+                                <div id="seat-sync-print-area" style={{ fontFamily: "'Georgia', 'Times New Roman', serif", background: '#fff', color: '#111' }}>
+
+                                    {/* Letterhead */}
+                                    <div style={{ borderBottom: '3px double #1e293b', padding: '28px 40px 20px', display: 'flex', alignItems: 'center', gap: '20px' }}>
+                                        <div style={{ width: 56, height: 56, borderRadius: 12, background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+                                            </svg>
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.04em', color: '#0f172a', lineHeight: 1.2 }}>SEAT-SYNC EXAMINATION CONTROL</div>
+                                            <div style={{ fontSize: 11, color: '#64748b', marginTop: 3, letterSpacing: '0.12em', textTransform: 'uppercase', fontFamily: "'Arial', sans-serif" }}>Official Seating Arrangement Document</div>
+                                        </div>
+                                        <div style={{ textAlign: 'right', fontFamily: "'Arial', sans-serif" }}>
+                                            <div style={{ fontSize: 10, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Document No.</div>
+                                            <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', letterSpacing: '0.06em' }}>{detailHall?.hallCode}-{selectedDate?.replace(/-/g, '')}-{selectedSession}</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Exam Detail Strip */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', padding: '14px 40px' }}>
+                                        {[
+                                            { label: 'EXAMINATION HALL', value: detailHall?.hallCode ?? '—' },
+                                            { label: 'DATE', value: selectedDate ? fmtDate(selectedDate) : '—' },
+                                            { label: 'SESSION', value: selectedSession === 'FN' ? 'Forenoon  (09:00 – 12:00)' : 'Afternoon  (14:00 – 17:00)' },
+                                            { label: 'STUDENTS ASSIGNED', value: `${detailFilled} / ${detailTotalSeats}` },
+                                        ].map(item => (
+                                            <div key={item.label} style={{ padding: '0 12px', borderRight: '1px solid #e2e8f0' }}>
+                                                <div style={{ fontSize: 9, fontFamily: "'Arial', sans-serif", fontWeight: 700, color: '#94a3b8', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>{item.label}</div>
+                                                <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', fontFamily: "'Arial', sans-serif" }}>{item.value}</div>
+                                            </div>
                                         ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {detailBenches.map(b => {
-                                        const ls = b.seats.find(s => s.SeatNumber === 1); const rs = b.seats.find(s => s.SeatNumber === 2);
-                                        const la = ls ? detailAssignments[ls.SeatID] : undefined; const ra = rs ? detailAssignments[rs.SeatID] : undefined;
-                                        return (
-                                            <tr key={`${b.rowLabel}${b.benchNumber}`} className="hover:bg-slate-50">
-                                                <td className="border border-slate-200 px-3 py-2 font-semibold text-slate-800">{b.rowLabel}{b.benchNumber}</td>
-                                                <td className="border border-slate-200 px-3 py-2 font-mono text-slate-700">{la?.registerNumber || '—'}</td>
-                                                <td className="border border-slate-200 px-3 py-2 text-slate-700">{la?.studentName || '—'}</td>
-                                                <td className="border border-slate-200 px-3 py-2 font-mono text-slate-700">{ra?.registerNumber || '—'}</td>
-                                                <td className="border border-slate-200 px-3 py-2 text-slate-700">{ra?.studentName || '—'}</td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </ModalBody>
-                        <ModalFooter>
-                            <Button variant="light" onPress={onClose}>Close</Button>
-                            <Button onPress={() => window.print()} className="font-bold bg-slate-900 text-white" startContent={<Printer size={14} />}>Print</Button>
-                        </ModalFooter>
-                    </>)}
+                                    </div>
+
+                                    {/* Table */}
+                                    <div style={{ padding: '24px 40px' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: "'Arial', sans-serif" }}>
+                                            <thead>
+                                                <tr style={{ background: '#0f172a' }}>
+                                                    {[
+                                                        { label: 'BENCH', w: '7%' },
+                                                        { label: 'LEFT — REG. NO.', w: '14%' },
+                                                        { label: 'LEFT — STUDENT NAME', w: '26%' },
+                                                        { label: 'DEPT', w: '7%' },
+                                                        { label: 'RIGHT — REG. NO.', w: '14%' },
+                                                        { label: 'RIGHT — STUDENT NAME', w: '26%' },
+                                                        { label: 'DEPT', w: '6%' },
+                                                    ].map(col => (
+                                                        <th key={col.label} style={{ width: col.w, padding: '10px 12px', textAlign: 'left', color: '#e2e8f0', fontWeight: 700, fontSize: 9, letterSpacing: '0.10em', borderRight: '1px solid #1e3a5f' }}>{col.label}</th>
+                                                    ))}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {detailBenches.map((b, idx) => {
+                                                    const ls = b.seats.find(s => s.SeatNumber === 1);
+                                                    const rs = b.seats.find(s => s.SeatNumber === 2);
+                                                    const la = ls ? detailAssignments[ls.SeatID] : undefined;
+                                                    const ra = rs ? detailAssignments[rs.SeatID] : undefined;
+                                                    const rowBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+                                                    const cellStyle = { padding: '9px 12px', borderBottom: '1px solid #e2e8f0', borderRight: '1px solid #e2e8f0', verticalAlign: 'middle' as React.CSSProperties['verticalAlign'] };
+                                                    return (
+                                                        <tr key={`${b.rowLabel}${b.benchNumber}`} style={{ background: rowBg }}>
+                                                            <td style={{ ...cellStyle, fontWeight: 700, color: '#475569', letterSpacing: '0.05em', textAlign: 'center', background: idx % 2 === 0 ? '#f1f5f9' : '#e9eef5' }}>
+                                                                {b.rowLabel}{b.benchNumber}
+                                                            </td>
+                                                            <td style={{ ...cellStyle, fontFamily: "'Courier New', monospace", fontWeight: 600, color: la ? '#0f172a' : '#cbd5e1', fontSize: 11 }}>{la?.registerNumber ?? '—'}</td>
+                                                            <td style={{ ...cellStyle, color: la ? '#1e293b' : '#cbd5e1' }}>{la?.studentName ?? '—'}</td>
+                                                            <td style={{ ...cellStyle, textAlign: 'center' }}>
+                                                                {la ? <span style={{ background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 4, padding: '2px 6px', fontSize: 10, fontWeight: 700 }}>{la.deptCode}</span> : <span style={{ color: '#cbd5e1' }}>—</span>}
+                                                            </td>
+                                                            <td style={{ ...cellStyle, fontFamily: "'Courier New', monospace", fontWeight: 600, color: ra ? '#0f172a' : '#cbd5e1', fontSize: 11 }}>{ra?.registerNumber ?? '—'}</td>
+                                                            <td style={{ ...cellStyle, color: ra ? '#1e293b' : '#cbd5e1' }}>{ra?.studentName ?? '—'}</td>
+                                                            <td style={{ ...cellStyle, textAlign: 'center' }}>
+                                                                {ra ? <span style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: 4, padding: '2px 6px', fontSize: 10, fontWeight: 700 }}>{ra.deptCode}</span> : <span style={{ color: '#cbd5e1' }}>—</span>}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {/* Footer / Signatures */}
+                                    <div style={{ padding: '0 40px 32px', borderTop: '1.5px solid #e2e8f0', marginTop: 4 }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 32, paddingTop: 28 }}>
+                                            {['Invigilator Signature', 'Chief Invigilator', 'Controller of Examinations'].map(role => (
+                                                <div key={role} style={{ textAlign: 'center' }}>
+                                                    <div style={{ borderBottom: '1.5px solid #475569', marginBottom: 8, paddingBottom: 36 }}></div>
+                                                    <div style={{ fontSize: 10, fontFamily: "'Arial', sans-serif", fontWeight: 700, color: '#475569', letterSpacing: '0.10em', textTransform: 'uppercase' }}>{role}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div style={{ textAlign: 'center', marginTop: 24, fontSize: 9, color: '#94a3b8', fontFamily: "'Arial', sans-serif", letterSpacing: '0.06em' }}>
+                                            Generated by Seat-Sync · {new Date().toLocaleString('en-IN')} · CONFIDENTIAL — FOR OFFICIAL USE ONLY
+                                        </div>
+                                    </div>
+
+                                </div>{/* /printable area */}
+                            </ModalBody>
+                            <ModalFooter className="flex justify-between items-center gap-3">
+                                <Button variant="light" className="font-semibold text-slate-500" onPress={onClose}>Close</Button>
+                                <div className="flex gap-3">
+                                    <Button onPress={downloadExcel}
+                                        className="font-bold bg-emerald-600 hover:bg-emerald-500 text-white px-5 rounded-xl shadow-lg border border-emerald-500/40"
+                                        startContent={<FileDown size={14} />}>
+                                        Download Excel
+                                    </Button>
+                                    <Button onPress={downloadPDF}
+                                        className="font-bold bg-[#0f172a] hover:bg-[#1e293b] text-white px-5 rounded-xl shadow-lg border border-slate-600/40"
+                                        startContent={<Printer size={14} />}>
+                                        Download PDF
+                                    </Button>
+                                </div>
+                            </ModalFooter>
+                        </>
+                    )}
                 </ModalContent>
             </Modal>
 

@@ -77,4 +77,10 @@ export const SeatingService = {
         const r = await api.post(`${PREFIX}/import-excel`, payload);
         return r.data;
     },
+
+    /** Search student by register number or name within a slot */
+    searchStudent: async (examDate: string, session: string, q: string) => {
+        const r = await api.get(`${PREFIX}/search-student`, { params: { examDate, session, q } });
+        return r.data as { results: { studentId: number; registerNumber: string; name: string; allocated: boolean; hallCode: string | null; hallId: number | null; rowLabel: string | null; benchNumber: number | null; side: string | null; seatLabel: string | null }[] };
+    },
 };
