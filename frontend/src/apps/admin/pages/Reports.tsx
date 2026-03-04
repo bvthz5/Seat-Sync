@@ -283,6 +283,8 @@ const Reports: React.FC = () => {
                                 <Spinner size="sm" />
                             ) : (
                                 <Select
+                                    id="report-series-select"
+                                    name="reportSeriesSelect"
                                     aria-label="Exam Series"
                                     size="sm"
                                     className="w-56"
@@ -398,6 +400,8 @@ const Reports: React.FC = () => {
                                 {/* Filters */}
                                 <div className="flex flex-col sm:flex-row gap-3">
                                     <Input
+                                        id="search-reports"
+                                        name="searchReports"
                                         className="sm:max-w-xs"
                                         placeholder="Search exam, hall, invigilator…"
                                         startContent={<Search size={14} className="text-slate-400" />}
@@ -407,19 +411,19 @@ const Reports: React.FC = () => {
                                         aria-label="Search records"
                                     />
                                     <div className="flex gap-2 flex-wrap">
-                                        <Select aria-label="Department" placeholder="All Departments" size="sm" className="w-44" variant="bordered"
+                                        <Select id="filter-dept" name="filterDept" aria-label="Department" placeholder="All Departments" size="sm" className="w-44" variant="bordered"
                                             selectedKeys={deptFilter ? new Set([deptFilter]) : new Set()}
                                             onSelectionChange={k => { setDeptFilter(Array.from(k as Set<string>)[0] || ''); setPage(1); }}
                                             classNames={{ trigger: 'bg-white border-slate-200 rounded-xl h-10', popoverContent: 'bg-white border border-slate-100 shadow-xl rounded-xl' }}>
                                             {departments.map(d => <SelectItem key={d}>{d}</SelectItem>)}
                                         </Select>
-                                        <Select aria-label="Status" placeholder="All Statuses" size="sm" className="w-36" variant="bordered"
+                                        <Select id="filter-status" name="filterStatus" aria-label="Status" placeholder="All Statuses" size="sm" className="w-36" variant="bordered"
                                             selectedKeys={statusFilter ? new Set([statusFilter]) : new Set()}
                                             onSelectionChange={k => { setStatusFilter(Array.from(k as Set<string>)[0] || ''); setPage(1); }}
                                             classNames={{ trigger: 'bg-white border-slate-200 rounded-xl h-10', popoverContent: 'bg-white border border-slate-100 shadow-xl rounded-xl' }}>
                                             {(['Completed', 'In Progress', 'Scheduled', 'Cancelled'] as ExamStatus[]).map(s => <SelectItem key={s}>{s}</SelectItem>)}
                                         </Select>
-                                        <Select aria-label="Session" placeholder="All Sessions" size="sm" className="w-32" variant="bordered"
+                                        <Select id="filter-session" name="filterSession" aria-label="Session" placeholder="All Sessions" size="sm" className="w-32" variant="bordered"
                                             selectedKeys={sessionFilter ? new Set([sessionFilter]) : new Set()}
                                             onSelectionChange={k => { setSessionFilter(Array.from(k as Set<string>)[0] || ''); setPage(1); }}
                                             classNames={{ trigger: 'bg-white border-slate-200 rounded-xl h-10', popoverContent: 'bg-white border border-slate-100 shadow-xl rounded-xl' }}>

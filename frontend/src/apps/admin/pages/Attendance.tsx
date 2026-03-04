@@ -355,6 +355,8 @@ const Attendance: React.FC = () => {
                 <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-3 flex flex-col sm:flex-row items-center gap-3">
                     <div className="flex-1 w-full">
                         <Input
+                            id="search-attendance"
+                            name="searchAttendance"
                             placeholder="Search by Hall or Invigilator..."
                             startContent={<Search size={16} className="text-gray-400" />}
                             value={search}
