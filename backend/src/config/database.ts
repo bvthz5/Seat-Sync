@@ -348,143 +348,43 @@ async function ensureSchemaIntegrity() {
             END
         `, { type: QueryTypes.RAW });
 
-        // Add Audit Columns to Exams
+        // Add Notifications and NotificationRecipients Tables
         await sequelize.query(`
-            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Exams' AND TABLE_SCHEMA = 'dbo')
+            IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Notifications' AND TABLE_SCHEMA = 'dbo')
             BEGIN
-                IF NOT EXISTS (
-                    SELECT * FROM sys.columns 
-                    WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') 
-                    AND name = 'AuditStatus'
-                )
-                BEGIN
-                    ALTER TABLE [dbo].[Exams] ADD [AuditStatus] NVARCHAR(20) DEFAULT 'Pending' WITH VALUES;
-                    PRINT 'Added AuditStatus to Exams';
-                END
-
-                IF NOT EXISTS (
-                    SELECT * FROM sys.columns 
-                    WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') 
-                    AND name = 'ConflictDetails'
-                )
-                BEGIN
-                    ALTER TABLE [dbo].[Exams] ADD [ConflictDetails] NVARCHAR(MAX) NULL;
-                    PRINT 'Added ConflictDetails to Exams';
-                END
-
-                IF NOT EXISTS (
-                    SELECT * FROM sys.columns 
-                    WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') 
-                    AND name = 'ExamDate'
-                )
-                BEGIN
-                    ALTER TABLE [dbo].[Exams] ADD [ExamDate] DATE NULL;
-                    PRINT 'Added ExamDate to Exams';
-                END
-
-                IF NOT EXISTS (
-                    SELECT * FROM sys.columns 
-                    WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') 
-                    AND name = 'IsEmergencyMode'
-                )
-                BEGIN
-                    ALTER TABLE [dbo].[Exams] ADD [IsEmergencyMode] BIT NOT NULL CONSTRAINT DF_Exams_IsEmergencyMode DEFAULT 0;
-                    PRINT 'Added IsEmergencyMode to Exams';
-                END
-
-                IF NOT EXISTS (
-                    SELECT * FROM sys.columns 
-                    WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') 
-                    AND name = 'AttendanceLocked'
-                )
-                BEGIN
-                    ALTER TABLE [dbo].[Exams] ADD [AttendanceLocked] BIT NOT NULL CONSTRAINT DF_Exams_AttendanceLocked DEFAULT 0;
-                    PRINT 'Added AttendanceLocked to Exams';
-                END
+                CREATE TABLE [dbo].[Notifications] (
+                    [NotificationID] INT IDENTITY(1,1) PRIMARY KEY,
+                    [Title] NVARCHAR(200) NOT NULL,
+                    [Message] NVARCHAR(MAX) NOT NULL,
+                    [Type] NVARCHAR(20) NOT NULL DEFAULT 'INFO',
+                    [Category] NVARCHAR(20) NOT NULL DEFAULT 'SYSTEM',
+                    [TargetType] NVARCHAR(20) NOT NULL DEFAULT 'ALL',
+                    [TargetId] NVARCHAR(255) NULL,
+                    [Priority] NVARCHAR(20) NOT NULL DEFAULT 'NORMAL',
+                    [Metadata] NVARCHAR(MAX) NULL,
+                    [SentBy] INT NOT NULL DEFAULT 0,
+                    [SentAt] DATETIME2 NOT NULL DEFAULT GETDATE(),
+                    [ExpiresAt] DATETIME2 NULL
+                );
+                PRINT 'Created Notifications table';
             END
-        `, { type: QueryTypes.RAW });
 
-        // Add Room Columns (Hall Mode)
-        await sequelize.query(`
-            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Rooms' AND TABLE_SCHEMA = 'dbo')
+            IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'NotificationRecipients' AND TABLE_SCHEMA = 'dbo')
             BEGIN
-                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'RoomType')
-                BEGIN
-                    ALTER TABLE [dbo].[Rooms] ADD [RoomType] NVARCHAR(20) DEFAULT 'ROOM' WITH VALUES;
-                    PRINT 'Added RoomType to Rooms';
-                END
-
-                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'IsLayoutLocked')
-                BEGIN
-                    ALTER TABLE [dbo].[Rooms] ADD [IsLayoutLocked] BIT DEFAULT 0 WITH VALUES;
-                    PRINT 'Added IsLayoutLocked to Rooms';
-                END
-            END
-        `, { type: QueryTypes.RAW });
-
-        // Add Seat Columns (Hall Mode)
-        await sequelize.query(`
-            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Seats' AND TABLE_SCHEMA = 'dbo')
-            BEGIN
-                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'IsActive')
-                BEGIN
-                    ALTER TABLE [dbo].[Seats] ADD [IsActive] BIT DEFAULT 1 WITH VALUES;
-                    PRINT 'Added IsActive to Seats';
-                END
-
-                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'ZoneID')
-                BEGIN
-                    ALTER TABLE [dbo].[Seats] ADD [ZoneID] INT NULL;
-                    PRINT 'Added ZoneID to Seats';
-                END
-            END
-        `, { type: QueryTypes.RAW });
-
-        // Add BenchMode to Rooms (New Feature persistence)
-        await sequelize.query(`
-            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Rooms' AND TABLE_SCHEMA = 'dbo')
-            BEGIN
-                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'BenchMode')
-                BEGIN
-                    ALTER TABLE [dbo].[Rooms] ADD [BenchMode] NVARCHAR(20) NOT NULL CONSTRAINT DF_Rooms_BenchMode DEFAULT 'PAIRED';
-                    PRINT 'Added BenchMode to Rooms';
-                END
-            END
-        `, { type: QueryTypes.RAW });
-
-        // Add Color to Zones (Visualization Feature)
-        await sequelize.query(`
-            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Zones' AND TABLE_SCHEMA = 'dbo')
-            BEGIN
-                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Zones]') AND name = 'Color')
-                BEGIN
-                    ALTER TABLE [dbo].[Zones] ADD [Color] NVARCHAR(20) NULL;
-                    PRINT 'Added Color to Zones';
-                END
-            END
-        `, { type: QueryTypes.RAW });
-
-        // Make Students.DepartmentID, ProgramID, SemesterID, BatchYear nullable
-        // (required so students can be auto-created from seating import without academic setup)
-        await sequelize.query(`
-            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Students' AND TABLE_SCHEMA = 'dbo')
-            BEGIN
-                -- Drop FK constraints referencing nullable columns before altering them (MSSQL requirement)
-                DECLARE @sql NVARCHAR(MAX) = '';
-                SELECT @sql += 'ALTER TABLE [dbo].[Students] DROP CONSTRAINT ' + fk.name + '; '
-                FROM sys.foreign_keys fk
-                INNER JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id
-                INNER JOIN sys.columns c ON fkc.parent_object_id = c.object_id AND fkc.parent_column_id = c.column_id
-                WHERE fk.parent_object_id = OBJECT_ID(N'[dbo].[Students]')
-                  AND c.name IN ('DepartmentID','ProgramID','SemesterID')
-                  AND c.is_nullable = 0;
-                IF LEN(@sql) > 0 EXEC sp_executesql @sql;
-
-                ALTER TABLE [dbo].[Students] ALTER COLUMN [DepartmentID] INT NULL;
-                ALTER TABLE [dbo].[Students] ALTER COLUMN [ProgramID] INT NULL;
-                ALTER TABLE [dbo].[Students] ALTER COLUMN [SemesterID] INT NULL;
-                ALTER TABLE [dbo].[Students] ALTER COLUMN [BatchYear] INT NULL;
-                PRINT 'Made Students DepartmentID/ProgramID/SemesterID/BatchYear nullable';
+                CREATE TABLE [dbo].[NotificationRecipients] (
+                    [RecipientID] INT IDENTITY(1,1) PRIMARY KEY,
+                    [NotificationID] INT NOT NULL,
+                    [UserID] INT NOT NULL,
+                    [IsRead] BIT NOT NULL DEFAULT 0,
+                    [ReadAt] DATETIME2 NULL,
+                    CONSTRAINT [FK_NotificationRecipients_Notifications] FOREIGN KEY ([NotificationID]) REFERENCES [Notifications]([NotificationID]) ON DELETE CASCADE,
+                    CONSTRAINT [FK_NotificationRecipients_Users] FOREIGN KEY ([UserID]) REFERENCES [Users]([UserID]) ON DELETE CASCADE
+                );
+                PRINT 'Created NotificationRecipients table';
+                
+                -- Create Indexes for performance
+                CREATE INDEX [IX_NotificationRecipients_UserID_IsRead] ON [dbo].[NotificationRecipients] ([UserID], [IsRead]);
+                CREATE UNIQUE INDEX [UX_NotificationRecipients_Notification_User] ON [dbo].[NotificationRecipients] ([NotificationID], [UserID]);
             END
         `, { type: QueryTypes.RAW });
 

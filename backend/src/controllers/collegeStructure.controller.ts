@@ -304,11 +304,17 @@ export const updateRoom = async (req: Request, res: Response) => {
         const room = await Room.findByPk(id);
         if (!room) return res.status(404).json({ message: "Room not found" });
 
+        // Coerce numeric fields to avoid false-positive layout-change detection
+        // (HTTP body delivers strings; Sequelize model stores numbers)
+        const newTotalRows     = TotalRows     !== undefined ? Number(TotalRows)     : undefined;
+        const newBenchesPerRow = BenchesPerRow !== undefined ? Number(BenchesPerRow) : undefined;
+        const newSeatsPerBench = SeatsPerBench !== undefined ? Number(SeatsPerBench) : undefined;
+
         // ... Layout check ...
         const isPhysicalLayoutChange = (
-            (TotalRows !== undefined && TotalRows !== room.TotalRows) ||
-            (BenchesPerRow !== undefined && BenchesPerRow !== room.BenchesPerRow) ||
-            (SeatsPerBench !== undefined && SeatsPerBench !== room.SeatsPerBench)
+            (newTotalRows     !== undefined && newTotalRows     !== Number(room.TotalRows))     ||
+            (newBenchesPerRow !== undefined && newBenchesPerRow !== Number(room.BenchesPerRow)) ||
+            (newSeatsPerBench !== undefined && newSeatsPerBench !== Number(room.SeatsPerBench))
         );
 
         const isLogicalLayoutChange = (BenchMode !== undefined && BenchMode !== room.BenchMode);
@@ -354,9 +360,9 @@ export const updateRoom = async (req: Request, res: Response) => {
 
         let shouldRegenerateSeats = false;
         if (isPhysicalLayoutChange) {
-            room.TotalRows = TotalRows;
-            room.BenchesPerRow = BenchesPerRow;
-            room.SeatsPerBench = SeatsPerBench;
+            room.TotalRows = newTotalRows!;
+            room.BenchesPerRow = newBenchesPerRow!;
+            room.SeatsPerBench = newSeatsPerBench!;
             shouldRegenerateSeats = true;
         }
 
