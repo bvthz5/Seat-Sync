@@ -14,8 +14,10 @@ export default defineConfig({
   },
   server: {
     hmr: {
-      timeout: 30000,
+      timeout: 60000,
+      protocol: 'ws',
     },
+    middlewareMode: false,
   },
   build: {
     // heroui (~620KB), pdf-vendor (~624KB) are inherently large third-party libs

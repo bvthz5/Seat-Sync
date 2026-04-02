@@ -93,6 +93,7 @@ const Dashboard: React.FC = () => {
                             classNames={{
                                 trigger: "bg-white border-slate-200 rounded-lg h-9 text-sm",
                                 value: "text-slate-700 text-sm",
+                                popoverContent: "!aria-hidden",
                             }}
                             selectedKeys={selectedSeries ? [selectedSeries.toString()] : []}
                             onChange={(e) => setSelectedSeries(Number(e.target.value))}

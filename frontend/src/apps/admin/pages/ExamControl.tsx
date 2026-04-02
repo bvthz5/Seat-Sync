@@ -203,7 +203,7 @@ const ExamControl: React.FC = () => {
                                 </DropdownTrigger>
                                 <DropdownMenu
                                     aria-label="Select Exam"
-                                    className="max-h-80 overflow-y-auto"
+                                    className="max-h-80 overflow-y-auto bg-white border border-slate-200 shadow-xl rounded-xl p-1"
                                     onAction={(key) => {
                                         const selected = exams.find(e => e.ExamID === Number(key));
                                         if (selected) handleExamSelect(selected);

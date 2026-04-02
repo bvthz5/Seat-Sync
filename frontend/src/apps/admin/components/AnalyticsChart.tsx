@@ -28,25 +28,37 @@ const CustomTooltip = ({ active, payload }: any) => {
 };
 
 export const AnalyticsChart: React.FC = () => {
-    const [mounted, setMounted] = useState(false);
-    React.useEffect(() => { setMounted(true); }, []);
-    if (!mounted) return <div className="animate-pulse bg-slate-100 rounded-xl h-[280px] w-full" />;
+    const containerRef = React.useRef<HTMLDivElement>(null);
+    const [containerWidth, setContainerWidth] = useState(0);
+    
+    React.useEffect(() => {
+        // Use requestAnimationFrame to defer measurement and avoid blocking message handlers
+        const rafId = requestAnimationFrame(() => {
+            if (containerRef.current) {
+                const width = containerRef.current.offsetWidth;
+                setContainerWidth(width > 0 ? width : 400);
+            }
+        });
+        return () => cancelAnimationFrame(rafId);
+    }, []);
 
     return (
         <div className="space-y-6">
             <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Department Load</p>
-                <div className="h-[130px] w-full">
-                    <ResponsiveContainer width="99%" height="100%" minWidth={1} minHeight={1}>
-                        <BarChart data={barData} layout="vertical" margin={{ top: 0, right: 20, left: -15, bottom: 0 }}>
-                            <XAxis type="number" hide />
-                            <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fontWeight: 600, fill: '#94a3b8' }} width={45} axisLine={false} tickLine={false} />
-                            <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
-                            <Bar dataKey="value" radius={[0, 5, 5, 0]} barSize={10}>
-                                {barData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                            </Bar>
-                        </BarChart>
-                    </ResponsiveContainer>
+                <div ref={containerRef} className="h-[130px] w-full" style={{ minHeight: '130px', minWidth: '300px' }}>
+                    {containerWidth > 0 && (
+                        <ResponsiveContainer width={containerWidth} height={130}>
+                            <BarChart data={barData} layout="vertical" margin={{ top: 0, right: 20, left: -15, bottom: 0 }}>
+                                <XAxis type="number" hide />
+                                <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fontWeight: 600, fill: '#94a3b8' }} width={45} axisLine={false} tickLine={false} />
+                                <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
+                                <Bar dataKey="value" radius={[0, 5, 5, 0]} barSize={10}>
+                                    {barData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    )}
                 </div>
             </div>
             <div>

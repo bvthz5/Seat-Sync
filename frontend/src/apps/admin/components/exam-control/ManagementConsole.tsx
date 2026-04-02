@@ -68,57 +68,71 @@ export const ManagementConsole: React.FC<ManagementConsoleProps> = ({ exam, allE
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
             {/* Header / Context Panel */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 relative overflow-hidden">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 relative overflow-visible z-40">
                 <div className="absolute top-0 right-0 w-64 h-full bg-gradient-to-l from-indigo-50/50 to-transparent pointer-events-none" />
 
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative z-10">
-                    <div>
+                    <div className="flex-1 min-w-0">
                         {/* Dropdown for Exam Selection */}
                         <Dropdown>
                             <DropdownTrigger>
                                 <Button
                                     variant="light"
-                                    className="text-2xl font-black text-slate-800 p-0 h-auto min-w-0 justify-start mb-1 hover:bg-transparent"
-                                    endContent={<ChevronDown className="w-5 h-5 text-slate-400" />}
+                                    className="text-2xl font-black text-slate-800 p-0 h-auto min-w-0 justify-start mb-1 hover:bg-transparent truncate"
+                                    endContent={<ChevronDown className="w-5 h-5 text-slate-400 shrink-0" />}
                                 >
                                     {detail.ExamName}
                                 </Button>
                             </DropdownTrigger>
                             <DropdownMenu
                                 aria-label="Select Exam"
-                                className="max-h-60 overflow-y-auto"
+                                variant="flat"
+                                className="max-h-80 overflow-y-auto bg-white shadow-2xl shadow-black/10 rounded-2xl border border-slate-100 p-2 z-[9999]"
+                                classNames={{
+                                    base: "min-w-xs",
+                                }}
+                                itemClasses={{
+                                    base: "data-[hover=true]:bg-slate-50 rounded-xl",
+                                }}
                                 onAction={(key) => {
                                     const selected = allExams.find(e => e.ExamID === Number(key));
                                     if (selected) onSelectExam(selected);
                                 }}
                             >
                                 {allExams.map(e => (
-                                    <DropdownItem key={e.ExamID} description={e.Session}>
-                                        {e.ExamName}
+                                    <DropdownItem
+                                        key={e.ExamID}
+                                        description={e.Session}
+                                        className="py-2"
+                                        startContent={
+                                            <div className={`w-2 h-2 rounded-full ${e.Status === 'Published' ? 'bg-green-500' : e.Status === 'In Progress' ? 'bg-blue-500' : 'bg-slate-300'}`} />
+                                        }
+                                    >
+                                        <span className="font-semibold text-slate-800">{e.ExamName}</span>
                                     </DropdownItem>
                                 ))}
                             </DropdownMenu>
                         </Dropdown>
 
-                        <div className="flex items-center gap-3 text-sm text-slate-500 font-medium">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 text-sm text-slate-500 font-medium mt-2">
                             <span className="flex items-center gap-1">
-                                <Clock className="w-4 h-4" />
+                                <Clock className="w-4 h-4 shrink-0" />
                                 {format(new Date(detail.ExamDate), 'EEE, dd MMM yyyy')} • {detail.Session}
                             </span>
-                            <span className="w-1 h-1 bg-slate-300 rounded-full" />
+                            <span className="hidden sm:block w-1 h-1 bg-slate-300 rounded-full" />
                             <span className="flex items-center gap-1">
-                                <Users className="w-4 h-4" />
+                                <Users className="w-4 h-4 shrink-0" />
                                 {metrics.studentsAllocated} Candidates
                             </span>
-                            <span className="w-1 h-1 bg-slate-300 rounded-full" />
+                            <span className="hidden sm:block w-1 h-1 bg-slate-300 rounded-full" />
                             <span className="flex items-center gap-1">
-                                <LayoutGrid className="w-4 h-4" />
+                                <LayoutGrid className="w-4 h-4 shrink-0" />
                                 {metrics.roomsAllocated} Rooms
                             </span>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 shrink-0">
                         <div className="text-right">
                             <div className="text-xs uppercase tracking-wider text-slate-400 font-bold mb-1">Status</div>
                             <Badge
@@ -131,7 +145,7 @@ export const ManagementConsole: React.FC<ManagementConsoleProps> = ({ exam, allE
                                 placement="top-right"
                             >
                                 <div className={`
-                                    px-4 py-1.5 rounded-lg font-bold text-sm border
+                                    px-4 py-1.5 rounded-lg font-bold text-sm border whitespace-nowrap
                                     ${detail.Status === ExamStatus.PUBLISHED ? 'bg-green-50 text-green-700 border-green-200' : ''}
                                     ${detail.Status === ExamStatus.IN_PROGRESS ? 'bg-blue-50 text-blue-700 border-blue-200' : ''}
                                     ${detail.Status === ExamStatus.DRAFT ? 'bg-amber-50 text-amber-700 border-amber-200' : ''}
@@ -145,10 +159,16 @@ export const ManagementConsole: React.FC<ManagementConsoleProps> = ({ exam, allE
 
                         {/* Status Indicators */}
                         <div className="flex gap-2">
-                            <div className={`p-2 rounded-lg border ${metrics.seatingGenerated ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-200'}`} title="Seating Generated">
+                            <div
+                                className={`p-2.5 rounded-lg border transition-colors ${metrics.seatingGenerated ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-200'}`}
+                                title={`Seating ${metrics.seatingGenerated ? 'Generated' : 'Not Generated'}`}
+                            >
                                 <Armchair className={`w-5 h-5 ${metrics.seatingGenerated ? 'text-green-600' : 'text-slate-400'}`} />
                             </div>
-                            <div className={`p-2 rounded-lg border ${metrics.attendanceLocked ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'}`} title="Attendance Locked">
+                            <div
+                                className={`p-2.5 rounded-lg border transition-colors ${metrics.attendanceLocked ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'}`}
+                                title={`Attendance ${metrics.attendanceLocked ? 'Locked' : 'Open'}`}
+                            >
                                 <Lock className={`w-5 h-5 ${metrics.attendanceLocked ? 'text-red-600' : 'text-slate-400'}`} />
                             </div>
                         </div>
@@ -157,102 +177,240 @@ export const ManagementConsole: React.FC<ManagementConsoleProps> = ({ exam, allE
             </div>
 
             {/* Section 1: Lifecycle Control */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-                        <History className="w-5 h-5 text-indigo-500" />
-                        Lifecycle Pipeline
-                    </h3>
-                    <span className="text-xs font-mono text-slate-400">STATE_MACHINE: ENFORCED</span>
+            <div className="bg-gradient-to-br from-white to-slate-50/30 rounded-2xl shadow-sm border border-slate-200 p-8 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-l from-indigo-50/20 to-transparent rounded-full -mr-32 -mt-32 pointer-events-none" />
+
+                <div className="relative z-10">
+                    <div className="flex justify-between items-center mb-8">
+                        <div>
+                            <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2 mb-1">
+                                <History className="w-5 h-5 text-indigo-500" />
+                                Lifecycle Pipeline
+                            </h3>
+                            <p className="text-xs text-slate-400 font-medium">Enforced state machine with audit trail</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                            <span className="text-xs font-mono text-slate-500 bg-slate-100 px-3 py-1 rounded-full">STATE_MACHINE: ENFORCED</span>
+                            <span className="text-[10px] text-slate-400">Current: <strong className="text-indigo-600">{detail.Status}</strong></span>
+                        </div>
+                    </div>
+                    <LifecycleTimeline
+                        currentStatus={detail.Status}
+                        examId={detail.ExamID}
+                        examName={detail.ExamName}
+                        onUpdateStatus={handleStatusUpdate}
+                    />
                 </div>
-                <LifecycleTimeline
-                    currentStatus={detail.Status}
-                    examId={detail.ExamID}
-                    examName={detail.ExamName}
-                    onUpdateStatus={handleStatusUpdate}
-                />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Section 2: Operational Controls */}
                 <div className="lg:col-span-2 space-y-6">
-                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-full">
-                        <h3 className="font-bold text-lg text-slate-800 mb-6 flex items-center gap-2">
-                            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                            Operational Controls
-                        </h3>
+                    <div className="bg-gradient-to-br from-white to-slate-50/30 rounded-2xl shadow-sm border border-slate-200 p-8 relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-72 h-72 bg-gradient-to-r from-emerald-50/20 to-transparent rounded-full -ml-32 -mt-32 pointer-events-none" />
 
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                            {/* Dynamic Actions based on Status */}
-                            {detail.Status === ExamStatus.DRAFT && (
-                                <>
-                                    <Button color="primary" variant="flat" startContent={<FileEdit className="w-4 h-4" />} onPress={() => handleAction('Edit Exam')}>Edit Exam</Button>
-                                    <Button color="secondary" variant="flat" startContent={<Armchair className="w-4 h-4" />} onPress={() => handleAction('Generate Seating')}>Generate Seating</Button>
-                                    <Button color="danger" variant="flat" startContent={<Trash2 className="w-4 h-4" />} onPress={() => handleAction('Delete Exam')}>Delete Exam</Button>
-                                </>
-                            )}
+                        <div className="relative z-10">
+                            <div className="flex items-center gap-2 mb-8">
+                                <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-lg text-slate-800">Operational Controls</h3>
+                                    <p className="text-xs text-slate-400">State-specific exam management actions</p>
+                                </div>
+                            </div>
 
-                            {detail.Status === ExamStatus.READY && (
-                                <>
-                                    <Button className="bg-green-600 text-white shadow-lg shadow-green-200" startContent={<Eye className="w-4 h-4" />} onPress={() => handleStatusUpdate(ExamStatus.PUBLISHED, 'Manual Publish')}>Publish Exam</Button>
-                                    <Button color="primary" variant="flat" startContent={<Users className="w-4 h-4" />} onPress={() => handleAction('Invigilators')}>Modify Invigilators</Button>
-                                    <Button color="secondary" variant="flat" startContent={<LayoutGrid className="w-4 h-4" />} onPress={() => handleAction('Preview')}>Preview Seating</Button>
-                                </>
-                            )}
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                {/* Dynamic Actions based on Status */}
+                                {detail.Status === ExamStatus.DRAFT && (
+                                    <>
+                                        <Button
+                                            color="primary"
+                                            variant="shadow"
+                                            className="shadow-indigo-100"
+                                            startContent={<FileEdit className="w-4 h-4" />}
+                                            onPress={() => handleAction('Edit Exam')}
+                                        >
+                                            Edit Exam
+                                        </Button>
+                                        <Button
+                                            color="secondary"
+                                            variant="flat"
+                                            startContent={<Armchair className="w-4 h-4" />}
+                                            onPress={() => handleAction('Generate Seating')}
+                                        >
+                                            Generate Seating
+                                        </Button>
+                                        <Button
+                                            color="danger"
+                                            variant="flat"
+                                            startContent={<Trash2 className="w-4 h-4" />}
+                                            onPress={() => handleAction('Delete Exam')}
+                                        >
+                                            Delete Exam
+                                        </Button>
+                                    </>
+                                )}
 
-                            {detail.Status === ExamStatus.PUBLISHED && (
-                                <>
-                                    <Button color="warning" variant="flat" startContent={<EyeOff className="w-4 h-4" />} onPress={() => handleStatusUpdate(ExamStatus.READY, 'Unpublish')}>Hide from Students</Button>
-                                    <Button color="danger" variant="flat" startContent={<Lock className="w-4 h-4" />} onPress={() => handleAction('Lock Editing')}>Lock Editing</Button>
-                                    <Button color="primary" variant="flat" startContent={<Armchair className="w-4 h-4" />} onPress={() => handleAction('Freeze')}>Freeze Seating</Button>
-                                </>
-                            )}
+                                {detail.Status === ExamStatus.READY && (
+                                    <>
+                                        <Button
+                                            className="bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg shadow-green-200"
+                                            startContent={<Eye className="w-4 h-4" />}
+                                            onPress={() => handleStatusUpdate(ExamStatus.PUBLISHED, 'Manual Publish')}
+                                        >
+                                            Publish Exam
+                                        </Button>
+                                        <Button
+                                            color="primary"
+                                            variant="flat"
+                                            startContent={<Users className="w-4 h-4" />}
+                                            onPress={() => handleAction('Invigilators')}
+                                        >
+                                            Manage Invigilators
+                                        </Button>
+                                        <Button
+                                            color="secondary"
+                                            variant="flat"
+                                            startContent={<LayoutGrid className="w-4 h-4" />}
+                                            onPress={() => handleAction('Preview')}
+                                        >
+                                            Preview Seating
+                                        </Button>
+                                    </>
+                                )}
 
-                            {detail.Status === ExamStatus.IN_PROGRESS && (
-                                <>
-                                    <Button color="primary" variant="shadow" startContent={<Clock className="w-4 h-4" />} onPress={() => handleAction('Extend Time')}>Extend Time</Button>
-                                    <Button color="warning" variant="flat" startContent={<Mic2 className="w-4 h-4" />} onPress={() => handleAction('Broadcast')}>Emergency Broadcast</Button>
-                                    <Button color="danger" variant="flat" startContent={<Lock className="w-4 h-4" />} onPress={() => ExamControlService.lockAttendance(exam.ExamID)}>Lock Attendance</Button>
-                                </>
-                            )}
+                                {detail.Status === ExamStatus.PUBLISHED && (
+                                    <>
+                                        <Button
+                                            color="warning"
+                                            variant="flat"
+                                            startContent={<EyeOff className="w-4 h-4" />}
+                                            onPress={() => handleStatusUpdate(ExamStatus.READY, 'Unpublish')}
+                                        >
+                                            Hide from Students
+                                        </Button>
+                                        <Button
+                                            color="danger"
+                                            variant="flat"
+                                            startContent={<Lock className="w-4 h-4" />}
+                                            onPress={() => handleAction('Lock Editing')}
+                                        >
+                                            Lock Editing
+                                        </Button>
+                                        <Button
+                                            color="primary"
+                                            variant="flat"
+                                            startContent={<Armchair className="w-4 h-4" />}
+                                            onPress={() => handleAction('Freeze')}
+                                        >
+                                            Freeze Seating
+                                        </Button>
+                                    </>
+                                )}
 
-                            {detail.Status === ExamStatus.COMPLETED && (
-                                <>
-                                    <Button color="success" variant="flat" startContent={<CheckCircle2 className="w-4 h-4" />} onPress={() => handleAction('Finalize')}>Finalize Report</Button>
-                                    <Button color="default" variant="flat" startContent={<Archive className="w-4 h-4" />} onPress={() => handleStatusUpdate(ExamStatus.ARCHIVED, 'Archive')}>Archive Exam</Button>
-                                    <Button color="danger" variant="light" startContent={<History className="w-4 h-4" />} onPress={() => handleStatusUpdate(ExamStatus.IN_PROGRESS, 'Reopen')}>Reopen (Root)</Button>
-                                </>
-                            )}
+                                {detail.Status === ExamStatus.IN_PROGRESS && (
+                                    <>
+                                        <Button
+                                            color="primary"
+                                            variant="shadow"
+                                            className="shadow-indigo-100"
+                                            startContent={<Clock className="w-4 h-4" />}
+                                            onPress={() => handleAction('Extend Time')}
+                                        >
+                                            Extend Time
+                                        </Button>
+                                        <Button
+                                            color="warning"
+                                            variant="flat"
+                                            startContent={<Mic2 className="w-4 h-4" />}
+                                            onPress={() => handleAction('Broadcast')}
+                                        >
+                                            Emergency Broadcast
+                                        </Button>
+                                        <Button
+                                            color="danger"
+                                            variant="flat"
+                                            startContent={<Lock className="w-4 h-4" />}
+                                            onPress={() => ExamControlService.lockAttendance(exam.ExamID)}
+                                        >
+                                            Lock Attendance
+                                        </Button>
+                                    </>
+                                )}
 
-                            {/* Always show if no actions match just to be safe? No, specific actions only. */}
-                            {/* Fallback for safety */}
-                            {Object.keys(ExamStatus).length === 0 && <div className="text-slate-400 text-sm col-span-3">No actions available for this state.</div>}
+                                {detail.Status === ExamStatus.COMPLETED && (
+                                    <>
+                                        <Button
+                                            className="bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-lg shadow-emerald-200"
+                                            startContent={<CheckCircle2 className="w-4 h-4" />}
+                                            onPress={() => handleAction('Finalize')}
+                                        >
+                                            Finalize Report
+                                        </Button>
+                                        <Button
+                                            color="default"
+                                            variant="flat"
+                                            startContent={<Archive className="w-4 h-4" />}
+                                            onPress={() => handleStatusUpdate(ExamStatus.ARCHIVED, 'Archive')}
+                                        >
+                                            Archive Exam
+                                        </Button>
+                                        <Button
+                                            color="danger"
+                                            variant="light"
+                                            startContent={<History className="w-4 h-4" />}
+                                            onPress={() => handleStatusUpdate(ExamStatus.IN_PROGRESS, 'Reopen')}
+                                        >
+                                            Reopen (Root)
+                                        </Button>
+                                    </>
+                                )}
+
+                                {detail.Status === ExamStatus.ARCHIVED && (
+                                    <>
+                                        <div className="col-span-full text-center py-8">
+                                            <Archive className="w-16 h-16 text-slate-300 mx-auto mb-3" />
+                                            <p className="text-slate-500 font-medium">Exam is archived. No operations available.</p>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 {/* Section 4: Mini Audit Timeline */}
                 <div className="space-y-6">
-                    <Card className="shadow-sm border border-slate-200">
+                    <Card className="shadow-sm border border-slate-200 bg-gradient-to-br from-white to-slate-50/30">
                         <CardBody className="p-6">
-                            <h4 className="font-bold text-slate-800 mb-4 flex justify-between items-center">
-                                <span>Recent Activity</span>
-                                <Button size="sm" variant="light" color="primary" onPress={() => handleAction('View Full Audit')} className="text-xs h-6">View Full →</Button>
-                            </h4>
+                            <div className="flex justify-between items-center mb-6">
+                                <div>
+                                    <h4 className="font-bold text-slate-800">Recent Activity</h4>
+                                    <p className="text-xs text-slate-400 mt-1">Last 5 audit log entries</p>
+                                </div>
+                                <Button size="sm" variant="light" color="primary" onPress={() => handleAction('View Full Audit')} className="text-xs h-7 font-medium">
+                                    View All →
+                                </Button>
+                            </div>
 
                             <div className="space-y-4 relative">
-                                <div className="absolute top-2 bottom-2 left-1.5 w-0.5 bg-slate-100" />
+                                <div className="absolute top-2 bottom-2 left-1.5 w-0.5 bg-gradient-to-b from-indigo-200 to-slate-100" />
 
                                 {logs.length === 0 ? (
-                                    <div className="text-xs text-slate-400 pl-4">No recent activity</div>
-                                ) : logs.map((log) => (
-                                    <div key={log.LogID} className="relative pl-6">
-                                        <div className="absolute left-0 top-1.5 w-3 h-3 bg-white border-2 border-indigo-400 rounded-full z-10" />
-                                        <p className="text-sm font-medium text-slate-700">{log.Action.replace(/_/g, ' ')}</p>
+                                    <div className="text-center py-8 text-slate-400">
+                                        <History className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                                        <p className="text-xs">No recent activity</p>
+                                    </div>
+                                ) : logs.map((log, idx) => (
+                                    <div key={log.LogID} className="relative pl-6 group">
+                                        <div className={`absolute left-0 top-1.5 w-3 h-3 rounded-full z-10 transition-all group-hover:scale-125 ${idx === 0 ? 'bg-indigo-500 ring-2 ring-indigo-200' : 'bg-slate-300 border border-slate-400'
+                                            }`} />
+                                        <p className="text-sm font-medium text-slate-700 group-hover:text-indigo-600 transition-colors">{log.Action.replace(/_/g, ' ')}</p>
                                         <div className="flex justify-between items-center mt-1">
                                             <span className="text-xs text-slate-500">{log.User?.Username || 'System'}</span>
                                             <span className="text-[10px] text-slate-400 font-mono">
-                                                {format(new Date(log.Timestamp), 'HH:mm')}
+                                                {format(new Date(log.Timestamp), 'HH:mm:ss')}
                                             </span>
                                         </div>
                                     </div>
@@ -263,15 +421,17 @@ export const ManagementConsole: React.FC<ManagementConsoleProps> = ({ exam, allE
 
                     {/* Metrics Cards (Small) */}
                     <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                            <div className="text-xs text-slate-400 font-bold uppercase">Utilization</div>
-                            <div className="text-xl font-black text-slate-700 mt-1">
+                        <div className="bg-gradient-to-br from-indigo-50 to-indigo-50/50 p-4 rounded-xl border border-indigo-100 hover:shadow-md transition-shadow">
+                            <div className="text-xs text-indigo-600 font-bold uppercase tracking-wide">Utilization</div>
+                            <div className="text-2xl font-black text-indigo-700 mt-2">
                                 {metrics.roomsAllocated > 0 ? Math.round(metrics.studentsAllocated / (metrics.roomsAllocated * 30) * 100) : 0}%
                             </div>
+                            <p className="text-[10px] text-indigo-600 mt-1 opacity-70">{metrics.studentsAllocated} of {(metrics.roomsAllocated * 30).toFixed(0)} seats</p>
                         </div>
-                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                            <div className="text-xs text-slate-400 font-bold uppercase">Conflicts</div>
-                            <div className="text-xl font-black text-emerald-600 mt-1">0</div>
+                        <div className="bg-gradient-to-br from-emerald-50 to-emerald-50/50 p-4 rounded-xl border border-emerald-100 hover:shadow-md transition-shadow">
+                            <div className="text-xs text-emerald-600 font-bold uppercase tracking-wide">Conflicts</div>
+                            <div className="text-2xl font-black text-emerald-700 mt-2">0</div>
+                            <p className="text-[10px] text-emerald-600 mt-1 opacity-70">No allocation conflicts</p>
                         </div>
                     </div>
                 </div>
