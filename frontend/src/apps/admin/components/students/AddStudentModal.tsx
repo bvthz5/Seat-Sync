@@ -25,10 +25,29 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
     onSuccess,
 }) => {
     const [loading, setLoading] = useState(false);
+    const [departments, setDepartments] = useState<any[]>([]);
+    const [programs, setPrograms] = useState<any[]>([]);
+    const [semesters, setSemesters] = useState<any[]>([]);
+
     const [formData, setFormData] = useState({
         RegisterNumber: "",
         FullName: "",
+        DepartmentID: "",
+        ProgramID: "",
+        SemesterID: "",
     });
+
+    React.useEffect(() => {
+        if (isOpen) {
+            // Use the dedicated meta endpoint – works without root-admin auth
+            api.get('/students/meta/create-options').then(res => {
+                const d = res.data;
+                setDepartments(d.departments || []);
+                setPrograms(d.programs || []);
+                setSemesters(d.semesters || []);
+            }).catch(err => console.error('Failed to load create options', err));
+        }
+    }, [isOpen]);
 
     const handleChange = (field: string, value: string) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
@@ -45,11 +64,14 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
             await api.post("/students", {
                 RegisterNumber: formData.RegisterNumber.trim(),
                 FullName: formData.FullName.trim(),
+                DepartmentID: formData.DepartmentID || undefined,
+                ProgramID: formData.ProgramID || undefined,
+                SemesterID: formData.SemesterID || undefined,
             });
             toast.success("Student added successfully");
             onSuccess();
             onClose();
-            setFormData({ RegisterNumber: "", FullName: "" });
+            setFormData({ RegisterNumber: "", FullName: "", DepartmentID: "", ProgramID: "", SemesterID: "" });
         } catch (error: any) {
             console.error(error);
             toast.error(error.response?.data?.message || "Failed to add student");
@@ -138,6 +160,53 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                                     }}
                                     variant="bordered"
                                 />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-semibold text-gray-700 ml-1">Department (Optional)</label>
+                                    <select
+                                        value={formData.DepartmentID}
+                                        onChange={(e) => handleChange("DepartmentID", e.target.value)}
+                                        className="w-full h-12 bg-gray-50/80 border border-gray-200 rounded-xl text-sm px-3 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                    >
+                                        <option value="">Auto-Detect</option>
+                                        {departments.map(dept => (
+                                            <option key={dept.DepartmentID} value={dept.DepartmentID}>{dept.DepartmentCode}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-semibold text-gray-700 ml-1">Program (Optional)</label>
+                                    <select
+                                        value={formData.ProgramID}
+                                        onChange={(e) => handleChange("ProgramID", e.target.value)}
+                                        className="w-full h-12 bg-gray-50/80 border border-gray-200 rounded-xl text-sm px-3 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                    >
+                                        <option value="">Auto-Detect</option>
+                                        {programs
+                                            .filter(prog => !formData.DepartmentID || prog.DepartmentID?.toString() === formData.DepartmentID.toString())
+                                            .map(prog => (
+                                                <option key={prog.ProgramID} value={prog.ProgramID}>{prog.ProgramCode}</option>
+                                            ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-semibold text-gray-700 ml-1">Semester (Optional)</label>
+                                <select
+                                    value={formData.SemesterID}
+                                    onChange={(e) => handleChange("SemesterID", e.target.value)}
+                                    className="w-full h-12 bg-gray-50/80 border border-gray-200 rounded-xl text-sm px-3 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                                >
+                                    <option value="">Auto-Detect</option>
+                                    {semesters
+                                        .filter(sem => !formData.ProgramID || sem.ProgramID?.toString() === formData.ProgramID.toString())
+                                        .map(sem => (
+                                            <option key={sem.SemesterID} value={sem.SemesterID}>{sem.SemesterName} (Seq: {sem.SemesterNumber})</option>
+                                        ))}
+                                </select>
                             </div>
                         </div>
 

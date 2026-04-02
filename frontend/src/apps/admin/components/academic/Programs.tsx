@@ -31,7 +31,14 @@ export const Programs: React.FC<ProgramsProps> = ({ academicYearId }) => {
     const [loading, setLoading] = useState(false);
     const [importing, setImporting] = useState(false);
     const [filterDept, setFilterDept] = useState<string>('');
-    const { isOpen, onOpen, onOpenChange } = useDisclosure();
+    
+    // Import Modal State
+    const { isOpen: isImportOpen, onOpen: onImportOpen, onOpenChange: onImportOpenChange } = useDisclosure();
+    
+    // Create Mode State
+    const { isOpen: isCreateOpen, onOpen: onCreateOpen, onOpenChange: onCreateOpenChange } = useDisclosure();
+    const [formData, setFormData] = useState({ ProgramCode: '', ProgramName: '', DepartmentID: '', DurationYears: 4 });
+
     const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onOpenChange: onDeleteOpenChange } = useDisclosure();
     const [deleteTarget, setDeleteTarget] = useState<{ type: 'single' | 'all', id?: number }>({ type: 'single' });
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -40,7 +47,8 @@ export const Programs: React.FC<ProgramsProps> = ({ academicYearId }) => {
         try {
             setLoading(true);
             const res = await academicService.getPrograms();
-            setPrograms(res.data || []);
+            // getPrograms returns a flat array directly
+            setPrograms(Array.isArray(res.data) ? res.data : (res.data?.data || []));
         } catch (error) {
             console.error(error);
             toast.error("Failed to load programs");
@@ -52,7 +60,8 @@ export const Programs: React.FC<ProgramsProps> = ({ academicYearId }) => {
     const fetchDepartments = async () => {
         try {
             const res = await academicService.getDepartments();
-            setDepartments(res.data || []);
+            // getDepartments returns a flat array directly
+            setDepartments(Array.isArray(res.data) ? res.data : (res.data?.data || []));
         } catch (error) {
             console.error(error);
         }
@@ -75,7 +84,7 @@ export const Programs: React.FC<ProgramsProps> = ({ academicYearId }) => {
                 toast.error(`${result.errorCount} errors occurred`);
             }
             fetchPrograms();
-            onOpenChange(); // Close modal
+            onImportOpenChange(); // Close modal
         } catch (error: any) {
             toast.error(error.response?.data?.message || "Import failed");
         } finally {
@@ -127,6 +136,32 @@ export const Programs: React.FC<ProgramsProps> = ({ academicYearId }) => {
         }
     };
 
+    const handleCreate = async (onClose: () => void) => {
+        if (!academicYearId) {
+            toast.error("Please select an Academic Year first");
+            return;
+        }
+        if (!formData.ProgramCode || !formData.ProgramName || !formData.DepartmentID || !formData.DurationYears) {
+            toast.error("All fields are required");
+            return;
+        }
+
+        try {
+            await academicService.createProgram({
+                ...formData,
+                DepartmentID: Number(formData.DepartmentID),
+                DurationYears: Number(formData.DurationYears),
+                AcademicYearID: academicYearId
+            });
+            toast.success("Program created successfully");
+            fetchPrograms();
+            setFormData({ ProgramCode: '', ProgramName: '', DepartmentID: '', DurationYears: 4 });
+            onClose();
+        } catch (error: any) {
+            toast.error(error.response?.data?.message || "Failed to create program");
+        }
+    };
+
     const filteredPrograms = filterDept
         ? programs.filter(p => p.Department?.DepartmentCode === filterDept)
         : programs;
@@ -154,10 +189,19 @@ export const Programs: React.FC<ProgramsProps> = ({ academicYearId }) => {
                 <Button
                     color="primary"
                     className="font-semibold text-white"
-                    startContent={<Upload size={18} />}
-                    onPress={onOpen}
+                    startContent={<Layers size={18} />}
+                    onPress={onCreateOpen}
                 >
-                    Import Programs
+                    Add Program
+                </Button>
+                <Button
+                    color="secondary"
+                    variant="flat"
+                    className="font-semibold"
+                    startContent={<Upload size={18} />}
+                    onPress={onImportOpen}
+                >
+                    Import CSV
                 </Button>
                 <Button
                     className="bg-red-600 text-white font-semibold hover:bg-red-700"
@@ -266,10 +310,75 @@ export const Programs: React.FC<ProgramsProps> = ({ academicYearId }) => {
                 </Table>
             </div>
 
+            {/* Create Modal */}
+            <Modal isOpen={isCreateOpen} onOpenChange={onCreateOpenChange} backdrop="blur" size="md">
+                <ModalContent>
+                    {(onClose) => (
+                        <>
+                            <ModalHeader className="flex flex-col gap-1">Add New Program</ModalHeader>
+                            <ModalBody>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="text-sm font-medium text-slate-700 block mb-1">Department</label>
+                                        <Select
+                                            placeholder="Select Department"
+                                            selectedKeys={formData.DepartmentID ? [formData.DepartmentID] : []}
+                                            onChange={(e) => setFormData({...formData, DepartmentID: e.target.value})}
+                                            variant="bordered"
+                                        >
+                                            {departments.map(dept => (
+                                                <SelectItem key={dept.DepartmentID.toString()}>
+                                                    {dept.DepartmentCode} - {dept.DepartmentName}
+                                                </SelectItem>
+                                            ))}
+                                        </Select>
+                                    </div>
+                                    <div>
+                                        <label className="text-sm font-medium text-slate-700">Program Code</label>
+                                        <input 
+                                            type="text" 
+                                            value={formData.ProgramCode}
+                                            onChange={(e) => setFormData({...formData, ProgramCode: e.target.value.toUpperCase()})}
+                                            className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                                            placeholder="e.g. BTECH-CS"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-sm font-medium text-slate-700">Program Name</label>
+                                        <input 
+                                            type="text" 
+                                            value={formData.ProgramName}
+                                            onChange={(e) => setFormData({...formData, ProgramName: e.target.value})}
+                                            className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                                            placeholder="e.g. B.Tech Computer Science"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-sm font-medium text-slate-700">Duration (Years)</label>
+                                        <input 
+                                            type="number" 
+                                            min="1" max="10"
+                                            value={formData.DurationYears}
+                                            onChange={(e) => setFormData({...formData, DurationYears: parseInt(e.target.value) || 0})}
+                                            className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                                        />
+                                        <p className="text-xs text-slate-500 mt-1">Semesters are correctly auto-generated as 2 per year.</p>
+                                    </div>
+                                </div>
+                            </ModalBody>
+                            <ModalFooter>
+                                <Button variant="light" onPress={onClose}>Cancel</Button>
+                                <Button color="primary" onPress={() => handleCreate(onClose)}>Create</Button>
+                            </ModalFooter>
+                        </>
+                    )}
+                </ModalContent>
+            </Modal>
+
             {/* Import Modal */}
             <Modal
-                isOpen={isOpen}
-                onOpenChange={onOpenChange}
+                isOpen={isImportOpen}
+                onOpenChange={onImportOpenChange}
                 size="2xl"
                 backdrop="blur"
                 classNames={{

@@ -8,7 +8,7 @@ import { User } from "./User.js";
 interface UserProfileAttributes {
   UserID: number;
   FullName: string;
-  Phone?: string;
+  Phone?: string | null;
 }
 
 export class UserProfile
@@ -16,7 +16,7 @@ export class UserProfile
   implements UserProfileAttributes {
   declare UserID: number;
   declare FullName: string;
-  declare Phone?: string;
+  declare Phone?: string | null;
 }
 
 UserProfile.init(

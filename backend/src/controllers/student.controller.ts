@@ -514,7 +514,7 @@ export const importStudents = async (req: Request, res: Response) => {
 export const createStudent = async (req: Request, res: Response) => {
     const t = await sequelize.transaction();
     try {
-        const { FullName, RegisterNumber } = req.body;
+        const { FullName, RegisterNumber, DepartmentID, ProgramID, SemesterID } = req.body;
 
         // Only Name and Register Number are required
         if (!FullName || !RegisterNumber) {
@@ -531,71 +531,90 @@ export const createStudent = async (req: Request, res: Response) => {
         }
 
         // Smart Parsing — same logic as Excel import
-        const programCache = new Map<string, any>();
-        const deptCache = new Map<string, any>();
+        let targetProgram: any = null;
+        let targetDept: any = null;
+        let targetSemester: any = null;
+        let derivedBatchYear: number | null = null;
+
         const programsAll = await Program.findAll({ transaction: t });
         const deptsAll = await Department.findAll({ transaction: t });
 
-        programsAll.forEach((p: any) => {
-            if (p.ProgramCode) programCache.set(p.ProgramCode.toUpperCase(), p);
-            programCache.set(p.ProgramName.toUpperCase(), p);
-        });
-        deptsAll.forEach((d: any) => {
-            deptCache.set(d.DepartmentCode.toUpperCase(), d);
-            deptCache.set(d.DepartmentName.toUpperCase(), d);
-        });
-
-        const idRegex = /^(L?SJC)(\d{2})([A-Z]+)(\d+)$/i;
-        const match = regNo.match(idRegex);
-
-        let targetProgram: any = null;
-        let targetDept: any = null;
-        let derivedBatchYear: number | null = null;
-
-        if (match) {
-            const yearShort = match[2];
-            const code = match[3];
-
-            if (yearShort && code) {
-                derivedBatchYear = 2000 + parseInt(yearShort, 10);
-                const codeUpper = code.toUpperCase();
-
-                if (programCache.has(codeUpper)) {
-                    targetProgram = programCache.get(codeUpper);
-                    targetDept = deptsAll.find((d: any) => d.DepartmentID === targetProgram.DepartmentID);
-                } else if (deptCache.has(codeUpper)) {
-                    targetDept = deptCache.get(codeUpper);
-                }
-            }
+        if (ProgramID) {
+            targetProgram = programsAll.find((p: any) => p.ProgramID === parseInt(ProgramID));
+        }
+        if (DepartmentID) {
+            targetDept = deptsAll.find((d: any) => d.DepartmentID === parseInt(DepartmentID));
         }
 
-        if (targetProgram && !targetDept) {
-            if (targetProgram.ProgramName.includes('Computer') || targetProgram.ProgramName.includes('MCA')) {
-                targetDept = deptsAll.find((d: any) => d.DepartmentCode === 'MCA' || d.DepartmentCode === 'CSE');
+        if (!targetProgram || !targetDept) {
+            // Smart Parsing — same logic as Excel import
+            const programCache = new Map<string, any>();
+            const deptCache = new Map<string, any>();
+
+            programsAll.forEach((p: any) => {
+                if (p.ProgramCode) programCache.set(p.ProgramCode.toUpperCase(), p);
+                programCache.set(p.ProgramName.toUpperCase(), p);
+            });
+            deptsAll.forEach((d: any) => {
+                deptCache.set(d.DepartmentCode.toUpperCase(), d);
+                deptCache.set(d.DepartmentName.toUpperCase(), d);
+            });
+
+            const idRegex = /^(L?SJC)(\d{2})([A-Z]+)(\d+)$/i;
+            const match = regNo.match(idRegex);
+
+            if (match) {
+                const yearShort = match[2];
+                const code = match[3];
+
+                if (yearShort && code) {
+                    derivedBatchYear = 2000 + parseInt(yearShort, 10);
+                    const codeUpper = code.toUpperCase();
+
+                    if (!targetProgram && programCache.has(codeUpper)) {
+                        targetProgram = programCache.get(codeUpper);
+                    }
+                    if (!targetDept && deptCache.has(codeUpper)) {
+                        targetDept = deptCache.get(codeUpper);
+                    }
+                }
+            }
+
+            if (targetProgram && !targetDept) {
+                // Infer department from program if possible
+                targetDept = deptsAll.find((d: any) => d.DepartmentID === targetProgram.DepartmentID);
+                if (!targetDept && (targetProgram.ProgramName.includes('Computer') || targetProgram.ProgramName.includes('MCA'))) {
+                    targetDept = deptsAll.find((d: any) => d.DepartmentCode === 'MCA' || d.DepartmentCode === 'CSE');
+                }
             }
         }
 
         if (!targetProgram) {
             await t.rollback();
-            return res.status(400).json({ message: `Could not identify Program from Register Number '${regNo}'. Please check the format.` });
+            return res.status(400).json({ message: `Could not identify Program from Register Number '${regNo}'. Please check the format or select explicitly.` });
         }
         if (!targetDept) {
             await t.rollback();
-            return res.status(400).json({ message: `Could not identify Department from Register Number '${regNo}'.` });
+            return res.status(400).json({ message: `Could not identify Department from Register Number '${regNo}'. Please select explicitly.` });
         }
 
-        // Default to Semester 1
-        let targetSemester = await Semester.findOne({
-            where: { ProgramID: targetProgram.ProgramID, SemesterNumber: 1 },
-            transaction: t
-        });
+        // Determine Semester
+        if (SemesterID) {
+            targetSemester = await Semester.findOne({ where: { SemesterID: parseInt(SemesterID) }, transaction: t });
+        }
         if (!targetSemester) {
-            targetSemester = await Semester.create({
-                ProgramID: targetProgram.ProgramID,
-                SemesterNumber: 1,
-                SemesterName: 'S1',
-                IsActive: true
-            }, { transaction: t });
+            targetSemester = await Semester.findOne({
+                where: { ProgramID: targetProgram.ProgramID, SemesterNumber: 1 },
+                transaction: t
+            });
+            if (!targetSemester) {
+                targetSemester = await Semester.create({
+                    ProgramID: targetProgram.ProgramID,
+                    SemesterNumber: 1,
+                    SemesterName: 'S1',
+                    IsActive: true
+                }, { transaction: t });
+            }
         }
 
         // Create minimal User to hold FullName (required by DB schema constraint on UserID)

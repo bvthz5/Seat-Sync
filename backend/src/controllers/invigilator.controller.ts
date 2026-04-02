@@ -1,8 +1,10 @@
 import { Request, Response } from "express";
-import { User, Invigilator, Faculty, InvigilatorAssignment, Exam } from "../models/index.js";
+import { User, Invigilator, Faculty, InvigilatorAssignment, Exam, UserProfile } from "../models/index.js";
 import { Op } from "sequelize";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import { sequelize } from "../config/database.js";
+import { emailService } from "../services/email.service.js";
 
 /**
  * Invigilator Controller
@@ -14,11 +16,7 @@ export const getAllInvigilators = async (req: Request, res: Response) => {
         const faculties = await Faculty.findAll();
         console.log("Fetched Faculties count:", faculties.length);
         if (faculties.length > 0) {
-<<<<<<< Updated upstream
             console.log("Sample Faculty:", faculties[0]?.toJSON());
-=======
-            console.log("Sample Faculty:", faculties[0].toJSON());
->>>>>>> Stashed changes
         }
 
         const today = new Date().toISOString().split('T')[0];
@@ -118,38 +116,76 @@ export const toggleInvigilatorEligibility = async (req: Request, res: Response) 
 };
 
 export const createInvigilator = async (req: Request, res: Response) => {
+    const t = await sequelize.transaction();
     try {
-        const { FacultyID, Name, Department, Designation } = req.body;
+        const { FacultyID, Name, Email, Phone, Department, Designation } = req.body;
 
-        if (!FacultyID || !Name || !Department) {
-            return res.status(400).json({ message: "Staff Code, Name, and Department are required" });
+        if (!FacultyID || !Email || !Name || !Department) {
+            await t.rollback();
+            return res.status(400).json({ message: "Faculty ID, Name, Email, and Department are required" });
         }
 
-        const staffCodeStr = String(FacultyID).trim();
-
-        // Check for duplicate by StaffCode
-        const existing = await Faculty.findOne({ where: { StaffCode: staffCodeStr } });
-        if (existing) {
-            return res.status(409).json({ message: `Staff Code ${staffCodeStr} already exists` });
+        const emailStr = String(Email).trim().toLowerCase();
+        
+        // 1. Check duplicate User
+        const existingUser = await User.findOne({ where: { Email: emailStr }, transaction: t });
+        if (existingUser) {
+            await t.rollback();
+            return res.status(409).json({ message: `Email ${emailStr} is already registered` });
         }
 
+        // 2. Create User
+        const activationToken = crypto.randomBytes(32).toString('hex');
+        const activationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+        const dummyPassword = await bcrypt.hash(crypto.randomBytes(8).toString('hex'), 10);
+
+        const newUser = await User.create({
+            Email: emailStr,
+            PasswordHash: dummyPassword,
+            Role: "invigilator",
+            IsActive: true,
+            IsActivated: false,
+            ActivationToken: activationToken,
+            ActivationExpires: activationExpires
+        }, { transaction: t });
+
+        // 3. Create UserProfile
+        await UserProfile.create({
+            UserID: newUser.UserID,
+            FullName: Name,
+            Phone: Phone || null
+        }, { transaction: t });
+
+        // 4. Create Faculty for legacy assignments
         const faculty = await Faculty.create({
-            StaffCode: staffCodeStr,
-            Name: String(Name).trim(),
-            Department: String(Department).trim(),
-            Designation: Designation ? String(Designation).trim() : "Faculty",
+            StaffCode: String(FacultyID).trim(), 
+            Name: Name,
+            Designation: Designation || "Faculty",
+            Department: Department,
             IsEligible: true,
+        }, { transaction: t });
+
+        // 5. Create actual Invigilator binding
+        await Invigilator.create({
+            UserID: newUser.UserID,
+            IsEligible: true,
+            IsFlagged: false
+        }, { transaction: t });
+
+        await t.commit();
+
+        // 6. Send Activation Email securely
+        emailService.sendInvigilatorActivationEmail(emailStr, Name, activationToken).catch(err => {
+            console.error("Failed sending activation email to", emailStr, err.message);
         });
 
         res.status(201).json({
-            message: "Invigilator added successfully",
+            message: "Invigilator created and activation email sent successfully",
             faculty: faculty.toJSON(),
         });
     } catch (error: any) {
+        await t.rollback();
         console.error("Error creating invigilator:", error);
-        if (error.name === 'SequelizeUniqueConstraintError') {
-            return res.status(409).json({ message: "Staff Code already exists" });
-        }
         res.status(500).json({ message: "Internal server error" });
     }
 };
@@ -234,75 +270,99 @@ export const bulkImportInvigilators = async (req: Request, res: Response) => {
 
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
-            const { FacultyID, Name, Department: deptValue, Designation } = row;
+            const { FacultyID, Name, Email, Department: deptValue, Phone, Designation } = row;
 
             try {
-                // Defensive check - ensure values are strings
-                const deptStr = deptValue ? String(deptValue).trim() : "";
+                const facIdStr = FacultyID ? String(FacultyID).trim() : "";
                 const nameStr = Name ? String(Name).trim() : "";
+                const emailStr = Email ? String(Email).trim().toLowerCase() : "";
+                const deptStr = deptValue ? String(deptValue).trim() : "";
+                const phoneStr = Phone ? String(Phone).trim() : null;
                 const desigStr = Designation ? String(Designation).trim() : "Faculty";
-<<<<<<< Updated upstream
-                const staffCodeStr = FacultyID ? String(FacultyID).trim() : "";
 
-                if (!nameStr || !deptStr || !staffCodeStr) {
-                    skipped.push({ row: i + 2, reason: `Invalid data: Name=${nameStr}, Dept=${deptStr}, StaffCode=${FacultyID}` });
+                if (!facIdStr || !nameStr || !emailStr || !deptStr) {
+                    skipped.push({ row: i + 2, reason: `Missing required fields (FacultyID, Name, Email, or Department)` });
                     continue;
                 }
 
-                // Check for duplicate StaffCode
-                const existing = await Faculty.findOne({ where: { StaffCode: staffCodeStr }, transaction: t });
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(emailStr)) {
+                    skipped.push({ row: i + 2, reason: `Invalid email format: ${emailStr}` });
+                    continue;
+                }
+
+                // Check duplicate
+                const existing = await User.findOne({ where: { Email: emailStr }, transaction: t });
                 if (existing) {
-                    skipped.push({ row: i + 2, reason: `StaffCode ${staffCodeStr} already exists` });
-=======
-                const facultyIDNum = Number(FacultyID);
-
-                if (!nameStr || !deptStr || isNaN(facultyIDNum)) {
-                    skipped.push({ row: i + 2, reason: `Invalid data: Name=${nameStr}, Dept=${deptStr}, ID=${FacultyID}` });
+                    skipped.push({ row: i + 2, reason: `Email ${emailStr} already exists` });
                     continue;
                 }
 
-                // Check for duplicate FacultyID
-                const existing = await Faculty.findByPk(facultyIDNum, { transaction: t });
-                if (existing) {
-                    skipped.push({ row: i + 2, reason: `FacultyID ${facultyIDNum} already exists` });
->>>>>>> Stashed changes
-                    continue;
-                }
+                // Create User
+                const activationToken = crypto.randomBytes(32).toString('hex');
+                const activationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+                const dummyPassword = await bcrypt.hash(crypto.randomBytes(8).toString('hex'), 10);
+
+                const newUser = await User.create({
+                    Email: emailStr,
+                    PasswordHash: dummyPassword,
+                    Role: "invigilator",
+                    IsActive: true,
+                    IsActivated: false,
+                    ActivationToken: activationToken,
+                    ActivationExpires: activationExpires
+                }, { transaction: t });
+
+                await UserProfile.create({
+                    UserID: newUser.UserID,
+                    FullName: nameStr,
+                    Phone: phoneStr || null
+                }, { transaction: t });
 
                 await Faculty.create({
-<<<<<<< Updated upstream
-                    StaffCode: staffCodeStr,
-=======
-                    FacultyID: facultyIDNum,
->>>>>>> Stashed changes
+                    StaffCode: facIdStr,
                     Name: nameStr,
                     Designation: desigStr,
                     Department: deptStr,
                     IsEligible: true,
                 }, { transaction: t });
 
+                await Invigilator.create({
+                    UserID: newUser.UserID,
+                    IsEligible: true,
+                    IsFlagged: false
+                }, { transaction: t });
+
                 created.push(i + 2);
+                
+                // Fire and forget email queue
+                emailService.sendInvigilatorActivationEmail(emailStr, nameStr, activationToken).catch(err => {
+                    console.error("Failed to send bulk email to", emailStr, err.message);
+                });
+
             } catch (rowError: any) {
                 console.error(`Row ${i + 2} failed:`, rowError);
-                skipped.push({ row: i + 2, reason: `Database error: ${rowError.message}` });
+                skipped.push({ row: i + 2, reason: `Error: ${rowError.message}` });
             }
         }
 
         await t.commit();
         res.status(201).json({
             message: `Import complete: ${created.length} created, ${skipped.length} skipped.`,
-            created: created.length,
+            successCount: created.length,
+            failedRows: skipped.length,
+            duplicateEntries: skipped.filter(s => s.reason.includes('already exists')).length,
+            created,
             skipped,
         });
     } catch (error: any) {
         await t.rollback();
         console.error("Error bulk importing invigilators:", error);
-        // Add more detail to the error response
         const message = error.errors ? error.errors.map((e: any) => e.message).join(", ") : error.message;
         res.status(500).json({ message: "Internal server error", detail: message });
     }
 };
-<<<<<<< Updated upstream
+
 /**
  * Clear all faculty records (to be called before a fresh bulk import)
  */
@@ -320,5 +380,183 @@ export const clearAllFaculties = async (req: Request, res: Response) => {
         res.status(500).json({ message: "Internal server error", detail: error.message });
     }
 };
-=======
->>>>>>> Stashed changes
+
+export const activateInvigilator = async (req: Request, res: Response) => {
+    const t = await sequelize.transaction();
+    try {
+        const { token, password } = req.body;
+        if (!token || !password) {
+            await t.rollback();
+            return res.status(400).json({ message: "Token and password are required" });
+        }
+
+        const user = await User.findOne({ 
+            where: { 
+                ActivationToken: token,
+                IsActivated: false
+            },
+            transaction: t 
+        });
+
+        if (!user) {
+            await t.rollback();
+            return res.status(400).json({ message: "Invalid or already used activation token" });
+        }
+
+        if (user.ActivationExpires && new Date(user.ActivationExpires) < new Date()) {
+            await t.rollback();
+            return res.status(400).json({ message: "Activation link has expired. Please request a new one." });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        
+        user.PasswordHash = hashedPassword;
+        user.IsActivated = true;
+        user.ActivationToken = null;
+        user.IsPasswordChanged = true;
+        
+        await user.save({ transaction: t });
+
+        await t.commit();
+        res.status(200).json({ message: "Account activated successfully. You can now login." });
+    } catch (error: any) {
+        await t.rollback();
+        console.error("Error activating invigilator:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+export const requestInvigilatorAccess = async (req: Request, res: Response) => {
+    try {
+        const { FacultyID, Name, Email, Phone, Department, Designation, Reason } = req.body;
+        
+        if (!FacultyID || !Name || !Email || !Department) {
+            return res.status(400).json({ message: "Faculty ID, Name, Email, and Department are required" });
+        }
+
+        const { InvigilatorRequest } = await import("../models/index.js");
+
+        await InvigilatorRequest.create({
+            FacultyID,
+            Name,
+            Email,
+            Phone: Phone || null,
+            Department,
+            Designation: Designation || null,
+            Reason: Reason || null,
+            Status: "PENDING"
+        });
+
+        res.status(201).json({ message: "Request submitted successfully. Waiting for admin approval." });
+    } catch (error: any) {
+        console.error("Error in access request:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+export const getInvigilatorRequests = async (req: Request, res: Response) => {
+    try {
+        const { InvigilatorRequest } = await import("../models/index.js");
+        const requests = await InvigilatorRequest.findAll({
+            order: [['RequestedAt', 'DESC']]
+        });
+        res.json(requests);
+    } catch (error: any) {
+        console.error("Error fetching requests:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+export const approveInvigilatorRequest = async (req: Request, res: Response) => {
+    const t = await sequelize.transaction();
+    try {
+        const { id } = req.params;
+        const { InvigilatorRequest } = await import("../models/index.js");
+        
+        const request = await InvigilatorRequest.findByPk(id as string, { transaction: t });
+        if (!request || request.Status !== "PENDING") {
+            await t.rollback();
+            return res.status(404).json({ message: "Valid pending request not found" });
+        }
+
+        const emailStr = request.Email.toLowerCase();
+        const existingUser = await User.findOne({ where: { Email: emailStr }, transaction: t });
+        if (existingUser) {
+            await t.rollback();
+            return res.status(409).json({ message: "A user with this email already exists" });
+        }
+
+        const activationToken = crypto.randomBytes(32).toString('hex');
+        const activationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        const dummyPassword = await bcrypt.hash(crypto.randomBytes(8).toString('hex'), 10);
+
+        const newUser = await User.create({
+            Email: emailStr,
+            PasswordHash: dummyPassword,
+            Role: "invigilator",
+            IsActive: true,
+            IsActivated: false,
+            ActivationToken: activationToken,
+            ActivationExpires: activationExpires
+        }, { transaction: t });
+
+        await UserProfile.create({
+            UserID: newUser.UserID,
+            FullName: request.Name,
+            Phone: request.Phone || null
+        }, { transaction: t });
+
+        await Faculty.create({
+            StaffCode: request.FacultyID,
+            Name: request.Name,
+            Designation: request.Designation || "Faculty",
+            Department: request.Department,
+            IsEligible: true,
+        }, { transaction: t });
+
+        await Invigilator.create({
+            UserID: newUser.UserID,
+            IsEligible: true,
+            IsFlagged: false
+        }, { transaction: t });
+
+        request.Status = "APPROVED";
+        request.ReviewedBy = (req as any).user?.UserID || null;
+        request.ReviewedAt = new Date();
+        await request.save({ transaction: t });
+
+        await t.commit();
+
+        emailService.sendInvigilatorActivationEmail(emailStr, request.Name, activationToken).catch(err => {
+            console.error("Failed sending approval email to", emailStr, err.message);
+        });
+
+        res.json({ message: "Request approved successfully. Activation email sent." });
+    } catch (error: any) {
+        await t.rollback();
+        console.error("Error approving request:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+export const rejectInvigilatorRequest = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { InvigilatorRequest } = await import("../models/index.js");
+        
+        const request = await InvigilatorRequest.findByPk(id as string);
+        if (!request || request.Status !== "PENDING") {
+            return res.status(404).json({ message: "Valid pending request not found" });
+        }
+
+        request.Status = "REJECTED";
+        request.ReviewedBy = (req as any).user?.UserID || null;
+        request.ReviewedAt = new Date();
+        await request.save();
+
+        res.json({ message: "Request rejected successfully." });
+    } catch (error: any) {
+        console.error("Error rejecting request:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};

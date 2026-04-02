@@ -95,15 +95,34 @@ export const importUnifiedAcademic = async (req: Request, res: Response) => {
                     continue; // Skip if dept not found (shouldn't happen with code above)
                 }
 
-                const [program] = await Program.findOrCreate({
+                const [program, created] = await Program.findOrCreate({
                     where: { ProgramCode: prog.code },
                     defaults: {
                         ProgramCode: prog.code,
                         ProgramName: prog.name,
-                        DepartmentID: departmentID
+                        DepartmentID: departmentID,
+                        DurationYears: 4, // Default assumption if not provided
+                        TotalSemesters: 8
                     },
                     transaction
                 });
+
+                if (created) {
+                    // Auto-create semesters
+                    const semestersToCreate = [];
+                    for (let i = 1; i <= 8; i++) {
+                        semestersToCreate.push({
+                            SemesterNumber: i,
+                            SemesterName: `Semester ${i}`,
+                            ProgramID: program.ProgramID,
+                            IsActive: true
+                        });
+                    }
+                    if (semestersToCreate.length > 0) {
+                        await Semester.bulkCreate(semestersToCreate, { transaction });
+                    }
+                }
+
                 createdPrograms.set(prog.code, program.ProgramID);
             }
 

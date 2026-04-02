@@ -41,6 +41,7 @@ import { toast } from 'react-hot-toast';
 import { invigilatorService, Invigilator, InvigilatorStats } from '../services/invigilatorService';
 import AddInvigilatorModal from '../components/invigilators/AddInvigilatorModal';
 import BulkImportModal from '../components/invigilators/BulkImportModal';
+import RequestsModal from '../components/invigilators/RequestsModal';
 
 /* ─── helpers ──────────────────────────────────────────── */
 const staffId = (id: number) => `#IV-2024-${String(id).padStart(3, '0')}`;
@@ -108,6 +109,7 @@ const Invigilators: React.FC = () => {
     const { isOpen: isDeleteOpen, onOpen: onOpenDelete, onClose: onCloseDelete } = useDisclosure();
     const { isOpen: isDetailsOpen, onOpen: onOpenDetails, onClose: onCloseDetails } = useDisclosure();
     const { isOpen: isBulkOpen, onOpen: onBulkOpen, onClose: onBulkClose } = useDisclosure();
+    const { isOpen: isReqOpen, onOpen: onReqOpen, onClose: onReqClose } = useDisclosure();
     const [selected, setSelected] = useState<Invigilator | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
@@ -214,6 +216,14 @@ const Invigilators: React.FC = () => {
                             </p>
                         </div>
                         <div className="flex items-center gap-3 mt-1 shrink-0">
+                            <Button
+                                variant="bordered"
+                                className="border-slate-200 text-slate-600 font-semibold h-10 px-5 rounded-xl bg-white text-sm hover:bg-slate-50 transition-colors relative"
+                                startContent={<Activity size={15} />}
+                                onPress={onReqOpen}
+                            >
+                                Review Requests
+                            </Button>
                             <Button
                                 variant="bordered"
                                 className="border-slate-200 text-slate-600 font-semibold h-10 px-5 rounded-xl bg-white text-sm hover:bg-slate-50 transition-colors"
@@ -622,6 +632,9 @@ const Invigilators: React.FC = () => {
 
             {/* Bulk Import */}
             <BulkImportModal isOpen={isBulkOpen} onClose={onBulkClose} onSuccess={fetchData} />
+
+            {/* Requests approval */}
+            <RequestsModal isOpen={isReqOpen} onClose={onReqClose} onSuccess={fetchData} />
         </div>
     );
 };

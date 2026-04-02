@@ -16,6 +16,9 @@ import structureImportRoutes from "./routes/structureImport.routes.js";
 import examRoutes from "./routes/exam.routes.js";
 import subjectRoutes from "./routes/subject.routes.js";
 
+// Initialize cron jobs
+import "./cron/academic.cron.js";
+
 // New ERP routes
 import adminManagementRoutes from "./routes/adminManagement.routes.js";
 import academicSetupRoutes from "./routes/academicSetup.routes.js";
@@ -141,6 +144,8 @@ const swaggerSpec = swaggerJsdoc(options);
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Routes (Body parsers already applied)
+import studentAuthRoutes from "./routes/student.auth.routes.js";
+app.use("/api/auth/student", studentAuthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/students", studentRoutes);
 app.use("/api/admin/college-structure", collegeStructureRoutes);

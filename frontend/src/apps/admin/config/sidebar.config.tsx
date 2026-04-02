@@ -93,6 +93,12 @@ export const sidebarConfig: SidebarItem[] = [
                 requiresRoot: true
             },
             {
+                label: "Academic Setup",
+                icon: <BookOpen size={18} />,
+                path: "/admin/academic-setup",
+                requiresRoot: true
+            },
+            {
                 label: "Exam Control",
                 icon: <Siren size={18} />,
                 path: "/admin/exam-control",

@@ -7,9 +7,12 @@ import InvigilatorLogin from './apps/invigilator/pages/InvigilatorLogin';
 import InvigilatorDashboard from './apps/invigilator/pages/InvigilatorDashboard';
 import AttendanceConsole from './apps/invigilator/pages/AttendanceConsole';
 import InvigilatorProfile from './apps/invigilator/pages/InvigilatorProfile';
+import InvigilatorActivate from './apps/invigilator/pages/InvigilatorActivate';
+import InvigilatorRequest from './apps/invigilator/pages/InvigilatorRequest';
 import LandingPage from './pages/LandingPage';
 import NotFound from './pages/NotFound';
 import RequireAuth from './components/RequireAuth';
+import StudentApp from './apps/student/StudentApp';
 import './App.css';
 
 function App() {
@@ -24,14 +27,16 @@ function App() {
 
           {/* Invigilator App */}
           <Route path="/invigilator/login" element={<InvigilatorLogin />} />
+          <Route path="/invigilator/activate" element={<InvigilatorActivate />} />
+          <Route path="/invigilator/request" element={<InvigilatorRequest />} />
           <Route element={<RequireAuth allowedRoles={['invigilator']} redirectTo="/invigilator/login" />}>
             <Route path="/invigilator/dashboard" element={<InvigilatorDashboard />} />
             <Route path="/invigilator/attendance" element={<AttendanceConsole />} />
             <Route path="/invigilator/profile" element={<InvigilatorProfile />} />
           </Route>
 
-          {/* Placeholders for other apps */}
-          <Route path="/student/*" element={<div>Student App Placeholder</div>} />
+          {/* Student App */}
+          <Route path="/student/*" element={<StudentApp />} />
 
           <Route path="*" element={<NotFound />} />
         </Routes>

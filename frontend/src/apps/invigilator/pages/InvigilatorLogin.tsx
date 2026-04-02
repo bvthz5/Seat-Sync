@@ -449,6 +449,9 @@ const InvigilatorLogin = () => {
 
                     {/* Footer */}
                     <motion.div variants={itemVariants} className="text-center space-y-4">
+                        <div className="text-sm font-medium text-slate-500 pb-2">
+                            New faculty staff? <Link href="/invigilator/request" className="text-indigo-600 font-bold hover:underline ml-1">Request duty access</Link>
+                        </div>
                         <div className="h-px w-full bg-slate-100"></div>
                         <p className="text-[11px] text-slate-400 font-medium uppercase tracking-widest">
                             Protected by SeatSync Identity Server

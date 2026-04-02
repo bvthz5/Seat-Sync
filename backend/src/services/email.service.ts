@@ -246,6 +246,50 @@ export class EmailService {
             throw new Error('Failed to send admin creation email');
         }
     }
+    async sendInvigilatorActivationEmail(to: string, name: string, token: string): Promise<void> {
+        const activationUrl = `${process.env.APP_URL || 'http://localhost:5173'}/faculty/activate?token=${token}`;
+
+        const content = `
+            <h2 style="color: #1e293b; margin-top: 0; font-size: 20px;">Faculty Onboarding - Activate Your Account</h2>
+            <p style="color: #475569;">
+                Hello <strong>${name}</strong>,<br><br>
+                Your faculty account has been created on the SeatSync Examination System. 
+                Please activate your account securely by setting up your access password using the link below.
+            </p>
+            
+            <div style="text-align: center;">
+                <a href="${activationUrl}" class="btn-primary">Activate Account</a>
+            </div>
+            
+            <p style="margin-top: 32px; font-size: 14px; color: #64748b;">
+                Or copy and paste this secure link into your browser:
+                <br>
+                <a href="${activationUrl}" style="color: #2563eb; word-break: break-all;">${activationUrl}</a>
+            </p>
+
+            <div class="warning-box">
+                <p class="warning-text">
+                    <strong>Security Notice:</strong> This activation link is unique to you and will expire in exactly 24 hours. 
+                    If you encounter any issues, please reach out to the examination control cell.
+                </p>
+            </div>
+        `;
+
+        const mailOptions = {
+            from: `"SeatSync Administrative Cell" <${process.env.FROM_EMAIL}>`,
+            to,
+            subject: 'Action Required: Activate Your SeatSync Faculty Account',
+            html: this.getBaseTemplate(content),
+        };
+
+        try {
+            const info = await this.transporter.sendMail(mailOptions);
+            console.log(`[EmailService] Faculty activation email sent: ${info.messageId}`);
+        } catch (error: any) {
+            console.error('[EmailService] Error sending email:', error.message);
+            throw new Error('Failed to send faculty activation email');
+        }
+    }
 }
 
 export const emailService = new EmailService();

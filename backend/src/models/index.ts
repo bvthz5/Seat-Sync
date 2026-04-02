@@ -26,6 +26,8 @@ export { default as ActiveSession } from "./ActiveSession.js";
 export { default as Faculty } from "./Faculty.js";
 export { default as ExamSeries } from "./ExamSeries.js";
 export { default as Zone } from "./Zone.js";
+export { default as InvigilatorRequest } from "./InvigilatorRequest.js";
+export { default as ProgramDepartment } from "./ProgramDepartment.js";
 
 // Associations
 import ActivityLog from "./ActivityLog.js";
@@ -37,6 +39,7 @@ import Exam from "./Exam.js";
 import InvigilatorAssignment from "./InvigilatorAssignment.js";
 import Room from "./Room.js";
 import Program from "./Program.js";
+import ProgramDepartment from "./ProgramDepartment.js";
 
 // Define associations here to avoid circular imports in model files
 ActivityLog.belongsTo(User, {
@@ -59,7 +62,7 @@ Invigilator.belongsTo(Department, {
     foreignKey: "DepartmentID",
 });
 
-// Department-Program Association
+// Department-Program Association (legacy single FK kept for backward compat)
 Department.hasMany(Program, {
     foreignKey: "DepartmentID",
     as: "Programs",
@@ -69,6 +72,21 @@ Department.hasMany(Program, {
 Program.belongsTo(Department, {
     foreignKey: "DepartmentID",
     as: "Department"
+});
+
+// Program <-> Department many-to-many via bridge table
+Program.belongsToMany(Department, {
+    through: ProgramDepartment,
+    foreignKey: "ProgramID",
+    otherKey: "DepartmentID",
+    as: "Departments"
+});
+
+Department.belongsToMany(Program, {
+    through: ProgramDepartment,
+    foreignKey: "DepartmentID",
+    otherKey: "ProgramID",
+    as: "LinkedPrograms"
 });
 
 // Invigilator Associations

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { UserPlus, Hash, User, Building2, Briefcase } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { invigilatorService } from '../../services/invigilatorService';
+import { academicService } from '../../services/academicService';
 
 interface AddInvigilatorModalProps {
     isOpen: boolean;
@@ -15,18 +16,30 @@ const FIELD_CLASS = "w-full h-11 px-4 rounded-xl text-sm font-medium text-slate-
 const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClose, onSuccess }) => {
     const [formData, setFormData] = useState({
         FacultyID: '',
+        Email: '',
         Name: '',
         Department: '',
+        Phone: '',
         Designation: '',
     });
     const [isLoading, setIsLoading] = useState(false);
+    const [departments, setDepartments] = useState<any[]>([]);
+
+    React.useEffect(() => {
+        if (isOpen) {
+            academicService.getDepartments().then(res => {
+                // getDepartments returns a flat array directly
+                setDepartments(Array.isArray(res.data) ? res.data : (res.data?.data || []));
+            }).catch(err => console.error("Failed to fetch departments", err));
+        }
+    }, [isOpen]);
 
     const handleChange = (field: string, value: string) => {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
     const handleReset = () => {
-        setFormData({ FacultyID: '', Name: '', Department: '', Designation: '' });
+        setFormData({ FacultyID: '', Email: '', Name: '', Department: '', Phone: '', Designation: '' });
     };
 
     const handleClose = () => {
@@ -36,19 +49,21 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formData.FacultyID || !formData.Name || !formData.Department) {
-            toast.error('Faculty ID, Name, and Department are required');
+        if (!formData.FacultyID || !formData.Email || !formData.Name || !formData.Department) {
+            toast.error('Faculty ID, Email, Name, and Department are required');
             return;
         }
         setIsLoading(true);
         try {
             await invigilatorService.create({
                 FacultyID: formData.FacultyID.trim(),
+                Email: formData.Email.trim(),
                 Name: formData.Name,
                 Department: formData.Department,
+                Phone: formData.Phone.trim() || undefined,
                 Designation: formData.Designation || 'Faculty',
             });
-            toast.success('Invigilator added successfully');
+            toast.success('Invigilator added successfully! Activation email sent.');
             handleReset();
             onSuccess();
             onClose();
@@ -108,6 +123,21 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
                         />
                     </div>
 
+                    {/* Email */}
+                    <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                            <Hash size={10} /> Email Address <span className="text-rose-400">*</span>
+                        </label>
+                        <input
+                            type="email"
+                            value={formData.Email}
+                            onChange={e => handleChange('Email', e.target.value)}
+                            placeholder="e.g. sarah.c@faculty.edu"
+                            className={FIELD_CLASS}
+                            required
+                        />
+                    </div>
+
                     {/* Name */}
                     <div className="space-y-1.5">
                         <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
@@ -128,13 +158,32 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
                         <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                             <Building2 size={10} /> Department <span className="text-rose-400">*</span>
                         </label>
-                        <input
-                            type="text"
+                        <select
                             value={formData.Department}
                             onChange={e => handleChange('Department', e.target.value)}
-                            placeholder="e.g. Computer Science"
                             className={FIELD_CLASS}
                             required
+                        >
+                            <option value="" disabled>Select Department</option>
+                            {departments.map((dept: any) => (
+                                <option key={dept.DepartmentID} value={dept.DepartmentCode}>
+                                    {dept.DepartmentCode} - {dept.DepartmentName}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Phone */}
+                    <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                            <Briefcase size={10} /> Phone <span className="text-slate-300 font-normal normal-case tracking-normal">optional</span>
+                        </label>
+                        <input
+                            type="text"
+                            value={formData.Phone}
+                            onChange={e => handleChange('Phone', e.target.value)}
+                            placeholder="+91 98000 00000"
+                            className={FIELD_CLASS}
                         />
                     </div>
 

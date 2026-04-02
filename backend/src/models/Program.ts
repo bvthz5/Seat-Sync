@@ -9,6 +9,7 @@ interface ProgramAttributes {
   ProgramName: string;
   ProgramCode?: string;
   DurationYears?: number;
+  TotalSemesters?: number;
   DepartmentID?: number;
   AcademicYearID?: number;
   IsActive?: boolean;
@@ -25,6 +26,7 @@ export class Program extends Model<ProgramAttributes, ProgramCreationAttributes>
   declare ProgramName: string;
   declare ProgramCode?: string;
   declare DurationYears?: number;
+  declare TotalSemesters?: number;
   declare DepartmentID?: number;
   declare AcademicYearID?: number;
   declare IsActive?: boolean;
@@ -46,6 +48,10 @@ Program.init(
       allowNull: true,
     },
     DurationYears: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    TotalSemesters: {
       type: DataTypes.INTEGER,
       allowNull: true,
     },

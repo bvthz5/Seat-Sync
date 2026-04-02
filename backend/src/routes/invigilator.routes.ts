@@ -1,15 +1,27 @@
 import { Router } from "express";
-<<<<<<< Updated upstream
-import { getAllInvigilators, createInvigilator, deleteInvigilator, getInvigilatorStats, toggleInvigilatorFlag, toggleInvigilatorEligibility, bulkImportInvigilators, clearAllFaculties } from "../controllers/invigilator.controller.js";
-=======
-import { getAllInvigilators, createInvigilator, deleteInvigilator, getInvigilatorStats, toggleInvigilatorFlag, toggleInvigilatorEligibility, bulkImportInvigilators } from "../controllers/invigilator.controller.js";
->>>>>>> Stashed changes
+import { 
+    getAllInvigilators, createInvigilator, deleteInvigilator, getInvigilatorStats, 
+    toggleInvigilatorFlag, toggleInvigilatorEligibility, bulkImportInvigilators, clearAllFaculties,
+    activateInvigilator, requestInvigilatorAccess, getInvigilatorRequests, 
+    approveInvigilatorRequest, rejectInvigilatorRequest
+} from "../controllers/invigilator.controller.js";
 import { AuthMiddleware } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
-// Protect all routes - only accessible by Root Admin
+// ==========================================
+// PUBLIC ROUTES
+// ==========================================
+
+router.post("/activate", activateInvigilator);
+router.post("/request", requestInvigilatorAccess);
+
+// ==========================================
+// PROTECTED ADMIN ROUTES
+// ==========================================
+// Protect all below routes - only accessible by Root Admin
 router.use((req, res, next) => AuthMiddleware.requireRootAuth(req, res, next));
+
 
 /**
  * @swagger
@@ -148,6 +160,10 @@ router.patch("/:id/toggle-eligibility", toggleInvigilatorEligibility);
  *       404:
  *         description: Not found
  */
+router.get("/requests", getInvigilatorRequests);
+router.post("/requests/:id/approve", approveInvigilatorRequest);
+router.post("/requests/:id/reject", rejectInvigilatorRequest);
+
 router.delete("/clear-all", clearAllFaculties);
 router.delete("/:id", deleteInvigilator);
 

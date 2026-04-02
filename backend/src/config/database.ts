@@ -190,6 +190,16 @@ async function ensureSchemaIntegrity() {
                     ALTER TABLE [dbo].[Programs] ADD [DurationYears] INT NULL;
                     PRINT 'Added DurationYears to Programs';
                 END
+
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Programs]') 
+                    AND name = 'TotalSemesters'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Programs] ADD [TotalSemesters] INT NULL;
+                    PRINT 'Added TotalSemesters to Programs';
+                END
             END
         `, { type: QueryTypes.RAW });
 
@@ -440,6 +450,42 @@ async function ensureSchemaIntegrity() {
                 BEGIN
                     ALTER TABLE [dbo].[Zones] ADD [Color] NVARCHAR(20) NULL;
                     PRINT 'Added Color to Zones';
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
+        // Add Faculty Onboarding fields to Users
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Users' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Users]') AND name = 'IsActivated')
+                BEGIN
+                    ALTER TABLE [dbo].[Users] ADD [IsActivated] BIT NOT NULL DEFAULT 1 WITH VALUES;
+                    PRINT 'Added IsActivated to Users';
+                END
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Users]') AND name = 'ActivationToken')
+                BEGIN
+                    ALTER TABLE [dbo].[Users] ADD [ActivationToken] NVARCHAR(255) NULL;
+                    PRINT 'Added ActivationToken to Users';
+                END
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Users]') AND name = 'ActivationExpires')
+                BEGIN
+                    ALTER TABLE [dbo].[Users] ADD [ActivationExpires] DATETIME NULL;
+                    PRINT 'Added ActivationExpires to Users';
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
+        // Add FacultyID to InvigilatorRequests
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InvigilatorRequests' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[InvigilatorRequests]') AND name = 'FacultyID')
+                BEGIN
+                    ALTER TABLE [dbo].[InvigilatorRequests] ADD [FacultyID] NVARCHAR(50) NOT NULL DEFAULT 'PENDING_ID' WITH VALUES;
+                    PRINT 'Added FacultyID to InvigilatorRequests';
                 END
             END
         `, { type: QueryTypes.RAW });
