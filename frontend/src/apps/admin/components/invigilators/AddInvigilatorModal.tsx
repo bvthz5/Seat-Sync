@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { UserPlus, Hash, User, Building2, Briefcase } from 'lucide-react';
+import { UserPlus, Hash, User, Building2, Briefcase, AlertTriangle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { invigilatorService } from '../../services/invigilatorService';
 import { academicService } from '../../services/academicService';
@@ -9,11 +9,12 @@ interface AddInvigilatorModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSuccess: () => void;
+    existingInvigilators: any[];
 }
 
 const FIELD_CLASS = "w-full h-11 px-4 rounded-xl text-sm font-medium text-slate-800 outline-none transition-all bg-slate-50 border border-slate-200 focus:border-slate-400 focus:bg-white placeholder:text-slate-400";
 
-const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClose, onSuccess }) => {
+const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClose, onSuccess, existingInvigilators }) => {
     const [formData, setFormData] = useState({
         FacultyID: '',
         Email: '',
@@ -23,6 +24,7 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
         Designation: '',
     });
     const [isLoading, setIsLoading] = useState(false);
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
     const [departments, setDepartments] = useState<any[]>([]);
 
     React.useEffect(() => {
@@ -44,15 +46,28 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
 
     const handleClose = () => {
         handleReset();
+        setErrorMsg(null);
         onClose();
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setErrorMsg(null);
         if (!formData.FacultyID || !formData.Email || !formData.Name || !formData.Department) {
-            toast.error('Faculty ID, Email, Name, and Department are required');
+            setErrorMsg('Faculty ID, Email, Name, and Department are required');
             return;
         }
+
+        const isDuplicate = existingInvigilators.some((inv: any) => 
+            String(inv.FacultyID || '').toLowerCase() === formData.FacultyID.trim().toLowerCase() ||
+            String(inv.Email || '').toLowerCase() === formData.Email.trim().toLowerCase()
+        );
+
+        if (isDuplicate) {
+            setErrorMsg('An invigilator with this Faculty ID or Email already exists!');
+            return;
+        }
+
         setIsLoading(true);
         try {
             await invigilatorService.create({
@@ -68,7 +83,7 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
             onSuccess();
             onClose();
         } catch (error: any) {
-            toast.error(error.response?.data?.message || 'Failed to add invigilator');
+            setErrorMsg(error.response?.data?.message || 'Failed to add invigilator');
         } finally {
             setIsLoading(false);
         }
@@ -110,10 +125,13 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
 
                     {/* Faculty ID */}
                     <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                        <label htmlFor="facultyId" className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                             <Hash size={10} /> Staff / Faculty ID <span className="text-rose-400">*</span>
                         </label>
                         <input
+                            id="facultyId"
+                            name="facultyId"
+                            autoComplete="off"
                             type="text"
                             value={formData.FacultyID}
                             onChange={e => handleChange('FacultyID', e.target.value)}
@@ -125,10 +143,13 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
 
                     {/* Email */}
                     <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                        <label htmlFor="email" className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                             <Hash size={10} /> Email Address <span className="text-rose-400">*</span>
                         </label>
                         <input
+                            id="email"
+                            name="email"
+                            autoComplete="email"
                             type="email"
                             value={formData.Email}
                             onChange={e => handleChange('Email', e.target.value)}
@@ -140,10 +161,13 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
 
                     {/* Name */}
                     <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                        <label htmlFor="fullName" className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                             <User size={10} /> Full Name <span className="text-rose-400">*</span>
                         </label>
                         <input
+                            id="fullName"
+                            name="fullName"
+                            autoComplete="name"
                             type="text"
                             value={formData.Name}
                             onChange={e => handleChange('Name', e.target.value)}
@@ -155,10 +179,12 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
 
                     {/* Department */}
                     <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                        <label htmlFor="department" className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                             <Building2 size={10} /> Department <span className="text-rose-400">*</span>
                         </label>
                         <select
+                            id="department"
+                            name="department"
                             value={formData.Department}
                             onChange={e => handleChange('Department', e.target.value)}
                             className={FIELD_CLASS}
@@ -175,10 +201,13 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
 
                     {/* Phone */}
                     <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                        <label htmlFor="phone" className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                             <Briefcase size={10} /> Phone <span className="text-slate-300 font-normal normal-case tracking-normal">optional</span>
                         </label>
                         <input
+                            id="phone"
+                            name="phone"
+                            autoComplete="tel"
                             type="text"
                             value={formData.Phone}
                             onChange={e => handleChange('Phone', e.target.value)}
@@ -189,10 +218,13 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
 
                     {/* Designation */}
                     <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                        <label htmlFor="designation" className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                             <Briefcase size={10} /> Designation <span className="text-slate-300 font-normal normal-case tracking-normal">optional</span>
                         </label>
                         <input
+                            id="designation"
+                            name="designation"
+                            autoComplete="organization-title"
                             type="text"
                             value={formData.Designation}
                             onChange={e => handleChange('Designation', e.target.value)}
@@ -200,6 +232,14 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
                             className={FIELD_CLASS}
                         />
                     </div>
+
+                    {/* Error Banner */}
+                    {errorMsg && (
+                        <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl flex items-start gap-2 !mt-4">
+                            <AlertTriangle size={14} className="text-rose-500 shrink-0 mt-0.5" />
+                            <p className="text-xs font-bold text-rose-600 leading-snug">{errorMsg}</p>
+                        </div>
+                    )}
 
                     {/* Divider */}
                     <div className="h-px bg-slate-100 !mt-6" />

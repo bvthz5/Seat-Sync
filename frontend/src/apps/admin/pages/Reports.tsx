@@ -513,7 +513,7 @@ const Reports: React.FC = () => {
                                     {/* Dept bar */}
                                     <div className="lg:col-span-3">
                                         <h3 className="text-sm font-bold text-slate-700 mb-4">Attendance Rate by Department</h3>
-                                        <ResponsiveContainer width="100%" height={230}>
+                                        <ResponsiveContainer width="100%" height={230} minWidth={1} minHeight={1}>
                                             <BarChart data={deptChartData} barSize={26} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
                                                 <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#f1f5f9" />
                                                 <XAxis dataKey="dept" tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
@@ -528,7 +528,7 @@ const Reports: React.FC = () => {
                                     {/* Donut */}
                                     <div className="lg:col-span-2">
                                         <h3 className="text-sm font-bold text-slate-700 mb-4">Exam Status Breakdown</h3>
-                                        <ResponsiveContainer width="100%" height={230}>
+                                        <ResponsiveContainer width="100%" height={230} minWidth={1} minHeight={1}>
                                             <PieChart>
                                                 <Pie data={statusDist} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={3} dataKey="value">
                                                     {statusDist.map((e, i) => <Cell key={i} fill={e.fill} />)}

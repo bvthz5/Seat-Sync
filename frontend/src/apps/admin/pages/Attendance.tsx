@@ -494,7 +494,7 @@ const Attendance: React.FC = () => {
                                 <TrendingUp size={18} className="text-gray-700" />
                                 <h2 className="text-base font-bold text-gray-900">Attendance Trends</h2>
                             </div>
-                            <ResponsiveContainer width="100%" height={220}>
+                            <ResponsiveContainer width="100%" height={220} minWidth={1} minHeight={1}>
                                 <BarChart data={WEEKLY_DATA} barSize={32} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
                                     <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#f1f5f9" />
                                     <XAxis
