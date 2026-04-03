@@ -239,6 +239,42 @@ async function ensureSchemaIntegrity() {
             END
         `, { type: QueryTypes.RAW });
 
+        // Add missing student columns used by registration and dashboard logic
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Students' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Students]')
+                    AND name = 'AdmissionDate'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Students] ADD [AdmissionDate] DATETIME NULL;
+                    PRINT 'Added AdmissionDate to Students';
+                END
+
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Students]')
+                    AND name = 'BatchYear'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Students] ADD [BatchYear] INT NULL;
+                    PRINT 'Added BatchYear to Students';
+                END
+
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Students]')
+                    AND name = 'SemesterID'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Students] ADD [SemesterID] INT NULL;
+                    PRINT 'Added SemesterID to Students';
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
         // Add Invigilator Columns (Resolution for Delete Admin Error)
         await sequelize.query(`
             IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Invigilators' AND TABLE_SCHEMA = 'dbo')
@@ -460,7 +496,7 @@ async function ensureSchemaIntegrity() {
             BEGIN
                 IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Users]') AND name = 'IsActivated')
                 BEGIN
-                    ALTER TABLE [dbo].[Users] ADD [IsActivated] BIT NOT NULL DEFAULT 1 WITH VALUES;
+                    ALTER TABLE [dbo].[Users] ADD [IsActivated] BIT NOT NULL DEFAULT 0 WITH VALUES;
                     PRINT 'Added IsActivated to Users';
                 END
 

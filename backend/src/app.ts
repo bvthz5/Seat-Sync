@@ -28,6 +28,7 @@ import examControlRoutes from "./routes/examControl.routes.js";
 import departmentRoutes from "./routes/department.routes.js";
 import programRoutes from "./routes/program.routes.js";
 import invigilatorRoutes from "./routes/invigilator.routes.js";
+import studentPortalRoutes from "./routes/student.portal.routes.js";
 import unifiedAcademicRoutes from "./routes/unified_academic.routes.js";
 import seriesRoutes from "./routes/series.routes.js";
 
@@ -166,6 +167,7 @@ app.use("/api/departments", departmentRoutes);
 app.use("/api/programs", programRoutes);
 app.use("/api/faculties", facultyRoutes);
 app.use("/api/invigilators", invigilatorRoutes);
+app.use("/api/student", studentPortalRoutes);
 app.use("/api/academic", unifiedAcademicRoutes);
 app.use("/api/series", seriesRoutes);
 

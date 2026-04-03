@@ -4,11 +4,31 @@ import { Server as HTTPServer } from "http";
 
 let io: SocketIOServer;
 
+const allowedOrigins = new Set([
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]);
+
 export const initSocket = (httpServer: HTTPServer) => {
     io = new SocketIOServer(httpServer, {
         cors: {
-            origin: "*", // Adjust for production
-            methods: ["GET", "POST"]
+            origin: (origin, callback) => {
+                if (!origin) return callback(null, true);
+
+                if (
+                    allowedOrigins.has(origin) ||
+                    origin.startsWith("http://localhost:") ||
+                    origin.startsWith("http://127.0.0.1:")
+                ) {
+                    return callback(null, true);
+                }
+
+                callback(new Error("Socket.IO CORS blocked"));
+            },
+            credentials: true,
+            methods: ["GET", "POST"],
         }
     });
 

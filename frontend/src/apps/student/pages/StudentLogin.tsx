@@ -33,8 +33,8 @@ const StudentLogin: React.FC = () => {
             return;
         }
 
-        if (loginMethod === 'email' && !identifier.endsWith('@sjcetpalai.ac.in')) {
-            toast.error("Please use your official @sjcetpalai.ac.in email");
+        if (loginMethod === 'email' && !/^[a-zA-Z0-9._%+-]+@([a-zA-Z0-9-]+\.)*sjcetpalai\.ac\.in$/i.test(identifier)) {
+            toast.error("Please use your official sjcetpalai.ac.in email (including subdomains)");
             triggerShake();
             return;
         }
@@ -56,8 +56,9 @@ const StudentLogin: React.FC = () => {
             // Successfully logged in
             toast.success("Welcome back!");
             localStorage.setItem("accessToken", data.accessToken);
-            // In a real app we might set to AuthContext
-            navigate('/student/dashboard');
+            sessionStorage.setItem('seat_sync_active', 'true');
+            // Reload so AuthContext can hydrate from the stored session/token cleanly
+            window.location.replace('/student/dashboard');
 
         } catch (error: any) {
             toast.error(error.message);
@@ -217,7 +218,7 @@ const StudentLogin: React.FC = () => {
 
                         <div className="space-y-5">
                             <div className="group">
-                                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                                <label htmlFor="student-identifier" className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
                                     {loginMethod === 'email' ? 'Official Student Email' : 'Register Number'}
                                 </label>
                                 <div className="relative flex items-center transition-all duration-300">
@@ -226,11 +227,12 @@ const StudentLogin: React.FC = () => {
                                     </div>
                                     <input
                                         ref={identifierRef}
+                                        id="student-identifier"
                                         type={loginMethod === 'email' ? 'email' : 'text'}
                                         value={identifier}
                                         onChange={(e) => setIdentifier(e.target.value)}
                                         className="w-full bg-white border border-slate-200 text-slate-900 text-[15px] font-medium rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 block pl-12 pr-4 py-4 transition-all shadow-sm placeholder:text-slate-400"
-                                        placeholder={loginMethod === 'email' ? "name@sjcetpalai.ac.in" : "SJC24MCA021"}
+                                        placeholder={loginMethod === 'email' ? "name@mca.sjcetpalai.ac.in" : "SJC24MCA021"}
                                         disabled={isLoading}
                                         autoComplete={loginMethod === 'email' ? 'email' : 'username'}
                                     />
@@ -238,7 +240,7 @@ const StudentLogin: React.FC = () => {
                             </div>
 
                             <div className="group">
-                                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                                <label htmlFor="student-password" className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
                                     Access Password
                                 </label>
                                 <div className="relative flex items-center transition-all duration-300">
@@ -246,6 +248,7 @@ const StudentLogin: React.FC = () => {
                                         <Lock className="w-5 h-5" />
                                     </div>
                                     <input
+                                        id="student-password"
                                         type={showPassword ? 'text' : 'password'}
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}

@@ -6,6 +6,18 @@ import crypto from "crypto";
 import { sequelize } from "../config/database.js";
 import { emailService } from "../services/email.service.js";
 
+const ACTIVATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+
+const createActivationToken = () => ({
+    token: crypto.randomBytes(32).toString('hex'),
+    expiresAt: new Date(Date.now() + ACTIVATION_TOKEN_TTL_MS),
+});
+
+const isActivationTokenExpired = (expiresAt: Date | null | undefined) => {
+    if (!expiresAt) return true;
+    return new Date(expiresAt).getTime() <= Date.now();
+};
+
 /**
  * Invigilator Controller
  */
@@ -135,8 +147,7 @@ export const createInvigilator = async (req: Request, res: Response) => {
         }
 
         // 2. Create User
-        const activationToken = crypto.randomBytes(32).toString('hex');
-        const activationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+        const { token: activationToken, expiresAt: activationExpiresAt } = createActivationToken();
         const dummyPassword = await bcrypt.hash(crypto.randomBytes(8).toString('hex'), 10);
 
         const newUser = await User.create({
@@ -146,7 +157,7 @@ export const createInvigilator = async (req: Request, res: Response) => {
             IsActive: true,
             IsActivated: false,
             ActivationToken: activationToken,
-            ActivationExpires: activationExpires
+            ActivationExpiresAt: activationExpiresAt
         }, { transaction: t });
 
         // 3. Create UserProfile
@@ -299,8 +310,7 @@ export const bulkImportInvigilators = async (req: Request, res: Response) => {
                 }
 
                 // Create User
-                const activationToken = crypto.randomBytes(32).toString('hex');
-                const activationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+                const { token: activationToken, expiresAt: activationExpiresAt } = createActivationToken();
                 const dummyPassword = await bcrypt.hash(crypto.randomBytes(8).toString('hex'), 10);
 
                 const newUser = await User.create({
@@ -310,7 +320,7 @@ export const bulkImportInvigilators = async (req: Request, res: Response) => {
                     IsActive: true,
                     IsActivated: false,
                     ActivationToken: activationToken,
-                    ActivationExpires: activationExpires
+                    ActivationExpiresAt: activationExpiresAt
                 }, { transaction: t });
 
                 await UserProfile.create({
@@ -381,6 +391,37 @@ export const clearAllFaculties = async (req: Request, res: Response) => {
     }
 };
 
+export const verifyInvigilatorActivationToken = async (req: Request, res: Response) => {
+    try {
+        const token = String(req.query.token || '').trim();
+
+        if (!token) {
+            return res.status(400).json({ valid: false, message: "Activation token is required" });
+        }
+
+        const user = await User.findOne({
+            where: {
+                ActivationToken: token,
+                Role: "invigilator",
+                IsActivated: false,
+            },
+        });
+
+        if (!user) {
+            return res.status(200).json({ valid: false, message: "Invalid activation link" });
+        }
+
+        if (isActivationTokenExpired(user.ActivationExpiresAt)) {
+            return res.status(200).json({ valid: false, message: "Activation link has expired" });
+        }
+
+        return res.status(200).json({ valid: true, message: "Activation link is valid" });
+    } catch (error: any) {
+        console.error("Error verifying activation token:", error);
+        res.status(500).json({ valid: false, message: "Internal server error" });
+    }
+};
+
 export const activateInvigilator = async (req: Request, res: Response) => {
     const t = await sequelize.transaction();
     try {
@@ -393,6 +434,7 @@ export const activateInvigilator = async (req: Request, res: Response) => {
         const user = await User.findOne({ 
             where: { 
                 ActivationToken: token,
+                Role: "invigilator",
                 IsActivated: false
             },
             transaction: t 
@@ -403,7 +445,7 @@ export const activateInvigilator = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "Invalid or already used activation token" });
         }
 
-        if (user.ActivationExpires && new Date(user.ActivationExpires) < new Date()) {
+        if (isActivationTokenExpired(user.ActivationExpiresAt)) {
             await t.rollback();
             return res.status(400).json({ message: "Activation link has expired. Please request a new one." });
         }
@@ -413,6 +455,7 @@ export const activateInvigilator = async (req: Request, res: Response) => {
         user.PasswordHash = hashedPassword;
         user.IsActivated = true;
         user.ActivationToken = null;
+        user.ActivationExpiresAt = null;
         user.IsPasswordChanged = true;
         
         await user.save({ transaction: t });
@@ -422,6 +465,53 @@ export const activateInvigilator = async (req: Request, res: Response) => {
     } catch (error: any) {
         await t.rollback();
         console.error("Error activating invigilator:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+export const resendInvigilatorActivationLink = async (req: Request, res: Response) => {
+    const t = await sequelize.transaction();
+    try {
+        const { email } = req.body;
+        const emailStr = String(email || '').trim().toLowerCase();
+
+        if (!emailStr) {
+            await t.rollback();
+            return res.status(400).json({ message: "Email is required" });
+        }
+
+        const user = await User.findOne({
+            where: {
+                Email: emailStr,
+                Role: "invigilator",
+                IsActivated: false,
+            },
+            transaction: t,
+        });
+
+        if (!user) {
+            await t.rollback();
+            return res.status(404).json({ message: "No pending invigilator account found for this email" });
+        }
+
+        const { token, expiresAt } = createActivationToken();
+        user.ActivationToken = token;
+        user.ActivationExpiresAt = expiresAt;
+        await user.save({ transaction: t });
+
+        const profile = await UserProfile.findOne({ where: { UserID: user.UserID }, transaction: t });
+        const name = profile?.FullName || user.FullName || "Invigilator";
+
+        await t.commit();
+
+        emailService.sendInvigilatorActivationEmail(emailStr, name, token).catch(err => {
+            console.error("Failed resending activation email to", emailStr, err.message);
+        });
+
+        return res.json({ message: "A fresh activation link has been sent to your email" });
+    } catch (error: any) {
+        await t.rollback();
+        console.error("Error resending activation link:", error);
         res.status(500).json({ message: "Internal server error" });
     }
 };
@@ -486,8 +576,7 @@ export const approveInvigilatorRequest = async (req: Request, res: Response) => 
             return res.status(409).json({ message: "A user with this email already exists" });
         }
 
-        const activationToken = crypto.randomBytes(32).toString('hex');
-        const activationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        const { token: activationToken, expiresAt: activationExpiresAt } = createActivationToken();
         const dummyPassword = await bcrypt.hash(crypto.randomBytes(8).toString('hex'), 10);
 
         const newUser = await User.create({
@@ -497,7 +586,7 @@ export const approveInvigilatorRequest = async (req: Request, res: Response) => 
             IsActive: true,
             IsActivated: false,
             ActivationToken: activationToken,
-            ActivationExpires: activationExpires
+            ActivationExpiresAt: activationExpiresAt
         }, { transaction: t });
 
         await UserProfile.create({

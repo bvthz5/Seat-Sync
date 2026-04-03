@@ -32,7 +32,7 @@ interface InputFieldProps {
 
 const InputField: React.FC<InputFieldProps> = ({ label, icon: Icon, type, name, placeholder, formData, onChange, disabled }) => (
     <div className="relative group col-span-1">
-        <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
+        <label htmlFor={name} className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
             {label}
         </label>
         <div className="relative flex items-center transition-all duration-300">
@@ -281,8 +281,8 @@ const StudentRegister: React.FC = () => {
                                 <InputField label="Register Number" icon={Hash} type="text" name="RegisterNumber" placeholder="SJC24MCA..." formData={formData} onChange={handleInputChange} disabled={isLoading} />
                                 
                                 <div className="relative group col-span-1">
-                                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
-                                        Batch Year
+                                    <label htmlFor="BatchYear" className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                                        Batch Year (Year Joined)
                                     </label>
                                     <div className="relative flex items-center transition-all duration-300">
                                         <div className="absolute left-4 text-slate-400 group-focus-within:text-blue-600 transition-colors">
@@ -291,17 +291,21 @@ const StudentRegister: React.FC = () => {
                                         <input
                                             type="number"
                                             name="BatchYear"
+                                            id="BatchYear"
                                             value={formData.BatchYear}
                                             onChange={handleInputChange}
                                             className="w-full bg-white border border-slate-200 text-slate-900 text-[15px] font-medium rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 block pl-12 pr-4 py-3.5 transition-all shadow-sm placeholder:text-slate-400"
-                                            placeholder="2024"
+                                            placeholder="Year joined, e.g. 2024"
                                             disabled={isLoading}
                                         />
                                     </div>
+                                    <p className="mt-2 ml-1 text-[11px] text-slate-400">
+                                        Enter the year you joined the program.
+                                    </p>
                                 </div>
 
                                 <div className="relative group col-span-1">
-                                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                                    <label htmlFor="DepartmentID" className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
                                         Department
                                     </label>
                                     <div className="relative flex items-center transition-all duration-300">
@@ -310,6 +314,7 @@ const StudentRegister: React.FC = () => {
                                         </div>
                                         <select
                                             name="DepartmentID"
+                                            id="DepartmentID"
                                             value={formData.DepartmentID}
                                             onChange={handleInputChange}
                                             className="w-full bg-white border border-slate-200 text-slate-900 text-[15px] font-medium rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 block pl-12 pr-4 py-3.5 transition-all shadow-sm appearance-none outline-none"
@@ -324,7 +329,7 @@ const StudentRegister: React.FC = () => {
                                 </div>
 
                                 <div className="relative group col-span-1">
-                                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                                    <label htmlFor="ProgramID" className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
                                         Program
                                     </label>
                                     <div className="relative flex items-center transition-all duration-300">
@@ -333,6 +338,7 @@ const StudentRegister: React.FC = () => {
                                         </div>
                                         <select
                                             name="ProgramID"
+                                            id="ProgramID"
                                             value={formData.ProgramID}
                                             onChange={handleInputChange}
                                             className="w-full bg-white border border-slate-200 text-slate-900 text-[15px] font-medium rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 block pl-12 pr-4 py-3.5 transition-all shadow-sm appearance-none outline-none"

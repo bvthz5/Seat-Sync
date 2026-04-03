@@ -16,14 +16,14 @@ interface UserAttributes {
   CreatedAt: Date;
   IsActivated: boolean;
   ActivationToken: string | null;
-  ActivationExpires: Date | null;
+  ActivationExpiresAt: Date | null;
 }
 
 /**
  * Attributes required when creating a user
  */
 interface UserCreationAttributes
-  extends Optional<UserAttributes, "UserID" | "IsRootAdmin" | "IsActive" | "IsPasswordChanged" | "CreatedAt" | "IsActivated" | "ActivationToken" | "ActivationExpires"> { }
+  extends Optional<UserAttributes, "UserID" | "IsRootAdmin" | "IsActive" | "IsPasswordChanged" | "CreatedAt" | "IsActivated" | "ActivationToken" | "ActivationExpiresAt"> { }
 
 export class User extends Model<UserAttributes, UserCreationAttributes>
   implements UserAttributes {
@@ -38,7 +38,7 @@ export class User extends Model<UserAttributes, UserCreationAttributes>
   declare CreatedAt: Date;
   declare IsActivated: boolean;
   declare ActivationToken: string | null;
-  declare ActivationExpires: Date | null;
+  declare ActivationExpiresAt: Date | null;
 }
 
 User.init(
@@ -105,9 +105,10 @@ User.init(
       type: DataTypes.STRING(255),
       allowNull: true,
     },
-    ActivationExpires: {
+    ActivationExpiresAt: {
       type: DataTypes.DATE,
       allowNull: true,
+      field: "ActivationExpires",
     },
   },
   {

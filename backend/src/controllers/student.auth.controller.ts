@@ -2,13 +2,30 @@ import { Request, Response } from "express";
 import { User } from "../models/User.js";
 import { Student } from "../models/Student.js";
 import { Semester } from "../models/Semester.js";
-import { sequelize } from "../config/database.js";
+import { Program } from "../models/Program.js";
+import { ProgramDepartment } from "../models/ProgramDepartment.js";
 import { Op } from "sequelize";
 import bcrypt from "bcrypt";
 import { signAccessToken, signRefreshToken } from "../utils/jwt.js";
 import { JWTPayload } from "../interfaces/auth.interfaces.js";
 import { generateRandomToken, hashToken } from "../utils/hash.js";
 import { PasswordReset } from "../models/PasswordReset.model.js";
+import { UniqueConstraintError } from "sequelize";
+
+const normalizeSemesterRank = (semester: { SemesterNumber?: number; SemesterName?: string }) => {
+  if (typeof semester.SemesterNumber === "number" && Number.isFinite(semester.SemesterNumber)) {
+    return semester.SemesterNumber;
+  }
+
+  if (semester.SemesterName) {
+    const match = semester.SemesterName.match(/(\d+)/);
+    if (match) {
+      return Number(match[1]);
+    }
+  }
+
+  return Number.MAX_SAFE_INTEGER;
+};
 
 export class StudentAuthController {
   /**
@@ -88,6 +105,9 @@ export class StudentAuthController {
     let createdUserID: number | null = null;
     try {
       const { FullName, Email, RegisterNumber, DepartmentID, ProgramID, BatchYear, Password, ConfirmPassword } = req.body;
+      const departmentId = Number(DepartmentID);
+      const programId = Number(ProgramID);
+      const batchYear = Number(BatchYear);
 
       if (!FullName || !Email || !RegisterNumber || !DepartmentID || !ProgramID || !BatchYear || !Password || !ConfirmPassword) {
         res.status(400).json({ error: "All required fields must be provided" });
@@ -98,6 +118,11 @@ export class StudentAuthController {
         return;
       }
 
+      if (![departmentId, programId, batchYear].every((value) => Number.isFinite(value) && value > 0)) {
+        res.status(400).json({ error: "Invalid academic details provided" });
+        return;
+      }
+
       // Duplicate checks
       const existingEmail = await User.findOne({ where: { Email } });
       if (existingEmail) { res.status(400).json({ error: "Email is already registered" }); return; }
@@ -105,13 +130,41 @@ export class StudentAuthController {
       const existingRegNum = await Student.findOne({ where: { RegisterNumber } });
       if (existingRegNum) { res.status(400).json({ error: "Register Number is already registered" }); return; }
 
-      // Verify semesters exist for this program
-      const initialSemester = await Semester.findOne({
-        where: { ProgramID: Number(ProgramID) },
-        order: [['SemesterNumber', 'ASC']]
+      // Validate program belongs to the selected department (supports legacy and bridge-table mappings).
+      const program = await Program.findOne({ where: { ProgramID: programId } });
+      let programDepartmentLink = null;
+
+      try {
+        programDepartmentLink = await ProgramDepartment.findOne({ where: { ProgramID: programId, DepartmentID: departmentId } });
+      } catch (lookupError) {
+        // If the bridge table is unavailable in a partial environment, fall back to the legacy mapping check.
+        console.warn("ProgramDepartment lookup skipped:", lookupError);
+      }
+
+      const isLinkedViaLegacy = program?.DepartmentID === departmentId;
+      if (!program || (!programDepartmentLink && !isLinkedViaLegacy)) {
+        res.status(400).json({ error: "Selected program is not mapped to the chosen department" });
+        return;
+      }
+
+      // Verify semesters exist for this program and pick the first real semester safely.
+      const semesters = await Semester.findAll({
+        where: {
+          ProgramID: programId,
+          IsActive: true,
+        },
       });
-      if (!initialSemester) {
+
+      if (!semesters.length) {
         res.status(400).json({ error: "No semesters found for the selected program. Please contact admin." });
+        return;
+      }
+
+      const initialSemester = [...semesters]
+        .sort((a, b) => normalizeSemesterRank(a) - normalizeSemesterRank(b))[0];
+
+      if (!initialSemester?.SemesterID) {
+        res.status(400).json({ error: "Unable to determine initial semester for the selected program." });
         return;
       }
 
@@ -130,10 +183,10 @@ export class StudentAuthController {
       await Student.create({
         UserID: user.UserID,
         RegisterNumber,
-        DepartmentID: Number(DepartmentID),
-        ProgramID: Number(ProgramID),
+        DepartmentID: departmentId,
+        ProgramID: programId,
         SemesterID: initialSemester.SemesterID,
-        BatchYear: Number(BatchYear),
+        BatchYear: batchYear,
         Status: "ACTIVE",
         AdmissionDate: null
       });
@@ -143,6 +196,16 @@ export class StudentAuthController {
       // Compensate: delete user if student creation failed
       if (createdUserID) {
         await User.destroy({ where: { UserID: createdUserID } }).catch(() => {});
+      }
+      if (error instanceof UniqueConstraintError) {
+        const fields = Object.keys(error.fields || {});
+        const message = fields.includes("Email")
+          ? "Email is already registered"
+          : fields.includes("RegisterNumber")
+            ? "Register Number is already registered"
+            : "Duplicate value already exists";
+        res.status(400).json({ error: message, message });
+        return;
       }
       const detail = error?.errors?.map((e: any) => e.message).join(', ')
         || error?.original?.message

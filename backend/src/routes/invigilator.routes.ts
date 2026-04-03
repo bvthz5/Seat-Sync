@@ -2,18 +2,45 @@ import { Router } from "express";
 import { 
     getAllInvigilators, createInvigilator, deleteInvigilator, getInvigilatorStats, 
     toggleInvigilatorFlag, toggleInvigilatorEligibility, bulkImportInvigilators, clearAllFaculties,
-    activateInvigilator, requestInvigilatorAccess, getInvigilatorRequests, 
+    activateInvigilator, verifyInvigilatorActivationToken, resendInvigilatorActivationLink, requestInvigilatorAccess, getInvigilatorRequests, 
     approveInvigilatorRequest, rejectInvigilatorRequest
 } from "../controllers/invigilator.controller.js";
 import { AuthMiddleware } from "../middlewares/auth.middleware.js";
+import rateLimit from "express-rate-limit";
 
 const router = Router();
+
+const verifyLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: "Too many activation-link checks. Please try again later." },
+});
+
+const activateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: "Too many activation attempts. Please try again later." },
+});
+
+const resendLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: "Too many activation requests. Please try again later." },
+});
 
 // ==========================================
 // PUBLIC ROUTES
 // ==========================================
 
-router.post("/activate", activateInvigilator);
+router.get("/activate/verify", verifyLimiter, verifyInvigilatorActivationToken);
+router.post("/activate", activateLimiter, activateInvigilator);
+router.post("/activate/resend", resendLimiter, resendInvigilatorActivationLink);
 router.post("/request", requestInvigilatorAccess);
 
 // ==========================================

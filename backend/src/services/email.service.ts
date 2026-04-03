@@ -247,13 +247,14 @@ export class EmailService {
         }
     }
     async sendInvigilatorActivationEmail(to: string, name: string, token: string): Promise<void> {
-        const activationUrl = `${process.env.APP_URL || 'http://localhost:5173'}/faculty/activate?token=${token}`;
+        const appUrl = process.env.APP_URL || 'http://localhost:5173';
+        const activationUrl = new URL('/activate', appUrl).toString() + `?token=${encodeURIComponent(token)}`;
 
         const content = `
-            <h2 style="color: #1e293b; margin-top: 0; font-size: 20px;">Faculty Onboarding - Activate Your Account</h2>
+            <h2 style="color: #1e293b; margin-top: 0; font-size: 20px;">Invigilator Onboarding - Activate Your Account</h2>
             <p style="color: #475569;">
                 Hello <strong>${name}</strong>,<br><br>
-                Your faculty account has been created on the SeatSync Examination System. 
+                Your invigilator account has been created on the SeatSync Examination System. 
                 Please activate your account securely by setting up your access password using the link below.
             </p>
             
