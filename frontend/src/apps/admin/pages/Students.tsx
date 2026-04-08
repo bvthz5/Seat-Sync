@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import * as React from 'react';
+import { useEffect, useState } from 'react';
 import { 
     Button, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, 
     Chip, Pagination, Input, Tooltip, Select, SelectItem, Progress,
@@ -74,6 +75,9 @@ const Students: React.FC = () => {
     const [isImportOpen, setIsImportOpen] = useState(false);
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+    const [isDeleteAllOpen, setIsDeleteAllOpen] = useState(false);
+    const [isDeletingAll, setIsDeletingAll] = useState(false);
+    const [deleteAllConfirmText, setDeleteAllConfirmText] = useState('');
     
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
     const [drawerStudent, setDrawerStudent] = useState<Student | null>(null);
@@ -176,11 +180,12 @@ const Students: React.FC = () => {
                 setTotalPages(res.data.totalPages || 1);
 
                 const rawStats = res.data.stats || {};
+                const total = rawStats.totalDatabaseCount ?? 0;
                 setStats({
                     ...rawStats,
-                    activeStudents: Math.floor((rawStats.totalDatabaseCount || 100) * 0.85),
-                    selfRegistered: Math.floor((rawStats.totalDatabaseCount || 100) * 0.4),
-                    adminAdded: Math.floor((rawStats.totalDatabaseCount || 100) * 0.6),
+                    activeStudents: Math.floor(total * 0.85),
+                    selfRegistered: Math.floor(total * 0.4),
+                    adminAdded: Math.floor(total * 0.6),
                 });
             });
         } catch (error) {
@@ -214,7 +219,47 @@ const Students: React.FC = () => {
         } catch (error) { toast.error("Failed to delete student"); }
     };
 
-    const handleExport = () => toast("Export functionality coming soon!");
+    const handleExport = async () => {
+        try {
+            const response = await api.get('/students/export', {
+                params: {
+                    search: searchQuery,
+                    dept: filters.dept,
+                    program: filters.program,
+                    semester: filters.semester
+                },
+                responseType: 'blob'
+            });
+            
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'students_export.xlsx');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            toast.success("Students exported successfully");
+        } catch (error) {
+            toast.error("Failed to export students");
+        }
+    };
+
+    const handleDeleteAll = async () => {
+        if (deleteAllConfirmText !== 'DELETE ALL') return;
+        setIsDeletingAll(true);
+        try {
+            await api.delete('/students/delete-all');
+            toast.success('All student records have been deleted');
+            setIsDeleteAllOpen(false);
+            setDeleteAllConfirmText('');
+            setDrawerStudent(null);
+            fetchStudents();
+        } catch (error: any) {
+            toast.error(error?.response?.data?.message || 'Failed to delete all students');
+        } finally {
+            setIsDeletingAll(false);
+        }
+    };
 
     const handleFilterChange = (key: string, value: string) => {
         setFilters(prev => ({ ...prev, [key]: value }));
@@ -300,6 +345,14 @@ const Students: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-3">
                     <Button 
+                        className="bg-red-50 text-red-600 font-medium hover:bg-red-100 border border-red-200"
+                        startContent={<Trash2 size={16} />}
+                        onPress={() => setIsDeleteAllOpen(true)}
+                        radius="lg"
+                    >
+                        Delete All
+                    </Button>
+                    <Button 
                         className="bg-slate-50 text-slate-700 font-medium hover:bg-slate-100 border border-slate-200"
                         startContent={<FileDown size={16} />}
                         onPress={handleExport}
@@ -345,7 +398,7 @@ const Students: React.FC = () => {
                             placeholder="Search by student name, register number, or email..."
                             startContent={<Search size={18} className="text-gray-400" />}
                             value={searchQuery}
-                            onValueChange={val => { setSearchQuery(val); setPage(1); }}
+                            onValueChange={(val: string) => { setSearchQuery(val); setPage(1); }}
                             isClearable
                             onClear={() => setSearchQuery("")}
                         />
@@ -374,7 +427,7 @@ const Students: React.FC = () => {
                         aria-label="Filter Department"
                         placeholder="Department" 
                         selectedKeys={filters.dept ? [filters.dept] : []} 
-                        onChange={(e) => handleFilterChange('dept', e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleFilterChange('dept', e.target.value)}
                         variant="flat" 
                         classNames={{ trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10" }}
                         size="sm"
@@ -388,7 +441,7 @@ const Students: React.FC = () => {
                         aria-label="Filter Program"
                         placeholder="Program" 
                         selectedKeys={filters.program ? [filters.program] : []} 
-                        onChange={(e) => handleFilterChange('program', e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleFilterChange('program', e.target.value)}
                         variant="flat" 
                         classNames={{ trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10" }}
                         size="sm"
@@ -402,7 +455,7 @@ const Students: React.FC = () => {
                         aria-label="Filter Batch Year"
                         placeholder="Batch Year" 
                         selectedKeys={filters.batch ? [filters.batch] : []} 
-                        onChange={(e) => handleFilterChange('batch', e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleFilterChange('batch', e.target.value)}
                         variant="flat" 
                         classNames={{ trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10" }}
                         size="sm"
@@ -419,7 +472,7 @@ const Students: React.FC = () => {
                         aria-label="Filter Semester"
                         placeholder="Semester" 
                         selectedKeys={filters.semester ? [filters.semester] : []} 
-                        onChange={(e) => handleFilterChange('semester', e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleFilterChange('semester', e.target.value)}
                         variant="flat" 
                         classNames={{ trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10" }}
                         size="sm"
@@ -433,7 +486,7 @@ const Students: React.FC = () => {
                         aria-label="Filter Status"
                         placeholder="Status" 
                         selectedKeys={filters.status ? [filters.status] : []} 
-                        onChange={(e) => handleFilterChange('status', e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleFilterChange('status', e.target.value)}
                         variant="flat" 
                         classNames={{ trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10" }}
                         size="sm"
@@ -450,7 +503,7 @@ const Students: React.FC = () => {
                         aria-label="Filter Source"
                         placeholder="Source" 
                         selectedKeys={filters.source ? [filters.source] : []} 
-                        onChange={(e) => handleFilterChange('source', e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleFilterChange('source', e.target.value)}
                         variant="flat" 
                         classNames={{ trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10" }}
                         size="sm"
@@ -826,7 +879,7 @@ const Students: React.FC = () => {
             {/* Delete Student Modal */}
             <Modal isOpen={isDeleteOpen} onClose={() => setIsDeleteOpen(false)} size="sm" backdrop="blur" classNames={{ base: "bg-white border border-gray-200 shadow-2xl rounded-2xl" }}>
                 <ModalContent>
-                    {(onClose) => (
+                    {(onClose: () => void) => (
                         <ModalBody className="p-8 text-center space-y-5">
                             <div className="w-16 h-16 mx-auto rounded-2xl bg-red-50 flex items-center justify-center">
                                 <AlertTriangle size={28} className="text-red-500" />
@@ -840,6 +893,55 @@ const Students: React.FC = () => {
                             <div className="flex gap-3 pt-2">
                                 <Button variant="bordered" className="flex-1 font-semibold" onPress={onClose} size="lg" radius="lg">Cancel</Button>
                                 <Button className="flex-1 bg-red-500 text-white font-semibold hover:bg-red-600" onPress={handleDelete} size="lg" radius="lg" startContent={<Trash2 size={16} />}>Delete</Button>
+                            </div>
+                        </ModalBody>
+                    )}
+                </ModalContent>
+            </Modal>
+
+            {/* Delete All Students Modal */}
+            <Modal isOpen={isDeleteAllOpen} onClose={() => { setIsDeleteAllOpen(false); setDeleteAllConfirmText(''); }} size="md" backdrop="blur" classNames={{ base: "bg-white border border-gray-200 shadow-2xl rounded-2xl" }}>
+                <ModalContent>
+                    {(onClose: () => void) => (
+                        <ModalBody className="p-8 text-center space-y-5">
+                            <div className="w-16 h-16 mx-auto rounded-2xl bg-red-50 flex items-center justify-center">
+                                <AlertTriangle size={28} className="text-red-500" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-gray-900">Delete All Students</h3>
+                                <p className="text-sm text-gray-500 mt-2 leading-relaxed">
+                                    This will permanently delete <strong className="text-red-600">all {stats.totalDatabaseCount} student records</strong> from the database. User accounts will be preserved but their student data will be removed.
+                                </p>
+                                <p className="text-sm text-gray-500 mt-3">
+                                    Type <strong className="text-red-600 font-mono">DELETE ALL</strong> to confirm:
+                                </p>
+                                <Input
+                                    id="delete-all-confirm"
+                                    name="delete-all-confirm"
+                                    aria-label="Confirm delete all"
+                                    value={deleteAllConfirmText}
+                                    onValueChange={setDeleteAllConfirmText}
+                                    placeholder="Type DELETE ALL"
+                                    classNames={{
+                                        inputWrapper: "mt-2 bg-red-50/50 border border-red-200 hover:border-red-300 focus-within:border-red-500 rounded-xl",
+                                        input: "text-center font-mono font-bold text-red-600 placeholder:text-red-300"
+                                    }}
+                                    autoComplete="off"
+                                />
+                            </div>
+                            <div className="flex gap-3 pt-2">
+                                <Button variant="bordered" className="flex-1 font-semibold" onPress={onClose} size="lg" radius="lg">Cancel</Button>
+                                <Button 
+                                    className="flex-1 bg-red-500 text-white font-semibold hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    onPress={handleDeleteAll} 
+                                    size="lg" 
+                                    radius="lg" 
+                                    startContent={<Trash2 size={16} />}
+                                    isDisabled={deleteAllConfirmText !== 'DELETE ALL'}
+                                    isLoading={isDeletingAll}
+                                >
+                                    Delete All Students
+                                </Button>
                             </div>
                         </ModalBody>
                     )}

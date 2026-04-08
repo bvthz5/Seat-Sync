@@ -790,9 +790,18 @@ export const deleteStudent = async (req: Request, res: Response) => {
 
 export const deleteAllStudents = async (req: Request, res: Response) => {
     try {
-        // Use Managed Transaction to prevent "rollback without begin" errors
         await sequelize.transaction(async (t) => {
-            // Only Delete Students. Users remain.
+            // Clear dependent tables that have FK references to Students
+            // Use try/catch per table in case some don't exist yet
+            const dependentTables = ['SeatAllocations', 'StudentSubjects', 'ExamRegistrations', 'Attendance'];
+            for (const table of dependentTables) {
+                try {
+                    await sequelize.query(`DELETE FROM [${table}]`, { transaction: t });
+                } catch (tableErr: any) {
+                    console.log(`[DeleteAll] Skipping ${table}: ${tableErr.message}`);
+                }
+            }
+            // Now safe to delete all students
             await Student.destroy({ where: {}, truncate: false, transaction: t });
         });
 

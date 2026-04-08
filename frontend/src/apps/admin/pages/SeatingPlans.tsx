@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useState, useCallback, useTransition } from 'react';
+import * as React from 'react';
+import { useEffect, useState, useCallback, useTransition } from 'react';
 import {
     Card, CardBody, CardHeader, Button, Select, SelectItem,
     Chip, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter,
@@ -637,9 +638,7 @@ const SeatingPlans: React.FC = () => {
         const timer = setTimeout(async () => {
             setSearching(true);
             try {
-                console.log('[Search] calling with:', { selectedDate, selectedSession, q: searchQ.trim() });
                 const data = await SeatingService.searchStudent(selectedDate, selectedSession, searchQ.trim());
-                console.log('[Search] response:', data);
                 setSearchResults(data.results || []);
             } catch (err: any) {
                 console.error('Search error:', err?.response?.data || err?.message || err);
@@ -753,7 +752,7 @@ const SeatingPlans: React.FC = () => {
                                     </span>
                                     <Select aria-label="Exam Series" placeholder="ΓÇö All Series ΓÇö" variant="bordered"
                                         selectedKeys={selectedSeries ? [selectedSeries] : []}
-                                        onSelectionChange={(k) => setSelectedSeries(Array.from(k)[0] as string || '')}
+                                        onSelectionChange={(k: any) => setSelectedSeries(Array.from(k)[0] as string || '')}
                                         classNames={{
                                             trigger: "bg-[#0d1424] border border-[#1e293b] shadow-inner rounded-lg data-[hover=true]:border-indigo-500/50 data-[hover=true]:bg-[#0f172a] transition-all h-9 text-slate-200 text-xs",
                                             popoverContent: "bg-[#0d1424] border border-[#1e293b] text-slate-200"
@@ -848,7 +847,7 @@ const SeatingPlans: React.FC = () => {
                                         </span>
                                         <Select aria-label="Left Department" placeholder="ΓÇö None ΓÇö" variant="bordered"
                                             selectedKeys={leftDept ? [leftDept] : []}
-                                            onSelectionChange={(k) => setLeftDept(Array.from(k)[0] as string || '')}
+                                            onSelectionChange={(k: any) => setLeftDept(Array.from(k)[0] as string || '')}
                                             classNames={{
                                                 trigger: "bg-[#0d1424] border border-[#1e293b] shadow-inner rounded-lg data-[hover=true]:border-emerald-500/50 data-[hover=true]:bg-[#0f172a] transition-all h-9 text-slate-200 text-xs",
                                                 popoverContent: "bg-[#0d1424] border border-[#1e293b] text-slate-200"
@@ -862,7 +861,7 @@ const SeatingPlans: React.FC = () => {
                                         </span>
                                         <Select aria-label="Right Department" placeholder="ΓÇö None ΓÇö" variant="bordered"
                                             selectedKeys={rightDept ? [rightDept] : []}
-                                            onSelectionChange={(k) => setRightDept(Array.from(k)[0] as string || '')}
+                                            onSelectionChange={(k: any) => setRightDept(Array.from(k)[0] as string || '')}
                                             classNames={{
                                                 trigger: "bg-[#0d1424] border border-[#1e293b] shadow-inner rounded-lg data-[hover=true]:border-emerald-500/50 data-[hover=true]:bg-[#0f172a] transition-all h-9 text-slate-200 text-xs",
                                                 popoverContent: "bg-[#0d1424] border border-[#1e293b] text-slate-200"
@@ -1013,7 +1012,7 @@ const SeatingPlans: React.FC = () => {
                                                 </DropdownTrigger>
                                                 <DropdownMenu aria-label="Download format"
                                                     classNames={{ base: 'bg-[#0f1729] border border-[#1e293b] rounded-xl shadow-2xl min-w-[180px]', list: 'gap-1 p-1' }}
-                                                    onAction={(key) => { if (key === 'pdf') downloadGlobalPDF(); else if (key === 'excel') downloadGlobalExcel(); }}>
+                                                    onAction={(key: any) => { if (key === 'pdf') downloadGlobalPDF(); else if (key === 'excel') downloadGlobalExcel(); }}>
                                                     <DropdownItem key="pdf"
                                                         startContent={<FileDown size={14} className="text-rose-400" />}
                                                         className="text-slate-300 data-[hover]:bg-[#1e293b] data-[hover]:text-white rounded-lg"
@@ -1069,7 +1068,7 @@ const SeatingPlans: React.FC = () => {
                                                             </DropdownTrigger>
                                                             <DropdownMenu aria-label="Hall actions"
                                                                 classNames={{ base: 'bg-[#0f1729] border border-[#1e293b] rounded-xl shadow-2xl min-w-[180px]', list: 'gap-0' }}
-                                                                onAction={(key) => {
+                                                                onAction={(key: any) => {
                                                                     if (key === 'edit') { setEditHall(h); setEditCapacity(String(h.capacity)); }
                                                                     else if (key === 'clear') { handleCardClearHall(h); }
                                                                     else if (key === 'disable') { handleDisableHall(h); }
@@ -1152,7 +1151,7 @@ const SeatingPlans: React.FC = () => {
             </div>
 
             {/* ΓòÉΓòÉΓòÉ HALL DETAIL ΓÇö BLUEPRINT FLOOR PLAN ΓòÉΓòÉΓòÉ */}
-            <Modal isOpen={!!detailHall} onOpenChange={(open) => { if (!open) { setDetailHall(null); loadSummary(); } }} backdrop="blur" size="full" scrollBehavior="inside"
+            <Modal isOpen={!!detailHall} onOpenChange={(open: boolean) => { if (!open) { setDetailHall(null); loadSummary(); } }} backdrop="blur" size="full" scrollBehavior="inside"
                 classNames={{
                     backdrop: "bg-black/60 backdrop-blur-xl",
                     base: "max-w-[96vw] max-h-[94vh] m-auto rounded-2xl bg-[#171c28] border border-[#253040] shadow-[0_24px_80px_rgba(0,0,0,0.6)] overflow-hidden flex flex-col",
@@ -1322,7 +1321,7 @@ const SeatingPlans: React.FC = () => {
                 </ModalContent>
             </Modal>
             {/* ΓòÉΓòÉΓòÉ Edit Capacity Modal ΓòÉΓòÉΓòÉ */}
-            <Modal isOpen={!!editHall} onOpenChange={(open) => { if (!open) setEditHall(null); }} backdrop="blur" size="md">
+            <Modal isOpen={!!editHall} onOpenChange={(open: boolean) => { if (!open) setEditHall(null); }} backdrop="blur" size="md">
                 <ModalContent className="bg-[#151923] border border-[#2d3348] rounded-[24px] shadow-2xl">
                     <ModalHeader className="border-b border-[#2d3348]/60 px-6 py-5">
                         <div className="flex items-center gap-3">
@@ -1365,7 +1364,7 @@ const SeatingPlans: React.FC = () => {
             <Modal isOpen={showPrintModal} onOpenChange={setShowPrintModal} backdrop="blur" size="4xl" scrollBehavior="outside"
                 classNames={{ base: 'bg-white shadow-2xl rounded-2xl my-8', header: 'hidden', footer: 'border-t border-slate-200 bg-slate-50/80 px-6 py-4 sticky bottom-0 z-10' }}>
                 <ModalContent>
-                    {(onClose) => (
+                    {(onClose: () => void) => (
                         <>
                             <ModalBody className="p-0 overflow-visible">
                                 {/* ΓöÇΓöÇ Printable Area ΓöÇΓöÇ */}
@@ -1491,7 +1490,7 @@ const SeatingPlans: React.FC = () => {
             {/* ΓòÉΓòÉΓòÉ Global Shuffle Confirmation Modal ΓòÉΓòÉΓòÉ */}
             <Modal isOpen={showShuffleConfirm} onOpenChange={setShowShuffleConfirm} placement="center" backdrop="blur" classNames={{ base: "bg-[#0b1221] border border-[#1e293b] shadow-2xl overflow-hidden", backdrop: "bg-[#05080f]/80 backdrop-blur-md" }}>
                 <ModalContent>
-                    {(onClose) => (
+                    {(onClose: () => void) => (
                         <>
                             <div className="absolute top-0 right-0 w-32 h-32 bg-pink-500/10 rounded-full blur-[40px] -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
                             <ModalHeader className="flex flex-col gap-1 border-b border-[#1e293b] px-6 py-5 relative z-10">
