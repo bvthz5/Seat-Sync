@@ -36,7 +36,12 @@ const SOCKET_URL = 'http://localhost:5000'; // Adjust for production
 export const initNotificationSocket = (userId: number, onNewNotification: (n: Notification) => void) => {
     if (socket) return socket;
 
-    socket = io(SOCKET_URL);
+    socket = io(SOCKET_URL, {
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        reconnectionAttempts: 5
+    });
 
     socket.on('connect', () => {
         console.log('Notification Socket Connected');
@@ -44,28 +49,38 @@ export const initNotificationSocket = (userId: number, onNewNotification: (n: No
     });
 
     socket.on('notification', (payload: any) => {
-        // Map payload to Notification interface if needed
-        const notification: Notification = {
-            id: payload.id,
-            title: payload.title,
-            message: payload.message,
-            type: payload.type.toLowerCase(),
-            category: payload.category,
-            priority: payload.priority,
-            sentAt: payload.createdAt,
-            isRead: false,
-            metadata: payload.metadata,
-            audience: ['Me'], // Socket notification is usually for 'me' or 'role' but payload doesn't carry target info sometimes
-            status: 'Delivered'
+        // Queue heavy work to avoid blocking socket handler
+        const processNotification = () => {
+            const notification: Notification = {
+                id: payload.id,
+                title: payload.title,
+                message: payload.message,
+                type: payload.type?.toLowerCase?.() || 'info',
+                category: payload.category || 'SYSTEM',
+                priority: payload.priority || 'NORMAL',
+                sentAt: payload.createdAt || new Date().toISOString(),
+                isRead: false,
+                metadata: payload.metadata,
+                audience: ['Me'],
+                status: 'Delivered'
+            };
+
+            onNewNotification(notification);
         };
 
-        onNewNotification(notification);
+        // Use Promise for non-blocking deferred execution
+        Promise.resolve().then(processNotification).catch(err => 
+            console.error('Failed to process notification:', err)
+        );
 
-        if (notification.priority === 'CRITICAL' || notification.type === 'EMERGENCY') {
-            toast.error(`EMERGENCY: ${notification.title}`, { duration: 10000 });
-        } else {
-            toast(`New Notification: ${notification.title}`, { icon: '🔔' });
-        }
+        // Toast asynchronously
+        Promise.resolve().then(() => {
+            if (payload.priority === 'CRITICAL' || payload.type === 'EMERGENCY') {
+                toast.error(`EMERGENCY: ${payload.title}`, { duration: 10000 });
+            } else {
+                toast(`New Notification: ${payload.title}`, { icon: '🔔' });
+            }
+        });
     });
 
     return socket;

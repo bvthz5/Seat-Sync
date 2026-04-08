@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { getAllStudents, importStudents, createStudent, getCreateOptions, updateStudent, deleteStudent, exportStudents, deleteAllStudents } from '../controllers/student.controller.js';
+import { getAllStudents, importStudents, createStudent, getCreateOptions, updateStudent, deleteStudent, exportStudents, deleteAllStudents, bulkImportStudents, bulkImportStudentsWithSeats, getStudentImportTemplate } from '../controllers/student.controller.js';
 import { AuthMiddleware } from '../middlewares/auth.middleware.js';
 
 const router = express.Router();
@@ -15,6 +15,19 @@ const upload = multer({
             cb(null, true);
         } else {
             cb(new Error("Only Excel files are allowed"));
+        }
+    }
+});
+
+// Multer setup for CSV files
+const csvUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype === "text/csv" || file.originalname.endsWith('.csv')) {
+            cb(null, true);
+        } else {
+            cb(new Error("Only CSV files are allowed"));
         }
     }
 });
@@ -320,5 +333,126 @@ router.get('/meta/create-options', AuthMiddleware.verifyAccessToken, getCreateOp
  *         description: Server error
  */
 router.post('/import', AuthMiddleware.verifyAccessToken, upload.single('file'), importStudents);
+
+/**
+ * @swagger
+ * /api/students/bulk-import/csv:
+ *   post:
+ *     summary: Bulk import students from CSV file
+ *     tags: [Student]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - file
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: CSV file with columns FullName, RegisterNumber, DepartmentCode, ProgramName, SemesterNumber, Email
+ *     responses:
+ *       201:
+ *         description: Bulk import completed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     studentsCreated:
+ *                       type: integer
+ *                     usersCreated:
+ *                       type: integer
+ *                     successRows:
+ *                       type: integer
+ *                     failedRows:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           rowNumber:
+ *                             type: integer
+ *                           registerNumber:
+ *                             type: string
+ *                           error:
+ *                             type: string
+ *       400:
+ *         description: Invalid file, missing data, or validation error
+ *       500:
+ *         description: Server error
+ */
+router.post('/bulk-import/csv', AuthMiddleware.verifyAccessToken, csvUpload.single('file'), bulkImportStudents);
+
+/**
+ * @swagger
+ * /api/students/bulk-import/csv-with-seats:
+ *   post:
+ *     summary: Bulk import students from CSV and optionally allocate seats
+ *     tags: [Student]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - file
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *               blockId:
+ *                 type: string
+ *                 description: Optional - Block ID for seat allocation
+ *               floorId:
+ *                 type: string
+ *                 description: Optional - Floor ID for seat allocation
+ *               roomId:
+ *                 type: string
+ *                 description: Optional - Room ID for seat allocation
+ *               batchNumber:
+ *                 type: string
+ *                 description: Optional - Batch number for seat allocation (default 1)
+ *     responses:
+ *       201:
+ *         description: Bulk import completed with optional seat allocation
+ *       400:
+ *         description: Invalid file or data
+ *       500:
+ *         description: Server error
+ */
+router.post('/bulk-import/csv-with-seats', AuthMiddleware.verifyAccessToken, csvUpload.single('file'), bulkImportStudentsWithSeats);
+
+/**
+ * @swagger
+ * /api/students/import-template:
+ *   get:
+ *     summary: Download sample CSV template for bulk student import
+ *     tags: [Student]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Excel file containing sample import template
+ *         content:
+ *           application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       500:
+ *         description: Server error
+ */
+router.get('/import-template', AuthMiddleware.verifyAccessToken, getStudentImportTemplate);
 
 export default router;
