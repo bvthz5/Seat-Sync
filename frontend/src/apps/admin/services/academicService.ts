@@ -9,6 +9,7 @@ export const academicService = {
 
     // --- Departments ---
     getDepartments: async (params?: any) => api.get('/departments', { params }),
+    createDepartment: async (data: any) => api.post('/departments', data),
     importDepartments: async (file: File) => {
         const formData = new FormData();
         formData.append('file', file);
@@ -30,6 +31,7 @@ export const academicService = {
 
     // --- Programs ---
     getPrograms: async (params?: any) => api.get('/programs', { params }),
+    createProgram: async (data: any) => api.post('/programs', data),
     importPrograms: async (file: File) => {
         const formData = new FormData();
         formData.append('file', file);

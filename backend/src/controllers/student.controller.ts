@@ -8,6 +8,8 @@ import { sequelize } from '../config/database.js';
 import { Op } from 'sequelize';
 import bcrypt from 'bcrypt';
 import * as XLSX from 'xlsx';
+import { BulkStudentImportService } from '../services/bulkStudentImport.service.js';
+import { emailService } from '../services/email.service.js';
 
 export const getAllStudents = async (req: Request, res: Response) => {
     try {
@@ -514,14 +516,16 @@ export const importStudents = async (req: Request, res: Response) => {
 export const createStudent = async (req: Request, res: Response) => {
     const t = await sequelize.transaction();
     try {
-        const { FullName, RegisterNumber } = req.body;
+        const { FullName, RegisterNumber, DepartmentID, ProgramID, SemesterID, Email, BatchYear } = req.body;
 
         // Only Name and Register Number are required
         if (!FullName || !RegisterNumber) {
+            await t.rollback();
             return res.status(400).json({ message: "Full Name and Register Number are required" });
         }
 
         const regNo = String(RegisterNumber).trim();
+        const collegeEmail = Email ? String(Email).trim().toLowerCase() : null;
 
         // Check for existing student
         const existingStudent = await Student.findOne({ where: { RegisterNumber: regNo }, transaction: t });
@@ -530,84 +534,115 @@ export const createStudent = async (req: Request, res: Response) => {
             return res.status(409).json({ message: "Student with this Register Number already exists" });
         }
 
-        // Smart Parsing — same logic as Excel import
-        const programCache = new Map<string, any>();
-        const deptCache = new Map<string, any>();
-        const programsAll = await Program.findAll({ transaction: t });
-        const deptsAll = await Department.findAll({ transaction: t });
-
-        programsAll.forEach((p: any) => {
-            if (p.ProgramCode) programCache.set(p.ProgramCode.toUpperCase(), p);
-            programCache.set(p.ProgramName.toUpperCase(), p);
-        });
-        deptsAll.forEach((d: any) => {
-            deptCache.set(d.DepartmentCode.toUpperCase(), d);
-            deptCache.set(d.DepartmentName.toUpperCase(), d);
-        });
-
-        const idRegex = /^(L?SJC)(\d{2})([A-Z]+)(\d+)$/i;
-        const match = regNo.match(idRegex);
-
-        let targetProgram: any = null;
-        let targetDept: any = null;
-        let derivedBatchYear: number | null = null;
-
-        if (match) {
-            const yearShort = match[2];
-            const code = match[3];
-
-            if (yearShort && code) {
-                derivedBatchYear = 2000 + parseInt(yearShort, 10);
-                const codeUpper = code.toUpperCase();
-
-                if (programCache.has(codeUpper)) {
-                    targetProgram = programCache.get(codeUpper);
-                    targetDept = deptsAll.find((d: any) => d.DepartmentID === targetProgram.DepartmentID);
-                } else if (deptCache.has(codeUpper)) {
-                    targetDept = deptCache.get(codeUpper);
-                }
+        // Check if email is already in use (if provided)
+        if (collegeEmail) {
+            const existingUser = await User.findOne({ where: { Email: collegeEmail }, transaction: t });
+            if (existingUser) {
+                await t.rollback();
+                return res.status(409).json({ message: "An account with this email already exists" });
             }
         }
 
-        if (targetProgram && !targetDept) {
-            if (targetProgram.ProgramName.includes('Computer') || targetProgram.ProgramName.includes('MCA')) {
-                targetDept = deptsAll.find((d: any) => d.DepartmentCode === 'MCA' || d.DepartmentCode === 'CSE');
+        // Smart Parsing — same logic as Excel import
+        let targetProgram: any = null;
+        let targetDept: any = null;
+        let targetSemester: any = null;
+        let derivedBatchYear: number | null = null;
+
+        const programsAll = await Program.findAll({ transaction: t });
+        const deptsAll = await Department.findAll({ transaction: t });
+
+        if (ProgramID) {
+            targetProgram = programsAll.find((p: any) => p.ProgramID === parseInt(ProgramID));
+        }
+        if (DepartmentID) {
+            targetDept = deptsAll.find((d: any) => d.DepartmentID === parseInt(DepartmentID));
+        }
+
+        if (!targetProgram || !targetDept) {
+            // Smart Parsing — same logic as Excel import
+            const programCache = new Map<string, any>();
+            const deptCache = new Map<string, any>();
+
+            programsAll.forEach((p: any) => {
+                if (p.ProgramCode) programCache.set(p.ProgramCode.toUpperCase(), p);
+                programCache.set(p.ProgramName.toUpperCase(), p);
+            });
+            deptsAll.forEach((d: any) => {
+                deptCache.set(d.DepartmentCode.toUpperCase(), d);
+                deptCache.set(d.DepartmentName.toUpperCase(), d);
+            });
+
+            const idRegex = /^(L?SJC)(\d{2})([A-Z]+)(\d+)$/i;
+            const match = regNo.match(idRegex);
+
+            if (match) {
+                const yearShort = match[2];
+                const code = match[3];
+
+                if (yearShort && code) {
+                    derivedBatchYear = 2000 + parseInt(yearShort, 10);
+                    const codeUpper = code.toUpperCase();
+
+                    if (!targetProgram && programCache.has(codeUpper)) {
+                        targetProgram = programCache.get(codeUpper);
+                    }
+                    if (!targetDept && deptCache.has(codeUpper)) {
+                        targetDept = deptCache.get(codeUpper);
+                    }
+                }
+            }
+
+            if (targetProgram && !targetDept) {
+                // Infer department from program if possible
+                targetDept = deptsAll.find((d: any) => d.DepartmentID === targetProgram.DepartmentID);
+                if (!targetDept && (targetProgram.ProgramName.includes('Computer') || targetProgram.ProgramName.includes('MCA'))) {
+                    targetDept = deptsAll.find((d: any) => d.DepartmentCode === 'MCA' || d.DepartmentCode === 'CSE');
+                }
             }
         }
 
         if (!targetProgram) {
             await t.rollback();
-            return res.status(400).json({ message: `Could not identify Program from Register Number '${regNo}'. Please check the format.` });
+            return res.status(400).json({ message: `Could not identify Program from Register Number '${regNo}'. Please check the format or select explicitly.` });
         }
         if (!targetDept) {
             await t.rollback();
-            return res.status(400).json({ message: `Could not identify Department from Register Number '${regNo}'.` });
+            return res.status(400).json({ message: `Could not identify Department from Register Number '${regNo}'. Please select explicitly.` });
         }
 
-        // Default to Semester 1
-        let targetSemester = await Semester.findOne({
-            where: { ProgramID: targetProgram.ProgramID, SemesterNumber: 1 },
-            transaction: t
-        });
+        // Determine Semester
+        if (SemesterID) {
+            targetSemester = await Semester.findOne({ where: { SemesterID: parseInt(SemesterID) }, transaction: t });
+        }
         if (!targetSemester) {
-            targetSemester = await Semester.create({
-                ProgramID: targetProgram.ProgramID,
-                SemesterNumber: 1,
-                SemesterName: 'S1',
-                IsActive: true
-            }, { transaction: t });
+            targetSemester = await Semester.findOne({
+                where: { ProgramID: targetProgram.ProgramID, SemesterNumber: 1 },
+                transaction: t
+            });
+            if (!targetSemester) {
+                targetSemester = await Semester.create({
+                    ProgramID: targetProgram.ProgramID,
+                    SemesterNumber: 1,
+                    SemesterName: 'S1',
+                    IsActive: true
+                }, { transaction: t });
+            }
         }
 
         // Create minimal User to hold FullName (required by DB schema constraint on UserID)
-        const passwordStr = (FullName.replace(/\s/g, '').substring(0, 4) + '@123');
-        const defaultPassword = await bcrypt.hash(passwordStr, 10);
+        const plainTextPassword = FullName.replace(/\s/g, '').substring(0, 4) + '@123';
+        const hashedPassword = await bcrypt.hash(plainTextPassword, 10);
 
-        let user = await User.findOne({ where: { Email: regNo }, transaction: t });
+        // Use provided email or fall back to RegisterNumber
+        const userEmail = collegeEmail || regNo;
+
+        let user = await User.findOne({ where: { Email: userEmail }, transaction: t });
         if (!user) {
             user = await User.create({
-                Email: regNo,
+                Email: userEmail,
                 FullName,
-                PasswordHash: defaultPassword,
+                PasswordHash: hashedPassword,
                 Role: 'student',
                 IsRootAdmin: false
             }, { transaction: t });
@@ -624,11 +659,22 @@ export const createStudent = async (req: Request, res: Response) => {
             DepartmentID: targetDept.DepartmentID,
             ProgramID: targetProgram.ProgramID,
             SemesterID: targetSemester.SemesterID,
-            BatchYear: derivedBatchYear || new Date().getFullYear()
+            BatchYear: BatchYear ? parseInt(BatchYear) : (derivedBatchYear || new Date().getFullYear())
         }, { transaction: t });
 
         await t.commit();
-        res.status(201).json({ message: "Student created successfully", student: newStudent });
+
+        // Send credentials email asynchronously (don't wait for it)
+        if (collegeEmail) {
+            emailService.sendStudentCredentialsEmail(collegeEmail, FullName, userEmail, plainTextPassword, regNo)
+                .catch(err => console.error('Failed to send credentials email:', err.message));
+        }
+
+        res.status(201).json({ 
+            message: "Student created successfully", 
+            student: newStudent,
+            credentialsEmailSent: !!collegeEmail
+        });
 
     } catch (error: any) {
         await t.rollback();
@@ -757,4 +803,116 @@ export const deleteAllStudents = async (req: Request, res: Response) => {
         res.status(500).json({ message: "Failed to delete all students", error: error.message });
     }
 };
+
+// Bulk Import from CSV
+export const bulkImportStudents = async (req: Request, res: Response) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: "No CSV file uploaded" });
+        }
+
+        const importService = new BulkStudentImportService();
+        const result = await importService.importFromCSV(req.file.buffer);
+
+        res.status(201).json({
+            message: "Bulk import completed",
+            data: result
+        });
+
+    } catch (error: any) {
+        console.error("Bulk Import Error:", error);
+        res.status(400).json({ message: error.message || "Failed to import students" });
+    }
+};
+
+// Bulk Import with optional seat allocation
+export const bulkImportStudentsWithSeats = async (req: Request, res: Response) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: "No CSV file uploaded" });
+        }
+
+        const { blockId, floorId, roomId, batchNumber } = req.body;
+
+        // Optional validation if seat allocation is requested
+        if (blockId && floorId && roomId) {
+            if (!blockId || !floorId || !roomId) {
+                return res.status(400).json({ 
+                    message: "All of blockId, floorId, roomId must be provided for seat allocation" 
+                });
+            }
+        }
+
+        const importService = new BulkStudentImportService();
+        const result = blockId && floorId && roomId
+            ? await importService.importWithSeatAllocation(
+                req.file.buffer,
+                parseInt(blockId),
+                parseInt(floorId),
+                parseInt(roomId),
+                batchNumber ? parseInt(batchNumber) : 1
+            )
+            : await importService.importFromCSV(req.file.buffer);
+
+        res.status(201).json({
+            message: "Bulk import completed",
+            data: result
+        });
+
+    } catch (error: any) {
+        console.error("Bulk Import with Seats Error:", error);
+        res.status(400).json({ message: error.message || "Failed to import students" });
+    }
+};
+
+// Get sample CSV template for bulk import
+export const getStudentImportTemplate = async (req: Request, res: Response) => {
+    try {
+        const sampleData = [
+            {
+                FullName: "John Doe",
+                RegisterNumber: "REG001",
+                DepartmentCode: "CSE",
+                ProgramName: "B.Tech",
+                SemesterNumber: "1",
+                Email: "john.doe@example.com"
+            },
+            {
+                FullName: "Jane Smith",
+                RegisterNumber: "REG002",
+                DepartmentCode: "ECE",
+                ProgramName: "B.Tech",
+                SemesterNumber: "1",
+                Email: "jane.smith@example.com"
+            }
+        ];
+
+        // Create workbook and worksheet
+        const worksheet = XLSX.utils.json_to_sheet(sampleData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Students");
+
+        // Set column widths
+        worksheet['!cols'] = [
+            { wch: 20 },
+            { wch: 15 },
+            { wch: 15 },
+            { wch: 15 },
+            { wch: 15 },
+            { wch: 25 }
+        ];
+
+        // Send as attachment
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename="student_import_template.xlsx"');
+        
+        const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
+        res.send(buffer);
+
+    } catch (error: any) {
+        console.error("Template Generation Error:", error);
+        res.status(500).json({ message: "Failed to generate template", error: error.message });
+    }
+};
+
 

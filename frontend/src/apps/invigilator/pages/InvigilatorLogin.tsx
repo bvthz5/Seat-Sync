@@ -262,8 +262,8 @@ const InvigilatorLogin = () => {
         if (!email) {
             setEmailError('Faculty email is required');
             isValid = false;
-        } else if (!/^[a-zA-Z0-9._%+-]+@sjcetpalai\.ac\.in$/.test(email)) {
-            setEmailError('Must use @sjcetpalai.ac.in email');
+        } else if (!/^[a-zA-Z0-9._%+-]+@([a-zA-Z0-9-]+\.)*sjcetpalai\.ac\.in$/i.test(email)) {
+            setEmailError('Must use your official sjcetpalai.ac.in email (including subdomains)');
             isValid = false;
         }
 
@@ -397,7 +397,7 @@ const InvigilatorLogin = () => {
                             <CustomInput
                                 id="email"
                                 label="Official Faculty Email"
-                                placeholder="name@sjcetpalai.ac.in"
+                                placeholder="name@mca.sjcetpalai.ac.in"
                                 type="email"
                                 value={email}
                                 onChange={(e: any) => setEmail(e.target.value)}
@@ -449,6 +449,9 @@ const InvigilatorLogin = () => {
 
                     {/* Footer */}
                     <motion.div variants={itemVariants} className="text-center space-y-4">
+                        <div className="text-sm font-medium text-slate-500 pb-2">
+                            New faculty staff? <Link href="/invigilator/request" className="text-indigo-600 font-bold hover:underline ml-1">Request duty access</Link>
+                        </div>
                         <div className="h-px w-full bg-slate-100"></div>
                         <p className="text-[11px] text-slate-400 font-medium uppercase tracking-widest">
                             Protected by SeatSync Identity Server

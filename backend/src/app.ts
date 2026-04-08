@@ -16,6 +16,9 @@ import structureImportRoutes from "./routes/structureImport.routes.js";
 import examRoutes from "./routes/exam.routes.js";
 import subjectRoutes from "./routes/subject.routes.js";
 
+// Initialize cron jobs
+import "./cron/academic.cron.js";
+
 // New ERP routes
 import adminManagementRoutes from "./routes/adminManagement.routes.js";
 import academicSetupRoutes from "./routes/academicSetup.routes.js";
@@ -25,6 +28,7 @@ import examControlRoutes from "./routes/examControl.routes.js";
 import departmentRoutes from "./routes/department.routes.js";
 import programRoutes from "./routes/program.routes.js";
 import invigilatorRoutes from "./routes/invigilator.routes.js";
+import studentPortalRoutes from "./routes/student.portal.routes.js";
 import unifiedAcademicRoutes from "./routes/unified_academic.routes.js";
 import seriesRoutes from "./routes/series.routes.js";
 
@@ -141,6 +145,8 @@ const swaggerSpec = swaggerJsdoc(options);
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Routes (Body parsers already applied)
+import studentAuthRoutes from "./routes/student.auth.routes.js";
+app.use("/api/auth/student", studentAuthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/students", studentRoutes);
 app.use("/api/admin/college-structure", collegeStructureRoutes);
@@ -161,6 +167,7 @@ app.use("/api/departments", departmentRoutes);
 app.use("/api/programs", programRoutes);
 app.use("/api/faculties", facultyRoutes);
 app.use("/api/invigilators", invigilatorRoutes);
+app.use("/api/student", studentPortalRoutes);
 app.use("/api/academic", unifiedAcademicRoutes);
 app.use("/api/series", seriesRoutes);
 

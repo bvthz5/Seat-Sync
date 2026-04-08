@@ -1,193 +1,793 @@
-import React, { useEffect, useState } from 'react';
-import { Tabs, Tab, Card, CardBody, Select, SelectItem, Button } from '@heroui/react';
-import { BookOpen, Calendar, Building2, Layers, Book, Bookmark, Clock, ChevronDown, FileSpreadsheet } from 'lucide-react';
-import { Departments } from '../components/academic/Departments';
-import { Programs } from '../components/academic/Programs';
-import { Semesters } from '../components/academic/Semesters';
-import { Subjects } from '../components/academic/Subjects';
-import { UnifiedImportModal } from '../components/academic/UnifiedImportModal';
-import { academicService } from '../services/academicService';
-import { AcademicYear } from '../types/academic';
+import React, { useEffect, useRef, useState } from 'react';
+import api from '../../../services/api';
 import { toast } from '../../../utils/toast';
+import {
+    Building2, Layers, Plus, Upload, Download, RefreshCw, Trash2, Edit3,
+    X, AlertTriangle, Search, ChevronDown, BookOpen, GraduationCap, FileSpreadsheet
+} from 'lucide-react';
 
+/* ────────────────────────── types ────────────────────────── */
+interface Department {
+    DepartmentID: number;
+    DepartmentCode: string;
+    DepartmentName: string;
+    programCount?: number;
+}
+
+interface Program {
+    ProgramID: number;
+    ProgramCode: string;
+    ProgramName: string;
+    DurationYears: number;
+    TotalSemesters?: number;
+    Departments?: Department[];
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MAIN PAGE
+═══════════════════════════════════════════════════════════ */
 const AcademicSetup: React.FC = () => {
-    const [years, setYears] = useState<AcademicYear[]>([]);
-    const [selectedYearId, setSelectedYearId] = useState<string>("");
-    const [selectedTab, setSelectedTab] = useState("departments");
-    const [isUnifiedImportOpen, setIsUnifiedImportOpen] = useState(false);
-
-    const fetchYears = async () => {
-        try {
-            const res = await academicService.getYears();
-            if (res.data?.success) {
-                const yearList = res.data.data;
-                setYears(yearList);
-                // Auto-select current year if none selected
-                if (!selectedYearId) {
-                    const current = yearList.find((y: AcademicYear) => y.IsCurrent);
-                    if (current) setSelectedYearId(current.AcademicYearID.toString());
-                    else if (yearList.length > 0) setSelectedYearId(yearList[0].AcademicYearID.toString());
-                }
-            }
-        } catch (error) {
-            console.error("Failed to load years", error);
-        }
-    };
-
-    useEffect(() => {
-        fetchYears();
-    }, []);
-
-    const handleYearChange = () => {
-        fetchYears();
-    };
+    const [tab, setTab] = useState<'departments' | 'programs'>('departments');
 
     return (
-        <div className="min-h-screen bg-slate-50/50 pb-12">
-            {/* Header Section */}
-            <div className="pt-8 px-8 max-w-[1920px] mx-auto mb-8">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-                    {/* Left: Title and Import Button */}
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 flex-1">
-                        <div className="flex items-center gap-4">
-                            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-3 rounded-xl text-white shadow-lg shadow-blue-500/20">
-                                <BookOpen size={28} strokeWidth={2} />
-                            </div>
-                            <div>
-                                <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Academic Setup</h1>
-                                <p className="text-slate-500 font-medium mt-1">Manage hierarchical academic data structure</p>
-                            </div>
+        <div className="min-h-screen bg-[#f7f8fc]">
+            {/* ── Page Header ─────────────────────────────────── */}
+            <div className="bg-white border-b border-slate-200 px-8 py-5">
+                <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center shadow-lg shadow-blue-200">
+                            <BookOpen size={22} className="text-white" />
                         </div>
-
-                        {/* Import All Button */}
-                        <Button
-                            color="primary"
-                            variant="shadow"
-                            startContent={<FileSpreadsheet size={20} />}
-                            onPress={() => setIsUnifiedImportOpen(true)}
-                            className="font-semibold whitespace-nowrap text-white"
-                        >
-                            Import All Data
-                        </Button>
+                        <div>
+                            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Academic Setup</h1>
+                            <p className="text-sm text-slate-500 mt-0.5">Manage Departments and Programs</p>
+                        </div>
                     </div>
-
-                    {/* Right: Global Context Selector */}
-                    <div className="w-full md:w-72">
-                        <label className="block text-sm font-semibold text-slate-600 mb-1.5">Working Academic Year</label>
-                        <Select
-                            aria-label="Working Academic Year"
-                            placeholder="Select Year"
-                            selectedKeys={selectedYearId ? [selectedYearId] : []}
-                            onChange={(e) => setSelectedYearId(e.target.value)}
-                            variant="bordered"
-                            startContent={<Calendar size={18} className="text-slate-400" />}
-                            selectorIcon={<ChevronDown size={18} className="text-slate-500" />}
-                            classNames={{
-                                trigger: "bg-white border-slate-200 shadow-sm min-h-[48px]",
-                                value: "text-slate-700 font-medium",
-                            }}
-                        >
-                            {years.map((year) => (
-                                <SelectItem key={year.AcademicYearID} textValue={year.YearName}>
-                                    {year.YearName} {year.IsCurrent ? '(Current)' : ''}
-                                </SelectItem>
-                            ))}
-                        </Select>
+                    <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 text-xs font-bold rounded-full border border-blue-100">
+                            <GraduationCap size={13} /> Academic ERP
+                        </span>
                     </div>
                 </div>
             </div>
 
-            {/* Navigation Tabs */}
-            <div className="px-8 max-w-[1920px] mx-auto">
-                <div className="sticky top-0 z-40 bg-slate-50/80 backdrop-blur-xl border-b border-slate-200/60 mb-6">
-                    <Tabs
-                        aria-label="Academic Navigation"
-                        color="primary"
-                        variant="underlined"
-                        classNames={{
-                            tabList: "gap-8 relative rounded-none p-0",
-                            cursor: "w-full bg-blue-600 h-[2px]",
-                            tab: "max-w-fit px-0 h-12 data-[hover=true]:opacity-80",
-                            tabContent: "group-data-[selected=true]:text-blue-600 group-data-[selected=true]:font-bold font-medium text-slate-500 text-base transition-colors"
-                        }}
-                        selectedKey={selectedTab}
-                        onSelectionChange={(key) => setSelectedTab(key.toString())}
-                    >
-                        <Tab
-                            key="departments"
-                            title={
-                                <div className="flex items-center space-x-2 py-1">
-                                    <Building2 size={18} />
-                                    <span>Departments</span>
-                                </div>
-                            }
-                        />
-                        <Tab
-                            key="programs"
-                            title={
-                                <div className="flex items-center space-x-2 py-1">
-                                    <Layers size={18} />
-                                    <span>Programs</span>
-                                </div>
-                            }
-                        />
-                        <Tab
-                            key="semesters"
-                            title={
-                                <div className="flex items-center space-x-2 py-1">
-                                    <Clock size={18} /> {/* Using Clock for Semester/Time logic */}
-                                    <span>Semesters</span>
-                                </div>
-                            }
-                        />
-                        <Tab
-                            key="subjects"
-                            title={
-                                <div className="flex items-center space-x-2 py-1">
-                                    <Book size={18} />
-                                    <span>Subjects</span>
-                                </div>
-                            }
-                        />
-                    </Tabs>
-                </div>
-
-                {/* Content Area */}
-                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <Card className="border-none shadow-none bg-transparent">
-                        <CardBody className="p-0">
-                            {selectedTab === "departments" && (
-                                <Departments academicYearId={selectedYearId ? Number(selectedYearId) : null} />
-                            )}
-                            {selectedTab === "programs" && (
-                                <Programs academicYearId={selectedYearId ? Number(selectedYearId) : null} />
-                            )}
-                            {selectedTab === "semesters" && (
-                                <Semesters academicYearId={selectedYearId ? Number(selectedYearId) : null} />
-                            )}
-                            {selectedTab === "subjects" && (
-                                <Subjects academicYearId={selectedYearId ? Number(selectedYearId) : null} />
-                            )}
-                        </CardBody>
-                    </Card>
+            {/* ── Tabs ────────────────────────────────────────── */}
+            <div className="bg-white border-b border-slate-200 px-8">
+                <div className="max-w-6xl mx-auto flex gap-0">
+                    {[
+                        { key: 'departments', label: 'Departments', icon: Building2 },
+                        { key: 'programs', label: 'Programs', icon: Layers },
+                    ].map(({ key, label, icon: Icon }) => (
+                        <button
+                            key={key}
+                            onClick={() => setTab(key as any)}
+                            className={`flex items-center gap-2 px-6 py-4 text-sm font-semibold border-b-2 transition-all ${tab === key
+                                ? 'border-blue-600 text-blue-600'
+                                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                            }`}
+                        >
+                            <Icon size={16} />
+                            {label}
+                        </button>
+                    ))}
                 </div>
             </div>
 
-            {/* Unified Import Modal */}
-            <UnifiedImportModal
-                isOpen={isUnifiedImportOpen}
-                onOpenChange={() => setIsUnifiedImportOpen(false)}
-                onSuccess={() => {
-                    // Refresh all data - you can add specific refresh handlers for each tab
-                    fetchYears();
-                    // Force re-render of child components by changing selected tab
-                    const currentTab = selectedTab;
-                    setSelectedTab('');
-                    setTimeout(() => setSelectedTab(currentTab), 100);
-                }}
-            />
+            {/* ── Content ─────────────────────────────────────── */}
+            <div className="max-w-6xl mx-auto px-8 py-8">
+                {tab === 'departments' && <DepartmentsTab />}
+                {tab === 'programs' && <ProgramsTab />}
+            </div>
         </div>
     );
 };
+
+/* ═══════════════════════════════════════════════════════════
+   DEPARTMENTS TAB
+═══════════════════════════════════════════════════════════ */
+const DepartmentsTab: React.FC = () => {
+    const [depts, setDepts] = useState<Department[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [search, setSearch] = useState('');
+    const [showAdd, setShowAdd] = useState(false);
+    const [showDelete, setShowDelete] = useState<{ mode: 'single' | 'all'; id?: number; name?: string } | null>(null);
+    const fileRef = useRef<HTMLInputElement>(null);
+
+    const [form, setForm] = useState({ DepartmentCode: '', DepartmentName: '' });
+    const [saving, setSaving] = useState(false);
+    const [importing, setImporting] = useState(false);
+    const [editTarget, setEditTarget] = useState<Department | null>(null);
+    const [editForm, setEditForm] = useState({ DepartmentName: '' });
+    const [editSaving, setEditSaving] = useState(false);
+
+    const load = async () => {
+        setLoading(true);
+        try {
+            const res = await api.get('/departments');
+            setDepts(Array.isArray(res.data) ? res.data : []);
+        } catch { toast.error('Failed to load departments'); }
+        finally { setLoading(false); }
+    };
+
+    useEffect(() => { load(); }, []);
+
+    const filtered = depts.filter(d =>
+        d.DepartmentCode.toLowerCase().includes(search.toLowerCase()) ||
+        d.DepartmentName.toLowerCase().includes(search.toLowerCase())
+    );
+
+    const handleAdd = async () => {
+        if (!form.DepartmentCode || !form.DepartmentName) {
+            toast.error('Both fields are required'); return;
+        }
+        setSaving(true);
+        try {
+            await api.post('/departments', { DepartmentCode: form.DepartmentCode.toLowerCase(), DepartmentName: form.DepartmentName });
+            toast.success('Department added');
+            setForm({ DepartmentCode: '', DepartmentName: '' });
+            setShowAdd(false);
+            load();
+        } catch (e: any) {
+            toast.error(e.response?.data?.message || 'Failed to add department');
+        } finally { setSaving(false); }
+    };
+
+    const handleDelete = async () => {
+        if (!showDelete) return;
+        try {
+            if (showDelete.mode === 'single' && showDelete.id) {
+                await api.delete(`/departments/${showDelete.id}`);
+                toast.success('Department deleted');
+            } else {
+                await api.delete('/departments/delete-all');
+                toast.success('All departments deleted');
+            }
+            setShowDelete(null);
+            load();
+        } catch (e: any) {
+            toast.error(e.response?.data?.message || 'Delete failed');
+        }
+    };
+
+    const openEdit = (dept: Department) => {
+        setEditTarget(dept);
+        setEditForm({ DepartmentName: dept.DepartmentName });
+    };
+
+    const handleEdit = async () => {
+        if (!editTarget || !editForm.DepartmentName.trim()) {
+            toast.error('Department name is required'); return;
+        }
+        setEditSaving(true);
+        try {
+            await api.put(`/departments/${editTarget.DepartmentID}`, { DepartmentName: editForm.DepartmentName.trim() });
+            toast.success('Department updated');
+            setEditTarget(null);
+            load();
+        } catch (e: any) {
+            toast.error(e.response?.data?.message || 'Failed to update department');
+        } finally { setEditSaving(false); }
+    };
+
+    const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setImporting(true);
+        const fd = new FormData();
+        fd.append('file', file);
+        try {
+            const res = await api.post('/departments/import', fd);
+            toast.success(`Imported ${res.data.successCount} departments${res.data.errorCount > 0 ? `, ${res.data.errorCount} errors` : ''}`);
+            load();
+        } catch (e: any) {
+            toast.error(e.response?.data?.message || 'Import failed');
+        } finally {
+            setImporting(false);
+            e.target.value = '';
+        }
+    };
+
+    const downloadTemplate = () => {
+        const csv = 'DepartmentCode,DepartmentName\ncsa001,Computer Science and Applications\nmec001,Mechanical Engineering\nece001,Electronics and Communication Engineering\n';
+        const a = document.createElement('a');
+        a.href = 'data:text/csv,' + encodeURIComponent(csv);
+        a.download = 'department_template.csv';
+        a.click();
+    };
+
+    return (
+        <>
+            {/* Toolbar */}
+            <div className="flex flex-col sm:flex-row justify-between gap-3 mb-5">
+                <div className="relative flex-1 max-w-xs">
+                    <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                        value={search} onChange={e => setSearch(e.target.value)}
+                        placeholder="Search departments…"
+                        className="w-full pl-9 pr-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                    />
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                    <button onClick={load} className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-300 shadow-sm transition-all" title="Refresh">
+                        <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                    </button>
+                    <button onClick={downloadTemplate} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-medium hover:border-blue-300 shadow-sm transition-all">
+                        <Download size={15} /> Template
+                    </button>
+                    <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImport} />
+                    <button onClick={() => fileRef.current?.click()} disabled={importing} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-medium hover:border-blue-300 shadow-sm transition-all">
+                        <Upload size={15} /> {importing ? 'Importing…' : 'Import'}
+                    </button>
+                    <button onClick={() => setShowDelete({ mode: 'all' })} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white border border-red-200 text-red-500 text-sm font-medium hover:bg-red-50 shadow-sm transition-all">
+                        <Trash2 size={15} /> Delete All
+                    </button>
+                    <button onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shadow-md shadow-blue-200 transition-all">
+                        <Plus size={16} /> Add Department
+                    </button>
+                </div>
+            </div>
+
+            {/* Table */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <table className="w-full">
+                    <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200">
+                            <th className="text-left text-xs font-bold text-slate-500 uppercase tracking-wider px-5 py-3.5">Code</th>
+                            <th className="text-left text-xs font-bold text-slate-500 uppercase tracking-wider px-5 py-3.5">Department Name</th>
+                            <th className="text-left text-xs font-bold text-slate-500 uppercase tracking-wider px-5 py-3.5">Programs</th>
+                            <th className="text-right text-xs font-bold text-slate-500 uppercase tracking-wider px-5 py-3.5">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {loading ? (
+                            <tr><td colSpan={4} className="text-center py-12 text-slate-400 text-sm">Loading…</td></tr>
+                        ) : filtered.length === 0 ? (
+                            <tr><td colSpan={4} className="text-center py-12 text-slate-400 text-sm">No departments found. Add one to get started.</td></tr>
+                        ) : filtered.map(dept => (
+                            <tr key={dept.DepartmentID} className="hover:bg-slate-50/60 transition-colors">
+                                <td className="px-5 py-3.5">
+                                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 text-xs font-bold font-mono border border-blue-100">
+                                        {dept.DepartmentCode}
+                                    </span>
+                                </td>
+                                <td className="px-5 py-3.5 text-sm font-medium text-slate-800">{dept.DepartmentName}</td>
+                                <td className="px-5 py-3.5">
+                                    <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
+                                        {dept.programCount ?? 0} program{dept.programCount !== 1 ? 's' : ''}
+                                    </span>
+                                </td>
+                                <td className="px-5 py-3.5 text-right">
+                                    <div className="flex justify-end gap-1">
+                                        <button
+                                            onClick={() => openEdit(dept)}
+                                            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
+                                            title="Edit"
+                                        ><Edit3 size={14} /></button>
+                                        <button
+                                            onClick={() => setShowDelete({ mode: 'single', id: dept.DepartmentID, name: dept.DepartmentName })}
+                                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all"
+                                            title="Delete"
+                                        ><Trash2 size={14} /></button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                {!loading && filtered.length > 0 && (
+                    <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-400 font-medium">
+                        {filtered.length} of {depts.length} departments
+                    </div>
+                )}
+            </div>
+
+            {/* Add Modal */}
+            {showAdd && (
+                <Modal title="Add Department" onClose={() => setShowAdd(false)}>
+                    <div className="space-y-4">
+                        <FormField label="Department Code" hint="Format: csa001 (letters + digits)">
+                            <input
+                                id="dept-code"
+                                name="DepartmentCode"
+                                value={form.DepartmentCode}
+                                onChange={e => setForm(p => ({ ...p, DepartmentCode: e.target.value.toLowerCase() }))}
+                                placeholder="e.g. csa001"
+                                autoComplete="off"
+                                className="input"
+                            />
+                        </FormField>
+                        <FormField label="Department Name">
+                            <input
+                                id="dept-name"
+                                name="DepartmentName"
+                                value={form.DepartmentName}
+                                onChange={e => setForm(p => ({ ...p, DepartmentName: e.target.value }))}
+                                placeholder="e.g. Computer Science and Applications"
+                                autoComplete="off"
+                                className="input"
+                            />
+                        </FormField>
+                        <div className="flex justify-end gap-2 pt-2">
+                            <button onClick={() => setShowAdd(false)} className="btn-ghost">Cancel</button>
+                            <button onClick={handleAdd} disabled={saving} className="btn-primary">{saving ? 'Saving…' : 'Add Department'}</button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
+            {/* Edit Modal */}
+            {editTarget && (
+                <Modal title={`Edit: ${editTarget.DepartmentCode}`} onClose={() => setEditTarget(null)}>
+                    <div className="space-y-4">
+                        <FormField label="Department Code">
+                            <input id="edit-dept-code" name="EditDepartmentCode" value={editTarget.DepartmentCode} disabled className="input opacity-60 cursor-not-allowed bg-slate-50" />
+                            <p className="text-xs text-slate-400 mt-1">Code cannot be changed after creation.</p>
+                        </FormField>
+                        <FormField label="Department Name">
+                            <input
+                                id="edit-dept-name"
+                                name="EditDepartmentName"
+                                value={editForm.DepartmentName}
+                                onChange={e => setEditForm({ DepartmentName: e.target.value })}
+                                placeholder="e.g. Computer Science and Applications"
+                                autoComplete="off"
+                                className="input"
+                                autoFocus
+                            />
+                        </FormField>
+                        <div className="flex justify-end gap-2 pt-2">
+                            <button onClick={() => setEditTarget(null)} className="btn-ghost">Cancel</button>
+                            <button onClick={handleEdit} disabled={editSaving} className="btn-primary">{editSaving ? 'Saving…' : 'Save Changes'}</button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
+            {/* Delete Confirm */}
+            {showDelete && (
+                <ConfirmModal
+                    title={showDelete.mode === 'all' ? 'Delete All Departments?' : `Delete "${showDelete.name}"?`}
+                    message={showDelete.mode === 'all'
+                        ? 'This will remove all departments and their linked programs. This action cannot be undone.'
+                        : 'This will remove the department. Programs linked only to this department will also be affected.'}
+                    onConfirm={handleDelete}
+                    onCancel={() => setShowDelete(null)}
+                />
+            )}
+        </>
+    );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   PROGRAMS TAB
+═══════════════════════════════════════════════════════════ */
+const ProgramsTab: React.FC = () => {
+    const [programs, setPrograms] = useState<Program[]>([]);
+    const [depts, setDepts] = useState<Department[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [search, setSearch] = useState('');
+    const [filterDept, setFilterDept] = useState('');
+    const [showAdd, setShowAdd] = useState(false);
+    const [showDelete, setShowDelete] = useState<{ mode: 'single' | 'all'; id?: number; name?: string } | null>(null);
+    const fileRef = useRef<HTMLInputElement>(null);
+
+    const [form, setForm] = useState({ ProgramCode: '', ProgramName: '', DepartmentIDs: [] as number[], DurationYears: 4 });
+    const [saving, setSaving] = useState(false);
+    const [importing, setImporting] = useState(false);
+    const [editTarget, setEditTarget] = useState<Program | null>(null);
+    const [editForm, setEditForm] = useState({ ProgramName: '', DepartmentIDs: [] as number[], DurationYears: 4 });
+    const [editSaving, setEditSaving] = useState(false);
+
+    const load = async () => {
+        setLoading(true);
+        try {
+            const [pRes, dRes] = await Promise.all([api.get('/programs'), api.get('/departments')]);
+            setPrograms(Array.isArray(pRes.data) ? pRes.data : []);
+            setDepts(Array.isArray(dRes.data) ? dRes.data : []);
+        } catch { toast.error('Failed to load programs'); }
+        finally { setLoading(false); }
+    };
+
+    useEffect(() => { load(); }, []);
+
+    const filtered = programs.filter(p => {
+        const matchSearch = !search || p.ProgramCode.toLowerCase().includes(search.toLowerCase()) || p.ProgramName.toLowerCase().includes(search.toLowerCase());
+        const matchDept = !filterDept || p.Departments?.some(d => d.DepartmentID.toString() === filterDept);
+        return matchSearch && matchDept;
+    });
+
+    const handleAdd = async () => {
+        if (!form.ProgramCode || !form.ProgramName || form.DepartmentIDs.length === 0) {
+            toast.error('Program Code, Name, and at least one Department are required'); return;
+        }
+        setSaving(true);
+        try {
+            await api.post('/programs', { ...form, DurationYears: Number(form.DurationYears) });
+            toast.success('Program created — semesters auto-generated!');
+            setForm({ ProgramCode: '', ProgramName: '', DepartmentIDs: [], DurationYears: 4 });
+            setShowAdd(false);
+            load();
+        } catch (e: any) {
+            toast.error(e.response?.data?.message || 'Failed to create program');
+        } finally { setSaving(false); }
+    };
+
+    const handleDelete = async () => {
+        if (!showDelete) return;
+        try {
+            if (showDelete.mode === 'single' && showDelete.id) {
+                await api.delete(`/programs/${showDelete.id}`);
+                toast.success('Program deleted');
+            } else {
+                await api.delete('/programs/delete-all');
+                toast.success('All programs deleted');
+            }
+            setShowDelete(null);
+            load();
+        } catch (e: any) { toast.error(e.response?.data?.message || 'Delete failed'); }
+    };
+
+    const openEditProg = (prog: Program) => {
+        setEditTarget(prog);
+        setEditForm({
+            ProgramName: prog.ProgramName,
+            DepartmentIDs: prog.Departments?.map(d => d.DepartmentID) || [],
+            DurationYears: prog.DurationYears
+        });
+    };
+
+    const handleEditProg = async () => {
+        if (!editTarget) return;
+        if (!editForm.ProgramName.trim() || editForm.DepartmentIDs.length === 0) {
+            toast.error('Name and at least one department are required'); return;
+        }
+        setEditSaving(true);
+        try {
+            await api.put(`/programs/${editTarget.ProgramID}`, {
+                ProgramName: editForm.ProgramName.trim(),
+                DepartmentIDs: editForm.DepartmentIDs,
+                DurationYears: Number(editForm.DurationYears)
+            });
+            toast.success('Program updated');
+            setEditTarget(null);
+            load();
+        } catch (e: any) {
+            toast.error(e.response?.data?.message || 'Failed to update program');
+        } finally { setEditSaving(false); }
+    };
+
+    const toggleEditDept = (id: number) => {
+        setEditForm(prev => ({
+            ...prev,
+            DepartmentIDs: prev.DepartmentIDs.includes(id)
+                ? prev.DepartmentIDs.filter(x => x !== id)
+                : [...prev.DepartmentIDs, id]
+        }));
+    };
+
+    const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setImporting(true);
+        const fd = new FormData();
+        fd.append('file', file);
+        try {
+            const res = await api.post('/programs/import', fd);
+            toast.success(`Imported ${res.data.successCount} programs${res.data.errorCount > 0 ? `, ${res.data.errorCount} errors` : ''}`);
+            if (res.data.errors?.length) console.warn('Import errors:', res.data.errors);
+            load();
+        } catch (e: any) {
+            toast.error(e.response?.data?.message || 'Import failed');
+        } finally { setImporting(false); e.target.value = ''; }
+    };
+
+    const downloadTemplate = async () => {
+        try {
+            const res = await api.get('/programs/template', { responseType: 'blob' });
+            const url = URL.createObjectURL(res.data);
+            const a = document.createElement('a');
+            a.href = url; a.download = 'program_template.xlsx'; a.click();
+        } catch { toast.error('Failed to download template'); }
+    };
+
+    const toggleDept = (id: number) => {
+        setForm(prev => ({
+            ...prev,
+            DepartmentIDs: prev.DepartmentIDs.includes(id)
+                ? prev.DepartmentIDs.filter(x => x !== id)
+                : [...prev.DepartmentIDs, id]
+        }));
+    };
+
+    return (
+        <>
+            <div className="flex flex-col sm:flex-row justify-between gap-3 mb-5">
+                <div className="flex gap-2 flex-1 max-w-lg">
+                    <div className="relative flex-1">
+                        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                            value={search} onChange={e => setSearch(e.target.value)}
+                            placeholder="Search programs…"
+                            className="w-full pl-9 pr-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                        />
+                    </div>
+                    <select
+                        value={filterDept} onChange={e => setFilterDept(e.target.value)}
+                        className="px-3 py-2.5 text-sm bg-white border border-slate-200 rounded-xl shadow-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                    >
+                        <option value="">All Departments</option>
+                        {depts.map(d => <option key={d.DepartmentID} value={d.DepartmentID}>{d.DepartmentCode}</option>)}
+                    </select>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                    <button onClick={load} className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-300 shadow-sm transition-all">
+                        <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                    </button>
+                    <button onClick={downloadTemplate} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-medium hover:border-blue-300 shadow-sm">
+                        <Download size={15} /> Template
+                    </button>
+                    <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImport} />
+                    <button onClick={() => fileRef.current?.click()} disabled={importing} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-medium hover:border-blue-300 shadow-sm">
+                        <Upload size={15} /> {importing ? 'Importing…' : 'Import'}
+                    </button>
+                    <button onClick={() => setShowDelete({ mode: 'all' })} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white border border-red-200 text-red-500 text-sm font-medium hover:bg-red-50 shadow-sm">
+                        <Trash2 size={15} /> Delete All
+                    </button>
+                    <button onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shadow-md shadow-blue-200">
+                        <Plus size={16} /> Add Program
+                    </button>
+                </div>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <table className="w-full">
+                    <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200">
+                            <th className="text-left text-xs font-bold text-slate-500 uppercase tracking-wider px-5 py-3.5">Code</th>
+                            <th className="text-left text-xs font-bold text-slate-500 uppercase tracking-wider px-5 py-3.5">Program Name</th>
+                            <th className="text-left text-xs font-bold text-slate-500 uppercase tracking-wider px-5 py-3.5">Departments</th>
+                            <th className="text-left text-xs font-bold text-slate-500 uppercase tracking-wider px-5 py-3.5">Duration</th>
+                            <th className="text-left text-xs font-bold text-slate-500 uppercase tracking-wider px-5 py-3.5">Semesters</th>
+                            <th className="text-right text-xs font-bold text-slate-500 uppercase tracking-wider px-5 py-3.5">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {loading ? (
+                            <tr><td colSpan={6} className="text-center py-12 text-slate-400 text-sm">Loading…</td></tr>
+                        ) : filtered.length === 0 ? (
+                            <tr><td colSpan={6} className="text-center py-12 text-slate-400 text-sm">
+                                {programs.length === 0 ? 'No programs yet. Add one or import from Excel.' : 'No programs match your filters.'}
+                            </td></tr>
+                        ) : filtered.map(prog => (
+                            <tr key={prog.ProgramID} className="hover:bg-slate-50/60 transition-colors group">
+                                <td className="px-5 py-3.5">
+                                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold font-mono border border-indigo-100">
+                                        {prog.ProgramCode}
+                                    </span>
+                                </td>
+                                <td className="px-5 py-3.5 text-sm font-medium text-slate-800">{prog.ProgramName}</td>
+                                <td className="px-5 py-3.5">
+                                    <div className="flex flex-wrap gap-1">
+                                        {prog.Departments?.map(d => (
+                                            <span key={d.DepartmentID} className="text-xs px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full font-medium border border-slate-200">
+                                                {d.DepartmentCode}
+                                            </span>
+                                        )) || <span className="text-slate-400 text-xs">—</span>}
+                                    </div>
+                                </td>
+                                <td className="px-5 py-3.5">
+                                    <span className="text-sm text-slate-600 font-medium">{prog.DurationYears} yr{prog.DurationYears !== 1 ? 's' : ''}</span>
+                                </td>
+                                <td className="px-5 py-3.5">
+                                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full border border-emerald-100">
+                                        {prog.TotalSemesters ?? (prog.DurationYears * 2)} sems
+                                    </span>
+                                </td>
+                                <td className="px-5 py-3.5 text-right">
+                                    <div className="flex justify-end gap-1">
+                                        <button
+                                            onClick={() => openEditProg(prog)}
+                                            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
+                                            title="Edit"
+                                        ><Edit3 size={14} /></button>
+                                        <button
+                                            onClick={() => setShowDelete({ mode: 'single', id: prog.ProgramID, name: prog.ProgramName })}
+                                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all"
+                                            title="Delete"
+                                        ><Trash2 size={14} /></button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                {!loading && filtered.length > 0 && (
+                    <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-400 font-medium">
+                        {filtered.length} of {programs.length} programs · Semesters are auto-generated
+                    </div>
+                )}
+            </div>
+
+            {/* Add Program Modal */}
+            {showAdd && (
+                <Modal title="Add Program" onClose={() => setShowAdd(false)}>
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-3">
+                            <FormField label="Program Code">
+                                <input id="prog-code" name="ProgramCode" value={form.ProgramCode} onChange={e => setForm(p => ({ ...p, ProgramCode: e.target.value.toUpperCase() }))} placeholder="e.g. BTECH" autoComplete="off" className="input" />
+                            </FormField>
+                            <FormField label="Duration (Years)" hint="1–5 years → semesters auto-calculated">
+                                <select id="prog-duration" name="DurationYears" value={form.DurationYears} onChange={e => setForm(p => ({ ...p, DurationYears: Number(e.target.value) }))} className="input">
+                                    {[1, 2, 3, 4, 5].map(n => (
+                                        <option key={n} value={n}>{n} year{n !== 1 ? 's' : ''} → {n * 2} semesters</option>
+                                    ))}
+                                </select>
+                            </FormField>
+                        </div>
+                        <FormField label="Program Name">
+                            <input id="prog-name" name="ProgramName" value={form.ProgramName} onChange={e => setForm(p => ({ ...p, ProgramName: e.target.value }))} placeholder="e.g. Bachelor of Technology" autoComplete="off" className="input" />
+                        </FormField>
+                        <FormField label="Departments" hint="Select one or more (e.g. B.Tech links CSE, ME, ECE)">
+                            {depts.length === 0 ? (
+                                <p className="text-sm text-amber-600 bg-amber-50 p-3 rounded-xl border border-amber-200">No departments found. Add departments first.</p>
+                            ) : (
+                                <div className="flex flex-wrap gap-2 p-3 border border-slate-200 rounded-xl bg-slate-50 max-h-40 overflow-y-auto">
+                                    {depts.map(d => (
+                                        <button
+                                            key={d.DepartmentID}
+                                            type="button"
+                                            onClick={() => toggleDept(d.DepartmentID)}
+                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${form.DepartmentIDs.includes(d.DepartmentID)
+                                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                                : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:text-blue-600'
+                                            }`}
+                                        >
+                                            {d.DepartmentCode}
+                                            {form.DepartmentIDs.includes(d.DepartmentID) && <X size={10} />}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            {form.DepartmentIDs.length > 0 && (
+                                <p className="text-xs text-blue-600 mt-1 font-medium">{form.DepartmentIDs.length} department{form.DepartmentIDs.length !== 1 ? 's' : ''} selected</p>
+                            )}
+                        </FormField>
+
+                        {form.DurationYears > 0 && (
+                            <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+                                <GraduationCap size={18} className="text-emerald-600 shrink-0" />
+                                <div>
+                                    <p className="text-sm font-bold text-emerald-700">{form.DurationYears * 2} Semesters will be auto-generated</p>
+                                    <p className="text-xs text-emerald-600">Semester 1 through {form.DurationYears * 2} will be created automatically.</p>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex justify-end gap-2 pt-2">
+                            <button onClick={() => setShowAdd(false)} className="btn-ghost">Cancel</button>
+                            <button onClick={handleAdd} disabled={saving} className="btn-primary">{saving ? 'Creating…' : 'Create Program'}</button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
+            {showDelete && (
+                <ConfirmModal
+                    title={showDelete.mode === 'all' ? 'Delete All Programs?' : `Delete "${showDelete.name}"?`}
+                    message={showDelete.mode === 'all' ? 'This will remove all programs and their auto-generated semesters.' : 'This program and its semesters will be deleted permanently.'}
+                    onConfirm={handleDelete}
+                    onCancel={() => setShowDelete(null)}
+                />
+            )}
+
+            {/* Edit Program Modal */}
+            {editTarget && (
+                <Modal title={`Edit: ${editTarget.ProgramCode}`} onClose={() => setEditTarget(null)}>
+                    <div className="space-y-4">
+                        <FormField label="Program Code">
+                            <input id="edit-prog-code" name="EditProgramCode" value={editTarget.ProgramCode} disabled className="input opacity-60 cursor-not-allowed bg-slate-50" />
+                            <p className="text-xs text-slate-400 mt-1">Code cannot be changed after creation.</p>
+                        </FormField>
+                        <FormField label="Program Name">
+                            <input
+                                id="edit-prog-name"
+                                name="EditProgramName"
+                                value={editForm.ProgramName}
+                                onChange={e => setEditForm(p => ({ ...p, ProgramName: e.target.value }))}
+                                placeholder="e.g. Bachelor of Technology"
+                                autoComplete="off"
+                                className="input"
+                                autoFocus
+                            />
+                        </FormField>
+                        <FormField label="Duration (Years)" hint={`Currently ${editForm.DurationYears} yr(s) → ${editForm.DurationYears * 2} semesters`}>
+                            <select
+                                id="edit-prog-duration"
+                                name="EditDurationYears"
+                                value={editForm.DurationYears}
+                                onChange={e => setEditForm(p => ({ ...p, DurationYears: Number(e.target.value) }))}
+                                className="input"
+                            >
+                                {[1, 2, 3, 4, 5].map(n => (
+                                    <option key={n} value={n}>{n} year{n !== 1 ? 's' : ''} → {n * 2} semesters</option>
+                                ))}
+                            </select>
+                        </FormField>
+                        <FormField label="Departments" hint="Toggle to add / remove departments">
+                            <div className="flex flex-wrap gap-2 p-3 border border-slate-200 rounded-xl bg-slate-50 max-h-40 overflow-y-auto">
+                                {depts.map(d => (
+                                    <button
+                                        key={d.DepartmentID}
+                                        type="button"
+                                        onClick={() => toggleEditDept(d.DepartmentID)}
+                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${editForm.DepartmentIDs.includes(d.DepartmentID)
+                                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                            : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:text-blue-600'
+                                        }`}
+                                    >
+                                        {d.DepartmentCode}
+                                        {editForm.DepartmentIDs.includes(d.DepartmentID) && <X size={10} />}
+                                    </button>
+                                ))}
+                            </div>
+                            {editForm.DepartmentIDs.length > 0 && (
+                                <p className="text-xs text-blue-600 mt-1 font-medium">{editForm.DepartmentIDs.length} department{editForm.DepartmentIDs.length !== 1 ? 's' : ''} selected</p>
+                            )}
+                        </FormField>
+                        <div className="flex justify-end gap-2 pt-2">
+                            <button onClick={() => setEditTarget(null)} className="btn-ghost">Cancel</button>
+                            <button onClick={handleEditProg} disabled={editSaving} className="btn-primary">{editSaving ? 'Saving…' : 'Save Changes'}</button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+        </>
+    );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   SHARED COMPONENTS
+═══════════════════════════════════════════════════════════ */
+const Modal: React.FC<{ title: string; onClose: () => void; children: React.ReactNode }> = ({ title, onClose, children }) => (
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+                <h2 className="text-base font-bold text-slate-800">{title}</h2>
+                <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all">
+                    <X size={18} />
+                </button>
+            </div>
+            <div className="px-6 py-5">{children}</div>
+        </div>
+    </div>
+);
+
+const ConfirmModal: React.FC<{ title: string; message: string; onConfirm: () => void; onCancel: () => void }> = ({ title, message, onConfirm, onCancel }) => (
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-start gap-4 mb-5">
+                <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+                    <AlertTriangle size={20} className="text-red-500" />
+                </div>
+                <div>
+                    <h3 className="font-bold text-slate-800">{title}</h3>
+                    <p className="text-sm text-slate-500 mt-1">{message}</p>
+                </div>
+            </div>
+            <div className="flex justify-end gap-2">
+                <button onClick={onCancel} className="btn-ghost">Cancel</button>
+                <button onClick={onConfirm} className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-all">Delete</button>
+            </div>
+        </div>
+    </div>
+);
+
+const FormField: React.FC<{ label: string; hint?: string; children: React.ReactNode }> = ({ label, hint, children }) => (
+    <div>
+        <label className="block text-sm font-semibold text-slate-700 mb-1.5">{label}</label>
+        {children}
+        {hint && <p className="text-xs text-slate-400 mt-1">{hint}</p>}
+    </div>
+);
 
 export default AcademicSetup;

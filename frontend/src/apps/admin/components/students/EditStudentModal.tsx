@@ -8,35 +8,25 @@ import {
     ModalFooter,
     Button,
     Input,
-    Select,
-    SelectItem,
 } from "@heroui/react";
 import { toast } from "react-hot-toast";
-import { User, Mail, Hash, Building2, GraduationCap, Calendar, BookOpen } from 'lucide-react';
+import { User, Hash, GraduationCap, Mail } from 'lucide-react';
 import api from "../../../../services/api";
 
 interface EditStudentModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSuccess: () => void;
-    student: any; // Using any for now to avoid strict type issues, but ideally should be Student interface
+    student: any;
 }
 
-interface Department {
-    DepartmentID: number;
-    DepartmentCode: string;
-    DepartmentName: string;
-}
-
-interface Program {
+interface ProgramWithDuration {
     ProgramID: number;
+    ProgramCode: string;
     ProgramName: string;
-}
-
-interface Semester {
-    SemesterID: number;
-    SemesterNumber: number;
-    ProgramID: number;
+    DurationYears?: number;
+    TotalSemesters?: number;
+    DepartmentID?: number;
 }
 
 export const EditStudentModal: React.FC<EditStudentModalProps> = ({
@@ -46,16 +36,15 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
     student
 }) => {
     const [loading, setLoading] = useState(false);
-    const [departments, setDepartments] = useState<Department[]>([]);
-    const [programs, setPrograms] = useState<Program[]>([]);
-    const [semesters, setSemesters] = useState<Semester[]>([]);
+    const [departments, setDepartments] = useState<any[]>([]);
+    const [programs, setPrograms] = useState<ProgramWithDuration[]>([]);
 
     const [formData, setFormData] = useState({
         RegisterNumber: "",
         FullName: "",
+        Email: "",
         DepartmentID: "",
         ProgramID: "",
-        SemesterID: "",
         BatchYear: "",
     });
 
@@ -66,9 +55,9 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                 setFormData({
                     RegisterNumber: student.RegisterNumber || "",
                     FullName: student.User?.FullName || "",
+                    Email: student.User?.Email || "",
                     DepartmentID: student.DepartmentID?.toString() || "",
                     ProgramID: student.ProgramID?.toString() || "",
-                    SemesterID: student.SemesterID?.toString() || "",
                     BatchYear: student.BatchYear?.toString() || "",
                 });
             }
@@ -78,9 +67,8 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
     const fetchMasterData = async () => {
         try {
             const response = await api.get('/students/meta/create-options');
-            setDepartments(response.data.departments);
-            setPrograms(response.data.programs);
-            setSemesters(response.data.semesters);
+            setDepartments(response.data.departments || []);
+            setPrograms(response.data.programs || []);
         } catch (error) {
             console.error("Failed to fetch master data", error);
             toast.error("Could not load form data options");
@@ -92,20 +80,25 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
     };
 
     const handleSubmit = async () => {
-        // Basic Validation
-        if (!formData.RegisterNumber || !formData.FullName || !formData.DepartmentID || !formData.ProgramID || !formData.SemesterID || !formData.BatchYear) {
-            toast.error("Please fill all fields");
+        if (!formData.RegisterNumber || !formData.FullName) {
+            toast.error("Register Number and Full Name are required");
+            return;
+        }
+
+        if (formData.Email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.Email)) {
+            toast.error("Please enter a valid email address");
             return;
         }
 
         setLoading(true);
         try {
             await api.put(`/students/${student.StudentID}`, {
-                ...formData,
-                DepartmentID: parseInt(formData.DepartmentID),
-                ProgramID: parseInt(formData.ProgramID),
-                SemesterID: parseInt(formData.SemesterID),
-                BatchYear: parseInt(formData.BatchYear)
+                RegisterNumber: formData.RegisterNumber.trim(),
+                FullName: formData.FullName.trim(),
+                Email: formData.Email?.trim() || undefined,
+                DepartmentID: formData.DepartmentID ? parseInt(formData.DepartmentID) : undefined,
+                ProgramID: formData.ProgramID ? parseInt(formData.ProgramID) : undefined,
+                BatchYear: formData.BatchYear ? parseInt(formData.BatchYear) : undefined,
             });
             toast.success("Student updated successfully");
             onSuccess();
@@ -118,174 +111,180 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
         }
     };
 
-    // Filter semesters based on program
-    const filteredSemesters = formData.ProgramID
-        ? semesters.filter(s => s.ProgramID === parseInt(formData.ProgramID))
-        : semesters;
-
     return (
         <Modal
             isOpen={isOpen}
             onClose={onClose}
             placement="center"
             backdrop="blur"
-            size="2xl"
+            size="md"
             classNames={{
-                base: "bg-white  border border-white/20  shadow-2xl rounded-3xl",
-                header: "border-b border-gray-100  p-6 pb-4",
+                base: "bg-white border border-white/20 shadow-2xl rounded-3xl",
+                header: "p-0 border-none",
                 body: "p-0",
-                footer: "border-t border-gray-100  p-6 pt-4 bg-gray-50/50 ",
-                closeButton: "hover:bg-gray-100  active:bg-gray-200  p-2 rounded-full transition-colors right-4 top-4"
+                footer: "border-t border-gray-100 py-4 px-7",
+                closeButton: "hover:bg-white/20 active:bg-white/30 text-white p-2 rounded-full transition-colors right-4 top-4 z-50"
             }}
             motionProps={{
                 variants: {
-                    enter: { y: 0, opacity: 1, transition: { duration: 0.3, ease: "easeOut" } },
-                    exit: { y: 20, opacity: 0, transition: { duration: 0.2, ease: "easeIn" } },
+                    enter: {
+                        y: 0,
+                        opacity: 1,
+                        transition: { duration: 0.3, ease: "easeOut" },
+                    },
+                    exit: {
+                        y: 20,
+                        opacity: 0,
+                        transition: { duration: 0.2, ease: "easeIn" },
+                    },
                 }
             }}
         >
             <ModalContent>
-                <ModalHeader className="flex flex-col gap-1 items-center justify-center pt-8 pb-6 bg-gradient-to-b from-white to-gray-50  ">
-                    <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mb-3 shadow-sm ring-4 ring-primary/5">
-                        <User size={24} strokeWidth={2.5} />
+                <ModalHeader>
+                    <div className="w-full bg-gradient-to-r from-slate-900 via-blue-900 to-cyan-900 rounded-t-3xl px-7 py-6">
+                        <div className="flex items-center gap-4">
+                            <div className="w-11 h-11 rounded-xl bg-white/15 backdrop-blur-sm flex items-center justify-center border border-white/20">
+                                <GraduationCap size={22} className="text-white" />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-bold text-white tracking-tight">Edit Student</h2>
+                                <p className="text-sm text-blue-200/60 font-normal mt-0.5">Update student information</p>
+                            </div>
+                        </div>
                     </div>
-                    <h2 className="text-2xl font-bold text-gray-900  tracking-tight">Edit Student</h2>
-                    <p className="text-sm font-medium text-gray-400  text-center max-w-xs">
-                        Update {formData.FullName || "student"}'s profile details below.
-                    </p>
                 </ModalHeader>
                 <ModalBody>
-                    <div className="p-6 space-y-8">
-                        {/* Section 1: Personal Info */}
-                        <div className="space-y-4">
-                            <div className="flex items-center gap-2 text-sm font-semibold text-gray-900 ">
-                                <div className="h-1.5 w-1.5 rounded-full bg-primary" />
-                                Personal Information
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <Input
-                                    startContent={<Hash className="text-gray-400 mr-2" size={16} />}
-                                    placeholder="Register Number"
-                                    value={formData.RegisterNumber}
-                                    onValueChange={(v) => handleChange("RegisterNumber", v)}
-                                    classNames={{
-                                        inputWrapper: "h-12 bg-white border-1 border-slate-200 shadow-sm hover:border-blue-400 focus-within:border-blue-600 focus-within:shadow-md rounded-xl transition-all",
-                                        input: "text-small bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0",
-                                    }}
-                                />
-                                <Input
-                                    startContent={<User className="text-gray-400 mr-2" size={16} />}
-                                    placeholder="Full Name"
-                                    value={formData.FullName}
-                                    onValueChange={(v) => handleChange("FullName", v)}
-                                    classNames={{
-                                        inputWrapper: "h-12 bg-white border-1 border-slate-200 shadow-sm hover:border-blue-400 focus-within:border-blue-600 focus-within:shadow-md rounded-xl transition-all",
-                                        input: "text-small bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0",
-                                    }}
-                                />
+                    <div className="px-7 py-6 space-y-6">
+                        {/* PERSONAL INFORMATION */}
+                        <div>
+                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Personal Information</h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                    <label htmlFor="full-name" className="text-sm font-semibold text-gray-700 ml-1">Full Name <span className="text-red-500">*</span></label>
+                                    <Input
+                                        id="full-name"
+                                        autoComplete="name"
+                                        startContent={<User className="text-gray-400" size={15} />}
+                                        placeholder="John Doe"
+                                        value={formData.FullName}
+                                        onValueChange={(v) => handleChange("FullName", v)}
+                                        classNames={{
+                                            inputWrapper: "h-12 bg-gray-50/80 border-1 border-gray-200 hover:border-blue-300 focus-within:!border-blue-500 focus-within:bg-white focus-within:shadow-sm rounded-xl transition-all",
+                                            input: "text-sm bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0 placeholder:text-gray-400",
+                                        }}
+                                        variant="bordered"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label htmlFor="college-email" className="text-sm font-semibold text-gray-700 ml-1">College Email</label>
+                                    <Input
+                                        id="college-email"
+                                        autoComplete="email"
+                                        type="email"
+                                        startContent={<Mail className="text-gray-400" size={15} />}
+                                        placeholder="john@college.edu"
+                                        value={formData.Email}
+                                        onValueChange={(v) => handleChange("Email", v)}
+                                        classNames={{
+                                            inputWrapper: "h-12 bg-gray-50/80 border-1 border-gray-200 hover:border-blue-300 focus-within:!border-blue-500 focus-within:bg-white focus-within:shadow-sm rounded-xl transition-all",
+                                            input: "text-sm bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0 placeholder:text-gray-400",
+                                        }}
+                                        variant="bordered"
+                                    />
+                                </div>
                             </div>
                         </div>
 
-                        <div className="h-px bg-gray-100 " />
+                        {/* ACADEMIC INFORMATION */}
+                        <div>
+                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Academic Information</h3>
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <label htmlFor="register-number" className="text-sm font-semibold text-gray-700 ml-1">Register Number <span className="text-red-500">*</span></label>
+                                        <Input
+                                            id="register-number"
+                                            autoComplete="off"
+                                            startContent={<Hash className="text-gray-400" size={15} />}
+                                            placeholder="SJC24MCA..."
+                                            value={formData.RegisterNumber}
+                                            onValueChange={(v) => handleChange("RegisterNumber", v)}
+                                            classNames={{
+                                                inputWrapper: "h-12 bg-gray-50/80 border-1 border-gray-200 hover:border-blue-300 focus-within:!border-blue-500 focus-within:bg-white focus-within:shadow-sm rounded-xl transition-all",
+                                                input: "text-sm bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0 placeholder:text-gray-400",
+                                            }}
+                                            variant="bordered"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label htmlFor="batch-year" className="text-sm font-semibold text-gray-700 ml-1">Batch Year</label>
+                                        <Input
+                                            id="batch-year"
+                                            type="number"
+                                            placeholder="2026"
+                                            value={formData.BatchYear}
+                                            onValueChange={(v) => handleChange("BatchYear", v)}
+                                            classNames={{
+                                                inputWrapper: "h-12 bg-gray-50/80 border-1 border-gray-200 hover:border-blue-300 focus-within:!border-blue-500 focus-within:bg-white focus-within:shadow-sm rounded-xl transition-all",
+                                                input: "text-sm bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0 placeholder:text-gray-400",
+                                            }}
+                                            variant="bordered"
+                                        />
+                                    </div>
+                                </div>
 
-                        {/* Section 2: Academic Info */}
-                        <div className="space-y-4">
-                            <div className="flex items-center gap-2 text-sm font-semibold text-gray-900 ">
-                                <div className="h-1.5 w-1.5 rounded-full bg-primary" />
-                                Academic Details
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <Select
-                                    startContent={<Building2 className="text-gray-400 mr-2" size={16} />}
-                                    placeholder="Select Department"
-                                    selectedKeys={formData.DepartmentID ? [formData.DepartmentID] : []}
-                                    onChange={(e) => handleChange("DepartmentID", e.target.value)}
-                                    aria-label="Department"
-                                    classNames={{
-                                        trigger: "h-12 bg-white border-1 border-slate-200 shadow-sm data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 rounded-xl transition-all",
-                                        popoverContent: "bg-white border border-gray-100 shadow-xl",
-                                        value: "text-small group-data-[has-value=true]:text-gray-900",
-                                        selectorIcon: "hidden"
-                                    }}
-                                >
-                                    {departments.map((dept) => (
-                                        <SelectItem key={dept.DepartmentID} textValue={dept.DepartmentCode}>
-                                            {dept.DepartmentName}
-                                        </SelectItem>
-                                    ))}
-                                </Select>
-
-                                <Select
-                                    startContent={<GraduationCap className="text-gray-400 mr-2" size={16} />}
-                                    placeholder="Select Program"
-                                    selectedKeys={formData.ProgramID ? [formData.ProgramID] : []}
-                                    onChange={(e) => handleChange("ProgramID", e.target.value)}
-                                    aria-label="Program"
-                                    classNames={{
-                                        trigger: "h-12 bg-white border-1 border-slate-200 shadow-sm data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 rounded-xl transition-all",
-                                        popoverContent: "bg-white border border-gray-100 shadow-xl",
-                                        value: "text-small group-data-[has-value=true]:text-gray-900",
-                                        selectorIcon: "hidden"
-                                    }}
-                                >
-                                    {programs.map((prog) => (
-                                        <SelectItem key={prog.ProgramID} textValue={prog.ProgramName}>
-                                            {prog.ProgramName}
-                                        </SelectItem>
-                                    ))}
-                                </Select>
-
-                                <Select
-                                    startContent={<BookOpen className="text-gray-400 mr-2" size={16} />}
-                                    placeholder="Select Semester"
-                                    selectedKeys={formData.SemesterID ? [formData.SemesterID] : []}
-                                    onChange={(e) => handleChange("SemesterID", e.target.value)}
-                                    isDisabled={!formData.ProgramID}
-                                    aria-label="Semester"
-                                    classNames={{
-                                        trigger: "h-12 bg-white border-1 border-slate-200 shadow-sm data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 rounded-xl transition-all",
-                                        popoverContent: "bg-white border border-gray-100 shadow-xl",
-                                        selectorIcon: "hidden"
-                                    }}
-                                >
-                                    {filteredSemesters.map((sem) => (
-                                        <SelectItem key={sem.SemesterID} textValue={sem.SemesterNumber.toString()}>
-                                            Semester {sem.SemesterNumber}
-                                        </SelectItem>
-                                    ))}
-                                </Select>
-
-                                <Input
-                                    startContent={<Calendar className="text-gray-400 mr-2" size={16} />}
-                                    placeholder="Batch Year"
-                                    type="number"
-                                    value={formData.BatchYear}
-                                    onValueChange={(v) => handleChange("BatchYear", v)}
-                                    classNames={{
-                                        inputWrapper: "h-12 bg-white border-1 border-slate-200 shadow-sm hover:border-blue-400 focus-within:border-blue-600 focus-within:shadow-md rounded-xl transition-all",
-                                        input: "text-small bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0",
-                                    }}
-                                />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <label htmlFor="department" className="text-sm font-semibold text-gray-700 ml-1">Department</label>
+                                        <select
+                                            id="department"
+                                            value={formData.DepartmentID}
+                                            onChange={(e) => handleChange("DepartmentID", e.target.value)}
+                                            className="w-full h-12 bg-gray-50/80 border border-gray-200 rounded-xl text-sm px-3 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                        >
+                                            <option value="">Select Department...</option>
+                                            {departments.map(dept => (
+                                                <option key={dept.DepartmentID} value={dept.DepartmentID}>{dept.DepartmentCode}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label htmlFor="program" className="text-sm font-semibold text-gray-700 ml-1">Program</label>
+                                        <select
+                                            id="program"
+                                            value={formData.ProgramID}
+                                            onChange={(e) => handleChange("ProgramID", e.target.value)}
+                                            className="w-full h-12 bg-gray-50/80 border border-gray-200 rounded-xl text-sm px-3 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                        >
+                                            <option value="">Select Program...</option>
+                                            {programs
+                                                .filter(prog => !formData.DepartmentID || prog.DepartmentID?.toString() === formData.DepartmentID.toString())
+                                                .map(prog => (
+                                                    <option key={prog.ProgramID} value={prog.ProgramID}>{prog.ProgramName}</option>
+                                                ))}
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </ModalBody>
-                <ModalFooter className="flex justify-between items-center bg-gray-50/50  p-6">
-                    <div className="text-xs text-gray-400 font-medium">
-                        * All fields are required
-                    </div>
-                    <div className="flex gap-3">
+                <ModalFooter className="flex justify-end items-center">
+                    <div className="flex gap-2.5">
                         <Button
-                            variant="light"
+                            variant="bordered"
                             onPress={onClose}
-                            className="font-semibold text-gray-500 hover:text-gray-700  "
+                            className="font-semibold text-gray-600 border-gray-200 hover:bg-gray-50 px-5"
+                            radius="lg"
                         >
                             Cancel
                         </Button>
                         <Button
-                            className="bg-black  text-white  font-bold shadow-lg shadow-black/20  px-8"
+                            className="bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold shadow-lg shadow-blue-600/25 hover:shadow-xl hover:shadow-blue-600/30 px-7"
                             onPress={handleSubmit}
                             isLoading={loading}
+                            radius="lg"
                         >
                             Update Student
                         </Button>

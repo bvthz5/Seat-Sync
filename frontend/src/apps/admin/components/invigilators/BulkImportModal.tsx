@@ -34,12 +34,12 @@ const stepIdx = (s: Step) => STEPS.findIndex(x => x.key === s);
 
 const downloadTemplate = () => {
     const ws = XLSX.utils.aoa_to_sheet([
-        ['FacultyID', 'Name', 'Department', 'Designation'],
-        ['101', 'Dr. Sarah Johnson', 'CS', 'Professor'],
-        ['102', 'Mr. Alan Walker', 'ECE', 'Asst. Professor'],
-        ['103', 'Ms. Priya Nair', 'ME', 'Senior Lecturer'],
+        ['FacultyID', 'Name', 'Email', 'Department', 'Phone', 'Designation'],
+        ['101', 'Dr. Sarah Johnson', 'sarah.j@college.edu', 'CS', '+91 9800000000', 'Professor'],
+        ['102', 'Mr. Alan Walker', 'alan.w@college.edu', 'ECE', '+91 9800000001', 'Asst. Professor'],
+        ['103', 'Ms. Priya Nair', 'priya.n@college.edu', 'ME', '+91 9800000003', 'Senior Lecturer'],
     ]);
-    ws['!cols'] = [{ wch: 12 }, { wch: 28 }, { wch: 16 }, { wch: 22 }];
+    ws['!cols'] = [{ wch: 12 }, { wch: 22 }, { wch: 26 }, { wch: 16 }, { wch: 18 }, { wch: 22 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Invigilators');
     XLSX.writeFile(wb, 'invigilator_import_template.xlsx');
@@ -78,11 +78,13 @@ const BulkImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
                     const t: Record<string, any> = {};
                     Object.keys(r).forEach(k => { t[k.trim()] = typeof r[k] === 'string' ? r[k].trim() : r[k]; });
                     if (!t['Name'] && !t['Department']) return;
-                    const fid = t['FacultyID'] || t['Faculty ID'] || t['faculty_id'];
+                    const fid = t['FacultyID'] || t['Faculty ID'] || t['faculty_id'] || t['StaffCode'];
                     if (!fid) { errors.push(`Row ${i + 2}: Missing FacultyID.`); return; }
+                    const email = t['Email'] || t['email'] || t['EMAIL'];
+                    if (!email) { errors.push(`Row ${i + 2}: Missing Email (Required for Activation).`); return; }
                     if (!t['Name']) { errors.push(`Row ${i + 2}: Missing Name.`); return; }
                     if (!t['Department']) { errors.push(`Row ${i + 2}: Missing Department.`); return; }
-                    normalised.push({ FacultyID: fid, Name: t['Name'], Department: t['Department'], Designation: t['Designation'] || undefined });
+                    normalised.push({ FacultyID: fid, Email: email, Name: t['Name'], Department: t['Department'], Phone: t['Phone'] || undefined, Designation: t['Designation'] || undefined });
                 });
                 setRows(normalised); setParseErrors(errors); setStep('preview');
             } catch { toast.error('Could not parse the file. Please use .xlsx or .csv.'); }
@@ -189,9 +191,11 @@ const BulkImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
                                             ))}
                                         </div>
                                         {[
-                                            { col: 'FacultyID', req: true, note: 'Unique numeric ID. Duplicate IDs are skipped.' },
+                                            { col: 'FacultyID', req: true, note: 'Unique numeric or string ID.' },
                                             { col: 'Name', req: true, note: 'Full name of the staff member.' },
+                                            { col: 'Email', req: true, note: 'Unique email address for activation link.' },
                                             { col: 'Department', req: true, note: 'Department code (CS, ECE) or full name.' },
+                                            { col: 'Phone', req: false, note: 'Contact phone number.' },
                                             { col: 'Designation', req: false, note: 'e.g. Professor. Defaults to "Faculty".' },
                                         ].map(({ col, req, note }, i, arr) => (
                                             <div key={col} className={`grid grid-cols-[100px_80px_1fr] px-3 py-2.5 gap-3 items-center bg-white ${i < arr.length - 1 ? 'border-b border-slate-100' : ''}`}>
@@ -264,8 +268,8 @@ const BulkImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
                                     )}
 
                                     <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
-                                        <div className="grid grid-cols-[70px_1.6fr_1fr_1fr] bg-slate-800 px-4 py-2 gap-3">
-                                            {['ID', 'Name', 'Dept', 'Designation'].map(h => (
+                                        <div className="grid grid-cols-[70px_1.2fr_1.6fr_1fr_1fr] bg-slate-800 px-4 py-2 gap-3">
+                                            {['ID', 'Name', 'Email', 'Dept', 'Phone'].map(h => (
                                                 <span key={h} className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{h}</span>
                                             ))}
                                         </div>
@@ -273,11 +277,12 @@ const BulkImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
                                             {rows.length === 0
                                                 ? <div className="py-6 text-center text-xs text-slate-400">No valid rows</div>
                                                 : rows.map((row, i) => (
-                                                    <div key={i} className={`grid grid-cols-[70px_1.6fr_1fr_1fr] px-4 py-2 gap-3 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'} ${i < rows.length - 1 ? 'border-b border-slate-100' : ''}`}>
-                                                        <span className="font-mono text-slate-400">{row.FacultyID}</span>
+                                                    <div key={i} className={`grid grid-cols-[70px_1.2fr_1.6fr_1fr_1fr] px-4 py-2 gap-3 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'} ${i < rows.length - 1 ? 'border-b border-slate-100' : ''}`}>
+                                                        <span className="font-mono text-slate-400 truncate">{row.FacultyID}</span>
                                                         <span className="font-semibold text-slate-800 truncate">{row.Name}</span>
+                                                        <span className="text-blue-600 truncate">{row.Email}</span>
                                                         <span className="text-slate-600 truncate">{row.Department}</span>
-                                                        <span className="text-slate-500 truncate">{row.Designation || <em className="text-slate-300">Faculty</em>}</span>
+                                                        <span className="font-mono text-slate-500 truncate">{row.Phone || <em className="text-slate-300">N/A</em>}</span>
                                                     </div>
                                                 ))
                                             }

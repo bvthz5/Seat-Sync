@@ -18,7 +18,14 @@ export const Departments: React.FC<DepartmentsProps> = ({ academicYearId }) => {
     const [departments, setDepartments] = useState<Department[]>([]);
     const [loading, setLoading] = useState(false);
     const [importing, setImporting] = useState(false);
-    const { isOpen, onOpen, onOpenChange } = useDisclosure();
+    
+    // Import Modal State
+    const { isOpen: isImportOpen, onOpen: onImportOpen, onOpenChange: onImportOpenChange } = useDisclosure();
+    
+    // Create Mode State
+    const { isOpen: isCreateOpen, onOpen: onCreateOpen, onOpenChange: onCreateOpenChange } = useDisclosure();
+    const [formData, setFormData] = useState({ DepartmentCode: '', DepartmentName: '' });
+
     const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onOpenChange: onDeleteOpenChange } = useDisclosure();
     const [deleteTarget, setDeleteTarget] = useState<{ type: 'single' | 'all', id?: number }>({ type: 'single' });
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -27,7 +34,8 @@ export const Departments: React.FC<DepartmentsProps> = ({ academicYearId }) => {
         try {
             setLoading(true);
             const res = await academicService.getDepartments();
-            setDepartments(res.data || []);
+            // getDepartments returns a flat array directly
+            setDepartments(Array.isArray(res.data) ? res.data : (res.data?.data || []));
         } catch (error) {
             console.error(error);
             toast.error("Failed to load departments");
@@ -52,7 +60,7 @@ export const Departments: React.FC<DepartmentsProps> = ({ academicYearId }) => {
                 toast.error(`${result.errorCount} errors occurred`);
             }
             fetchDepartments();
-            onOpenChange(); // Close modal
+            onImportOpenChange(); // Close modal
         } catch (error: any) {
             toast.error(error.response?.data?.message || "Import failed");
         } finally {
@@ -104,6 +112,30 @@ export const Departments: React.FC<DepartmentsProps> = ({ academicYearId }) => {
         }
     };
 
+    const handleCreate = async (onClose: () => void) => {
+        if (!academicYearId) {
+            toast.error("Please select an Academic Year first");
+            return;
+        }
+        if (!formData.DepartmentCode || !formData.DepartmentName) {
+            toast.error("Code and Name are required");
+            return;
+        }
+
+        try {
+            await academicService.createDepartment({
+                ...formData,
+                AcademicYearID: academicYearId
+            });
+            toast.success("Department created successfully");
+            fetchDepartments();
+            setFormData({ DepartmentCode: '', DepartmentName: '' });
+            onClose();
+        } catch (error: any) {
+            toast.error(error.response?.data?.message || "Failed to create department");
+        }
+    };
+
     return (
         <div className="flex flex-col gap-6">
             {/* Header */}
@@ -127,10 +159,19 @@ export const Departments: React.FC<DepartmentsProps> = ({ academicYearId }) => {
                 <Button
                     color="primary"
                     className="font-semibold text-white"
-                    startContent={<Upload size={18} />}
-                    onPress={onOpen}
+                    startContent={<Building2 size={18} />}
+                    onPress={onCreateOpen}
                 >
-                    Import Departments
+                    Add Department
+                </Button>
+                <Button
+                    color="secondary"
+                    variant="flat"
+                    className="font-semibold"
+                    startContent={<Upload size={18} />}
+                    onPress={onImportOpen}
+                >
+                    Import CSV
                 </Button>
                 <Button
                     className="bg-red-600 text-white font-semibold hover:bg-red-700"
@@ -206,10 +247,49 @@ export const Departments: React.FC<DepartmentsProps> = ({ academicYearId }) => {
                 </Table>
             </div>
 
+            {/* Create Modal */}
+            <Modal isOpen={isCreateOpen} onOpenChange={onCreateOpenChange} backdrop="blur">
+                <ModalContent>
+                    {(onClose) => (
+                        <>
+                            <ModalHeader className="flex flex-col gap-1">Add New Department</ModalHeader>
+                            <ModalBody>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="text-sm font-medium text-slate-700">Department Code</label>
+                                        <input 
+                                            type="text" 
+                                            value={formData.DepartmentCode}
+                                            onChange={(e) => setFormData({...formData, DepartmentCode: e.target.value.toUpperCase()})}
+                                            className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                                            placeholder="e.g. CS"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-sm font-medium text-slate-700">Department Name</label>
+                                        <input 
+                                            type="text" 
+                                            value={formData.DepartmentName}
+                                            onChange={(e) => setFormData({...formData, DepartmentName: e.target.value})}
+                                            className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                                            placeholder="e.g. Computer Science"
+                                        />
+                                    </div>
+                                </div>
+                            </ModalBody>
+                            <ModalFooter>
+                                <Button variant="light" onPress={onClose}>Cancel</Button>
+                                <Button color="primary" onPress={() => handleCreate(onClose)}>Create</Button>
+                            </ModalFooter>
+                        </>
+                    )}
+                </ModalContent>
+            </Modal>
+
             {/* Import Modal */}
             <Modal
-                isOpen={isOpen}
-                onOpenChange={onOpenChange}
+                isOpen={isImportOpen}
+                onOpenChange={onImportOpenChange}
                 size="2xl"
                 backdrop="blur"
                 classNames={{

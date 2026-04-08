@@ -16,12 +16,14 @@ interface StudentAttributes {
   ProgramID: number;
   SemesterID: number;
   BatchYear: number;
+  Status: "ACTIVE" | "GRADUATED" | "DROPPED";
+  AdmissionDate: Date | null;
 }
 
 /**
  * Attributes required when creating a student
  */
-interface StudentCreationAttributes extends Optional<StudentAttributes, "StudentID" | "UserID"> { }
+interface StudentCreationAttributes extends Optional<StudentAttributes, "StudentID" | "UserID" | "Status" | "AdmissionDate"> { }
 
 export class Student extends Model<StudentAttributes, StudentCreationAttributes>
   implements StudentAttributes {
@@ -32,6 +34,8 @@ export class Student extends Model<StudentAttributes, StudentCreationAttributes>
   declare ProgramID: number;
   declare SemesterID: number;
   declare BatchYear: number;
+  declare Status: "ACTIVE" | "GRADUATED" | "DROPPED";
+  declare AdmissionDate: Date | null;
 }
 
 Student.init(
@@ -82,6 +86,18 @@ Student.init(
     BatchYear: {
       type: DataTypes.INTEGER,
       allowNull: false,
+    },
+    Status: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: "ACTIVE",
+      validate: {
+        isIn: [['ACTIVE', 'GRADUATED', 'DROPPED']]
+      }
+    },
+    AdmissionDate: {
+      type: DataTypes.DATE,
+      allowNull: true,
     },
   },
   {

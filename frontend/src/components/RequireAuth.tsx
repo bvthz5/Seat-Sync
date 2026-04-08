@@ -24,9 +24,11 @@ const RequireAuth: React.FC<RequireAuthProps> = ({ allowedRoles, redirectTo = "/
         return <Navigate to={redirectTo} state={{ from: location }} replace />;
     }
 
+    const deniedRedirect = redirectTo;
+
     if (allowedRoles && user && !allowedRoles.includes(user.Role)) {
         // If they are logged in but don't have the right role, send to 404/not authorized
-        return <Navigate to="/404" replace />;
+        return <Navigate to={deniedRedirect} replace />;
     }
 
     return <Outlet />;

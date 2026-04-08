@@ -32,7 +32,7 @@ export const AnalyticsChart: React.FC = () => (
         <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Department Load</p>
             <div className="h-[130px]">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                     <BarChart data={barData} layout="vertical" margin={{ top: 0, right: 20, left: -15, bottom: 0 }}>
                         <XAxis type="number" hide />
                         <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fontWeight: 600, fill: '#94a3b8' }} width={45} axisLine={false} tickLine={false} />
@@ -48,7 +48,7 @@ export const AnalyticsChart: React.FC = () => (
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Seat Utilization</p>
             <div className="flex items-center gap-5">
                 <div className="relative w-[110px] h-[110px] shrink-0">
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                         <PieChart>
                             <Pie data={pieData} cx="50%" cy="50%" innerRadius={35} outerRadius={50} paddingAngle={3} dataKey="value" stroke="none">
                                 <Cell fill="#6366f1" />
