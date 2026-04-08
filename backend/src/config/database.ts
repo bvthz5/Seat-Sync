@@ -540,13 +540,19 @@ export async function connectDB() {
 
         await import("../models/index.js");
 
-        try {
-            await sequelize.sync({ alter: true });
-            console.log("Database synchronized with alter");
-        } catch (syncErr: any) {
-            console.warn("Database alter sync failed, falling back to standard sync:", syncErr.message);
+        const dialect = sequelize.getDialect();
+        if (dialect === 'mssql') {
             await sequelize.sync();
-            console.log("Database synchronized (standard)");
+            console.log("Database synchronized (standard, alter skipped for MSSQL)");
+        } else {
+            try {
+                await sequelize.sync({ alter: true });
+                console.log("Database synchronized with alter");
+            } catch (syncErr: any) {
+                console.warn("Database alter sync failed, falling back to standard sync:", syncErr.message);
+                await sequelize.sync();
+                console.log("Database synchronized (standard fallback)");
+            }
         }
 
         return true;
