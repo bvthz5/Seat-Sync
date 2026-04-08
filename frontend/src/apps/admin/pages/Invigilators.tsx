@@ -10,10 +10,7 @@ import {
     useDisclosure,
     Spinner,
     Pagination,
-    Dropdown,
-    DropdownTrigger,
-    DropdownMenu,
-    DropdownItem,
+
     Tooltip,
 } from '@heroui/react';
 import {
@@ -29,7 +26,6 @@ import {
     UserPlus,
     Upload,
     Filter,
-    MoreVertical,
     Activity,
     Clock,
     Briefcase,
@@ -163,7 +159,6 @@ const Invigilators: React.FC = () => {
 
     /* ── derived ───────────────────────────────────────── */
     const uniqueDepts = React.useMemo(() => {
-        // Collect unique department strings
         const depts = new Set<string>();
         invigilators.forEach(inv => {
             if (inv.Department) depts.add(inv.Department);
@@ -321,11 +316,11 @@ const Invigilators: React.FC = () => {
                 </div>
 
                 {/* ── Table Card ──────────────────────────────── */}
-                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm">
 
                     {/* Table head */}
-                    <div className="grid grid-cols-[2.2fr_1.1fr_1.4fr_1.8fr_1fr_64px] px-6 py-3.5 border-b border-slate-100 bg-slate-50/70">
-                        {['Invigilator', 'Staff ID', 'Department', 'Contact', 'Status', ''].map((h, i) => (
+                    <div className="grid grid-cols-[2.2fr_1.1fr_1.4fr_1.8fr_1fr_200px] px-6 py-3.5 border-b border-slate-100 bg-slate-50/70">
+                        {['Invigilator', 'Staff ID', 'Department', 'Contact', 'Status', 'Actions'].map((h, i) => (
                             <span key={i} className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{h}</span>
                         ))}
                     </div>
@@ -353,7 +348,7 @@ const Invigilators: React.FC = () => {
                             return (
                                 <div
                                     key={inv.InvigilatorID}
-                                    className={`grid grid-cols-[2.2fr_1.1fr_1.4fr_1.8fr_1fr_64px] px-6 py-4 items-center transition-colors hover:bg-slate-50/80 ${!isLast ? 'border-b border-slate-100' : ''}`}
+                                    className={`group grid grid-cols-[2.2fr_1.1fr_1.4fr_1.8fr_1fr_200px] px-6 py-4 items-center transition-colors hover:bg-slate-50/80 ${!isLast ? 'border-b border-slate-100' : ''}`}
                                 >
                                     {/* Invigilator */}
                                     <div className="flex items-center gap-3.5 min-w-0">
@@ -406,56 +401,104 @@ const Invigilators: React.FC = () => {
                                         </span>
                                     </div>
 
-                                    {/* Action menu */}
-                                    <div className="flex justify-center">
-                                        <Dropdown placement="bottom-end">
-                                            <DropdownTrigger>
-                                                <button className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-all">
-                                                    <MoreVertical size={16} />
-                                                </button>
-                                            </DropdownTrigger>
-                                            <DropdownMenu aria-label="Invigilator actions" className="min-w-[190px]" itemClasses={{ base: 'rounded-lg' }}>
-                                                <DropdownItem
-                                                    key="view"
-                                                    startContent={<ClipboardList size={15} />}
-                                                    onPress={() => { setSelected(inv); onOpenDetails(); }}
-                                                    description="See full profile details"
-                                                >
-                                                    View Profile
-                                                </DropdownItem>
-                                                <DropdownItem
-                                                    key="toggle"
-                                                    startContent={inv.isEligible ? <UserMinus size={15} /> : <CheckCircle2 size={15} />}
-                                                    onPress={() => handleToggleEligibility(inv.InvigilatorID)}
-                                                    description={inv.isEligible ? 'Disable duty access' : 'Enable duty access'}
-                                                >
-                                                    {inv.isEligible ? 'Mark Ineligible' : 'Mark Eligible'}
-                                                </DropdownItem>
-                                                <DropdownItem
-                                                    key="flag"
-                                                    startContent={<Flag size={15} />}
-                                                    onPress={() => handleToggleFlag(inv.InvigilatorID)}
-                                                    description={inv.isFlagged ? 'Remove leave status' : 'Put on leave'}
-                                                >
-                                                    {inv.isFlagged ? 'Remove Leave Flag' : 'Flag for Leave'}
-                                                </DropdownItem>
-                                                <DropdownItem
-                                                    key="delete"
-                                                    className="text-danger"
-                                                    color="danger"
-                                                    startContent={<Trash2 size={15} />}
-                                                    onPress={() => { setSelected(inv); onOpenDelete(); }}
-                                                    description="Permanently remove account"
-                                                >
-                                                    Remove Account
-                                                </DropdownItem>
-                                            </DropdownMenu>
-                                        </Dropdown>
+                                    {/* Actions — separated pastel pills */}
+                                    <div className="flex items-center gap-2">
+
+                                        {/* View Profile */}
+                                        <div className="relative">
+                                            <button
+                                                onClick={() => { setSelected(inv); onOpenDetails(); }}
+                                                onMouseEnter={() => setActiveTooltip(`${inv.InvigilatorID}-view`)}
+                                                onMouseLeave={() => setActiveTooltip(null)}
+                                                className="h-8 w-11 flex items-center justify-center rounded-lg border border-blue-100 bg-blue-50/50 text-blue-500 hover:bg-blue-100/50 hover:text-blue-600 transition-colors shadow-sm"
+                                            >
+                                                <ClipboardList size={14} strokeWidth={2.5} />
+                                            </button>
+                                            {activeTooltip === `${inv.InvigilatorID}-view` && (
+                                                <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 flex flex-col items-center z-[9999]">
+                                                    <div className="bg-slate-900 text-white rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
+                                                        <p className="text-[11px] font-semibold leading-tight">View Profile</p>
+                                                        <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">See full invigilator details</p>
+                                                    </div>
+                                                    <div className="w-2 h-2 bg-slate-900 rotate-45 -mt-1" />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Suspend / Restore Access */}
+                                        <div className="relative">
+                                            <button
+                                                onClick={() => handleToggleEligibility(inv.InvigilatorID)}
+                                                onMouseEnter={() => setActiveTooltip(`${inv.InvigilatorID}-elig`)}
+                                                onMouseLeave={() => setActiveTooltip(null)}
+                                                className={`h-8 w-11 flex items-center justify-center rounded-lg border shadow-sm transition-colors ${inv.isEligible
+                                                    ? 'border-emerald-100 bg-emerald-50/50 text-emerald-500 hover:bg-emerald-100/50 hover:text-emerald-600'
+                                                    : 'border-amber-100 bg-amber-50/50 text-amber-500 hover:bg-amber-100/50 hover:text-amber-600'
+                                                    }`}
+                                            >
+                                                {inv.isEligible ? <CheckCircle2 size={14} strokeWidth={2.5} /> : <UserMinus size={14} strokeWidth={2.5} />}
+                                            </button>
+                                            {activeTooltip === `${inv.InvigilatorID}-elig` && (
+                                                <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 flex flex-col items-center z-[9999]">
+                                                    <div className="bg-slate-900 text-white rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
+                                                        <p className="text-[11px] font-semibold leading-tight">{inv.isEligible ? 'Suspend Access' : 'Restore Access'}</p>
+                                                        <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{inv.isEligible ? 'Disable from exam duty' : 'Re-enable for exam duty'}</p>
+                                                    </div>
+                                                    <div className="w-2 h-2 bg-slate-900 rotate-45 -mt-1" />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Flag for Leave */}
+                                        <div className="relative">
+                                            <button
+                                                onClick={() => handleToggleFlag(inv.InvigilatorID)}
+                                                onMouseEnter={() => setActiveTooltip(`${inv.InvigilatorID}-flag`)}
+                                                onMouseLeave={() => setActiveTooltip(null)}
+                                                className={`h-8 w-11 flex items-center justify-center rounded-lg border shadow-sm transition-colors ${inv.isFlagged
+                                                    ? 'border-purple-200 bg-purple-100/50 text-purple-600 hover:bg-purple-200/50'
+                                                    : 'border-slate-200 bg-slate-50/50 text-slate-400 hover:bg-slate-100/50 hover:text-slate-600'
+                                                    }`}
+                                            >
+                                                <Flag size={14} strokeWidth={2.5} />
+                                            </button>
+                                            {activeTooltip === `${inv.InvigilatorID}-flag` && (
+                                                <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 flex flex-col items-center z-[9999]">
+                                                    <div className="bg-slate-900 text-white rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
+                                                        <p className="text-[11px] font-semibold leading-tight">{inv.isFlagged ? 'Clear Leave Status' : 'Flag for Leave'}</p>
+                                                        <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{inv.isFlagged ? 'Remove the leave flag' : 'Mark as on approved leave'}</p>
+                                                    </div>
+                                                    <div className="w-2 h-2 bg-slate-900 rotate-45 -mt-1" />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Remove Account */}
+                                        <div className="relative">
+                                            <button
+                                                onClick={() => { setSelected(inv); onOpenDelete(); }}
+                                                onMouseEnter={() => setActiveTooltip(`${inv.InvigilatorID}-del`)}
+                                                onMouseLeave={() => setActiveTooltip(null)}
+                                                className="h-8 w-11 flex items-center justify-center rounded-lg border border-rose-100 bg-rose-50/50 text-rose-500 hover:bg-rose-100/50 hover:text-rose-600 transition-colors shadow-sm"
+                                            >
+                                                <Trash2 size={14} strokeWidth={2.5} />
+                                            </button>
+                                            {activeTooltip === `${inv.InvigilatorID}-del` && (
+                                                <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 flex flex-col items-center z-[9999]">
+                                                    <div className="bg-rose-600 text-white rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
+                                                        <p className="text-[11px] font-semibold leading-tight">Remove Account</p>
+                                                        <p className="text-[10px] text-rose-200 mt-0.5 leading-tight">Permanently delete this record</p>
+                                                    </div>
+                                                    <div className="w-2 h-2 bg-rose-600 rotate-45 -mt-1" />
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             );
                         })
                     )}
+
                     {/* Footer */}
                     <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
                         <span className="text-xs text-slate-400 font-medium">
@@ -479,146 +522,179 @@ const Invigilators: React.FC = () => {
                             />
                         )}
                     </div>
-                </div >
+                </div>
+
             </div>
 
             {/* ══════════════ MODALS ════════════════════════ */}
 
             <AddInvigilatorModal isOpen={isAddOpen} onClose={onAddClose} onSuccess={fetchData} />
 
-            {/* Delete */}
-            <Modal isOpen={isDeleteOpen} onClose={onCloseDelete} size="sm" classNames={{ wrapper: 'z-[9999]', backdrop: 'z-[9998] bg-black/60' }}>
-                <ModalContent className="rounded-2xl">
-                    {(onClose) => (
-                        <>
-                            <ModalHeader className="flex flex-col items-center pt-8 pb-2 px-8 text-center gap-0">
-                                <div className="w-14 h-14 rounded-2xl bg-rose-50 flex items-center justify-center mb-4 border border-rose-100">
-                                    <Trash2 size={22} className="text-rose-500" />
+            {/* Delete — custom portal overlay */}
+            {isDeleteOpen && createPortal(
+                <div
+                    className="fixed inset-0 z-[99999] flex items-center justify-center"
+                    style={{ backgroundColor: 'rgba(15,23,42,0.7)', backdropFilter: 'blur(4px)' }}
+                    onClick={(e) => e.target === e.currentTarget && onCloseDelete()}
+                >
+                    <div
+                        className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden"
+                        style={{ border: '1px solid #e2e8f0' }}
+                    >
+                        <div className="px-8 pt-8 pb-8 text-center">
+                            <div className="flex items-center justify-center mb-5">
+                                <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#fff1f2,#fecdd3)', border: '1px solid #fecaca' }}>
+                                    <Trash2 size={26} className="text-rose-500" strokeWidth={1.75} />
                                 </div>
-                                <h3 className="text-lg font-bold text-slate-900">Remove Invigilator?</h3>
-                            </ModalHeader>
-                            <ModalBody className="text-center px-8 pb-2">
-                                <p className="text-sm text-slate-500 leading-relaxed">
-                                    This will permanently remove <span className="font-bold text-slate-900">{selected?.Name}</span> from the system. This action cannot be undone.
-                                </p>
-                            </ModalBody>
-                            <ModalFooter className="justify-center gap-3 pb-8 pt-4 px-8">
-                                <Button variant="bordered" onPress={onClose} className="font-semibold text-slate-600 border-slate-200 rounded-xl">Cancel</Button>
-                                <Button className="bg-rose-500 text-white font-bold rounded-xl px-6 shadow-sm shadow-rose-100" onPress={handleDelete} isLoading={isSubmitting}>
-                                    Remove Account
-                                </Button>
-                            </ModalFooter>
-                        </>
-                    )}
-                </ModalContent>
-            </Modal>
+                            </div>
+                            <h3 className="text-[18px] font-bold text-slate-900 mb-2">Delete Invigilator</h3>
+                            <p className="text-sm text-slate-500 leading-relaxed">
+                                You are about to permanently remove{' '}
+                                <span className="font-semibold text-slate-800">{selected?.Name}</span>{' '}
+                                from the system. This action cannot be undone.
+                            </p>
+                            <div className="my-6 h-px bg-slate-100" />
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={onCloseDelete}
+                                    className="flex-1 h-11 rounded-xl font-semibold text-sm text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleDelete}
+                                    disabled={isSubmitting}
+                                    className="flex-1 h-11 rounded-xl font-bold text-sm text-white bg-rose-500 hover:bg-rose-600 transition-colors shadow-md disabled:opacity-70"
+                                    style={{ boxShadow: '0 4px 14px rgba(239,68,68,0.35)' }}
+                                >
+                                    {isSubmitting ? 'Deleting...' : 'Delete'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
 
-            {/* Profile */}
-            <Modal isOpen={isDetailsOpen} onClose={onCloseDetails} size="lg" backdrop="opaque" scrollBehavior="inside" classNames={{ wrapper: 'z-[9999]', backdrop: 'z-[9998] bg-black/60' }}>
-                <ModalContent className="rounded-2xl">
-                    {(onClose) => {
-                        if (!selected) return null;
-                        const st = resolveStatus(selected);
-                        const cfg = STATUS_CFG[st];
-                        const ini = initials(selected.Name);
-                        return (
-                            <>
-                                <ModalHeader className="pt-6 px-7 pb-4 border-b border-slate-100 flex items-center gap-3">
-                                    <div className="p-2 bg-slate-100 rounded-xl">
-                                        <ClipboardList size={16} className="text-slate-600" />
-                                    </div>
-                                    <div>
-                                        <p className="text-base font-bold text-slate-900">Invigilator Profile</p>
-                                        <p className="text-xs text-slate-400 font-normal">Complete information &amp; status</p>
-                                    </div>
-                                </ModalHeader>
-                                <ModalBody className="py-6 px-7">
-                                    <div className="space-y-5">
-                                        {/* Hero row */}
-                                        <div className="flex items-center gap-5 p-5 bg-slate-50 rounded-2xl border border-slate-200">
-                                            {selected.ProfileImageURL ? (
-                                                <img src={selected.ProfileImageURL} alt={selected.Name} className="w-16 h-16 rounded-2xl object-cover ring-4 ring-white shadow-md shrink-0" />
-                                            ) : (
-                                                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-white font-bold text-xl shadow-md shrink-0">
-                                                    {ini}
-                                                </div>
-                                            )}
-                                            <div className="flex-1 min-w-0">
-                                                <h3 className="text-lg font-bold text-slate-900 truncate">{selected.Name}</h3>
-                                                <p className="text-sm text-slate-500 mt-0.5">{selected.Designation || 'Faculty'}</p>
-                                                <div className="flex items-center gap-2 mt-2">
-                                                    <span
-                                                        className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full border"
-                                                        style={{ background: cfg.chipBg, color: cfg.chipText, borderColor: st === 'active' ? '#bbf7d0' : st === 'on-leave' ? '#fde68a' : '#e2e8f0' }}
-                                                    >
-                                                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: cfg.dotBg }} />
-                                                        {cfg.label}
-                                                    </span>
-                                                    <span className="font-mono text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">{staffId(selected.InvigilatorID)}</span>
-                                                </div>
-                                            </div>
+            {/* Profile — custom portal overlay */}
+            {isDetailsOpen && selected && (() => {
+                const st = resolveStatus(selected);
+                const cfg = STATUS_CFG[st];
+                const ini = initials(selected.Name);
+                return createPortal(
+                    <div
+                        className="fixed inset-0 z-[99999] flex items-center justify-center"
+                        style={{ backgroundColor: 'rgba(15,23,42,0.65)', backdropFilter: 'blur(6px)' }}
+                        onClick={(e) => e.target === e.currentTarget && onCloseDetails()}
+                    >
+                        <div
+                            className="bg-white w-full max-w-md mx-4 rounded-2xl overflow-hidden shadow-2xl"
+                            style={{ border: '1px solid #e2e8f0', maxHeight: '90vh', overflowY: 'auto' }}
+                        >
+                            {/* ── Header band ───────────────────────────── */}
+                            <div className="relative" style={{ background: 'linear-gradient(135deg,#0f172a 0%,#1e293b 60%,#334155 100%)' }}>
+                                <button
+                                    onClick={onCloseDetails}
+                                    className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+                                >
+                                    ✕
+                                </button>
+                                <div className="px-7 pt-8 pb-6 flex items-center gap-5">
+                                    {selected.ProfileImageURL ? (
+                                        <img src={selected.ProfileImageURL} alt={selected.Name}
+                                            className="w-20 h-20 rounded-2xl object-cover ring-2 ring-white/20 shadow-xl shrink-0" />
+                                    ) : (
+                                        <div
+                                            className="w-20 h-20 rounded-2xl flex items-center justify-center text-white font-bold text-2xl shrink-0 shadow-xl"
+                                            style={{ background: 'linear-gradient(135deg,#475569,#1e293b)', border: '2px solid rgba(255,255,255,0.12)' }}
+                                        >
+                                            {ini}
                                         </div>
-
-                                        {/* Info grid */}
-                                        <div className="grid grid-cols-2 gap-3">
-                                            {[
-                                                { label: 'Department', value: selected.Department || 'Not Assigned' },
-                                                { label: 'Dept Code', value: '—' },
-                                                { label: 'Total Exams', value: `${selected.totalExams ?? 0} assignments` },
-                                                { label: 'Eligibility', value: selected.isEligible ? '✓ Eligible for duty' : '✗ Not eligible', colored: true, isEligible: selected.isEligible },
-                                            ].map(item => (
-                                                <div key={item.label} className="bg-white rounded-xl p-4 border border-slate-200">
-                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">{item.label}</p>
-                                                    <p className={`text-sm font-semibold ${(item as any).colored ? ((item as any).isEligible ? 'text-emerald-600' : 'text-rose-500') : 'text-slate-800'}`}>
-                                                        {item.value}
-                                                    </p>
-                                                </div>
-                                            ))}
-                                        </div>
-
-                                        {/* Contact */}
-                                        <div className="bg-white rounded-xl p-4 border border-slate-200">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Contact Information</p>
-                                            <div className="flex flex-col gap-1.5">
-                                                <p className="text-sm text-slate-700 font-medium">{mockEmail(selected.Name)}</p>
-                                                <p className="text-sm text-slate-500">{mockPhone(selected.InvigilatorID)}</p>
-                                            </div>
-                                        </div>
-
-                                        {/* Quick actions */}
-                                        <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
-                                            <Button size="sm" variant="bordered"
-                                                className={`font-semibold rounded-xl text-xs h-9 ${selected.isEligible ? 'border-slate-200 text-rose-500' : 'border-slate-200 text-emerald-600'}`}
-                                                onPress={() => { handleToggleEligibility(selected.InvigilatorID); onClose(); }}
-                                                startContent={selected.isEligible ? <UserMinus size={13} /> : <CheckCircle2 size={13} />}
+                                    )}
+                                    <div className="min-w-0">
+                                        <h2 className="text-xl font-bold text-white truncate leading-tight">{selected.Name}</h2>
+                                        <p className="text-sm text-slate-400 mt-0.5">{selected.Designation || 'Faculty'}</p>
+                                        <div className="flex items-center gap-2 mt-3">
+                                            <span
+                                                className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full"
+                                                style={{ background: cfg.chipBg, color: cfg.chipText }}
                                             >
-                                                {selected.isEligible ? 'Mark Ineligible' : 'Mark Eligible'}
-                                            </Button>
-                                            <Button size="sm" variant="bordered"
-                                                className={`font-semibold rounded-xl text-xs h-9 ${selected.isFlagged ? 'border-slate-200 text-slate-600' : 'border-slate-200 text-amber-600'}`}
-                                                onPress={() => { handleToggleFlag(selected.InvigilatorID); onClose(); }}
-                                                startContent={<Flag size={13} />}
-                                            >
-                                                {selected.isFlagged ? 'Remove Leave Flag' : 'Flag for Leave'}
-                                            </Button>
-                                            <Button size="sm" variant="bordered"
-                                                className="font-semibold rounded-xl text-xs h-9 ml-auto border-rose-200 text-rose-500"
-                                                onPress={() => { onClose(); setTimeout(onOpenDelete, 200); }}
-                                                startContent={<Trash2 size={13} />}
-                                            >
-                                                Remove
-                                            </Button>
+                                                <span className="w-1.5 h-1.5 rounded-full" style={{ background: cfg.dotBg }} />
+                                                {cfg.label}
+                                            </span>
+                                            <span className="font-mono text-[11px] text-white/50 bg-white/10 px-2.5 py-1 rounded-full">
+                                                {staffId(selected.InvigilatorID)}
+                                            </span>
                                         </div>
                                     </div>
-                                </ModalBody>
-                                <ModalFooter className="justify-end pb-6 pt-3 px-7 border-t border-slate-100">
-                                    <Button variant="light" onPress={onClose} className="font-semibold text-slate-500 text-sm rounded-xl">Close</Button>
-                                </ModalFooter>
-                            </>
-                        );
-                    }}
-                </ModalContent>
-            </Modal>
+                                </div>
+                            </div>
+
+                            {/* ── Body ──────────────────────────────────── */}
+                            <div className="px-7 py-6 space-y-5">
+
+                                {/* Info grid */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    {[
+                                        { icon: '🏛️', label: 'Department', value: selected.Department || '—' },
+                                        { icon: '📋', label: 'Total Exams', value: `${selected.totalExams ?? 0}` },
+                                        { icon: '✅', label: 'Eligibility', value: selected.isEligible ? 'Eligible' : 'Not Eligible', green: selected.isEligible, red: !selected.isEligible },
+                                        { icon: '🚩', label: 'Leave Status', value: selected.isFlagged ? 'On Leave' : 'Available', amber: selected.isFlagged },
+                                    ].map(item => (
+                                        <div key={item.label} className="rounded-xl p-4" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{item.label}</p>
+                                            <p className={`text-sm font-semibold ${(item as any).green ? 'text-emerald-600' : (item as any).red ? 'text-rose-500' : (item as any).amber ? 'text-amber-600' : 'text-slate-800'}`}>
+                                                {item.value}
+                                            </p>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Contact */}
+                                <div className="rounded-xl p-4" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Contact</p>
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 shrink-0" style={{ fontSize: 13 }}>@</div>
+                                            <span className="text-sm text-slate-700 font-medium">{mockEmail(selected.Name)}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 shrink-0" style={{ fontSize: 11 }}>☎</div>
+                                            <span className="text-sm text-slate-500">{mockPhone(selected.InvigilatorID)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Divider */}
+                                <div className="h-px bg-slate-100" />
+
+                                {/* Action buttons */}
+                                <div className="flex flex-wrap gap-2">
+                                    <button
+                                        onClick={() => { handleToggleEligibility(selected.InvigilatorID); onCloseDetails(); }}
+                                        className={`flex items-center gap-1.5 px-3.5 h-9 rounded-xl text-xs font-semibold border transition-colors ${selected.isEligible ? 'border-rose-200 text-rose-600 bg-rose-50 hover:bg-rose-100' : 'border-emerald-200 text-emerald-600 bg-emerald-50 hover:bg-emerald-100'}`}
+                                    >
+                                        {selected.isEligible ? <><UserMinus size={13} /> Mark Ineligible</> : <><CheckCircle2 size={13} /> Mark Eligible</>}
+                                    </button>
+                                    <button
+                                        onClick={() => { handleToggleFlag(selected.InvigilatorID); onCloseDetails(); }}
+                                        className={`flex items-center gap-1.5 px-3.5 h-9 rounded-xl text-xs font-semibold border transition-colors ${selected.isFlagged ? 'border-slate-200 text-slate-600 bg-slate-50 hover:bg-slate-100' : 'border-amber-200 text-amber-600 bg-amber-50 hover:bg-amber-100'}`}
+                                    >
+                                        <Flag size={13} /> {selected.isFlagged ? 'Clear Leave' : 'Flag for Leave'}
+                                    </button>
+                                    <button
+                                        onClick={() => { onCloseDetails(); setTimeout(onOpenDelete, 150); }}
+                                        className="ml-auto flex items-center gap-1.5 px-3.5 h-9 rounded-xl text-xs font-semibold border border-rose-200 text-rose-600 bg-rose-50 hover:bg-rose-100 transition-colors"
+                                    >
+                                        <Trash2 size={13} /> Remove
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>,
+                    document.body
+                );
+            })()}
 
             {/* Bulk Import */}
             <BulkImportModal isOpen={isBulkOpen} onClose={onBulkClose} onSuccess={fetchData} />
