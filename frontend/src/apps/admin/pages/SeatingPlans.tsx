@@ -796,8 +796,8 @@ const SeatingPlans: React.FC = () => {
                                             trigger: "bg-[#0d1424] border border-[#1e293b] shadow-inner rounded-lg data-[hover=true]:border-indigo-500/50 data-[hover=true]:bg-[#0f172a] transition-all h-8 text-slate-200 text-xs",
                                             popoverContent: "bg-[#0d1424] border border-[#1e293b] text-slate-200"
                                         }}>
-                                        {examDates.filter(d => d.session === selectedSession).map(d => (
-                                            <SelectItem key={d.examDate} textValue={`${fmtDate(d.examDate)} (${d.examCount})`} className="data-[hover=true]:bg-indigo-500/10 data-[hover=true]:text-indigo-300">
+                                        {examDates.filter(d => d.session === selectedSession).map((d, i) => (
+                                            <SelectItem key={`${d.examDate}-${i}`} textValue={`${fmtDate(d.examDate)} (${d.examCount})`} className="data-[hover=true]:bg-indigo-500/10 data-[hover=true]:text-indigo-300">
                                                 {fmtDate(d.examDate)} ({d.examCount} exam{d.examCount !== 1 ? 's' : ''})
                                             </SelectItem>
                                         ))}
