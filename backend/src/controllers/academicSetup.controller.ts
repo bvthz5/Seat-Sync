@@ -11,16 +11,19 @@ import { Op } from "sequelize";
 
 export const getAllAcademicYears = async (req: Request, res: Response): Promise<void> => {
     try {
+        console.log("[getAllAcademicYears] Fetching all academic years...");
         const years = await AcademicYear.findAll({
             order: [['StartDate', 'DESC']]
         });
+        console.log("[getAllAcademicYears] Found", years.length, "years");
 
         res.status(200).json({
             success: true,
             data: years
         });
     } catch (error: any) {
-        console.error("Error fetching academic years:", error);
+        console.error("[getAllAcademicYears] Error:", error);
+        console.error("[getAllAcademicYears] Stack:", error.stack);
         res.status(500).json({
             success: false,
             message: "Failed to fetch academic years",
@@ -34,8 +37,11 @@ export const createAcademicYear = async (req: Request, res: Response): Promise<v
         const { YearName, StartDate, EndDate, IsCurrent } = req.body;
         const currentUser = (req as any).user;
 
+        console.log("[createAcademicYear] Starting with payload:", { YearName, StartDate, EndDate, IsCurrent, userID: currentUser?.UserID });
+
         // Validation
         if (!YearName || !StartDate || !EndDate) {
+            console.log("[createAcademicYear] Validation failed: missing required fields");
             res.status(400).json({
                 success: false,
                 message: "YearName, StartDate, and EndDate are required"
@@ -45,12 +51,14 @@ export const createAcademicYear = async (req: Request, res: Response): Promise<v
 
         // If setting as current, unset all others
         if (IsCurrent) {
+            console.log("[createAcademicYear] Unsetting all other current years...");
             await AcademicYear.update(
                 { IsCurrent: false },
                 { where: { IsCurrent: true } }
             );
         }
 
+        console.log("[createAcademicYear] Creating academic year...");
         const year = await AcademicYear.create({
             YearName,
             StartDate,
@@ -58,9 +66,11 @@ export const createAcademicYear = async (req: Request, res: Response): Promise<v
             IsCurrent: IsCurrent || false,
             IsActive: true
         });
+        console.log("[createAcademicYear] Academic year created:", year.AcademicYearID);
 
         // Log activity (non-blocking - don't fail if logging fails)
         try {
+            console.log("[createAcademicYear] Creating activity log...");
             await ActivityLog.create({
                 UserID: currentUser.UserID,
                 Action: 'CREATE_ACADEMIC_YEAR',
@@ -70,18 +80,35 @@ export const createAcademicYear = async (req: Request, res: Response): Promise<v
                 IPAddress: req.ip || 'unknown',
                 UserAgent: req.get('user-agent') || 'unknown'
             });
+            console.log("[createAcademicYear] Activity log created");
         } catch (logError: any) {
-            console.warn("Failed to log activity:", logError.message);
+            console.warn("[createAcademicYear] Failed to log activity:", logError.message);
             // Don't fail the request if logging fails
         }
 
+        console.log("[createAcademicYear] Sending success response");
         res.status(201).json({
             success: true,
             message: "Academic year created successfully",
             data: year
         });
     } catch (error: any) {
-        console.error("Error creating academic year:", error);
+        console.error("[createAcademicYear] Error:", error);
+        console.error("[createAcademicYear] Error stack:", error.stack);
+        console.error("[createAcademicYear] Sequelize errors:", error.errors);
+
+        // Handle unique constraint violation
+        if (error.name === 'SequelizeUniqueConstraintError') {
+            console.log("[createAcademicYear] Unique constraint violation detected");
+            res.status(400).json({
+                success: false,
+                message: `Academic year '${error.fields?.UQ__Academic__294C4DA93FF6F462 || error.fields?.YearName || 'N/A'}' already exists. Please choose a different year name.`,
+                error: "Duplicate academic year"
+            });
+            return;
+        }
+
+        // Generic error response
         res.status(500).json({
             success: false,
             message: "Failed to create academic year",
