@@ -12,6 +12,14 @@ export const SeatingService = {
         return r.data;
     },
 
+    /** Get departments with exams on a specific date+session */
+    getExamDepartments: async (examDate: string, session: string, seriesId?: number) => {
+        const params: any = { examDate, session };
+        if (seriesId) params.seriesId = seriesId;
+        const r = await api.get(`${PREFIX}/exam-departments`, { params });
+        return r.data;
+    },
+
     /** Get all active halls */
     getHalls: async () => { const r = await api.get(`${PREFIX}/halls`); return r.data; },
 

@@ -15,7 +15,6 @@ import {
 import { toast } from 'react-hot-toast';
 import { SeatingService } from '../services/seatingService';
 import api from '../../../services/api';
-import SeatingImportModal from '../components/seating/SeatingImportModal';
 
 
 /* ΓöÇΓöÇΓöÇ Types ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
@@ -73,12 +72,12 @@ const SeatingPlans: React.FC = () => {
     const [leftDept, setLeftDept] = useState<string>('');
     const [rightDept, setRightDept] = useState<string>('');
     const [selectedHallIds, setSelectedHallIds] = useState<Set<number>>(new Set());
+    const [availableDepts, setAvailableDepts] = useState<Dept[]>([]);
 
     const [assigning, setAssigning] = useState(false);
     const [shuffling, setShuffling] = useState(false);
     const [loadingSummary, setLoadingSummary] = useState(false);
     const [addingSlot, setAddingSlot] = useState(false);
-    const [showImportModal, setShowImportModal] = useState(false);
 
     /* student search */
     const [searchQ, setSearchQ] = useState('');
@@ -130,9 +129,20 @@ const SeatingPlans: React.FC = () => {
 
     useEffect(() => {
         SeatingService.getExamDates(selectedSeries ? Number(selectedSeries) : undefined)
-            .then(r => { setExamDates(Array.isArray(r) ? r : []); setSelectedDate(''); })
+            .then(r => { setExamDates(Array.isArray(r) ? r : []); setSelectedDate(''); setAvailableDepts([]); })
             .catch(() => { });
     }, [selectedSeries]);
+
+    /* Fetch available departments when date+session changes */
+    useEffect(() => {
+        if (!selectedDate) { setAvailableDepts([]); return; }
+        (async () => {
+            try {
+                const depts = await SeatingService.getExamDepartments(selectedDate, selectedSession, selectedSeries ? Number(selectedSeries) : undefined);
+                setAvailableDepts(Array.isArray(depts) ? depts : []);
+            } catch { setAvailableDepts([]); }
+        })();
+    }, [selectedDate, selectedSession, selectedSeries]);
 
     const loadSummary = useCallback(async () => {
         if (!selectedDate) { startTransition(() => setHallSummary([])); return; }
@@ -729,32 +739,28 @@ const SeatingPlans: React.FC = () => {
                 <div className="flex flex-col xl:flex-row gap-8 items-start">
 
                     {/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ LEFT PANEL ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */}
-                    <div className="w-full xl:w-[380px] shrink-0 xl:sticky xl:top-2 z-10 flex flex-col gap-3">
+                    <div className="w-full xl:w-[340px] shrink-0 xl:sticky xl:top-2 z-10 flex flex-col gap-2">
 
                         {/* ΓöÇΓöÇ Exam Slot Section ΓöÇΓöÇ */}
                         <Card className="border border-[#1e293b] shadow-2xl bg-[#0b1221]/80 backdrop-blur-xl rounded-2xl overflow-hidden">
-                            <CardHeader className="flex gap-3 bg-[#0d1627]/90 border-b border-[#1e293b] px-4 py-3 relative overflow-hidden">
+                            <CardHeader className="flex gap-2 bg-[#0d1627]/90 border-b border-[#1e293b] px-4 py-2 relative overflow-hidden">
                                 <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-[30px] -translate-y-1/2 translate-x-1/2"></div>
-                                <div className="p-2 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-lg relative z-10">
-                                    <ClipboardList size={16} strokeWidth={2} />
+                                <div className="p-1.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-lg relative z-10">
+                                    <ClipboardList size={14} strokeWidth={2} />
                                 </div>
                                 <div className="relative z-10">
-                                    <h3 className="text-[13px] font-semibold text-white tracking-wide">Exam Slot</h3>
-                                    <p className="text-[10px] text-slate-400 font-medium tracking-wider uppercase">Series ┬╖ Date ┬╖ Session</p>
+                                    <h3 className="text-[12px] font-semibold text-white tracking-wide">Exam Slot</h3>
                                 </div>
                             </CardHeader>
-                            <CardBody className="px-4 py-3 flex flex-col gap-3">
+                            <CardBody className="px-3 py-2 flex flex-col gap-2">
                                 {/* Series */}
-                                <div className="space-y-1">
-                                    <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                                        <Building2 size={10} className="text-slate-500" /> Series
-                                        <span className="text-slate-500 normal-case font-normal">(opt)</span>
-                                    </span>
+                                <div className="space-y-0.5">
+                                    <span className="text-[8px] font-semibold text-slate-400 uppercase tracking-widest">Series (opt)</span>
                                     <Select aria-label="Exam Series" placeholder="ΓÇö All Series ΓÇö" variant="bordered"
                                         selectedKeys={selectedSeries ? [selectedSeries] : []}
                                         onSelectionChange={(k: any) => setSelectedSeries(Array.from(k)[0] as string || '')}
                                         classNames={{
-                                            trigger: "bg-[#0d1424] border border-[#1e293b] shadow-inner rounded-lg data-[hover=true]:border-indigo-500/50 data-[hover=true]:bg-[#0f172a] transition-all h-9 text-slate-200 text-xs",
+                                            trigger: "bg-[#0d1424] border border-[#1e293b] shadow-inner rounded-lg data-[hover=true]:border-indigo-500/50 data-[hover=true]:bg-[#0f172a] transition-all h-8 text-slate-200 text-xs",
                                             popoverContent: "bg-[#0d1424] border border-[#1e293b] text-slate-200"
                                         }}>
                                         {seriesList.map(s => <SelectItem key={String(s.ExamSeriesID)} textValue={s.SeriesName} className="data-[hover=true]:bg-indigo-500/10 data-[hover=true]:text-indigo-300">{s.SeriesName}</SelectItem>)}
@@ -762,14 +768,12 @@ const SeatingPlans: React.FC = () => {
                                 </div>
 
                                 {/* Session */}
-                                <div className="space-y-1">
-                                    <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                                        <Calendar size={10} className="text-slate-500" /> Session
-                                    </span>
-                                    <div className="grid grid-cols-2 gap-2">
+                                <div className="space-y-0.5">
+                                    <span className="text-[8px] font-semibold text-slate-400 uppercase tracking-widest">Session</span>
+                                    <div className="grid grid-cols-2 gap-1.5">
                                         {(['FN', 'AN'] as const).map(s => (
                                             <button key={s} onClick={() => { setSelectedSession(s); setSelectedDate(''); }}
-                                                className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all border ${selectedSession === s
+                                                className={`flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-semibold transition-all border ${selectedSession === s
                                                     ? s === 'FN'
                                                         ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30 shadow-[inset_0_0_15px_rgba(99,102,241,0.1)]'
                                                         : 'bg-orange-500/10 text-orange-400 border-orange-500/30 shadow-[inset_0_0_15px_rgba(249,115,22,0.1)]'
@@ -783,23 +787,34 @@ const SeatingPlans: React.FC = () => {
                                     </div>
                                 </div>
 
-                                <div className="space-y-1">
-                                    <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest flex items-center justify-between">
-                                        <span className="flex items-center gap-1.5"><Calendar size={10} className="text-slate-500" /> Date</span>
-                                    </span>
-                                    <div className="flex gap-2">
-                                        <div className="flex-1">
-                                            <input
-                                                id="exam-date"
-                                                name="exam-date"
-                                                type="date"
-                                                value={selectedDate}
-                                                onChange={(e) => setSelectedDate(e.target.value)}
-                                                className="w-full bg-[#0d1424] border border-[#1e293b] shadow-inner rounded-lg px-3 hover:border-indigo-500/50 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all h-9 text-slate-200 text-xs"
-                                                style={{ colorScheme: 'dark' }}
-                                            />
+                                <div className="space-y-0.5">
+                                    <span className="text-[8px] font-semibold text-slate-400 uppercase tracking-widest">Date</span>
+                                    <Select aria-label="Exam Date" placeholder="ΓÇö Select Date ΓÇö" variant="bordered"
+                                        selectedKeys={selectedDate ? [selectedDate] : []}
+                                        onSelectionChange={(k: any) => setSelectedDate(Array.from(k)[0] as string || '')}
+                                        classNames={{
+                                            trigger: "bg-[#0d1424] border border-[#1e293b] shadow-inner rounded-lg data-[hover=true]:border-indigo-500/50 data-[hover=true]:bg-[#0f172a] transition-all h-8 text-slate-200 text-xs",
+                                            popoverContent: "bg-[#0d1424] border border-[#1e293b] text-slate-200"
+                                        }}>
+                                        {examDates.filter(d => d.session === selectedSession).map(d => (
+                                            <SelectItem key={d.examDate} textValue={`${fmtDate(d.examDate)} (${d.examCount})`} className="data-[hover=true]:bg-indigo-500/10 data-[hover=true]:text-indigo-300">
+                                                {fmtDate(d.examDate)} ({d.examCount} exam{d.examCount !== 1 ? 's' : ''})
+                                            </SelectItem>
+                                        ))}
+                                    </Select>
+
+                                    {/* If no timetable dates, show manual slot creation option */}
+                                    {examDates.filter(d => d.session === selectedSession).length === 0 && (
+                                        <div className="pt-1.5">
+                                            <Button
+                                                size="sm"
+                                                className="w-full bg-slate-700/20 text-slate-300 border border-slate-600/30 hover:bg-slate-700/40 shadow-none font-medium text-xs h-8"
+                                                onPress={() => { /* Show manual entry option */ }}
+                                            >
+                                                Or Create Custom Slot
+                                            </Button>
                                         </div>
-                                    </div>
+                                    )}
 
                                     {/* Quick Add missing slot button */}
                                     {selectedDate && !currentSlot && (
@@ -828,70 +843,81 @@ const SeatingPlans: React.FC = () => {
 
                         {/* ΓöÇΓöÇ Assignment Setup Section ΓöÇΓöÇ */}
                         <Card className="border border-[#1e293b] shadow-2xl bg-[#0b1221]/80 backdrop-blur-xl rounded-2xl overflow-hidden">
-                            <CardHeader className="flex gap-3 bg-[#0d1627]/90 border-b border-[#1e293b] px-4 py-3 relative overflow-hidden">
+                            <CardHeader className="flex gap-2 bg-[#0d1627]/90 border-b border-[#1e293b] px-4 py-2 relative overflow-hidden">
                                 <div className="absolute top-0 left-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-[30px] -translate-y-1/2 -translate-x-1/2"></div>
-                                <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-lg relative z-10">
-                                    <Users size={16} strokeWidth={2} />
+                                <div className="p-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-lg relative z-10">
+                                    <Users size={14} strokeWidth={2} />
                                 </div>
                                 <div className="relative z-10">
-                                    <h3 className="text-[13px] font-semibold text-white tracking-wide">Assignment Setup</h3>
-                                    <p className="text-[10px] text-slate-400 font-medium tracking-wider uppercase">Departments ┬╖ Halls ┬╖ Auto-Assign</p>
+                                    <h3 className="text-[12px] font-semibold text-white tracking-wide">Assignment Setup</h3>
                                 </div>
                             </CardHeader>
-                            <CardBody className="px-4 py-3 flex flex-col gap-3">
+                            <CardBody className="px-3 py-2 flex flex-col gap-2">
+                                {/* Available departments hint */}
+                                {selectedDate && availableDepts.length > 0 && (
+                                    <div className="px-2 py-1.5 rounded-lg bg-emerald-500/5 border border-emerald-500/15">
+                                        <p className="text-[7px] font-semibold text-emerald-400/60 uppercase tracking-widest mb-1">Available Departments</p>
+                                        <div className="flex flex-wrap gap-1">
+                                            {availableDepts.map(d => (
+                                                <Chip
+                                                    key={d.DepartmentID}
+                                                    size="sm"
+                                                    variant="flat"
+                                                    className="text-[8px] font-medium bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
+                                                >
+                                                    {d.DepartmentCode} ({d.studentCount})
+                                                </Chip>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Departments side-by-side */}
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="space-y-1">
-                                        <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                                            <ChevronRight size={10} className="text-slate-500" /> Left Dept
-                                        </span>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="space-y-0.5">
+                                        <span className="text-[8px] font-semibold text-slate-400 uppercase tracking-widest">Left Dept</span>
                                         <Select aria-label="Left Department" placeholder="ΓÇö None ΓÇö" variant="bordered"
                                             selectedKeys={leftDept ? [leftDept] : []}
                                             onSelectionChange={(k: any) => setLeftDept(Array.from(k)[0] as string || '')}
                                             classNames={{
-                                                trigger: "bg-[#0d1424] border border-[#1e293b] shadow-inner rounded-lg data-[hover=true]:border-emerald-500/50 data-[hover=true]:bg-[#0f172a] transition-all h-9 text-slate-200 text-xs",
+                                                trigger: "bg-[#0d1424] border border-[#1e293b] shadow-inner rounded-lg data-[hover=true]:border-emerald-500/50 data-[hover=true]:bg-[#0f172a] transition-all h-8 text-slate-200 text-xs",
                                                 popoverContent: "bg-[#0d1424] border border-[#1e293b] text-slate-200"
                                             }}>
-                                            {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={`${d.DepartmentName} (${d.studentCount})`} className="data-[hover=true]:bg-emerald-500/10 data-[hover=true]:text-emerald-300">{d.DepartmentName} ({d.studentCount})</SelectItem>)}
+                                            {(availableDepts.length > 0 ? availableDepts : departments).map(d => <SelectItem key={String(d.DepartmentID)} textValue={`${d.DepartmentName} (${d.studentCount})`} className="data-[hover=true]:bg-emerald-500/10 data-[hover=true]:text-emerald-300">{d.DepartmentName} ({d.studentCount})</SelectItem>)}
                                         </Select>
                                     </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                                            <ChevronRight size={10} className="rotate-180 text-slate-500" /> Right Dept
-                                        </span>
+                                    <div className="space-y-0.5">
+                                        <span className="text-[8px] font-semibold text-slate-400 uppercase tracking-widest">Right Dept</span>
                                         <Select aria-label="Right Department" placeholder="ΓÇö None ΓÇö" variant="bordered"
                                             selectedKeys={rightDept ? [rightDept] : []}
                                             onSelectionChange={(k: any) => setRightDept(Array.from(k)[0] as string || '')}
                                             classNames={{
-                                                trigger: "bg-[#0d1424] border border-[#1e293b] shadow-inner rounded-lg data-[hover=true]:border-emerald-500/50 data-[hover=true]:bg-[#0f172a] transition-all h-9 text-slate-200 text-xs",
+                                                trigger: "bg-[#0d1424] border border-[#1e293b] shadow-inner rounded-lg data-[hover=true]:border-emerald-500/50 data-[hover=true]:bg-[#0f172a] transition-all h-8 text-slate-200 text-xs",
                                                 popoverContent: "bg-[#0d1424] border border-[#1e293b] text-slate-200"
                                             }}>
-                                            {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={`${d.DepartmentName} (${d.studentCount})`} className="data-[hover=true]:bg-emerald-500/10 data-[hover=true]:text-emerald-300">{d.DepartmentName} ({d.studentCount})</SelectItem>)}
+                                            {(availableDepts.length > 0 ? availableDepts : departments).map(d => <SelectItem key={String(d.DepartmentID)} textValue={`${d.DepartmentName} (${d.studentCount})`} className="data-[hover=true]:bg-emerald-500/10 data-[hover=true]:text-emerald-300">{d.DepartmentName} ({d.studentCount})</SelectItem>)}
                                         </Select>
                                     </div>
                                 </div>
 
                                 {/* Hall selector ΓÇö compact chip grid */}
                                 {hallSummary.length > 0 && (
-                                    <div className="space-y-2">
+                                    <div className="space-y-1">
                                         <div className="flex items-center justify-between">
-                                            <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                                                <Armchair size={10} className="text-slate-500" /> Halls
-                                                <span className="text-slate-500 normal-case font-normal tracking-normal">(empty = all)</span>
-                                            </span>
+                                            <span className="text-[8px] font-semibold text-slate-400 uppercase tracking-widest">Halls (empty = all)</span>
                                             <div className="flex items-center gap-0.5 bg-[#0d1424] border border-[#1e293b] rounded-md p-0.5">
                                                 <button onClick={selectAllHalls} className="text-[9px] font-medium text-slate-300 hover:text-white px-2 py-0.5 rounded hover:bg-[#1e293b] transition-colors">All</button>
                                                 <span className="text-[#1e293b]">|</span>
                                                 <button onClick={clearHallSelection} className="text-[9px] font-medium text-slate-400 hover:text-white px-2 py-0.5 rounded hover:bg-[#1e293b] transition-colors">None</button>
                                             </div>
                                         </div>
-                                        <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto dark-scrollbar pr-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#64748b #1e293b' }}>
+                                        <div className="grid grid-cols-auto gap-1 max-h-[280px] overflow-y-auto dark-scrollbar pr-2" style={{ scrollbarWidth: 'thin', scrollbarColor: '#64748b #1e293b', gridAutoFlow: 'dense', gridTemplateColumns: 'repeat(auto-fill, minmax(65px, 1fr))' }}>
                                             {hallSummary.map(h => {
                                                 const isSelected = selectedHallIds.has(h.hallId);
                                                 const pct = h.totalSeats > 0 ? Math.round((h.filledSeats / h.totalSeats) * 100) : 0;
                                                 return (
                                                     <button key={h.hallId} onClick={() => toggleHall(h.hallId)}
-                                                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all duration-200 border ${isSelected
+                                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-medium transition-all duration-200 border ${isSelected
                                                             ? 'bg-indigo-500 text-white border-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.3)] scale-[1.02]'
                                                             : pct >= 100
                                                                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:border-emerald-500/40 hover:bg-emerald-500/15'
@@ -915,33 +941,23 @@ const SeatingPlans: React.FC = () => {
                                 )}
 
                                 {/* Assign & Shuffle Buttons */}
-                                <div className="flex flex-col gap-2 mt-2">
-                                    <Button onPress={() => setShowImportModal(true)}
-                                        isDisabled={!selectedDate || !currentSlot}
-                                        className="w-full font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-xl h-9 border border-emerald-500/30 transition-all data-[disabled=true]:opacity-50 text-xs shadow-none"
-                                        startContent={<FileSpreadsheet size={14} />} size="sm"
-                                    >
-                                        Import Seating from Excel
-                                    </Button>
-
-                                    <div className="flex gap-2">
+                                <div className="flex gap-2 mt-2">
                                         <Button onPress={handleBulkAssign} isLoading={assigning}
                                             isDisabled={!selectedDate || (!leftDept && !rightDept)}
-                                            className="flex-1 font-bold text-white shadow-[0_0_20px_rgba(79,70,229,0.2)] bg-indigo-600 hover:bg-indigo-500 rounded-xl h-10 border border-indigo-500/50 hover:shadow-[0_0_30px_rgba(79,70,229,0.4)] transition-all data-[disabled=true]:opacity-50 text-sm"
-                                            startContent={!assigning ? <Zap size={16} fill="currentColor" /> : undefined} size="md"
+                                            className="flex-1 font-bold text-white shadow-[0_0_20px_rgba(79,70,229,0.2)] bg-indigo-600 hover:bg-indigo-500 rounded-lg h-9 border border-indigo-500/50 hover:shadow-[0_0_30px_rgba(79,70,229,0.4)] transition-all data-[disabled=true]:opacity-50 text-xs"
+                                            startContent={!assigning ? <Zap size={14} fill="currentColor" /> : undefined} size="sm"
                                         >
                                             {assigning ? 'AssigningΓÇª' : `Assign${selectedHallIds.size > 0 ? '' : ' All'}`}
                                         </Button>
 
                                         <Button onPress={handleShuffleGlobal} isLoading={shuffling}
                                             isDisabled={!selectedDate || totalFilled === 0}
-                                            className="font-bold text-white shadow-[0_0_20px_rgba(236,72,153,0.2)] bg-pink-600 hover:bg-pink-500 rounded-xl h-10 w-10 min-w-10 px-0 border border-pink-500/50 hover:shadow-[0_0_30px_rgba(236,72,153,0.4)] transition-all data-[disabled=true]:opacity-50 text-sm"
+                                            className="font-bold text-white shadow-[0_0_20px_rgba(236,72,153,0.2)] bg-pink-600 hover:bg-pink-500 rounded-lg h-9 w-9 min-w-9 px-0 border border-pink-500/50 hover:shadow-[0_0_30px_rgba(236,72,153,0.4)] transition-all data-[disabled=true]:opacity-50"
                                             title="Shuffle All Assigned Students"
                                         >
-                                            {!shuffling && <Shuffle size={16} />}
+                                            {!shuffling && <Shuffle size={14} />}
                                         </Button>
                                     </div>
-                                </div>
                             </CardBody>
                         </Card>
 
@@ -971,7 +987,7 @@ const SeatingPlans: React.FC = () => {
                     </div>
 
                     {/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ RIGHT: HALL CARDS ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */}
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 xl:max-h-[calc(100vh-40px)] xl:overflow-y-auto">
                         {selectedDate ? (
                             loadingSummary ? (
                                 <Card className="border border-[#1e293b] shadow-2xl bg-[#0b1221]/80 backdrop-blur-xl rounded-[20px] min-h-[400px]">
@@ -1539,15 +1555,6 @@ const SeatingPlans: React.FC = () => {
                 </ModalContent>
             </Modal>
 
-            {/* Import Seating Modal */}
-            <SeatingImportModal
-                isOpen={showImportModal}
-                onClose={() => setShowImportModal(false)}
-                onSuccess={() => loadSummary()}
-                examDate={selectedDate}
-                session={selectedSession}
-                selectedHalls={selectedHallIds.size > 0 ? Array.from(selectedHallIds) : undefined}
-            />
 
         </div>
     );

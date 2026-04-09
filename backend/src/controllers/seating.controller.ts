@@ -96,6 +96,78 @@ export const getExamDates = async (req: Request, res: Response) => {
 };
 
 /* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+ *  GET /api/seating/exam-departments
+ *  Returns all departments with exams on a given date+session
+ *  Query params: examDate, session, seriesId (optional)
+ *  Response: [{ departmentId, departmentName, departmentCode, studentCount }]
+ * ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */
+export const getExamDepartments = async (req: Request, res: Response) => {
+    try {
+        const { examDate, session, seriesId } = req.query;
+
+        if (!examDate || !session) {
+            return res.status(400).json({ message: "examDate and session are required" });
+        }
+
+        const where: any = { ExamDate: examDate, Session: session };
+        if (seriesId) where.ExamSeriesID = Number(seriesId);
+
+        // Find all exams on this date+session, include Subject and Department
+        const exams = await Exam.findAll({
+            where,
+            include: [
+                {
+                    model: Subject,
+                    attributes: ["SubjectID", "SubjectName", "SubjectCode"],
+                    include: [
+                        {
+                            model: Department,
+                            attributes: ["DepartmentID", "DepartmentName", "DepartmentCode"],
+                        }
+                    ]
+                }
+            ]
+        });
+
+        // Extract unique departments and get student counts
+        const deptMap = new Map<number, { departmentId: number; departmentName: string; departmentCode: string; studentCount: number }>();
+
+        for (const exam of exams) {
+            const subject = (exam as any).Subject;
+            if (subject?.Department) {
+                const dept = subject.Department;
+                if (!deptMap.has(dept.DepartmentID)) {
+                    deptMap.set(dept.DepartmentID, {
+                        departmentId: dept.DepartmentID,
+                        departmentName: dept.DepartmentName,
+                        departmentCode: dept.DepartmentCode,
+                        studentCount: 0 // Will populate below
+                    });
+                }
+            }
+        }
+
+        // Get student counts for each department
+        for (const dept of deptMap.values()) {
+            const count = await Student.count({
+                where: { DepartmentID: dept.departmentId }
+            });
+            dept.studentCount = count;
+        }
+
+        // Sort by department name
+        const result = Array.from(deptMap.values()).sort((a, b) =>
+            a.departmentName.localeCompare(b.departmentName)
+        );
+
+        res.json(result);
+    } catch (error: any) {
+        console.error("GET EXAM DEPARTMENTS ERROR:", error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
  *  GET /api/seating/halls
  * ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */
 export const getHalls = async (_req: Request, res: Response) => {

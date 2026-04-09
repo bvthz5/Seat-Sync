@@ -3,6 +3,7 @@ import { AuthMiddleware } from "../middlewares/auth.middleware.js";
 import {
     getSeries,
     getExamDates,
+    getExamDepartments,
     getHalls,
     getHallLayout,
     getDepartments,
@@ -29,6 +30,9 @@ router.get("/series", getSeries);
 
 // Distinct exam dates (with optional ?seriesId= filter)
 router.get("/exam-dates", getExamDates);
+
+// Get departments with exams on a specific date+session
+router.get("/exam-departments", getExamDepartments);
 
 // Get all active halls
 router.get("/halls", getHalls);
