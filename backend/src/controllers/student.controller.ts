@@ -924,4 +924,176 @@ export const getStudentImportTemplate = async (req: Request, res: Response) => {
     }
 };
 
+export const importSeatingBatch = async (req: Request, res: Response) => {
+    const t = await sequelize.transaction();
+    try {
+        const { rows } = req.body;
+
+        if (!Array.isArray(rows) || rows.length === 0) {
+            await t.rollback();
+            return res.status(400).json({ message: "No rows provided" });
+        }
+
+        // Cache for lookups
+        const deptCache = new Map<string, any>();
+        const programCache = new Map<string, any>();
+        const deptsAll = await Department.findAll({ transaction: t });
+        const programsAll = await Program.findAll({ transaction: t });
+
+        deptsAll.forEach((d: any) => {
+            deptCache.set(d.DepartmentCode.toUpperCase(), d);
+            deptCache.set(d.DepartmentName.toUpperCase(), d);
+        });
+
+        programsAll.forEach((p: any) => {
+            if (p.ProgramCode) {
+                programCache.set(p.ProgramCode.toUpperCase(), p);
+            }
+            programCache.set(p.ProgramName.toUpperCase(), p);
+        });
+
+        let totalImported = 0;
+        let autoCreatedCount = 0;
+        let notFoundCount = 0;
+        const notFound: string[] = [];
+        const errors: any[] = [];
+
+        for (const row of rows) {
+            try {
+                const registerNumber = String(row.registerNumber).trim();
+                const name = String(row.name || '').trim();
+                const dept = String(row.department || '').trim();
+                const program = String(row.program || '').trim();
+                const side = String(row.side || 'L').toUpperCase();
+
+                if (!registerNumber) {
+                    errors.push({ row, error: 'Missing register number' });
+                    notFoundCount++;
+                    continue;
+                }
+
+                // Check if student already exists
+                let student = await Student.findOne({
+                    where: { RegisterNumber: registerNumber },
+                    transaction: t
+                });
+
+                if (student) {
+                    // Student already exists, just increment count
+                    totalImported++;
+                    continue;
+                }
+
+                // Parse batch year from register number (SJC/24/CSE/001 -> 2024)
+                const parts = registerNumber.split('/');
+                let batchYear = new Date().getFullYear();
+                if (parts.length >= 2 && parts[1]) {
+                    const yearPart = parseInt(parts[1], 10);
+                    if (!isNaN(yearPart)) {
+                        const century = yearPart < 30 ? 2000 : 1900;
+                        batchYear = century + yearPart;
+                    }
+                }
+
+                // Parse department from register number (SJC/24/CSE/001 -> CSE)
+                let targetDept: any = null;
+                if (parts.length >= 3 && parts[2]) {
+                    const deptCode = parts[2].toUpperCase();
+                    targetDept = deptCache.get(deptCode);
+                }
+
+                // Fallback: lookup by provided department field
+                if (!targetDept && dept) {
+                    targetDept = deptCache.get(dept.toUpperCase());
+                }
+
+                if (!targetDept) {
+                    errors.push({ registerNumber, error: 'Department not found' });
+                    notFoundCount++;
+                    notFound.push(registerNumber);
+                    continue;
+                }
+
+                // Lookup program
+                let targetProgram: any = program ? programCache.get(program.toUpperCase()) : null;
+                if (!targetProgram && programsAll.length > 0) {
+                    // Fallback to first program (B.Tech)
+                    targetProgram = programsAll[0];
+                }
+
+                if (!targetProgram) {
+                    errors.push({ registerNumber, error: 'Program not found' });
+                    notFoundCount++;
+                    notFound.push(registerNumber);
+                    continue;
+                }
+
+                // Default semester to first semester
+                const semester = await Semester.findOne({
+                    order: [['SemesterNumber', 'ASC']],
+                    transaction: t
+                });
+
+                if (!semester) {
+                    errors.push({ registerNumber, error: 'No semester found' });
+                    notFoundCount++;
+                    notFound.push(registerNumber);
+                    continue;
+                }
+
+                // Create email for auto-created user
+                const email = `${registerNumber.toLowerCase().replace(/\//g, '.')}@student.sjc.ac.in`;
+
+                // Create user account
+                const hashedPassword = await bcrypt.hash(registerNumber, 10);
+                const user = await User.create({
+                    Email: email,
+                    FullName: name || registerNumber,
+                    PasswordHash: hashedPassword,
+                    Role: 'student',
+                    IsActive: true
+                }, { transaction: t }) as any;
+
+                // Create student record
+                await Student.create({
+                    UserID: user.UserID,
+                    RegisterNumber: registerNumber,
+                    DepartmentID: targetDept.DepartmentID,
+                    ProgramID: targetProgram.ProgramID,
+                    SemesterID: semester.SemesterID,
+                    BatchYear: batchYear,
+                    Status: 'ACTIVE'
+                }, { transaction: t });
+
+                totalImported++;
+                autoCreatedCount++;
+
+            } catch (error: any) {
+                console.error("Error processing row:", error);
+                errors.push({ row, error: error.message });
+                notFoundCount++;
+            }
+        }
+
+        await t.commit();
+
+        res.status(200).json({
+            message: 'Seating batch import completed',
+            totalImported,
+            autoCreatedCount,
+            notFoundCount,
+            notFound,
+            errors: errors.length > 0 ? errors : undefined
+        });
+
+    } catch (error: any) {
+        await t.rollback();
+        console.error("Error importing seating batch:", error);
+        res.status(500).json({
+            message: "Failed to import seating data",
+            error: error.message
+        });
+    }
+};
+
 

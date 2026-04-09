@@ -15,6 +15,7 @@ import {
 import { toast } from 'react-hot-toast';
 import api from '../../../services/api';
 import StudentImportModal from '../components/students/StudentImportModal';
+import SeatingBatchImportModal from '../components/students/SeatingBatchImportModal';
 import { AddStudentModal } from '../components/students/AddStudentModal';
 import { EditStudentModal } from '../components/students/EditStudentModal';
 import { useDebounce } from '../../../hooks/useDebounce';
@@ -73,6 +74,7 @@ const Students: React.FC = () => {
 
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [isImportOpen, setIsImportOpen] = useState(false);
+    const [isSeatingImportOpen, setIsSeatingImportOpen] = useState(false);
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
     const [isDeleteAllOpen, setIsDeleteAllOpen] = useState(false);
@@ -360,13 +362,22 @@ const Students: React.FC = () => {
                     >
                         Export
                     </Button>
-                    <Button 
+                    <Button
                         className="bg-blue-50 text-blue-700 font-medium border border-blue-100 hover:bg-blue-100"
                         startContent={<FileSpreadsheet size={16} />}
                         onPress={() => setIsImportOpen(true)}
                         radius="lg"
                     >
                         Import Data
+                    </Button>
+                    <Button
+                        className="bg-indigo-50 text-indigo-700 font-medium border border-indigo-100 hover:bg-indigo-100"
+                        startContent={<FileSpreadsheet size={16} />}
+                        onPress={() => setIsSeatingImportOpen(true)}
+                        radius="lg"
+                        title="Import student seating assignments for exam dates"
+                    >
+                        Seating Batch Import
                     </Button>
                     <Button 
                         className="bg-blue-600 text-white font-semibold shadow-lg shadow-blue-600/20 hover:shadow-xl hover:scale-[1.02] transition-all"
@@ -872,6 +883,8 @@ const Students: React.FC = () => {
 
             {/* Original Modals */}
             <AddStudentModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onSuccess={() => fetchStudents()} />
+            <StudentImportModal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} onSuccess={() => fetchStudents()} />
+            <SeatingBatchImportModal isOpen={isSeatingImportOpen} onClose={() => setIsSeatingImportOpen(false)} onSuccess={() => fetchStudents()} />
             {selectedStudent && (
                 <EditStudentModal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} onSuccess={() => fetchStudents()} student={selectedStudent} />
             )}

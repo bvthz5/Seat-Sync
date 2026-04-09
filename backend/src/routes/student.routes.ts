@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { getAllStudents, importStudents, createStudent, getCreateOptions, updateStudent, deleteStudent, exportStudents, deleteAllStudents, bulkImportStudents, bulkImportStudentsWithSeats, getStudentImportTemplate } from '../controllers/student.controller.js';
+import { getAllStudents, importStudents, createStudent, getCreateOptions, updateStudent, deleteStudent, exportStudents, deleteAllStudents, bulkImportStudents, bulkImportStudentsWithSeats, getStudentImportTemplate, importSeatingBatch } from '../controllers/student.controller.js';
 import { AuthMiddleware } from '../middlewares/auth.middleware.js';
 
 const router = express.Router();
@@ -454,5 +454,44 @@ router.post('/bulk-import/csv-with-seats', AuthMiddleware.verifyAccessToken, csv
  *         description: Server error
  */
 router.get('/import-template', AuthMiddleware.verifyAccessToken, getStudentImportTemplate);
+
+/**
+ * @swagger
+ * /api/students/import-seating:
+ *   post:
+ *     summary: Import students with seating side assignments
+ *     tags: [Student]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               rows:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     registerNumber:
+ *                       type: string
+ *                     name:
+ *                       type: string
+ *                     department:
+ *                       type: string
+ *                     program:
+ *                       type: string
+ *                     side:
+ *                       type: string
+ *                       enum: [L, R]
+ *     responses:
+ *       200:
+ *         description: Import completed
+ *       500:
+ *         description: Server error
+ */
+router.post('/import-seating', AuthMiddleware.verifyAccessToken, importSeatingBatch);
 
 export default router;
