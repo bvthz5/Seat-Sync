@@ -115,16 +115,20 @@ export const setCurrentAcademicYear = async (req: Request, res: Response): Promi
         year.IsCurrent = true;
         await year.save();
 
-        // Log activity
-        await ActivityLog.create({
-            UserID: currentUser.UserID,
-            Action: 'SET_CURRENT_YEAR',
-            EntityType: 'AcademicYear',
-            EntityID: year.AcademicYearID,
-            Details: `Set current academic year: ${year.YearName}`,
-            IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
-        });
+        // Log activity (non-blocking)
+        try {
+            await ActivityLog.create({
+                UserID: currentUser.UserID,
+                Action: 'SET_CURRENT_YEAR',
+                EntityType: 'AcademicYear',
+                EntityID: year.AcademicYearID,
+                Details: `Set current academic year: ${year.YearName}`,
+                IPAddress: req.ip || 'unknown',
+                UserAgent: req.get('user-agent') || 'unknown'
+            });
+        } catch (logError: any) {
+            console.warn("Failed to log activity:", logError.message);
+        }
 
         res.status(200).json({
             success: true,
@@ -167,16 +171,20 @@ export const deleteAcademicYear = async (req: Request, res: Response): Promise<v
         // For now, we will just attempt to delete. If FK constraints fail, the catch block handles it.
         await year.destroy();
 
-        // Log activity
-        await ActivityLog.create({
-            UserID: currentUser.UserID,
-            Action: 'DELETE_ACADEMIC_YEAR',
-            EntityType: 'AcademicYear',
-            EntityID: year.AcademicYearID,
-            Details: `Deleted academic year: ${year.YearName}`,
-            IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
-        });
+        // Log activity (non-blocking)
+        try {
+            await ActivityLog.create({
+                UserID: currentUser.UserID,
+                Action: 'DELETE_ACADEMIC_YEAR',
+                EntityType: 'AcademicYear',
+                EntityID: year.AcademicYearID,
+                Details: `Deleted academic year: ${year.YearName}`,
+                IPAddress: req.ip || 'unknown',
+                UserAgent: req.get('user-agent') || 'unknown'
+            });
+        } catch (logError: any) {
+            console.warn("Failed to log activity:", logError.message);
+        }
 
         res.status(200).json({
             success: true,
@@ -186,7 +194,7 @@ export const deleteAcademicYear = async (req: Request, res: Response): Promise<v
         console.error("Error deleting academic year:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to delete academic year. It may differenced by other records.",
+            message: "Failed to delete academic year. It may referenced by other records.",
             error: error.message
         });
     }
