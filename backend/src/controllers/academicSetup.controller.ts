@@ -59,16 +59,21 @@ export const createAcademicYear = async (req: Request, res: Response): Promise<v
             IsActive: true
         });
 
-        // Log activity
-        await ActivityLog.create({
-            UserID: currentUser.UserID,
-            Action: 'CREATE_ACADEMIC_YEAR',
-            EntityType: 'AcademicYear',
-            EntityID: year.AcademicYearID,
-            Details: `Created academic year: ${YearName}`,
-            IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
-        });
+        // Log activity (non-blocking - don't fail if logging fails)
+        try {
+            await ActivityLog.create({
+                UserID: currentUser.UserID,
+                Action: 'CREATE_ACADEMIC_YEAR',
+                EntityType: 'AcademicYear',
+                EntityID: year.AcademicYearID,
+                Details: `Created academic year: ${YearName}`,
+                IPAddress: req.ip || 'unknown',
+                UserAgent: req.get('user-agent') || 'unknown'
+            });
+        } catch (logError: any) {
+            console.warn("Failed to log activity:", logError.message);
+            // Don't fail the request if logging fails
+        }
 
         res.status(201).json({
             success: true,
@@ -80,7 +85,8 @@ export const createAcademicYear = async (req: Request, res: Response): Promise<v
         res.status(500).json({
             success: false,
             message: "Failed to create academic year",
-            error: error.message
+            error: error.message,
+            details: error.errors ? error.errors.map((e: any) => e.message) : undefined
         });
     }
 };
