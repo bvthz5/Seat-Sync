@@ -291,6 +291,7 @@ export const bulkImportInvigilators = async (req: Request, res: Response) => {
                 const deptStr = deptValue ? String(deptValue).trim() : "";
                 const phoneStr = Phone ? String(Phone).trim() : null;
                 const desigStr = Designation ? String(Designation).trim() : "Faculty";
+                const staffCodeStr = FacultyID ? String(FacultyID).trim() : "";
 
                 if (!facIdStr || !nameStr || !emailStr || !deptStr) {
                     skipped.push({ row: i + 2, reason: `Missing required fields (FacultyID, Name, Email, or Department)` });
@@ -331,7 +332,7 @@ export const bulkImportInvigilators = async (req: Request, res: Response) => {
                 }, { transaction: t });
 
                 await Faculty.create({
-                    StaffCode: facIdStr,
+                    StaffCode: staffCodeStr,
                     Name: nameStr,
                     Designation: desigStr,
                     Department: deptStr,

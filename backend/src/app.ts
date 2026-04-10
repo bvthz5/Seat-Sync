@@ -174,6 +174,9 @@ app.use("/api/series", seriesRoutes);
 import allocationRoutes from "./routes/allocation.routes.js";
 app.use("/api/allocation", allocationRoutes);
 
+import seatingRoutes from "./routes/seating.routes.js";
+app.use("/api/seating", seatingRoutes);
+
 import auditLogsRoutes from "./routes/auditLogs.routes.js";
 app.use("/api/audit", auditLogsRoutes);
 

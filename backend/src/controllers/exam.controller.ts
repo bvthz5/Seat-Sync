@@ -4,6 +4,7 @@ import { Exam } from '../models/Exam.js';
 import { Subject } from '../models/Subject.js';
 import { Department } from '../models/Department.js';
 import { Semester } from "../models/Semester.js";
+import { Program } from "../models/Program.js";
 import { AcademicYear } from "../models/AcademicYear.js";
 import { Op, QueryTypes } from 'sequelize';
 import { ExamSeries } from '../models/index.js';
@@ -307,19 +308,41 @@ export class ExamController {
                 }
             }
 
-            // Safety Check: Ensure Semester 1 and at least one Academic Year exist
-            const semesterOne = await Semester.findByPk(1);
-            if (!semesterOne) {
-                return res.status(400).json({
-                    message: "Deployment Error: Semester ID 1 not found in database. Please contact support."
-                });
-            }
-
+            // Ensure at least one Academic Year exists
             const ayCount = await AcademicYear.count();
             if (ayCount === 0) {
                 return res.status(400).json({
                     message: "Setup Error: No Academic Years found. Please create at least one Academic Year."
                 });
+            }
+
+            // Get or create default semester for subject assignment during import
+            let defaultSemesterID = 1;
+            let semesterOne = await Semester.findByPk(1);
+            if (!semesterOne) {
+                console.log("[importTimetable] Semester ID 1 not found, finding or creating default...");
+                let anySemester = await Semester.findOne();
+                if (anySemester) {
+                    defaultSemesterID = anySemester.SemesterID;
+                    console.log(`[importTimetable] Using existing semester ID ${defaultSemesterID}`);
+                } else {
+                    // Create a default semester - find first program
+                    const program = await Program.findOne();
+                    if (program) {
+                        try {
+                            const newSem = await Semester.create({
+                                SemesterNumber: 1,
+                                SemesterName: "Semester 1",
+                                ProgramID: program.ProgramID
+                            });
+                            defaultSemesterID = newSem.SemesterID;
+                            console.log(`[importTimetable] Created default semester ID ${defaultSemesterID}`);
+                        } catch (e: any) {
+                            console.warn("[importTimetable] Could not create default semester:", e.message);
+                            // Fallback to ID 1 anyway
+                        }
+                    }
+                }
             }
 
             let successCount = 0;
@@ -393,7 +416,7 @@ export class ExamController {
                                 SubjectCode: cleanCode,
                                 SubjectName: subjectName,
                                 DepartmentID: departmentID,
-                                SemesterID: 1
+                                SemesterID: defaultSemesterID
                             }
                         });
                         subjectID = subj.SubjectID;
