@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { getAllStudents, importStudents, createStudent, getCreateOptions, getFilterOptions, updateStudent, deleteStudent, exportStudents, deleteAllStudents, bulkImportStudents, bulkImportStudentsWithSeats, getStudentImportTemplate, importSeatingBatch } from '../controllers/student.controller.js';
+import { getAllStudents, importStudents, createStudent, getCreateOptions, getFilterOptions, updateStudent, deleteStudent, exportStudents, deleteAllStudents, bulkImportStudents, bulkImportStudentsWithSeats, getStudentImportTemplate, importSeatingBatch, toggleStudentAccountStatus, resetStudentPassword, softDeleteStudent } from '../controllers/student.controller.js';
 import { AuthMiddleware } from '../middlewares/auth.middleware.js';
 
 const router = express.Router();
@@ -542,5 +542,119 @@ router.get('/import-template', AuthMiddleware.verifyAccessToken, getStudentImpor
  *         description: Server error
  */
 router.post('/import-seating', AuthMiddleware.verifyAccessToken, importSeatingBatch);
+
+/**
+ * @swagger
+ * /api/students/{id}/toggle-status:
+ *   patch:
+ *     summary: Toggle student account status (Enable/Disable)
+ *     tags: [Student]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Student ID
+ *     responses:
+ *       200:
+ *         description: Account status toggled successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 isActive:
+ *                   type: boolean
+ *                 studentId:
+ *                   type: integer
+ *       404:
+ *         description: Student not found
+ *       500:
+ *         description: Server error
+ */
+router.patch('/:id/toggle-status', AuthMiddleware.verifyAccessToken, toggleStudentAccountStatus);
+
+/**
+ * @swagger
+ * /api/students/{id}/reset-password:
+ *   post:
+ *     summary: Reset student password to temporary default
+ *     tags: [Student]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Student ID
+ *     responses:
+ *       200:
+ *         description: Password reset successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 studentId:
+ *                   type: integer
+ *                 registerNumber:
+ *                   type: string
+ *                 email:
+ *                   type: string
+ *                 tempPassword:
+ *                   type: string
+ *                 note:
+ *                   type: string
+ *       404:
+ *         description: Student not found
+ *       500:
+ *         description: Server error
+ */
+router.post('/:id/reset-password', AuthMiddleware.verifyAccessToken, resetStudentPassword);
+
+/**
+ * @swagger
+ * /api/students/{id}/soft-delete:
+ *   delete:
+ *     summary: Soft delete student (mark as inactive)
+ *     tags: [Student]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Student ID
+ *     responses:
+ *       200:
+ *         description: Student deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 studentId:
+ *                   type: integer
+ *                 registerNumber:
+ *                   type: string
+ *       404:
+ *         description: Student not found
+ *       500:
+ *         description: Server error
+ */
+router.delete('/:id/soft-delete', AuthMiddleware.verifyAccessToken, softDeleteStudent);
 
 export default router;

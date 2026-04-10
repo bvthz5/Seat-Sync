@@ -94,6 +94,14 @@ const Students: React.FC = () => {
     const [isDeletingAll, setIsDeletingAll] = useState(false);
     const [deleteAllConfirmText, setDeleteAllConfirmText] = useState('');
     
+    // New modal states for disable, reset password, and delete
+    const [isDisableOpen, setIsDisableOpen] = useState(false);
+    const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
+    const [shouldResetPassword, setShouldResetPassword] = useState(false);
+    const [resetPasswordData, setResetPasswordData] = useState<{ tempPassword: string; email: string } | null>(null);
+    const [isDisabling, setIsDisabling] = useState(false);
+    const [isResettingPassword, setIsResettingPassword] = useState(false);
+    
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
     const [drawerStudent, setDrawerStudent] = useState<Student | null>(null);
 
@@ -290,9 +298,58 @@ const Students: React.FC = () => {
         fetchStudents(); 
     }, [page, debouncedSearch, filters, programs]);
 
+    // Handle reset password when flag is set
+    useEffect(() => {
+        if (shouldResetPassword && selectedStudent) {
+            handleResetPassword();
+            setShouldResetPassword(false);
+        }
+    }, [shouldResetPassword, selectedStudent]);
+
     const handleEdit = (student: Student) => { setSelectedStudent(student); setIsEditOpen(true); };
     const confirmDelete = (student: Student) => { setSelectedStudent(student); setIsDeleteOpen(true); };
     const viewStudent = (student: Student) => { setDrawerStudent(student); };
+
+    // New handlers for disable, reset password
+    const handleDisableAccount = async () => {
+        if (!selectedStudent) return;
+        setIsDisabling(true);
+        try {
+            const isCurrentlyActive = selectedStudent.User?.isActive;
+            await api.patch(`/students/${selectedStudent.StudentID}/toggle-status`);
+            const action = isCurrentlyActive ? "disabled" : "enabled";
+            toast.success(`Student account ${action} successfully`);
+            setIsDisableOpen(false);
+            setSelectedStudent(null);
+            fetchStudents();
+            if (drawerStudent?.StudentID === selectedStudent.StudentID) {
+                setDrawerStudent(null);
+            }
+        } catch (error: any) { 
+            toast.error(error?.response?.data?.message || "Failed to update account status");
+        } finally {
+            setIsDisabling(false);
+        }
+    };
+
+    const handleResetPassword = async () => {
+        if (!selectedStudent) return;
+        setIsResettingPassword(true);
+        try {
+            const response = await api.post(`/students/${selectedStudent.StudentID}/reset-password`);
+            setResetPasswordData({
+                tempPassword: response.data.tempPassword,
+                email: response.data.email
+            });
+            setIsResetPasswordOpen(true);
+            toast.success("Password reset successfully");
+            fetchStudents();
+        } catch (error: any) { 
+            toast.error(error?.response?.data?.message || "Failed to reset password");
+        } finally {
+            setIsResettingPassword(false);
+        }
+    };
 
     const handleDelete = async () => {
         if (!selectedStudent) return;
@@ -834,10 +891,10 @@ const Students: React.FC = () => {
                                                 <DropdownItem key="edit" textValue="Edit Profile" className="md:hidden hover:bg-slate-50 py-2" startContent={<Pencil size={15} className="mr-2 text-slate-500" />} onPress={() => handleEdit(item)}>
                                                     <span className="text-slate-700 font-medium">Edit Profile</span>
                                                 </DropdownItem>
-                                                <DropdownItem key="enable" textValue="Toggle State" className="hover:bg-slate-50 py-2" startContent={item.User?.isActive ? <AlertTriangle size={15} className="mr-2 text-amber-500" /> : <ShieldCheck size={15} className="mr-2 text-emerald-500" />}>
+                                                <DropdownItem key="enable" textValue="Toggle State" className="hover:bg-slate-50 py-2" startContent={item.User?.isActive ? <AlertTriangle size={15} className="mr-2 text-amber-500" /> : <ShieldCheck size={15} className="mr-2 text-emerald-500" />} onPress={() => { setSelectedStudent(item); setIsDisableOpen(true); }}>
                                                     <span className={item.User?.isActive ? "text-amber-700 font-medium" : "text-emerald-700 font-medium"}>{item.User?.isActive ? 'Disable Account' : 'Enable Account'}</span>
                                                 </DropdownItem>
-                                                <DropdownItem key="reset" textValue="Reset Password" className="hover:bg-slate-50 py-2" startContent={<ShieldCheck size={15} className="mr-2 text-slate-500" />}>
+                                                <DropdownItem key="reset" textValue="Reset Password" className="hover:bg-slate-50 py-2" startContent={<ShieldCheck size={15} className="mr-2 text-slate-500" />} onPress={() => { setSelectedStudent(item); setShouldResetPassword(true); }}>
                                                     <span className="text-slate-700 font-medium">Reset Password</span>
                                                 </DropdownItem>
                                                 <DropdownItem key="delete" textValue="Delete Student" className="hover:bg-red-50 py-2 mt-1 border-t border-slate-100" startContent={<Trash2 size={15} className="mr-2 text-red-500" />} onPress={() => confirmDelete(item)} color="danger">
@@ -945,6 +1002,124 @@ const Students: React.FC = () => {
                             </div>
                         </ModalBody>
                     )}
+                </ModalContent>
+            </Modal>
+
+            {/* Disable/Enable Account Modal */}
+            <Modal isOpen={isDisableOpen} onClose={() => setIsDisableOpen(false)} size="sm" backdrop="blur" classNames={{ base: "bg-white border border-gray-200 shadow-2xl rounded-2xl" }}>
+                <ModalContent>
+                    {(onClose: () => void) => {
+                        const isCurrentlyActive = selectedStudent?.User?.isActive;
+                        const action = isCurrentlyActive ? "Disable" : "Enable";
+                        const bgColor = isCurrentlyActive ? "bg-amber-50" : "bg-emerald-50";
+                        const textColor = isCurrentlyActive ? "text-amber-500" : "text-emerald-500";
+                        const buttonColor = isCurrentlyActive ? "bg-amber-500 hover:bg-amber-600" : "bg-emerald-500 hover:bg-emerald-600";
+                        const icon = isCurrentlyActive ? <AlertTriangle size={28} /> : <ShieldCheck size={28} />;
+                        
+                        return (
+                            <ModalBody className="p-8 text-center space-y-5">
+                                <div className={`w-16 h-16 mx-auto rounded-2xl ${bgColor} flex items-center justify-center`}>
+                                    <div className={textColor}>{icon}</div>
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-900">{action} Student Account</h3>
+                                    <p className="text-sm text-gray-500 mt-2 leading-relaxed">
+                                        Are you sure you want to <strong className={isCurrentlyActive ? "text-amber-600" : "text-emerald-600"}>{action.toLowerCase()}</strong> the account for <strong className="text-gray-800">{selectedStudent?.User?.FullName || 'this student'}</strong>?
+                                    </p>
+                                    <p className="text-xs text-gray-400 mt-3">
+                                        {isCurrentlyActive 
+                                            ? "The student will not be able to log in or access the portal."
+                                            : "The student will be able to log in and access the portal again."
+                                        }
+                                    </p>
+                                </div>
+                                <div className="flex gap-3 pt-2">
+                                    <Button variant="bordered" className="flex-1 font-semibold" onPress={onClose} size="lg" radius="lg">Cancel</Button>
+                                    <Button 
+                                        className={`flex-1 text-white font-semibold ${buttonColor}`}
+                                        onPress={handleDisableAccount}
+                                        size="lg" 
+                                        radius="lg"
+                                        isLoading={isDisabling}
+                                        startContent={isCurrentlyActive ? <AlertTriangle size={16} /> : <ShieldCheck size={16} />}
+                                    >
+                                        {action} Account
+                                    </Button>
+                                </div>
+                            </ModalBody>
+                        );
+                    }}
+                </ModalContent>
+            </Modal>
+
+            {/* Reset Password Modal */}
+            <Modal isOpen={isResetPasswordOpen} onClose={() => { setIsResetPasswordOpen(false); setResetPasswordData(null); }} size="sm" backdrop="blur" classNames={{ base: "bg-white border border-gray-200 shadow-2xl rounded-2xl" }}>
+                <ModalContent>
+                    {(onClose: () => void) => {
+                        const handleCopyPassword = () => {
+                            if (resetPasswordData?.tempPassword) {
+                                navigator.clipboard.writeText(resetPasswordData.tempPassword);
+                                toast.success("Password copied to clipboard");
+                            }
+                        };
+                        
+                        return (
+                            <ModalBody className="p-8 space-y-5">
+                                <div className="w-16 h-16 mx-auto rounded-2xl bg-emerald-50 flex items-center justify-center">
+                                    <ShieldCheck size={28} className="text-emerald-500" />
+                                </div>
+                                <div className="text-center">
+                                    <h3 className="text-lg font-bold text-gray-900">Password Reset Successfully</h3>
+                                    <p className="text-sm text-gray-500 mt-2 leading-relaxed">
+                                        A temporary password has been generated for <strong className="text-gray-800">{selectedStudent?.User?.FullName || 'the student'}</strong>.
+                                    </p>
+                                </div>
+                                
+                                {resetPasswordData && (
+                                    <div className="bg-slate-50 rounded-xl p-4 space-y-3 border border-slate-200">
+                                        <div className="space-y-1">
+                                            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Email</p>
+                                            <p className="text-sm text-gray-800 font-mono break-all">{resetPasswordData.email}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Temporary Password</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-sm text-gray-800 font-mono font-bold flex-1">{resetPasswordData.tempPassword}</p>
+                                                <Button
+                                                    isIconOnly
+                                                    size="sm"
+                                                    variant="light"
+                                                    className="text-slate-500 hover:text-slate-700"
+                                                    onPress={handleCopyPassword}
+                                                    title="Copy password"
+                                                >
+                                                    📋
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+                                    <p className="text-xs font-semibold text-blue-900">⚡ Important Notes:</p>
+                                    <ul className="text-xs text-blue-800 space-y-1">
+                                        <li>• Student must change this password on first login</li>
+                                        <li>• Share this password securely with the student</li>
+                                        <li>• This password is temporary and should not be used permanently</li>
+                                    </ul>
+                                </div>
+
+                                <Button 
+                                    className="w-full bg-emerald-500 text-white font-semibold hover:bg-emerald-600"
+                                    onPress={onClose}
+                                    size="lg"
+                                    radius="lg"
+                                >
+                                    Done
+                                </Button>
+                            </ModalBody>
+                        );
+                    }}
                 </ModalContent>
             </Modal>
 

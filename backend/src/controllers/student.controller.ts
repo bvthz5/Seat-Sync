@@ -1152,4 +1152,174 @@ export const importSeatingBatch = async (req: Request, res: Response) => {
     }
 };
 
+/**
+ * Toggle Student Account Status (Enable/Disable)
+ * PATCH /api/students/:id/toggle-status
+ */
+export const toggleStudentAccountStatus = async (req: Request, res: Response) => {
+    const t = await sequelize.transaction();
+    try {
+        const { id } = req.params;
+        const studentId = parseInt(id as string, 10);
+
+        if (isNaN(studentId)) {
+            await t.rollback();
+            return res.status(400).json({ message: "Invalid Student ID" });
+        }
+
+        const student = await Student.findByPk(studentId, { transaction: t });
+        if (!student) {
+            await t.rollback();
+            return res.status(404).json({ message: "Student not found" });
+        }
+
+        if (!student.UserID) {
+            await t.rollback();
+            return res.status(400).json({ message: "Student has no associated user account" });
+        }
+
+        const user = await User.findByPk(student.UserID, { transaction: t });
+        if (!user) {
+            await t.rollback();
+            return res.status(404).json({ message: "Associated user not found" });
+        }
+
+        // Toggle the account status
+        const newStatus = !user.IsActive;
+        await user.update({ IsActive: newStatus }, { transaction: t });
+
+        await t.commit();
+
+        const action = newStatus ? "enabled" : "disabled";
+        res.json({
+            message: `Student account ${action} successfully`,
+            isActive: newStatus,
+            studentId: studentId
+        });
+
+    } catch (error: any) {
+        await t.rollback();
+        console.error("Toggle Account Status Error:", error);
+        res.status(500).json({ message: "Failed to toggle account status", error: error.message });
+    }
+};
+
+/**
+ * Reset Student Password
+ * POST /api/students/:id/reset-password
+ */
+export const resetStudentPassword = async (req: Request, res: Response) => {
+    const t = await sequelize.transaction();
+    try {
+        const { id } = req.params;
+        const studentId = parseInt(id as string, 10);
+
+        if (isNaN(studentId)) {
+            await t.rollback();
+            return res.status(400).json({ message: "Invalid Student ID" });
+        }
+
+        const student = await Student.findByPk(studentId, { transaction: t });
+
+        if (!student) {
+            await t.rollback();
+            return res.status(404).json({ message: "Student not found" });
+        }
+
+        if (!student.UserID) {
+            await t.rollback();
+            return res.status(400).json({ message: "Student has no associated user account" });
+        }
+
+        const user = await User.findByPk(student.UserID, { transaction: t });
+        if (!user) {
+            await t.rollback();
+            return res.status(404).json({ message: "Associated user not found" });
+        }
+
+        // Generate temporary password: First 4 chars of name + @123
+        let firstName = (user.FullName || 'User').split(' ')[0];
+        const tempPassword = firstName.substring(0, 4) + '@123';
+
+        // Hash and update password
+        const hashedPassword = await bcrypt.hash(tempPassword, 10);
+        await user.update({
+            PasswordHash: hashedPassword,
+            IsPasswordChanged: false // Reset the flag to force change on next login
+        }, { transaction: t });
+
+        await t.commit();
+
+        // Log the password reset action
+        console.log(`[PasswordReset] Student ${student.RegisterNumber} (${user.Email}) password reset by admin`);
+
+        res.json({
+            message: "Password reset successfully",
+            studentId: studentId,
+            registerNumber: student.RegisterNumber,
+            email: user.Email,
+            tempPassword: tempPassword, // Return to admin to share with student
+            note: "Student must change this password on first login"
+        });
+
+    } catch (error: any) {
+        await t.rollback();
+        console.error("Reset Password Error:", error);
+        res.status(500).json({ message: "Failed to reset password", error: error.message });
+    }
+};
+
+/**
+ * Soft Delete Student (Mark as Inactive)
+ * DELETE /api/students/:id/soft-delete
+ */
+export const softDeleteStudent = async (req: Request, res: Response) => {
+    const t = await sequelize.transaction();
+    try {
+        const { id } = req.params;
+        const studentId = parseInt(id as string, 10);
+
+        if (isNaN(studentId)) {
+            await t.rollback();
+            return res.status(400).json({ message: "Invalid Student ID" });
+        }
+
+        const student = await Student.findByPk(studentId, { transaction: t });
+        if (!student) {
+            await t.rollback();
+            return res.status(404).json({ message: "Student not found" });
+        }
+
+        if (!student.UserID) {
+            await t.rollback();
+            return res.status(400).json({ message: "Student has no associated user account" });
+        }
+
+        const user = await User.findByPk(student.UserID, { transaction: t });
+        if (!user) {
+            await t.rollback();
+            return res.status(404).json({ message: "Associated user not found" });
+        }
+
+        // Soft delete: Mark user as inactive instead of hard delete
+        await user.update({ IsActive: false }, { transaction: t });
+
+        // Update student status to DROPPED
+        await student.update({ Status: 'DROPPED' }, { transaction: t });
+
+        await t.commit();
+
+        res.json({
+            message: "Student deleted successfully (soft delete)",
+            studentId: studentId,
+            registerNumber: student.RegisterNumber
+        });
+
+    } catch (error: any) {
+        await t.rollback();
+        console.error("Soft Delete Student Error:", error);
+        res.status(500).json({ message: "Failed to delete student", error: error.message });
+    }
+};
+
 
