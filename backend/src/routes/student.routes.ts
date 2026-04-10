@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { getAllStudents, importStudents, createStudent, getCreateOptions, updateStudent, deleteStudent, exportStudents, deleteAllStudents, bulkImportStudents, bulkImportStudentsWithSeats, getStudentImportTemplate } from '../controllers/student.controller.js';
+import { getAllStudents, importStudents, createStudent, getCreateOptions, getFilterOptions, updateStudent, deleteStudent, exportStudents, deleteAllStudents, bulkImportStudents, bulkImportStudentsWithSeats, getStudentImportTemplate } from '../controllers/student.controller.js';
 import { AuthMiddleware } from '../middlewares/auth.middleware.js';
 
 const router = express.Router();
@@ -305,6 +305,55 @@ router.delete('/:id', AuthMiddleware.verifyAccessToken, deleteStudent);
  *         description: Server error
  */
 router.get('/meta/create-options', AuthMiddleware.verifyAccessToken, getCreateOptions);
+
+/**
+ * @swagger
+ * /api/students/meta/filters:
+ *   get:
+ *     summary: Get dynamic filter options for student list (scalable system)
+ *     description: Fetches available filter options including batch years from actual student data, ensuring the system scales with growing data
+ *     tags: [Student]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Filter options successfully fetched
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 batchYears:
+ *                   type: array
+ *                   items:
+ *                     type: integer
+ *                   description: List of unique batch years from student records (sorted DESC)
+ *                 semesters:
+ *                   type: array
+ *                   description: List of available semesters
+ *                 statusOptions:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       value:
+ *                         type: string
+ *                       label:
+ *                         type: string
+ *                 sourceOptions:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       value:
+ *                         type: string
+ *                       label:
+ *                         type: string
+ *       500:
+ *         description: Server error
+ */
+router.get('/meta/filters', AuthMiddleware.verifyAccessToken, getFilterOptions);
+router.get('/meta/filter-options', AuthMiddleware.verifyAccessToken, getFilterOptions);
 
 /**
  * @swagger

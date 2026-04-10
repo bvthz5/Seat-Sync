@@ -38,6 +38,64 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
     const [loading, setLoading] = useState(false);
     const [departments, setDepartments] = useState<any[]>([]);
     const [programs, setPrograms] = useState<ProgramWithDuration[]>([]);
+    const [errors, setErrors] = useState<Record<string, string>>({});
+
+    const validateFields = (): boolean => {
+        const newErrors: Record<string, string> = {};
+
+        if (!formData.FullName?.trim()) {
+            newErrors.FullName = "Full Name is required";
+        } else if (formData.FullName.trim().length < 2) {
+            newErrors.FullName = "Full Name must be at least 2 characters";
+        } else if (formData.FullName.trim().length > 100) {
+            newErrors.FullName = "Full Name must not exceed 100 characters";
+        } else if (!/^[a-zA-Z\s\-']+$/.test(formData.FullName.trim())) {
+            newErrors.FullName = "Full Name can only contain letters, spaces, hyphens, and apostrophes";
+        }
+
+        if (!formData.Email?.trim()) {
+            newErrors.Email = "College Email is required";
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.Email)) {
+            newErrors.Email = "Please enter a valid email address";
+        } else if (!formData.Email.toLowerCase().endsWith("@sjcetpalai.ac.in")) {
+            newErrors.Email = "Email must be from the college domain (sjcetpalai.ac.in)";
+        }
+
+        if (!formData.RegisterNumber?.trim()) {
+            newErrors.RegisterNumber = "Register Number is required";
+        } else if (formData.RegisterNumber.trim().length < 4) {
+            newErrors.RegisterNumber = "Register Number must be at least 4 characters";
+        } else if (formData.RegisterNumber.trim().length > 50) {
+            newErrors.RegisterNumber = "Register Number must not exceed 50 characters";
+        } else if (!/^[A-Z0-9\-_]+$/i.test(formData.RegisterNumber.trim())) {
+            newErrors.RegisterNumber = "Register Number can only contain letters, numbers, hyphens, and underscores";
+        }
+
+        if (!formData.BatchYear) {
+            newErrors.BatchYear = "Batch Year is required";
+        } else {
+            const year = Number(formData.BatchYear);
+            const currentYear = new Date().getFullYear();
+            if (!Number.isInteger(year)) {
+                newErrors.BatchYear = "Batch Year must be a valid year";
+            } else if (year < 2000) {
+                newErrors.BatchYear = "Batch Year must be 2000 or later";
+            } else if (year > currentYear + 5) {
+                newErrors.BatchYear = `Batch Year cannot exceed ${currentYear + 5}`;
+            }
+        }
+
+        if (!formData.DepartmentID) {
+            newErrors.DepartmentID = "Department is required";
+        }
+
+        if (!formData.ProgramID) {
+            newErrors.ProgramID = "Program is required";
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
 
     const [formData, setFormData] = useState({
         RegisterNumber: "",
@@ -50,7 +108,20 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
 
     useEffect(() => {
         if (isOpen) {
-            fetchMasterData();
+            fetchMasterDataAndSetForm();
+        }
+    }, [isOpen, student]);
+
+    const fetchMasterDataAndSetForm = async () => {
+        try {
+            const response = await api.get('/students/meta/create-options');
+            const fetchedDepts = response.data.departments || [];
+            const fetchedProgs = response.data.programs || [];
+            
+            setDepartments(fetchedDepts);
+            setPrograms(fetchedProgs);
+
+            // Set form data after fetching master data
             if (student) {
                 setFormData({
                     RegisterNumber: student.RegisterNumber || "",
@@ -61,14 +132,6 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                     BatchYear: student.BatchYear?.toString() || "",
                 });
             }
-        }
-    }, [isOpen, student]);
-
-    const fetchMasterData = async () => {
-        try {
-            const response = await api.get('/students/meta/create-options');
-            setDepartments(response.data.departments || []);
-            setPrograms(response.data.programs || []);
         } catch (error) {
             console.error("Failed to fetch master data", error);
             toast.error("Could not load form data options");
@@ -77,35 +140,47 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
 
     const handleChange = (field: string, value: string) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
+        if (errors[field]) {
+            setErrors(prev => {
+                const newErrors = { ...prev };
+                delete newErrors[field];
+                return newErrors;
+            });
+        }
     };
 
     const handleSubmit = async () => {
-        if (!formData.RegisterNumber || !formData.FullName) {
-            toast.error("Register Number and Full Name are required");
-            return;
-        }
-
-        if (formData.Email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.Email)) {
-            toast.error("Please enter a valid email address");
+        if (!validateFields()) {
+            toast.error("Please correct all validation errors");
             return;
         }
 
         setLoading(true);
         try {
             await api.put(`/students/${student.StudentID}`, {
-                RegisterNumber: formData.RegisterNumber.trim(),
+                RegisterNumber: formData.RegisterNumber.trim().toUpperCase(),
                 FullName: formData.FullName.trim(),
-                Email: formData.Email?.trim() || undefined,
-                DepartmentID: formData.DepartmentID ? parseInt(formData.DepartmentID) : undefined,
-                ProgramID: formData.ProgramID ? parseInt(formData.ProgramID) : undefined,
-                BatchYear: formData.BatchYear ? parseInt(formData.BatchYear) : undefined,
+                Email: formData.Email.trim().toLowerCase(),
+                DepartmentID: parseInt(formData.DepartmentID),
+                ProgramID: parseInt(formData.ProgramID),
+                BatchYear: parseInt(formData.BatchYear),
             });
             toast.success("Student updated successfully");
             onSuccess();
             onClose();
+            setErrors({});
         } catch (error: any) {
             console.error(error);
-            toast.error(error.response?.data?.message || "Failed to update student");
+            if (error.response?.data?.validationErrors) {
+                const serverErrors: Record<string, string> = {};
+                Object.entries(error.response.data.validationErrors).forEach(([key, value]) => {
+                    serverErrors[key] = value as string;
+                });
+                setErrors(serverErrors);
+                toast.error("Please correct validation errors");
+            } else {
+                toast.error(error.response?.data?.message || "Failed to update student");
+            }
         } finally {
             setLoading(false);
         }
@@ -117,7 +192,7 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
             onClose={onClose}
             placement="center"
             backdrop="blur"
-            size="md"
+            size="2xl"
             classNames={{
                 base: "bg-white border border-white/20 shadow-2xl rounded-3xl",
                 header: "p-0 border-none",
@@ -159,9 +234,11 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                         {/* PERSONAL INFORMATION */}
                         <div>
                             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Personal Information</h3>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-2 gap-5">
                                 <div className="space-y-1.5">
-                                    <label htmlFor="full-name" className="text-sm font-semibold text-gray-700 ml-1">Full Name <span className="text-red-500">*</span></label>
+                                    <label htmlFor="full-name" className="text-sm font-semibold text-gray-700 ml-1">
+                                        Full Name <span className="text-red-500">*</span>
+                                    </label>
                                     <Input
                                         id="full-name"
                                         autoComplete="name"
@@ -169,26 +246,34 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                                         placeholder="John Doe"
                                         value={formData.FullName}
                                         onValueChange={(v) => handleChange("FullName", v)}
+                                        isInvalid={!!errors.FullName}
+                                        errorMessage={errors.FullName}
                                         classNames={{
-                                            inputWrapper: "h-12 bg-gray-50/80 border-1 border-gray-200 hover:border-blue-300 focus-within:!border-blue-500 focus-within:bg-white focus-within:shadow-sm rounded-xl transition-all",
+                                            inputWrapper: `h-12 bg-gray-50/80 border-1 ${errors.FullName ? 'border-red-500 bg-red-50/30' : 'border-gray-200'} hover:border-blue-300 focus-within:!border-blue-500 focus-within:bg-white focus-within:shadow-sm rounded-xl transition-all`,
                                             input: "text-sm bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0 placeholder:text-gray-400",
+                                            errorMessage: "text-red-500 text-xs font-medium mt-1"
                                         }}
                                         variant="bordered"
                                     />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label htmlFor="college-email" className="text-sm font-semibold text-gray-700 ml-1">College Email</label>
+                                    <label htmlFor="college-email" className="text-sm font-semibold text-gray-700 ml-1">
+                                        College Email <span className="text-red-500">*</span>
+                                    </label>
                                     <Input
                                         id="college-email"
                                         autoComplete="email"
                                         type="email"
                                         startContent={<Mail className="text-gray-400" size={15} />}
-                                        placeholder="john@college.edu"
+                                        placeholder="john@sjcetpalai.ac.in"
                                         value={formData.Email}
                                         onValueChange={(v) => handleChange("Email", v)}
+                                        isInvalid={!!errors.Email}
+                                        errorMessage={errors.Email}
                                         classNames={{
-                                            inputWrapper: "h-12 bg-gray-50/80 border-1 border-gray-200 hover:border-blue-300 focus-within:!border-blue-500 focus-within:bg-white focus-within:shadow-sm rounded-xl transition-all",
+                                            inputWrapper: `h-12 bg-gray-50/80 border-1 ${errors.Email ? 'border-red-500 bg-red-50/30' : 'border-gray-200'} hover:border-blue-300 focus-within:!border-blue-500 focus-within:bg-white focus-within:shadow-sm rounded-xl transition-all`,
                                             input: "text-sm bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0 placeholder:text-gray-400",
+                                            errorMessage: "text-red-500 text-xs font-medium mt-1"
                                         }}
                                         variant="bordered"
                                     />
@@ -199,71 +284,100 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                         {/* ACADEMIC INFORMATION */}
                         <div>
                             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Academic Information</h3>
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-5">
+                                <div className="grid grid-cols-2 gap-5">
                                     <div className="space-y-1.5">
-                                        <label htmlFor="register-number" className="text-sm font-semibold text-gray-700 ml-1">Register Number <span className="text-red-500">*</span></label>
+                                        <label htmlFor="register-number" className="text-sm font-semibold text-gray-700 ml-1">
+                                            Register Number <span className="text-red-500">*</span>
+                                        </label>
                                         <Input
                                             id="register-number"
                                             autoComplete="off"
                                             startContent={<Hash className="text-gray-400" size={15} />}
-                                            placeholder="SJC24MCA..."
+                                            placeholder="SJC24MCA001"
                                             value={formData.RegisterNumber}
                                             onValueChange={(v) => handleChange("RegisterNumber", v)}
+                                            isInvalid={!!errors.RegisterNumber}
+                                            errorMessage={errors.RegisterNumber}
                                             classNames={{
-                                                inputWrapper: "h-12 bg-gray-50/80 border-1 border-gray-200 hover:border-blue-300 focus-within:!border-blue-500 focus-within:bg-white focus-within:shadow-sm rounded-xl transition-all",
+                                                inputWrapper: `h-12 bg-gray-50/80 border-1 ${errors.RegisterNumber ? 'border-red-500 bg-red-50/30' : 'border-gray-200'} hover:border-blue-300 focus-within:!border-blue-500 focus-within:bg-white focus-within:shadow-sm rounded-xl transition-all`,
                                                 input: "text-sm bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0 placeholder:text-gray-400",
+                                                errorMessage: "text-red-500 text-xs font-medium mt-1"
                                             }}
                                             variant="bordered"
                                         />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label htmlFor="batch-year" className="text-sm font-semibold text-gray-700 ml-1">Batch Year</label>
+                                        <label htmlFor="batch-year" className="text-sm font-semibold text-gray-700 ml-1">
+                                            Batch Year <span className="text-red-500">*</span>
+                                        </label>
                                         <Input
                                             id="batch-year"
                                             type="number"
                                             placeholder="2026"
                                             value={formData.BatchYear}
                                             onValueChange={(v) => handleChange("BatchYear", v)}
+                                            isInvalid={!!errors.BatchYear}
+                                            errorMessage={errors.BatchYear}
                                             classNames={{
-                                                inputWrapper: "h-12 bg-gray-50/80 border-1 border-gray-200 hover:border-blue-300 focus-within:!border-blue-500 focus-within:bg-white focus-within:shadow-sm rounded-xl transition-all",
+                                                inputWrapper: `h-12 bg-gray-50/80 border-1 ${errors.BatchYear ? 'border-red-500 bg-red-50/30' : 'border-gray-200'} hover:border-blue-300 focus-within:!border-blue-500 focus-within:bg-white focus-within:shadow-sm rounded-xl transition-all`,
                                                 input: "text-sm bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0 placeholder:text-gray-400",
+                                                errorMessage: "text-red-500 text-xs font-medium mt-1"
                                             }}
                                             variant="bordered"
                                         />
+                                        <p className="text-xs text-gray-400 ml-1">Year when student joined the program</p>
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-2 gap-5">
                                     <div className="space-y-1.5">
-                                        <label htmlFor="department" className="text-sm font-semibold text-gray-700 ml-1">Department</label>
+                                        <label htmlFor="department" className="text-sm font-semibold text-gray-700 ml-1">
+                                            Department <span className="text-red-500">*</span>
+                                        </label>
                                         <select
                                             id="department"
                                             value={formData.DepartmentID}
                                             onChange={(e) => handleChange("DepartmentID", e.target.value)}
-                                            className="w-full h-12 bg-gray-50/80 border border-gray-200 rounded-xl text-sm px-3 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                            className={`w-full h-12 bg-gray-50/80 border rounded-xl text-sm px-3 focus:ring-1 outline-none transition-all ${errors.DepartmentID ? 'border-red-500 bg-red-50/30 focus:border-red-500 focus:ring-red-500' : 'border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-blue-500'}`}
                                         >
                                             <option value="">Select Department...</option>
                                             {departments.map(dept => (
-                                                <option key={dept.DepartmentID} value={dept.DepartmentID}>{dept.DepartmentCode}</option>
+                                                <option key={dept.DepartmentID} value={dept.DepartmentID}>
+                                                    {dept.DepartmentCode} - {dept.DepartmentName}
+                                                </option>
                                             ))}
                                         </select>
+                                        {errors.DepartmentID && <p className="text-red-500 text-xs font-medium mt-1">{errors.DepartmentID}</p>}
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label htmlFor="program" className="text-sm font-semibold text-gray-700 ml-1">Program</label>
+                                        <label htmlFor="program" className="text-sm font-semibold text-gray-700 ml-1">
+                                            Program <span className="text-red-500">*</span>
+                                        </label>
                                         <select
                                             id="program"
                                             value={formData.ProgramID}
                                             onChange={(e) => handleChange("ProgramID", e.target.value)}
-                                            className="w-full h-12 bg-gray-50/80 border border-gray-200 rounded-xl text-sm px-3 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                            className={`w-full h-12 bg-gray-50/80 border rounded-xl text-sm px-3 focus:ring-1 outline-none transition-all ${errors.ProgramID ? 'border-red-500 bg-red-50/30 focus:border-red-500 focus:ring-red-500' : 'border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-blue-500'}`}
                                         >
                                             <option value="">Select Program...</option>
                                             {programs
-                                                .filter(prog => !formData.DepartmentID || prog.DepartmentID?.toString() === formData.DepartmentID.toString())
+                                                .filter(prog => {
+                                                    // Always show the currently selected program
+                                                    if (formData.ProgramID && prog.ProgramID?.toString() === formData.ProgramID.toString()) {
+                                                        return true;
+                                                    }
+                                                    // Also show programs from selected department or all if no department selected
+                                                    if (!formData.DepartmentID) return true;
+                                                    return prog.DepartmentID?.toString() === formData.DepartmentID.toString();
+                                                })
                                                 .map(prog => (
-                                                    <option key={prog.ProgramID} value={prog.ProgramID}>{prog.ProgramName}</option>
+                                                    <option key={prog.ProgramID} value={prog.ProgramID}>
+                                                        {prog.ProgramName}
+                                                    </option>
                                                 ))}
                                         </select>
+                                        {errors.ProgramID && <p className="text-red-500 text-xs font-medium mt-1">{errors.ProgramID}</p>}
                                     </div>
                                 </div>
                             </div>

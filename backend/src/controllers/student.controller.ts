@@ -21,68 +21,28 @@ export const getAllStudents = async (req: Request, res: Response) => {
         const dept = req.query.dept as string; // DepartmentID
         const program = req.query.program as string; // ProgramID
         const semester = req.query.semester as string; // SemesterID
+        const batch = req.query.batch as string; // BatchYear
+        const status = req.query.status as string; // Status (computed field)
+        const source = req.query.source as string; // Source (computed field)
 
-        const studentWhere: any = { [Op.and]: [] };
-        const userWhere: any = {};
+        // Build WHERE clause - start with simple conditions
+        const conditions: any[] = [];
 
-        // Filter by Department, Program, Semester
-        if (dept) studentWhere[Op.and].push({ DepartmentID: dept });
-        if (program) studentWhere[Op.and].push({ ProgramID: program });
-        if (semester) studentWhere[Op.and].push({ SemesterID: semester });
+        // Parse and validate numeric filters
+        const deptId = dept && !isNaN(parseInt(dept)) ? parseInt(dept) : null;
+        const programId = program && !isNaN(parseInt(program)) ? parseInt(program) : null;
+        const semesterId = semester && !isNaN(parseInt(semester)) ? parseInt(semester) : null;
+        const batchYear = batch && !isNaN(parseInt(batch)) ? parseInt(batch) : null;
 
-        // Search Logic
-        if (search) {
-            // we want to search in Student.RegisterNumber OR User.FullName OR User.Email
-            // Since we are doing an include, we can't easily do a top-level OR across tables without complex queries.
-            // A common strategy:
-            // 1. Where on Student fields OR
-            // 2. Where on User fields
+        // Add direct filter conditions to array
+        if (deptId) conditions.push({ DepartmentID: deptId });
+        if (programId) conditions.push({ ProgramID: programId });
+        if (semesterId) conditions.push({ SemesterID: semesterId });
+        if (batchYear) conditions.push({ BatchYear: batchYear });
 
-            // However, typical Sequelize "include" with "where" performs an inner join.
-            // If we put a where on User, it filters students who have that user.
-
-            // Simpler approach for single search bar across related tables:
-            // Use logical OR in the main where clause if possible, but that's hard with associations.
-            // Alternatively, utilize the fact that we can search User fields in the User include, and Student fields in the Student where.
-            // But we want (Student matches OR User matches).
-
-            // Let's try:
-            // Find User IDs that match Name/Email
-            // OR find Student that matches RegNo
-
-            // Constructing a smart where clause:
-            // This is slightly complex in pure Sequelize object syntax without literal.
-            // Let's stick to a solid implementation:
-
-            // Allow searching by Register Number regardless of User
-            if (!isNaN(Number(search))) {
-                // heuristic: if sure it's a number, maybe it's RegNo (if numeric) or Batch
-            }
-
-            // Simplest robust way for "Search All" in this stack:
-            // User 'Where' clause handles Name/Email. 
-            // Student 'Where' clause handles RegisterNumber.
-            // BUT they are ANDed by default (Student must match AND User must match).
-            // We want Union.
-
-            // WORKAROUND:
-            // We can search for the Search Term in RegisterNumber. 
-            // OR we can search in User.
-            // Since we usually want to filter the LIST of students.
-
-            // Let's simplify: 
-            // If the search term matches RegisterNumber, we find those students.
-            // If it matches Name/Email, we find those students.
-
-            // We can use Sequelize's "$" syntax for nested columns if supported, or just keep it simple:
-            // We will filter users who match Name/Email.
-            // AND/OR we filter students who match RegNo.
-
-            // Let's prioritize: 
-            // if search is provided, we try to match RegisterNumber OR User fields.
-            // Since standard includes are AND, checking "RegisterNumber LIKE %q% OR User.Name LIKE %q%" requires top level where with '$User.FullName$'.
-
-            studentWhere[Op.and].push({
+        // Search Logic - add OR condition for search
+        if (search && search.trim()) {
+            conditions.push({
                 [Op.or]: [
                     { RegisterNumber: { [Op.like]: `%${search}%` } },
                     { '$User.FullName$': { [Op.like]: `%${search}%` } },
@@ -91,24 +51,44 @@ export const getAllStudents = async (req: Request, res: Response) => {
             });
         }
 
+        // Combine all conditions with AND
+        const studentWhere = conditions.length > 0 ? { [Op.and]: conditions } : {};
+
         const { count, rows } = await Student.findAndCountAll({
             where: studentWhere,
             include: [
                 {
                     model: User,
-                    attributes: ['Email', 'Role', 'FullName'],
-                    // where: userWhere, // We are doing the search in the top level where using $User.field$ syntax
-                    required: true // Inner join required for the $User.field$ syntax to work reliably for filtering
+                    attributes: ['Email', 'Role', 'FullName', 'isActive'],
+                    required: true
                 },
-                { model: Department, attributes: ['DepartmentName', 'DepartmentCode'] },
-                { model: Program, attributes: ['ProgramName'] },
-                { model: Semester, attributes: ['SemesterNumber'] }
+                {
+                    model: Department,
+                    attributes: ['DepartmentName', 'DepartmentCode', 'DepartmentID']
+                },
+                {
+                    model: Program,
+                    attributes: ['ProgramName', 'ProgramID', 'DurationYears', 'TotalSemesters']
+                },
+                {
+                    model: Semester,
+                    attributes: ['SemesterID', 'SemesterNumber'],
+                    as: 'Semester' // Explicitly set alias
+                }
             ],
             limit,
             offset,
             order: [['StudentID', 'ASC']],
-            subQuery: false
+            subQuery: false,
+            raw: false
         });
+
+        // Debug log for semester filtering
+        if (semesterId) {
+            console.log(`[Backend] Semester Filter Applied: ${semesterId}`);
+            console.log(`[Backend] WHERE clause:`, JSON.stringify(studentWhere, null, 2));
+            console.log(`[Backend] Results: ${count} students found`);
+        }
 
         // Calculate Stats (Parallel for performance)
         const commonInclude = search ? [{ model: User, attributes: [], required: true }] : [];
@@ -130,15 +110,11 @@ export const getAllStudents = async (req: Request, res: Response) => {
             }),
             Student.count({
                 where: {
-                    [Op.and]: [
-                        studentWhere,
-                        {
-                            [Op.or]: [
-                                { DepartmentID: null },
-                                { ProgramID: null },
-                                { SemesterID: null }
-                            ]
-                        }
+                    ...studentWhere,
+                    [Op.or]: [
+                        { DepartmentID: null },
+                        { ProgramID: null },
+                        { SemesterID: null }
                     ]
                 },
                 include: commonInclude,
@@ -698,6 +674,86 @@ export const getCreateOptions = async (req: Request, res: Response) => {
     } catch (error) {
         console.error("Error fetching create options:", error);
         res.status(500).json({ message: "Failed to fetch master data" });
+    }
+};
+
+/**
+ * Get dynamic filter options for student list filtering
+ * Includes: batch years (from actual student data), semesters, and status options
+ * This ensures the filters scale with the growing system
+ */
+export const getFilterOptions = async (req: Request, res: Response) => {
+    try {
+        // Fetch unique batch years from student records (SCALABLE - fetches from actual data)
+        const batchYearsResult = await Student.findAll({
+            attributes: [
+                [sequelize.fn('DISTINCT', sequelize.col('BatchYear')), 'BatchYear']
+            ],
+            raw: true,
+            order: [['BatchYear', 'DESC']],
+            limit: 50  // Limit to prevent huge queries
+        });
+
+        const batchYears = batchYearsResult
+            .map(r => r.BatchYear as number)
+            .filter(y => y && !isNaN(y))
+            .sort((a, b) => b - a);
+
+        // Fetch semesters - Deduplicate by SemesterNumber to avoid duplicates
+        const allSemesters = await Semester.findAll({
+            attributes: ['SemesterID', 'SemesterNumber'],
+            raw: true,
+            order: [['SemesterNumber', 'ASC']]
+        });
+
+        // Deduplicate: Keep only first occurrence of each SemesterNumber
+        const semesterMap = new Map<number, any>();
+        allSemesters.forEach(s => {
+            if (s.SemesterNumber && !semesterMap.has(s.SemesterNumber)) {
+                semesterMap.set(s.SemesterNumber, s);
+            }
+        });
+        const semesters = Array.from(semesterMap.values());
+
+        // Status options (hardcoded as business logic, but can be fetched from config)
+        const statusOptions = [
+            { value: 'Active', label: 'Active' },
+            { value: 'Incomplete', label: 'Incomplete' },
+            { value: 'Pending', label: 'Pending' },
+            { value: 'Disabled', label: 'Disabled' }
+        ];
+
+        // Source options (can be expanded based on system design)
+        const sourceOptions = [
+            { value: 'Self Registered', label: 'Self Registered' },
+            { value: 'Admin Added', label: 'Admin Added' },
+            { value: 'Imported', label: 'Imported' }
+        ];
+
+        res.json({
+            batchYears: batchYears.length > 0 ? batchYears : [new Date().getFullYear()],
+            semesters,
+            statusOptions,
+            sourceOptions
+        });
+    } catch (error) {
+        console.error("Error fetching filter options:", error);
+        // Return sensible defaults on error
+        res.status(200).json({
+            batchYears: [new Date().getFullYear()],
+            semesters: [],
+            statusOptions: [
+                { value: 'Active', label: 'Active' },
+                { value: 'Incomplete', label: 'Incomplete' },
+                { value: 'Pending', label: 'Pending' },
+                { value: 'Disabled', label: 'Disabled' }
+            ],
+            sourceOptions: [
+                { value: 'Self Registered', label: 'Self Registered' },
+                { value: 'Admin Added', label: 'Admin Added' },
+                { value: 'Imported', label: 'Imported' }
+            ]
+        });
     }
 };
 

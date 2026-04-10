@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserPlus, ArrowLeft, Building2, Mail, Info, Briefcase, Phone, MessageSquare, ChevronDown, Search, Network, ShieldCheck, User } from 'lucide-react';
+import { UserPlus, ArrowLeft, Building2, Mail, Info, Briefcase, Phone, MessageSquare, ChevronDown, Search, Network, ShieldCheck, User, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import api from '../../../services/api';
+import { validateInvigilatorRequestForm, validateField } from '../../../utils/invigilatorRequestValidation';
 
 const InvigilatorRequest: React.FC = () => {
     const navigate = useNavigate();
@@ -12,6 +13,8 @@ const InvigilatorRequest: React.FC = () => {
     const [departments, setDepartments] = useState<{ DepartmentID: number; DepartmentCode: string; DepartmentName: string }[]>([]);
     const [isDeptDropdownOpen, setIsDeptDropdownOpen] = useState(false);
     const [deptSearch, setDeptSearch] = useState('');
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
     const deptDropdownRef = React.useRef<HTMLDivElement>(null);
 
     // Close dropdown when clicked outside
@@ -45,13 +48,54 @@ const InvigilatorRequest: React.FC = () => {
 
     const handleChange = (field: string, value: string) => {
         setFormData(prev => ({ ...prev, [field]: value }));
+        
+        // Mark field as touched
+        setTouchedFields(prev => new Set([...prev, field]));
+        
+        // Validate field in real-time if touched
+        if (touchedFields.has(field)) {
+            const fieldError = validateField(field, value);
+            
+            setErrors(prev => {
+                if (fieldError) {
+                    return { ...prev, [field]: fieldError };
+                } else {
+                    const newErrors = { ...prev };
+                    delete newErrors[field];
+                    return newErrors;
+                }
+            });
+        }
+    };
+
+    const handleBlur = (fieldName: string) => {
+        // Mark field as touched when blur
+        setTouchedFields(prev => new Set([...prev, fieldName]));
+        
+        // Validate field
+        const fieldError = validateField(fieldName, formData[fieldName as keyof typeof formData]);
+        
+        setErrors(prev => {
+            if (fieldError) {
+                return { ...prev, [fieldName]: fieldError };
+            } else {
+                const newErrors = { ...prev };
+                delete newErrors[fieldName];
+                return newErrors;
+            }
+        });
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        if (!formData.FacultyID || !formData.Name || !formData.Email || !formData.Department) {
-            toast.error('Faculty ID, Name, Email, and Department are required.');
+        // Validate all fields
+        const validationErrors = validateInvigilatorRequestForm(formData);
+        
+        if (Object.keys(validationErrors).length > 0) {
+            setErrors(validationErrors);
+            setTouchedFields(new Set(Object.keys(validationErrors)));
+            toast.error("Please correct all validation errors");
             return;
         }
 
@@ -61,7 +105,13 @@ const InvigilatorRequest: React.FC = () => {
             toast.success('Access request submitted successfully!');
             setIsSubmitted(true);
         } catch (error: any) {
-            toast.error(error.response?.data?.message || 'Failed to submit request. Please try again.');
+            if (error.response?.data?.validationErrors) {
+                setErrors(error.response.data.validationErrors);
+                setTouchedFields(new Set(Object.keys(error.response.data.validationErrors)));
+                toast.error(error.response.data.error || 'Validation failed');
+            } else {
+                toast.error(error.response?.data?.message || 'Failed to submit request. Please try again.');
+            }
         } finally {
             setIsLoading(false);
         }
@@ -239,12 +289,12 @@ const InvigilatorRequest: React.FC = () => {
                             
                             <div className="grid grid-cols-1 gap-6">
                                 <div>
-                                    <label htmlFor="facultyId" className="text-xs font-bold text-slate-400 block uppercase tracking-widest px-1 mb-2">
+                                    <label htmlFor="facultyId" className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.FacultyID && touchedFields.has('FacultyID') ? 'text-red-600' : 'text-slate-400'}`}>
                                         Staff / Faculty ID <span className="text-rose-400">*</span>
                                     </label>
                                     <div className="relative h-14">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 w-8 border-r border-slate-200">
-                                            <Briefcase size={18} className="text-slate-400" />
+                                        <div className={`absolute left-4 top-1/2 -translate-y-1/2 w-8 border-r ${errors.FacultyID && touchedFields.has('FacultyID') ? 'border-red-300' : 'border-slate-200'}`}>
+                                            <Briefcase size={18} className={errors.FacultyID && touchedFields.has('FacultyID') ? 'text-red-500' : 'text-slate-400'} />
                                         </div>
                                         <input
                                             id="facultyId"
@@ -253,20 +303,27 @@ const InvigilatorRequest: React.FC = () => {
                                             autoComplete="off"
                                             value={formData.FacultyID}
                                             onChange={e => handleChange('FacultyID', e.target.value)}
-                                            className="w-full h-full pl-14 pr-4 rounded-xl bg-slate-50 border border-slate-200 text-base text-slate-800 outline-none focus:bg-white focus:border-blue-500 transition-all font-medium"
+                                            onBlur={() => handleBlur('FacultyID')}
+                                            className={`w-full h-full pl-14 pr-4 rounded-xl bg-slate-50 border text-base text-slate-800 outline-none focus:bg-white transition-all font-medium ${errors.FacultyID && touchedFields.has('FacultyID') ? 'border-red-500 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' : 'border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'}`}
                                             placeholder="e.g. FAC001"
                                             required
                                         />
                                     </div>
+                                    {errors.FacultyID && touchedFields.has('FacultyID') && (
+                                        <div className="mt-2 ml-1 flex items-center gap-1.5 text-[11px] text-red-600 font-medium">
+                                            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                                            {errors.FacultyID}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div>
-                                    <label htmlFor="fullName" className="text-xs font-bold text-slate-400 block uppercase tracking-widest px-1 mb-2">
+                                    <label htmlFor="fullName" className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Name && touchedFields.has('Name') ? 'text-red-600' : 'text-slate-400'}`}>
                                         Full Name <span className="text-rose-400">*</span>
                                     </label>
                                     <div className="relative h-14">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 w-8 border-r border-slate-200">
-                                            <UserPlus size={18} className="text-slate-400" />
+                                        <div className={`absolute left-4 top-1/2 -translate-y-1/2 w-8 border-r ${errors.Name && touchedFields.has('Name') ? 'border-red-300' : 'border-slate-200'}`}>
+                                            <UserPlus size={18} className={errors.Name && touchedFields.has('Name') ? 'text-red-500' : 'text-slate-400'} />
                                         </div>
                                         <input
                                             id="fullName"
@@ -275,20 +332,27 @@ const InvigilatorRequest: React.FC = () => {
                                             autoComplete="name"
                                             value={formData.Name}
                                             onChange={e => handleChange('Name', e.target.value)}
-                                            className="w-full h-full pl-14 pr-4 rounded-xl bg-slate-50 border border-slate-200 text-base text-slate-800 outline-none focus:bg-white focus:border-blue-500 transition-all font-medium"
+                                            onBlur={() => handleBlur('Name')}
+                                            className={`w-full h-full pl-14 pr-4 rounded-xl bg-slate-50 border text-base text-slate-800 outline-none focus:bg-white transition-all font-medium ${errors.Name && touchedFields.has('Name') ? 'border-red-500 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' : 'border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'}`}
                                             placeholder="e.g. Dr. Jane Smith"
                                             required
                                         />
                                     </div>
+                                    {errors.Name && touchedFields.has('Name') && (
+                                        <div className="mt-2 ml-1 flex items-center gap-1.5 text-[11px] text-red-600 font-medium">
+                                            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                                            {errors.Name}
+                                        </div>
+                                    )}
                                 </div>
                                 
                                 <div>
-                                    <label htmlFor="email" className="text-xs font-bold text-slate-400 block uppercase tracking-widest px-1 mb-2">
+                                    <label htmlFor="email" className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Email && touchedFields.has('Email') ? 'text-red-600' : 'text-slate-400'}`}>
                                         Official Email <span className="text-rose-400">*</span>
                                     </label>
                                     <div className="relative h-14">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 w-8 border-r border-slate-200">
-                                            <Mail size={18} className="text-slate-400" />
+                                        <div className={`absolute left-4 top-1/2 -translate-y-1/2 w-8 border-r ${errors.Email && touchedFields.has('Email') ? 'border-red-300' : 'border-slate-200'}`}>
+                                            <Mail size={18} className={errors.Email && touchedFields.has('Email') ? 'text-red-500' : 'text-slate-400'} />
                                         </div>
                                         <input
                                             id="email"
@@ -297,24 +361,34 @@ const InvigilatorRequest: React.FC = () => {
                                             autoComplete="email"
                                             value={formData.Email}
                                             onChange={e => handleChange('Email', e.target.value)}
-                                            className="w-full h-full pl-14 pr-4 rounded-xl bg-slate-50 border border-slate-200 text-base text-slate-800 outline-none focus:bg-white focus:border-blue-500 transition-all font-medium"
+                                            onBlur={() => handleBlur('Email')}
+                                            className={`w-full h-full pl-14 pr-4 rounded-xl bg-slate-50 border text-base text-slate-800 outline-none focus:bg-white transition-all font-medium ${errors.Email && touchedFields.has('Email') ? 'border-red-500 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' : 'border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'}`}
                                             placeholder="jane@college.edu"
                                             required
                                         />
                                     </div>
+                                    {errors.Email && touchedFields.has('Email') && (
+                                        <div className="mt-2 ml-1 flex items-center gap-1.5 text-[11px] text-red-600 font-medium">
+                                            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                                            {errors.Email}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div>
-                                    <label className="text-xs font-bold text-slate-400 block uppercase tracking-widest px-1 mb-2">
+                                    <label className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Department && touchedFields.has('Department') ? 'text-red-600' : 'text-slate-400'}`}>
                                         Department <span className="text-rose-400">*</span>
                                     </label>
                                     <input type="hidden" id="department" name="department" value={formData.Department} />
                                     <div className="relative h-14" ref={deptDropdownRef}>
-                                        <Building2 size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                        <div className={`absolute left-4 top-1/2 -translate-y-1/2 w-8 border-r pointer-events-none ${errors.Department && touchedFields.has('Department') ? 'border-red-300' : 'border-slate-200'}`}>
+                                            <Building2 size={18} className={errors.Department && touchedFields.has('Department') ? 'text-red-500' : 'text-slate-400'} />
+                                        </div>
                                         
                                         <div 
                                             onClick={() => setIsDeptDropdownOpen(!isDeptDropdownOpen)}
-                                            className="w-full h-full pl-12 pr-10 rounded-xl bg-slate-50 border border-slate-200 text-base outline-none focus:bg-white focus:border-blue-500 transition-all font-medium flex items-center cursor-pointer select-none"
+                                            onBlur={() => handleBlur('Department')}
+                                            className={`w-full h-full pl-12 pr-10 rounded-xl bg-slate-50 border text-base outline-none focus:bg-white transition-all font-medium flex items-center cursor-pointer select-none ${errors.Department && touchedFields.has('Department') ? 'border-red-500 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' : 'border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'}`}
                                         >
                                             {formData.Department ? (
                                                 <span className="text-slate-800">
@@ -324,7 +398,7 @@ const InvigilatorRequest: React.FC = () => {
                                                 <span className="text-slate-400">Select Department...</span>
                                             )}
                                         </div>
-                                        <ChevronDown size={18} className={`absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none transition-transform ${isDeptDropdownOpen ? 'rotate-180' : ''}`} />
+                                        <ChevronDown size={18} className={`absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none transition-transform ${isDeptDropdownOpen ? 'rotate-180' : ''} ${errors.Department && touchedFields.has('Department') ? 'text-red-500' : 'text-slate-400'}`} />
 
                                         {/* Dropdown Menu */}
                                         {isDeptDropdownOpen && (
@@ -376,14 +450,22 @@ const InvigilatorRequest: React.FC = () => {
                                             </div>
                                         )}
                                     </div>
+                                    {errors.Department && touchedFields.has('Department') && (
+                                        <div className="mt-2 ml-1 flex items-center gap-1.5 text-[11px] text-red-600 font-medium">
+                                            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                                            {errors.Department}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div>
-                                    <label htmlFor="phone" className="text-xs font-bold text-slate-400 block uppercase tracking-widest px-1 mb-2">
+                                    <label htmlFor="phone" className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Phone && touchedFields.has('Phone') ? 'text-red-600' : 'text-slate-400'}`}>
                                         Phone
                                     </label>
                                     <div className="relative h-14">
-                                        <Phone size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        <div className={`absolute left-4 top-1/2 -translate-y-1/2 w-8 border-r pointer-events-none ${errors.Phone && touchedFields.has('Phone') ? 'border-red-300' : 'border-slate-200'}`}>
+                                            <Phone size={18} className={errors.Phone && touchedFields.has('Phone') ? 'text-red-500' : 'text-slate-400'} />
+                                        </div>
                                         <input
                                             id="phone"
                                             name="phone"
@@ -391,27 +473,41 @@ const InvigilatorRequest: React.FC = () => {
                                             autoComplete="tel"
                                             value={formData.Phone}
                                             onChange={e => handleChange('Phone', e.target.value)}
-                                            className="w-full h-full pl-12 pr-4 rounded-xl bg-slate-50 border border-slate-200 text-base text-slate-800 outline-none focus:bg-white focus:border-blue-500 transition-all font-medium"
+                                            onBlur={() => handleBlur('Phone')}
+                                            className={`w-full h-full pl-14 pr-4 rounded-xl bg-slate-50 border text-base text-slate-800 outline-none focus:bg-white transition-all font-medium ${errors.Phone && touchedFields.has('Phone') ? 'border-red-500 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' : 'border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'}`}
                                         />
                                     </div>
+                                    {errors.Phone && touchedFields.has('Phone') && (
+                                        <div className="mt-2 ml-1 flex items-center gap-1.5 text-[11px] text-red-600 font-medium">
+                                            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                                            {errors.Phone}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div>
-                                    <label htmlFor="reason" className="text-xs font-bold text-slate-400 block uppercase tracking-widest px-1 mb-2">
+                                    <label htmlFor="reason" className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Reason && touchedFields.has('Reason') ? 'text-red-600' : 'text-slate-400'}`}>
                                         Reason for joining
                                     </label>
-                                    <div className="relative">
-                                        <MessageSquare size={18} className="absolute left-4 top-4 text-slate-400" />
+                                    <div className={`relative border rounded-xl transition-all overflow-hidden ${errors.Reason && touchedFields.has('Reason') ? 'border-red-500' : 'border-slate-200'}`}>
+                                        <MessageSquare size={18} className={`absolute left-4 top-4 pointer-events-none ${errors.Reason && touchedFields.has('Reason') ? 'text-red-500' : 'text-slate-400'}`} />
                                         <textarea
                                             id="reason"
                                             name="reason"
                                             autoComplete="off"
                                             value={formData.Reason}
                                             onChange={e => handleChange('Reason', e.target.value)}
-                                            className="w-full min-h-[120px] pl-12 pr-4 py-4 rounded-xl bg-slate-50 border border-slate-200 text-base text-slate-800 outline-none focus:bg-white focus:border-blue-500 transition-all font-medium resize-none"
+                                            onBlur={() => handleBlur('Reason')}
+                                            className={`w-full min-h-[120px] pl-12 pr-4 py-4 bg-slate-50 text-base text-slate-800 outline-none focus:bg-white transition-all font-medium resize-none ring-0 focus:ring-4 ${errors.Reason && touchedFields.has('Reason') ? 'focus:ring-red-500/10' : 'focus:ring-blue-500/10'}`}
                                             placeholder="Optional note to the admin..."
                                         />
                                     </div>
+                                    {errors.Reason && touchedFields.has('Reason') && (
+                                        <div className="mt-2 ml-1 flex items-center gap-1.5 text-[11px] text-red-600 font-medium">
+                                            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                                            {errors.Reason}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 

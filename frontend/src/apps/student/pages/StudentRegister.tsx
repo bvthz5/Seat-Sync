@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Mail, Lock, User, Hash, Briefcase, GraduationCap, Calendar, Loader2, ArrowRight } from 'lucide-react';
+import { Mail, Lock, User, Hash, Briefcase, GraduationCap, Calendar, Loader2, ArrowRight, AlertCircle, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { validateRegistrationForm, validateField } from '../../../utils/studentRegistrationValidation';
 
 interface Department {
     DepartmentID: number;
@@ -27,16 +28,20 @@ interface InputFieldProps {
     placeholder: string;
     formData: Record<string, string>;
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
+    onBlur?: (fieldName: string) => void;
     disabled: boolean;
+    error?: string;
 }
 
-const InputField: React.FC<InputFieldProps> = ({ label, icon: Icon, type, name, placeholder, formData, onChange, disabled }) => (
+const InputField: React.FC<InputFieldProps> = ({ label, icon: Icon, type, name, placeholder, formData, onChange, disabled, error, onBlur }) => {
+    const hasError = !!error;
+    return (
     <div className="relative group col-span-1">
-        <label htmlFor={name} className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
+        <label htmlFor={name} className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ml-1 ${hasError ? 'text-red-600' : 'text-slate-500'}`}>
             {label}
         </label>
         <div className="relative flex items-center transition-all duration-300">
-            <div className="absolute left-4 text-slate-400 group-focus-within:text-blue-600 transition-colors">
+            <div className={`absolute left-4 group-focus-within:text-blue-600 transition-colors ${hasError ? 'text-red-500' : 'text-slate-400'}`}>
                 <Icon className="w-5 h-5" />
             </div>
             <input
@@ -45,14 +50,27 @@ const InputField: React.FC<InputFieldProps> = ({ label, icon: Icon, type, name, 
                 id={name}
                 value={formData[name] ?? ''}
                 onChange={onChange}
-                className="w-full bg-white border border-slate-200 text-slate-900 text-[15px] font-medium rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 block pl-12 pr-4 py-3.5 transition-all shadow-sm placeholder:text-slate-400"
+                onBlur={(e) => {
+                    if (onBlur) onBlur(name);
+                }}
+                className={`w-full bg-white border text-slate-900 text-[15px] font-medium rounded-xl focus:ring-4 focus:outline-none block pl-12 pr-4 py-3.5 transition-all shadow-sm placeholder:text-slate-400 ${
+                    hasError
+                        ? 'border-red-500 focus:ring-red-500/10 focus:border-red-500'
+                        : 'border-slate-200 focus:ring-blue-500/10 focus:border-blue-500'
+                }`}
                 placeholder={placeholder}
                 disabled={disabled}
                 autoComplete="off"
             />
         </div>
+        {error && (
+            <div className="mt-2 ml-1 flex items-center gap-1.5 text-[11px] text-red-600 font-medium">
+                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                {error}
+            </div>
+        )}
     </div>
-);
+);};
 
 const StudentRegister: React.FC = () => {
     const navigate = useNavigate();
@@ -62,6 +80,8 @@ const StudentRegister: React.FC = () => {
     const [filteredPrograms, setFilteredPrograms] = useState<Program[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [shake, setShake] = useState(false);
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
 
     const [formData, setFormData] = useState({
         FullName: '',
@@ -109,27 +129,64 @@ const StudentRegister: React.FC = () => {
     };
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        const { name, value } = e.target;
+        setFormData({ ...formData, [name]: value });
+        
+        // Mark field as touched
+        setTouchedFields(prev => new Set([...prev, name]));
+        
+        // Validate field in real-time if touched
+        if (touchedFields.has(name)) {
+            const fieldError = validateField(
+                name,
+                value,
+                name === 'ConfirmPassword' ? formData.Password : undefined
+            );
+            
+            setErrors(prev => {
+                if (fieldError) {
+                    return { ...prev, [name]: fieldError };
+                } else {
+                    const newErrors = { ...prev };
+                    delete newErrors[name];
+                    return newErrors;
+                }
+            });
+        }
+    };
+
+    const handleBlur = (fieldName: string) => {
+        // Mark field as touched when blur
+        setTouchedFields(prev => new Set([...prev, fieldName]));
+        
+        // Validate field
+        const fieldError = validateField(
+            fieldName,
+            formData[fieldName as keyof typeof formData],
+            fieldName === 'ConfirmPassword' ? formData.Password : undefined
+        );
+        
+        setErrors(prev => {
+            if (fieldError) {
+                return { ...prev, [fieldName]: fieldError };
+            } else {
+                const newErrors = { ...prev };
+                delete newErrors[fieldName];
+                return newErrors;
+            }
+        });
     };
 
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        // Basic validation
-        if (Object.values(formData).some(val => !val)) {
-            toast.error("Please fill in all fields");
-            triggerShake();
-            return;
-        }
-
-        if (formData.Password !== formData.ConfirmPassword) {
-            toast.error("Passwords do not match");
-            triggerShake();
-            return;
-        }
-
-        if (formData.Password.length < 8) {
-            toast.error("Password must be at least 8 characters");
+        // Validate all fields
+        const validationErrors = validateRegistrationForm(formData);
+        
+        if (Object.keys(validationErrors).length > 0) {
+            setErrors(validationErrors);
+            setTouchedFields(new Set(Object.keys(validationErrors)));
+            toast.error("Please correct all validation errors");
             triggerShake();
             return;
         }
@@ -152,14 +209,23 @@ const StudentRegister: React.FC = () => {
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || 'Registration failed');
+                // Handle server validation errors
+                if (data.validationErrors) {
+                    setErrors(data.validationErrors);
+                    setTouchedFields(new Set(Object.keys(data.validationErrors)));
+                    toast.error(data.error || 'Validation failed');
+                } else {
+                    toast.error(data.error || 'Registration failed');
+                }
+                triggerShake();
+                return;
             }
 
             toast.success("Registration successful! You can now log in.");
             navigate('/student/login');
 
         } catch (error: any) {
-            toast.error(error.message);
+            toast.error(error.message || 'Registration failed');
             triggerShake();
         } finally {
             setIsLoading(false);
@@ -269,8 +335,30 @@ const StudentRegister: React.FC = () => {
                         <div className="space-y-5">
                             <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-2">Personal Information</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                <InputField label="Full Name" icon={User} type="text" name="FullName" placeholder="John Doe" formData={formData} onChange={handleInputChange} disabled={isLoading} />
-                                <InputField label="College Email" icon={Mail} type="email" name="Email" placeholder="john@college.edu" formData={formData} onChange={handleInputChange} disabled={isLoading} />
+                                <InputField 
+                                    label="Full Name" 
+                                    icon={User} 
+                                    type="text" 
+                                    name="FullName" 
+                                    placeholder="John Doe" 
+                                    formData={formData} 
+                                    onChange={handleInputChange}
+                                    onBlur={handleBlur}
+                                    disabled={isLoading}
+                                    error={touchedFields.has('FullName') ? errors.FullName : undefined}
+                                />
+                                <InputField 
+                                    label="College Email" 
+                                    icon={Mail} 
+                                    type="email" 
+                                    name="Email" 
+                                    placeholder="john@sjcetpalai.ac.in" 
+                                    formData={formData} 
+                                    onChange={handleInputChange}
+                                    onBlur={handleBlur}
+                                    disabled={isLoading}
+                                    error={touchedFields.has('Email') ? errors.Email : undefined}
+                                />
                             </div>
                         </div>
 
@@ -278,14 +366,25 @@ const StudentRegister: React.FC = () => {
                         <div className="space-y-5">
                             <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-2">Academic Information</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                <InputField label="Register Number" icon={Hash} type="text" name="RegisterNumber" placeholder="SJC24MCA..." formData={formData} onChange={handleInputChange} disabled={isLoading} />
+                                <InputField 
+                                    label="Register Number" 
+                                    icon={Hash} 
+                                    type="text" 
+                                    name="RegisterNumber" 
+                                    placeholder="SJC24MCA..." 
+                                    formData={formData} 
+                                    onChange={handleInputChange}
+                                    onBlur={handleBlur}
+                                    disabled={isLoading}
+                                    error={touchedFields.has('RegisterNumber') ? errors.RegisterNumber : undefined}
+                                />
                                 
                                 <div className="relative group col-span-1">
-                                    <label htmlFor="BatchYear" className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                                    <label htmlFor="BatchYear" className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ml-1 ${errors.BatchYear && touchedFields.has('BatchYear') ? 'text-red-600' : 'text-slate-500'}`}>
                                         Batch Year (Year Joined)
                                     </label>
                                     <div className="relative flex items-center transition-all duration-300">
-                                        <div className="absolute left-4 text-slate-400 group-focus-within:text-blue-600 transition-colors">
+                                        <div className={`absolute left-4 group-focus-within:text-blue-600 transition-colors ${errors.BatchYear && touchedFields.has('BatchYear') ? 'text-red-500' : 'text-slate-400'}`}>
                                             <Calendar className="w-5 h-5" />
                                         </div>
                                         <input
@@ -294,22 +393,33 @@ const StudentRegister: React.FC = () => {
                                             id="BatchYear"
                                             value={formData.BatchYear}
                                             onChange={handleInputChange}
-                                            className="w-full bg-white border border-slate-200 text-slate-900 text-[15px] font-medium rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 block pl-12 pr-4 py-3.5 transition-all shadow-sm placeholder:text-slate-400"
+                                            onBlur={() => handleBlur('BatchYear')}
+                                            className={`w-full bg-white border text-slate-900 text-[15px] font-medium rounded-xl focus:outline-none block pl-12 pr-4 py-3.5 transition-all shadow-sm placeholder:text-slate-400 ${
+                                                errors.BatchYear && touchedFields.has('BatchYear')
+                                                    ? 'border-red-500 focus:ring-4 focus:ring-red-500/10 focus:border-red-500'
+                                                    : 'border-slate-200 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500'
+                                            }`}
                                             placeholder="Year joined, e.g. 2024"
                                             disabled={isLoading}
                                         />
                                     </div>
+                                    {errors.BatchYear && touchedFields.has('BatchYear') && (
+                                        <div className="mt-2 ml-1 flex items-center gap-1.5 text-[11px] text-red-600 font-medium">
+                                            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                                            {errors.BatchYear}
+                                        </div>
+                                    )}
                                     <p className="mt-2 ml-1 text-[11px] text-slate-400">
                                         Enter the year you joined the program.
                                     </p>
                                 </div>
 
                                 <div className="relative group col-span-1">
-                                    <label htmlFor="DepartmentID" className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                                    <label htmlFor="DepartmentID" className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ml-1 ${errors.DepartmentID && touchedFields.has('DepartmentID') ? 'text-red-600' : 'text-slate-500'}`}>
                                         Department
                                     </label>
                                     <div className="relative flex items-center transition-all duration-300">
-                                        <div className="absolute left-4 text-slate-400 group-focus-within:text-blue-600 transition-colors">
+                                        <div className={`absolute left-4 group-focus-within:text-blue-600 transition-colors ${errors.DepartmentID && touchedFields.has('DepartmentID') ? 'text-red-500' : 'text-slate-400'}`}>
                                             <Briefcase className="w-5 h-5" />
                                         </div>
                                         <select
@@ -317,7 +427,12 @@ const StudentRegister: React.FC = () => {
                                             id="DepartmentID"
                                             value={formData.DepartmentID}
                                             onChange={handleInputChange}
-                                            className="w-full bg-white border border-slate-200 text-slate-900 text-[15px] font-medium rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 block pl-12 pr-4 py-3.5 transition-all shadow-sm appearance-none outline-none"
+                                            onBlur={() => handleBlur('DepartmentID')}
+                                            className={`w-full bg-white border text-slate-900 text-[15px] font-medium rounded-xl focus:outline-none block pl-12 pr-4 py-3.5 transition-all shadow-sm appearance-none outline-none ${
+                                                errors.DepartmentID && touchedFields.has('DepartmentID')
+                                                    ? 'border-red-500 focus:ring-4 focus:ring-red-500/10 focus:border-red-500'
+                                                    : 'border-slate-200 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500'
+                                            }`}
                                             disabled={isLoading || departments.length === 0}
                                         >
                                             <option value="">Select Department...</option>
@@ -326,14 +441,20 @@ const StudentRegister: React.FC = () => {
                                             ))}
                                         </select>
                                     </div>
+                                    {errors.DepartmentID && touchedFields.has('DepartmentID') && (
+                                        <div className="mt-2 ml-1 flex items-center gap-1.5 text-[11px] text-red-600 font-medium">
+                                            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                                            {errors.DepartmentID}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="relative group col-span-1">
-                                    <label htmlFor="ProgramID" className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                                    <label htmlFor="ProgramID" className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ml-1 ${errors.ProgramID && touchedFields.has('ProgramID') ? 'text-red-600' : 'text-slate-500'}`}>
                                         Program
                                     </label>
                                     <div className="relative flex items-center transition-all duration-300">
-                                        <div className="absolute left-4 text-slate-400 group-focus-within:text-blue-600 transition-colors">
+                                        <div className={`absolute left-4 group-focus-within:text-blue-600 transition-colors ${errors.ProgramID && touchedFields.has('ProgramID') ? 'text-red-500' : 'text-slate-400'}`}>
                                             <GraduationCap className="w-5 h-5" />
                                         </div>
                                         <select
@@ -341,7 +462,12 @@ const StudentRegister: React.FC = () => {
                                             id="ProgramID"
                                             value={formData.ProgramID}
                                             onChange={handleInputChange}
-                                            className="w-full bg-white border border-slate-200 text-slate-900 text-[15px] font-medium rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 block pl-12 pr-4 py-3.5 transition-all shadow-sm appearance-none outline-none"
+                                            onBlur={() => handleBlur('ProgramID')}
+                                            className={`w-full bg-white border text-slate-900 text-[15px] font-medium rounded-xl focus:outline-none block pl-12 pr-4 py-3.5 transition-all shadow-sm appearance-none outline-none ${
+                                                errors.ProgramID && touchedFields.has('ProgramID')
+                                                    ? 'border-red-500 focus:ring-4 focus:ring-red-500/10 focus:border-red-500'
+                                                    : 'border-slate-200 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500'
+                                            }`}
                                             disabled={isLoading || !formData.DepartmentID}
                                         >
                                             <option value="">Select Program...</option>
@@ -358,9 +484,46 @@ const StudentRegister: React.FC = () => {
                         <div className="space-y-5">
                             <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-2">Security</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                <InputField label="Password" icon={Lock} type="password" name="Password" placeholder="••••••••" formData={formData} onChange={handleInputChange} disabled={isLoading} />
-                                <InputField label="Confirm Password" icon={Lock} type="password" name="ConfirmPassword" placeholder="••••••••" formData={formData} onChange={handleInputChange} disabled={isLoading} />
+                                <InputField 
+                                    label="Password" 
+                                    icon={Lock} 
+                                    type="password" 
+                                    name="Password" 
+                                    placeholder="••••••••" 
+                                    formData={formData} 
+                                    onChange={handleInputChange}
+                                    onBlur={handleBlur}
+                                    disabled={isLoading}
+                                    error={touchedFields.has('Password') ? errors.Password : undefined}
+                                />
+                                <InputField 
+                                    label="Confirm Password" 
+                                    icon={Lock} 
+                                    type="password" 
+                                    name="ConfirmPassword" 
+                                    placeholder="••••••••" 
+                                    formData={formData} 
+                                    onChange={handleInputChange}
+                                    onBlur={handleBlur}
+                                    disabled={isLoading}
+                                    error={touchedFields.has('ConfirmPassword') ? errors.ConfirmPassword : undefined}
+                                />
                             </div>
+                        </div>
+
+                        {/* Password Requirements Info */}
+                        <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                            <h4 className="text-[12px] font-bold text-blue-900 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <CheckCircle className="w-4 h-4" />
+                                Password Requirements
+                            </h4>
+                            <ul className="text-[12px] text-blue-800 space-y-1.5 ml-6">
+                                <li className="list-disc">At least 8 characters long</li>
+                                <li className="list-disc">Contains uppercase letters (A-Z)</li>
+                                <li className="list-disc">Contains lowercase letters (a-z)</li>
+                                <li className="list-disc">Contains numbers (0-9)</li>
+                                <li className="list-disc">Contains special characters (@, #, $, %, !, etc.)</li>
+                            </ul>
                         </div>
 
                         <div className="pt-6 flex items-center justify-between">

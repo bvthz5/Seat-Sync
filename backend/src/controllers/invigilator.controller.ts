@@ -5,6 +5,7 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { sequelize } from "../config/database.js";
 import { emailService } from "../services/email.service.js";
+import { validateInvigilatorRequest } from "../utils/invigilator-request.validation.js";
 
 const ACTIVATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -520,20 +521,72 @@ export const requestInvigilatorAccess = async (req: Request, res: Response) => {
     try {
         const { FacultyID, Name, Email, Phone, Department, Designation, Reason } = req.body;
         
-        if (!FacultyID || !Name || !Email || !Department) {
-            return res.status(400).json({ message: "Faculty ID, Name, Email, and Department are required" });
+        // Run comprehensive validation on all fields
+        const validation = validateInvigilatorRequest({
+            FacultyID,
+            Name,
+            Email,
+            Phone,
+            Department,
+            Designation,
+            Reason
+        });
+
+        // If validation failed, return all errors
+        if (!validation.isValid) {
+            res.status(400).json({ 
+                error: "Validation failed",
+                validationErrors: validation.errors 
+            });
+            return;
         }
 
         const { InvigilatorRequest } = await import("../models/index.js");
 
+        // Check for duplicate Faculty ID in pending/approved requests
+        const existingRequest = await InvigilatorRequest.findOne({
+            where: { 
+                FacultyID: FacultyID.trim().toUpperCase(),
+                Status: { [Op.in]: ["PENDING", "APPROVED"] }
+            }
+        });
+
+        if (existingRequest) {
+            res.status(400).json({ 
+                error: "Validation failed",
+                validationErrors: { 
+                    FacultyID: "This Faculty ID already has an active or pending request" 
+                } 
+            });
+            return;
+        }
+
+        // Check for duplicate email in pending/approved requests
+        const existingEmail = await InvigilatorRequest.findOne({
+            where: { 
+                Email: Email.toLowerCase(),
+                Status: { [Op.in]: ["PENDING", "APPROVED"] }
+            }
+        });
+
+        if (existingEmail) {
+            res.status(400).json({ 
+                error: "Validation failed",
+                validationErrors: { 
+                    Email: "This email already has an active or pending request" 
+                } 
+            });
+            return;
+        }
+
         await InvigilatorRequest.create({
-            FacultyID,
-            Name,
-            Email,
-            Phone: Phone || null,
+            FacultyID: FacultyID.trim().toUpperCase(),
+            Name: Name.trim(),
+            Email: Email.toLowerCase(),
+            Phone: Phone ? Phone.trim() : null,
             Department,
-            Designation: Designation || null,
-            Reason: Reason || null,
+            Designation: Designation ? Designation.trim() : null,
+            Reason: Reason ? Reason.trim() : null,
             Status: "PENDING"
         });
 

@@ -16,6 +16,7 @@ import api from '../../../services/api';
 import StudentImportModal from '../components/students/StudentImportModal';
 import { AddStudentModal } from '../components/students/AddStudentModal';
 import { EditStudentModal } from '../components/students/EditStudentModal';
+import StudentQuickViewDrawer from '../components/students/StudentQuickViewDrawer';
 import { useDebounce } from '../../../hooks/useDebounce';
 
 interface Student {
@@ -65,10 +66,22 @@ const Students: React.FC = () => {
     const debouncedSearch = useDebounce(searchQuery, 500);
     const [filters, setFilters] = useState({ dept: "", program: "", semester: "", status: "", source: "", batch: "" });
     
-    // For the UI Dropdowns
+    // For the UI Dropdowns - Now with dynamic batch years fetched from API
     const [departments, setDepartments] = useState<any[]>([]);
     const [programs, setPrograms] = useState<any[]>([]);
     const [semesters, setSemesters] = useState<any[]>([]);
+    const [batchYears, setBatchYears] = useState<number[]>([]);  // Dynamic batch years from API
+    const [statusOptions, setStatusOptions] = useState<Array<{ value: string; label: string; color?: string }>>([
+        { value: 'Active', label: 'Active', color: 'emerald' },
+        { value: 'Incomplete', label: 'Incomplete', color: 'amber' },
+        { value: 'Pending', label: 'Pending', color: 'blue' },
+        { value: 'Disabled', label: 'Disabled', color: 'red' }
+    ]);
+    const [sourceOptions, setSourceOptions] = useState<Array<{ value: string; label: string }>>([
+        { value: 'Self Registered', label: 'Self Registered' },
+        { value: 'Admin Added', label: 'Admin Added' },
+        { value: 'Imported', label: 'Imported' }
+    ]);
 
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [isImportOpen, setIsImportOpen] = useState(false);
@@ -78,29 +91,89 @@ const Students: React.FC = () => {
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
     const [drawerStudent, setDrawerStudent] = useState<Student | null>(null);
 
-    // Fetch helper functions
+    // Fetch helper functions - Enhanced for scalability
     const fetchDropdownData = async () => {
         try {
-            const [deptRes, progRes] = await Promise.all([
+            // Fetch all filter data in parallel for better performance
+            const [deptRes, progRes, filterRes] = await Promise.all([
                 api.get('/departments').catch(() => ({ data: { data: [] } })),
-                api.get('/programs').catch(() => ({ data: { data: [] } }))
+                api.get('/programs').catch(() => ({ data: { data: [] } })),
+                // Fetch filter metadata (batch years, semesters, status, source options) from backend
+                api.get('/students/meta/filter-options').catch(() => ({ data: { batchYears: [], semesters: [], statusOptions: [], sourceOptions: [] } }))
             ]);
+            
             setDepartments(deptRes.data?.data || deptRes.data || []);
             setPrograms(progRes.data?.data || progRes.data || []);
-            // Backend might not have /semesters, mock 1-8
-            setSemesters([...Array(8)].map((_, i) => ({ SemesterID: i + 1, SemesterNumber: i + 1 })));
+            
+            // Use dynamic batch years from API
+            const fetchedBatchYears = filterRes.data?.batchYears || [];
+            const batchYearsToSet = fetchedBatchYears.length > 0 
+                ? fetchedBatchYears
+                : Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i);
+            setBatchYears(batchYearsToSet);
+            
+            // Use dynamic semesters from API - Deduplicate by SemesterNumber
+            const fetchedSemesters = filterRes.data?.semesters || [];
+            const semestersToSet = fetchedSemesters.length > 0 
+                ? fetchedSemesters
+                : [...Array(8)].map((_, i) => ({ SemesterID: i + 1, SemesterNumber: i + 1 }));
+            
+            // Deduplicate semesters by SemesterNumber (business value, not ID)
+            const uniqueSemesterMap = new Map<number, any>();
+            semestersToSet.forEach((s: any) => {
+                if (!uniqueSemesterMap.has(s.SemesterNumber)) {
+                    uniqueSemesterMap.set(s.SemesterNumber, s);
+                }
+            });
+            const uniqueSemesters = Array.from(uniqueSemesterMap.values())
+                .sort((a, b) => a.SemesterNumber - b.SemesterNumber);
+            setSemesters(uniqueSemesters);
+
+            // Use dynamic status options from API
+            const fetchedStatusOptions = filterRes.data?.statusOptions || [];
+            if (fetchedStatusOptions.length > 0) {
+                // Add color mappings for UI
+                const statusWithColors = fetchedStatusOptions.map((s: any) => ({
+                    ...s,
+                    color: s.value === 'Active' ? 'emerald' 
+                        : s.value === 'Incomplete' ? 'amber'
+                        : s.value === 'Pending' ? 'blue'
+                        : 'red'
+                }));
+                setStatusOptions(statusWithColors);
+            }
+
+            // Use dynamic source options from API
+            const fetchedSourceOptions = filterRes.data?.sourceOptions || [];
+            if (fetchedSourceOptions.length > 0) {
+                setSourceOptions(fetchedSourceOptions);
+            }
         } catch (error) {
             console.error('Failed to load filter dropdown data', error);
+            // Graceful fallback to default values
+            setBatchYears(Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i));
+            const fallbackSemesters = [...Array(8)].map((_, i) => ({ SemesterID: i + 1, SemesterNumber: i + 1 }));
+            setSemesters(fallbackSemesters);
         }
     };
 
     const fetchStudents = async () => {
         setIsLoading(true);
         try {
+            // Debug log for filters
+            if (filters.semester) {
+                console.log(`[Frontend] Fetching students with Semester Filter: ${filters.semester}`);
+                console.log(`[Frontend] Full filters:`, filters);
+            }
+            
             const res = await api.get('/students', {
                 params: { page, limit: 10, search: debouncedSearch, ...filters }
             });
             const fetchedStudents = res.data.students || [];
+            
+            if (filters.semester) {
+                console.log(`[Frontend] Response received: ${fetchedStudents.length} students`);
+            }
             
             // Use current system year for semester calculation
             const currentYear = new Date().getFullYear();
@@ -171,8 +244,19 @@ const Students: React.FC = () => {
                     };
                 });
 
+                // Apply client-side filtering for calculated fields (Status, Source)
+                let filteredStudents = enhancedStudents;
+                
+                // Filter by Status (calculated field)
+                if (filters.status) {
+                    filteredStudents = filteredStudents.filter((s: any) => s.Status === filters.status);
+                }
+                
+                // Note: Source filter would require tracking how each student was added (Self Registered, Admin Added, Imported)
+                // For now, filtering by status only
+
                 // Batch state updates to avoid multiple renders
-                setStudents(enhancedStudents);
+                setStudents(filteredStudents);
                 setTotalPages(res.data.totalPages || 1);
 
                 const rawStats = res.data.stats || {};
@@ -376,7 +460,13 @@ const Students: React.FC = () => {
                         selectedKeys={filters.dept ? [filters.dept] : []} 
                         onChange={(e) => handleFilterChange('dept', e.target.value)}
                         variant="flat" 
-                        classNames={{ trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10" }}
+                        classNames={{ 
+                            trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10",
+                            popoverContent: "bg-white shadow-xl border border-gray-200 rounded-xl"
+                        }}
+                        popoverProps={{
+                            classNames: { content: "bg-white p-1 border border-gray-200 shadow-xl rounded-xl z-50 text-gray-800" }
+                        }}
                         size="sm"
                         disableAnimation
                     >
@@ -390,7 +480,13 @@ const Students: React.FC = () => {
                         selectedKeys={filters.program ? [filters.program] : []} 
                         onChange={(e) => handleFilterChange('program', e.target.value)}
                         variant="flat" 
-                        classNames={{ trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10" }}
+                        classNames={{ 
+                            trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10",
+                            popoverContent: "bg-white shadow-xl border border-gray-200 rounded-xl"
+                        }}
+                        popoverProps={{
+                            classNames: { content: "bg-white p-1 border border-gray-200 shadow-xl rounded-xl z-50 text-gray-800" }
+                        }}
                         size="sm"
                         disableAnimation
                     >
@@ -404,14 +500,26 @@ const Students: React.FC = () => {
                         selectedKeys={filters.batch ? [filters.batch] : []} 
                         onChange={(e) => handleFilterChange('batch', e.target.value)}
                         variant="flat" 
-                        classNames={{ trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10" }}
+                        classNames={{ 
+                            trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10",
+                            popoverContent: "bg-white shadow-xl border border-gray-200 rounded-xl"
+                        }}
+                        popoverProps={{
+                            classNames: { content: "bg-white p-1 border border-gray-200 shadow-xl rounded-xl z-50 text-gray-800" }
+                        }}
                         size="sm"
                         disableAnimation
                     >
-                        {[...Array(5)].map((_, i) => {
-                            const year = new Date().getFullYear() - 2 + i;
-                            return <SelectItem key={year.toString()} textValue={year.toString()}>{year.toString()}</SelectItem>;
-                        })}
+                        {/* Dynamic batch years from API */}
+                        {batchYears.length > 0 ? (
+                            batchYears.map(year => (
+                                <SelectItem key={year.toString()} textValue={year.toString()}>
+                                    {year.toString()}
+                                </SelectItem>
+                            ))
+                        ) : (
+                            <SelectItem key="loading" isDisabled>Loading...</SelectItem>
+                        )}
                     </Select>
                     <Select 
                         id="filter-semester"
@@ -421,11 +529,21 @@ const Students: React.FC = () => {
                         selectedKeys={filters.semester ? [filters.semester] : []} 
                         onChange={(e) => handleFilterChange('semester', e.target.value)}
                         variant="flat" 
-                        classNames={{ trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10" }}
+                        classNames={{ 
+                            trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10",
+                            popoverContent: "bg-white shadow-xl border border-gray-200 rounded-xl"
+                        }}
+                        popoverProps={{
+                            classNames: { content: "bg-white p-1 border border-gray-200 shadow-xl rounded-xl z-50 text-gray-800" }
+                        }}
                         size="sm"
                         disableAnimation
                     >
-                        {semesters.map(s => <SelectItem key={s.SemesterID?.toString()} textValue={`Semester ${s.SemesterNumber}`}>{`Semester ${s.SemesterNumber}`}</SelectItem>)}
+                        {semesters.map(s => (
+                            <SelectItem key={s.SemesterID.toString()} textValue={`Semester ${s.SemesterNumber}`}>
+                                Semester {s.SemesterNumber}
+                            </SelectItem>
+                        ))}
                     </Select>
                     <Select 
                         id="filter-status"
@@ -435,14 +553,24 @@ const Students: React.FC = () => {
                         selectedKeys={filters.status ? [filters.status] : []} 
                         onChange={(e) => handleFilterChange('status', e.target.value)}
                         variant="flat" 
-                        classNames={{ trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10" }}
+                        classNames={{ 
+                            trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10",
+                            popoverContent: "bg-white shadow-xl border border-gray-200 rounded-xl"
+                        }}
+                        popoverProps={{
+                            classNames: { content: "bg-white p-1 border border-gray-200 shadow-xl rounded-xl z-50 text-gray-800" }
+                        }}
                         size="sm"
                         disableAnimation
                     >
-                        <SelectItem key="Active" textValue="Active">Active</SelectItem>
-                        <SelectItem key="Incomplete" textValue="Incomplete">Incomplete</SelectItem>
-                        <SelectItem key="Pending" textValue="Pending">Pending</SelectItem>
-                        <SelectItem key="Disabled" textValue="Disabled">Disabled</SelectItem>
+                        {statusOptions.map(s => (
+                            <SelectItem key={s.value} textValue={s.label}>
+                                <div className="flex items-center gap-2">
+                                    <div className={`w-2 h-2 rounded-full bg-${s.color}-500`}></div>
+                                    {s.label}
+                                </div>
+                            </SelectItem>
+                        ))}
                     </Select>
                     <Select 
                         id="filter-source"
@@ -452,13 +580,21 @@ const Students: React.FC = () => {
                         selectedKeys={filters.source ? [filters.source] : []} 
                         onChange={(e) => handleFilterChange('source', e.target.value)}
                         variant="flat" 
-                        classNames={{ trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10" }}
+                        classNames={{ 
+                            trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10",
+                            popoverContent: "bg-white shadow-xl border border-gray-200 rounded-xl"
+                        }}
+                        popoverProps={{
+                            classNames: { content: "bg-white p-1 border border-gray-200 shadow-xl rounded-xl z-50 text-gray-800" }
+                        }}
                         size="sm"
                         disableAnimation
                     >
-                        <SelectItem key="Self Registered" textValue="Self Registered">Self Registered</SelectItem>
-                        <SelectItem key="Admin Added" textValue="Admin Added">Admin Added</SelectItem>
-                        <SelectItem key="Imported" textValue="Imported">Imported</SelectItem>
+                        {sourceOptions.map(source => (
+                            <SelectItem key={source.value} textValue={source.label}>
+                                {source.label}
+                            </SelectItem>
+                        ))}
                     </Select>
                 </div>
             </div>
@@ -564,19 +700,7 @@ const Students: React.FC = () => {
                                             <Chip size="sm" variant="flat" className="bg-slate-100 text-slate-600 text-[10px] h-5 px-1.5 font-bold border border-slate-200 rounded-md">
                                                 {item.Department?.DepartmentCode || 'N/A'}
                                             </Chip>
-                                            <span className="text-xs font-bold text-slate-700">
-                                                Sem {item.CalculatedSemester || '-'}/{item.MaxSemesters || '-'}
-                                            </span>
                                         </div>
-                                        
-                                        {/* Passout Year Badge */}
-                                        {item.Program?.DurationYears && item.BatchYear && (
-                                            <div className="flex items-center gap-1.5">
-                                                <span className="text-[10px] text-slate-500 px-2 py-0.5 bg-slate-100 rounded">
-                                                    Passout: {item.BatchYear + item.Program.DurationYears}
-                                                </span>
-                                            </div>
-                                        )}
                                     </div>
                                 </TableCell>
 
@@ -665,157 +789,20 @@ const Students: React.FC = () => {
                 </Table>
             </div>
 
-            {/* Slide-over Detail Drawer */}
-            <div className={`fixed inset-0 transition-all duration-300 z-50 ${drawerStudent ? 'bg-slate-900/30 backdrop-blur-sm opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setDrawerStudent(null)}>
-                <div 
-                    className={`fixed inset-y-0 right-0 w-full md:w-[440px] bg-white shadow-2xl transform transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] flex flex-col ${drawerStudent ? 'translate-x-0' : 'translate-x-full'}`}
-                    onClick={(e) => e.stopPropagation()}
-                >
-                    {drawerStudent && (
-                        <>
-                            {/* Drawer Header */}
-                            <div className="px-7 py-8 border-b border-gray-100 bg-white flex items-start justify-between relative overflow-hidden">
-                                <div className="absolute -top-4 -right-4 p-8 opacity-[0.03]">
-                                    <GraduationCap size={140} />
-                                </div>
-                                <div className="flex gap-5 items-center relative z-10 w-full">
-                                    <div className="relative shrink-0 border border-gray-100 p-0.5 rounded-full bg-white shadow-sm">
-                                        <div className="w-[72px] h-[72px] rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-extrabold text-2xl shadow-inner">
-                                            {(drawerStudent.User?.FullName || "U")[0].toUpperCase()}
-                                        </div>
-                                        <div className={`absolute bottom-1 right-1 w-4 h-4 rounded-full border-2 border-white ${getStatusDot(drawerStudent.Status)} shadow-sm`}></div>
-                                    </div>
-                                    <div className="flex-1">
-                                        <h2 className="text-2xl font-bold text-gray-900 tracking-tight leading-tight">{drawerStudent.User?.FullName || "Unknown Student"}</h2>
-                                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                            <span className="font-mono text-xs text-blue-700 font-bold bg-blue-50/80 px-2 py-0.5 rounded border border-blue-100">{drawerStudent.RegisterNumber}</span>
-                                            <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded border text-[10px] uppercase tracking-wider font-bold ${getStatusColor(drawerStudent.Status)}`}>
-                                                {drawerStudent.Status}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <Button isIconOnly variant="light" size="sm" onPress={() => setDrawerStudent(null)} className="absolute top-4 right-4 bg-gray-50 hover:bg-gray-100 rounded-full z-10 text-gray-500">
-                                    <X size={18} />
-                                </Button>
-                            </div>
-
-                            {/* Drawer Content */}
-                            <div className="flex-1 overflow-y-auto px-7 py-6 space-y-7 custom-scrollbar bg-slate-50/50">
-                                
-                                {/* Snapshot */}
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="bg-white rounded-xl p-4 border border-slate-200/60 shadow-sm flex flex-col justify-center items-center text-center">
-                                        <p className="text-xs text-slate-500 font-medium mb-1 uppercase tracking-wide">Batch Selection</p>
-                                        <p className="text-lg font-bold text-slate-900">{drawerStudent.BatchYear}</p>
-                                    </div>
-                                    <div className="bg-white rounded-xl p-4 border border-slate-200/60 shadow-sm flex flex-col justify-center items-center text-center">
-                                        <p className="text-xs text-slate-500 font-medium mb-1 uppercase tracking-wide">Access State</p>
-                                        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-semibold">
-                                            {drawerStudent.User?.isActive ? <ShieldCheck size={12} className="text-emerald-500"/> : <AlertTriangle size={12} className="text-amber-500"/>} 
-                                            {drawerStudent.User?.isActive ? 'Unlocked' : 'Locked'}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Academic Card */}
-                                <section>
-                                    <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                        <BookOpen size={14} className="text-slate-400" /> Academic Profile
-                                    </h3>
-                                    <div className="bg-white rounded-2xl p-5 space-y-5 border border-slate-200/60 shadow-sm">
-                                        <div>
-                                            <p className="text-xs text-slate-500 mb-1 font-medium">Program Enrolled</p>
-                                            <p className="text-sm font-semibold text-slate-900 leading-snug">{drawerStudent.Program?.ProgramName}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-slate-500 mb-1 font-medium">Department</p>
-                                            <p className="text-sm font-semibold text-slate-900">{drawerStudent.Department?.DepartmentName || drawerStudent.Department?.DepartmentCode}</p>
-                                        </div>
-
-                                        {/* Program Duration & Passout */}
-                                        {drawerStudent.Program?.DurationYears && drawerStudent.BatchYear && (
-                                            <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-100">
-                                                <div className="bg-slate-50 rounded-lg p-3">
-                                                    <p className="text-[10px] text-slate-500 mb-1 font-medium uppercase">Program Duration</p>
-                                                    <p className="text-sm font-bold text-slate-900">{drawerStudent.Program.DurationYears} years</p>
-                                                </div>
-                                                <div className="bg-green-50 rounded-lg p-3">
-                                                    <p className="text-[10px] text-slate-500 mb-1 font-medium uppercase">Passout Year</p>
-                                                    <p className="text-sm font-bold text-green-700">{drawerStudent.BatchYear + drawerStudent.Program.DurationYears}</p>
-                                                </div>
-                                            </div>
-                                        )}
-                                        
-                                        <div className="pt-4 border-t border-slate-100">
-                                            <div className="flex justify-between items-center mb-2">
-                                                <p className="text-xs font-medium text-slate-500">Current Progress</p>
-                                                <div className="flex items-baseline gap-1">
-                                                    <span className="text-sm font-bold text-indigo-600">Sem {drawerStudent.CalculatedSemester}</span>
-                                                    <span className="text-xs font-semibold text-slate-400">/ {drawerStudent.MaxSemesters || '-'}</span>
-                                                </div>
-                                            </div>
-                                            <Progress 
-                                                size="md" 
-                                                radius="md"
-                                                aria-label="Student Progress"
-                                                value={((drawerStudent.CalculatedSemester || 0) / (drawerStudent.MaxSemesters || 1)) * 100} 
-                                                classNames={{ indicator: "bg-indigo-600", track: "bg-slate-100" }} 
-                                            />
-                                            <p className="text-[11px] text-slate-500 mt-2 text-center">
-                                                {Math.round(((drawerStudent.CalculatedSemester || 0) / (drawerStudent.MaxSemesters || 1)) * 100)}% Complete
-                                            </p>
-                                        </div>
-                                    </div>
-                                </section>
-
-                                {/* Contact Card */}
-                                <section>
-                                    <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                        <Phone size={14} className="text-slate-400" /> Contact Information
-                                    </h3>
-                                    <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
-                                        <div className="flex items-center gap-4 p-4 border-b border-slate-50 hover:bg-slate-50/50 transition-colors group">
-                                            <div className="bg-blue-50/50 border border-blue-100 p-2.5 rounded-xl text-blue-600 group-hover:bg-blue-100 group-hover:border-blue-200 transition-colors"><Mail size={18} /></div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Email Address</p>
-                                                <p className="text-sm font-semibold text-slate-900 truncate">{drawerStudent.User?.Email || "Not provided"}</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-4 p-4 hover:bg-slate-50/50 transition-colors group">
-                                            <div className="bg-emerald-50/50 border border-emerald-100 p-2.5 rounded-xl text-emerald-600 group-hover:bg-emerald-100 group-hover:border-emerald-200 transition-colors"><Phone size={18} /></div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Phone Network</p>
-                                                <p className="text-sm font-semibold text-slate-900 truncate">{drawerStudent.User?.Phone || "Not provided"}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </section>
-                            </div>
-
-                            {/* Drawer Footer Actions */}
-                            <div className="p-6 border-t border-gray-100 bg-white grid grid-cols-2 gap-4 shadow-min relative z-10">
-                                <Button 
-                                    className="w-full bg-white border-2 border-slate-200 text-slate-700 font-bold hover:bg-slate-50 hover:border-slate-300 shadow-sm h-12"
-                                    onPress={() => { handleEdit(drawerStudent); setDrawerStudent(null); }}
-                                    radius="lg"
-                                    startContent={<Pencil size={18}/>}
-                                >
-                                    Edit Profile
-                                </Button>
-                                <Button 
-                                    className="w-full bg-red-50 text-red-600 font-bold hover:bg-red-100 border border-red-100 shadow-sm h-12"
-                                    onPress={() => confirmDelete(drawerStudent)}
-                                    radius="lg"
-                                    startContent={<Trash2 size={18}/>}
-                                >
-                                    Delete Account
-                                </Button>
-                            </div>
-                        </>
-                    )}
-                </div>
-            </div>
+            {/* Slide-over Detail Drawer - Using Dedicated Component */}
+            <StudentQuickViewDrawer
+                student={drawerStudent}
+                isOpen={!!drawerStudent}
+                onClose={() => setDrawerStudent(null)}
+                onEdit={(student) => {
+                    handleEdit(student);
+                    setDrawerStudent(null);
+                }}
+                onDelete={(student) => {
+                    confirmDelete(student);
+                    setDrawerStudent(null);
+                }}
+            />
 
             {/* Original Modals */}
             <AddStudentModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onSuccess={() => fetchStudents()} />

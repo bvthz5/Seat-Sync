@@ -11,6 +11,7 @@ import { JWTPayload } from "../interfaces/auth.interfaces.js";
 import { generateRandomToken, hashToken } from "../utils/hash.js";
 import { PasswordReset } from "../models/PasswordReset.model.js";
 import { UniqueConstraintError } from "sequelize";
+import { validateStudentRegistration } from "../utils/student-registration.validation.js";
 
 const normalizeSemesterRank = (semester: { SemesterNumber?: number; SemesterName?: string }) => {
   if (typeof semester.SemesterNumber === "number" && Number.isFinite(semester.SemesterNumber)) {
@@ -105,30 +106,56 @@ export class StudentAuthController {
     let createdUserID: number | null = null;
     try {
       const { FullName, Email, RegisterNumber, DepartmentID, ProgramID, BatchYear, Password, ConfirmPassword } = req.body;
+
+      // Run comprehensive validation on all fields
+      const validation = validateStudentRegistration({
+        FullName,
+        Email,
+        RegisterNumber,
+        DepartmentID,
+        ProgramID,
+        BatchYear,
+        Password,
+        ConfirmPassword
+      });
+
+      // If validation failed, return all errors
+      if (!validation.isValid) {
+        res.status(400).json({ 
+          error: "Validation failed",
+          validationErrors: validation.errors 
+        });
+        return;
+      }
+
       const departmentId = Number(DepartmentID);
       const programId = Number(ProgramID);
       const batchYear = Number(BatchYear);
 
-      if (!FullName || !Email || !RegisterNumber || !DepartmentID || !ProgramID || !BatchYear || !Password || !ConfirmPassword) {
-        res.status(400).json({ error: "All required fields must be provided" });
-        return;
-      }
-      if (Password !== ConfirmPassword) {
-        res.status(400).json({ error: "Passwords do not match" });
-        return;
-      }
-
+      // Additional numeric validation (should pass after field validation)
       if (![departmentId, programId, batchYear].every((value) => Number.isFinite(value) && value > 0)) {
         res.status(400).json({ error: "Invalid academic details provided" });
         return;
       }
 
       // Duplicate checks
-      const existingEmail = await User.findOne({ where: { Email } });
-      if (existingEmail) { res.status(400).json({ error: "Email is already registered" }); return; }
+      const existingEmail = await User.findOne({ where: { Email: Email.toLowerCase() } });
+      if (existingEmail) { 
+        res.status(400).json({ 
+          error: "Validation failed",
+          validationErrors: { Email: "Email is already registered" } 
+        }); 
+        return; 
+      }
 
-      const existingRegNum = await Student.findOne({ where: { RegisterNumber } });
-      if (existingRegNum) { res.status(400).json({ error: "Register Number is already registered" }); return; }
+      const existingRegNum = await Student.findOne({ where: { RegisterNumber: RegisterNumber.toUpperCase() } });
+      if (existingRegNum) { 
+        res.status(400).json({ 
+          error: "Validation failed",
+          validationErrors: { RegisterNumber: "Register Number is already registered" } 
+        }); 
+        return; 
+      }
 
       // Validate program belongs to the selected department (supports legacy and bridge-table mappings).
       const program = await Program.findOne({ where: { ProgramID: programId } });
@@ -170,9 +197,10 @@ export class StudentAuthController {
 
       const hashPassword = await bcrypt.hash(Password, 12);
 
-      // Step 1: Create User
+      // Step 1: Create User with normalized email and full name
       const user = await User.create({
-        Email, FullName,
+        Email: Email.toLowerCase(), 
+        FullName: FullName.trim(),
         PasswordHash: hashPassword,
         Role: "student",
         IsActive: true,
@@ -182,7 +210,7 @@ export class StudentAuthController {
       // Step 2: Create Student (if this fails, compensate by deleting the User)
       await Student.create({
         UserID: user.UserID,
-        RegisterNumber,
+        RegisterNumber: RegisterNumber.toUpperCase(),
         DepartmentID: departmentId,
         ProgramID: programId,
         SemesterID: initialSemester.SemesterID,
