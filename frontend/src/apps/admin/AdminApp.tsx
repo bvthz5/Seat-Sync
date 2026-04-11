@@ -4,6 +4,7 @@ import AdminLayout from './layout/AdminLayout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Exams from './pages/Exams';
+import SeriesSelection from './pages/SeriesSelection';
 import ExamSeriesList from './pages/ExamSeriesList';
 import SeatingPlans from './pages/SeatingPlans';
 import Invigilators from './pages/Invigilators';
@@ -43,8 +44,8 @@ const AdminApp: React.FC = () => {
                     <Route path="dashboard" element={<Dashboard />} />
                     <Route path="profile" element={<Profile />} />
                     <Route path="students" element={<Students />} />
-                    <Route path="exams" element={<ExamSeriesList />} />
-                    <Route path="exams/:seriesId" element={<Exams />} />
+                    <Route path="exams" element={<SeriesSelection />} />
+                    <Route path="exams/series/:seriesId" element={<ExamSeriesList />} />
                     <Route path="seating" element={<SeatingPlans />} />
                     <Route path="invigilators" element={<Invigilators />} />
                     <Route path="attendance" element={<Attendance />} />

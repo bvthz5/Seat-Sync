@@ -78,7 +78,9 @@ export const createAcademicYear = async (req: Request, res: Response): Promise<v
                 EntityID: year.AcademicYearID,
                 Details: `Created academic year: ${YearName}`,
                 IPAddress: req.ip || 'unknown',
-                UserAgent: req.get('user-agent') || 'unknown'
+                UserAgent: req.get('user-agent') || 'unknown',
+                Severity: 'Info',
+                Status: 'Success'
             });
             console.log("[createAcademicYear] Activity log created");
         } catch (logError: any) {
@@ -151,7 +153,9 @@ export const setCurrentAcademicYear = async (req: Request, res: Response): Promi
                 EntityID: year.AcademicYearID,
                 Details: `Set current academic year: ${year.YearName}`,
                 IPAddress: req.ip || 'unknown',
-                UserAgent: req.get('user-agent') || 'unknown'
+                UserAgent: req.get('user-agent') || 'unknown',
+                Severity: 'Info',
+                Status: 'Success'
             });
         } catch (logError: any) {
             console.warn("Failed to log activity:", logError.message);
@@ -207,7 +211,9 @@ export const deleteAcademicYear = async (req: Request, res: Response): Promise<v
                 EntityID: year.AcademicYearID,
                 Details: `Deleted academic year: ${year.YearName}`,
                 IPAddress: req.ip || 'unknown',
-                UserAgent: req.get('user-agent') || 'unknown'
+                UserAgent: req.get('user-agent') || 'unknown',
+                Severity: 'Info',
+                Status: 'Success'
             });
         } catch (logError: any) {
             console.warn("Failed to log activity:", logError.message);
@@ -284,7 +290,9 @@ export const createDepartment = async (req: Request, res: Response): Promise<voi
             EntityID: department.DepartmentID,
             Details: `Created department: ${DepartmentName}`,
             IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
+            UserAgent: req.get('user-agent') || 'unknown',
+            Severity: 'Info',
+            Status: 'Success'
         });
 
         res.status(201).json({
@@ -360,7 +368,9 @@ export const createProgram = async (req: Request, res: Response): Promise<void> 
             EntityID: program.ProgramID,
             Details: `Created program: ${ProgramName}`,
             IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
+            UserAgent: req.get('user-agent') || 'unknown',
+            Severity: 'Info',
+            Status: 'Success'
         });
 
         res.status(201).json({
@@ -435,7 +445,9 @@ export const createSemester = async (req: Request, res: Response): Promise<void>
             EntityID: semester.SemesterID,
             Details: `Created semester: ${SemesterName}`,
             IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
+            UserAgent: req.get('user-agent') || 'unknown',
+            Severity: 'Info',
+            Status: 'Success'
         });
 
         res.status(201).json({
@@ -511,7 +523,9 @@ export const createSubject = async (req: Request, res: Response): Promise<void> 
             EntityID: subject.SubjectID,
             Details: `Created subject: ${SubjectName}`,
             IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
+            UserAgent: req.get('user-agent') || 'unknown',
+            Severity: 'Info',
+            Status: 'Success'
         });
 
         res.status(201).json({

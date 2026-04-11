@@ -9,6 +9,7 @@ interface CreateExamModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSuccess: () => void;
+    seriesId?: string | number;
 }
 
 interface Subject {
@@ -17,7 +18,7 @@ interface Subject {
     SubjectName: string;
 }
 
-const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSuccess }) => {
+const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSuccess, seriesId }) => {
     const [loading, setLoading] = useState(false);
 
     // Form State
@@ -87,13 +88,19 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
 
         setLoading(true);
         try {
-            await ExamService.create({
+            const payload: any = {
                 ExamName: formData.ExamName,
                 SubjectID: parseInt(formData.SubjectID),
                 ExamDate: formData.ExamDate,
                 Session: formData.Session,
                 Duration: parseInt(formData.Duration)
-            });
+            };
+
+            if (seriesId) {
+                payload.ExamSeriesID = parseInt(seriesId.toString());
+            }
+
+            await ExamService.create(payload);
             toast.success("Schedule Published Successfully!");
             onSuccess();
             onClose();

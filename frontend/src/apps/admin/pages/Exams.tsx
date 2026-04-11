@@ -397,6 +397,7 @@ const Exams: React.FC = () => {
                 isOpen={isCreateModalOpen}
                 onClose={() => setIsCreateModalOpen(false)}
                 onSuccess={fetchData}
+                seriesId={seriesId}
             />
 
             {/* Edit Modal */}
