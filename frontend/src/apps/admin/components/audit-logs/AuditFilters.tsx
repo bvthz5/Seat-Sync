@@ -25,7 +25,7 @@ export const AuditFilters: React.FC<AuditFiltersProps> = ({ filters, onFilterCha
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                 {/* Search */}
                 <div className="md:col-span-4 flex flex-col gap-1.5">
-                    <label htmlFor="search-input" className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Log Search</label>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Log Search</label>
                     <Input aria-label="Log Search" id="search-input"
                         name="search"
                         
@@ -44,7 +44,7 @@ export const AuditFilters: React.FC<AuditFiltersProps> = ({ filters, onFilterCha
 
                 {/* Role Filter */}
                 <div className="md:col-span-2 flex flex-col gap-1.5">
-                    <label htmlFor="role-select" className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Actor Role</label>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Actor Role</label>
                     <Select aria-label="Actor Role" id="role-select"
                         name="role"
                         
@@ -76,7 +76,7 @@ export const AuditFilters: React.FC<AuditFiltersProps> = ({ filters, onFilterCha
 
                 {/* Action Type */}
                 <div className="md:col-span-3 flex flex-col gap-1.5">
-                    <label htmlFor="action-input" className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Action Type</label>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Action Type</label>
                     <Input aria-label="Action Type" id="action-input"
                         name="action"
                         
@@ -94,7 +94,7 @@ export const AuditFilters: React.FC<AuditFiltersProps> = ({ filters, onFilterCha
 
                 {/* Severity */}
                 <div className="md:col-span-2 flex flex-col gap-1.5">
-                    <label htmlFor="severity-select" className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Severity</label>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Severity</label>
                     <Select aria-label="Severity" id="severity-select"
                         name="severity"
                         

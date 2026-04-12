@@ -289,7 +289,7 @@ const InvigilatorRequest: React.FC = () => {
                             
                             <div className="grid grid-cols-1 gap-6">
                                 <div>
-                                    <label htmlFor="facultyId" className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.FacultyID && touchedFields.has('FacultyID') ? 'text-red-600' : 'text-slate-400'}`}>
+                                    <label className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.FacultyID && touchedFields.has('FacultyID') ? 'text-red-600' : 'text-slate-400'}`}>
                                         Staff / Faculty ID <span className="text-rose-400">*</span>
                                     </label>
                                     <div className="relative h-14">
@@ -318,7 +318,7 @@ const InvigilatorRequest: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label htmlFor="fullName" className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Name && touchedFields.has('Name') ? 'text-red-600' : 'text-slate-400'}`}>
+                                    <label className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Name && touchedFields.has('Name') ? 'text-red-600' : 'text-slate-400'}`}>
                                         Full Name <span className="text-rose-400">*</span>
                                     </label>
                                     <div className="relative h-14">
@@ -347,7 +347,7 @@ const InvigilatorRequest: React.FC = () => {
                                 </div>
                                 
                                 <div>
-                                    <label htmlFor="email" className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Email && touchedFields.has('Email') ? 'text-red-600' : 'text-slate-400'}`}>
+                                    <label className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Email && touchedFields.has('Email') ? 'text-red-600' : 'text-slate-400'}`}>
                                         Official Email <span className="text-rose-400">*</span>
                                     </label>
                                     <div className="relative h-14">
@@ -376,7 +376,7 @@ const InvigilatorRequest: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label htmlFor="department" className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Department && touchedFields.has('Department') ? 'text-red-600' : 'text-slate-400'}`}>
+                                    <label className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Department && touchedFields.has('Department') ? 'text-red-600' : 'text-slate-400'}`}>
                                         Department <span className="text-rose-400">*</span>
                                     </label>
                                     <input type="hidden" id="department" name="department" value={formData.Department} />
@@ -459,7 +459,7 @@ const InvigilatorRequest: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label htmlFor="phone" className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Phone && touchedFields.has('Phone') ? 'text-red-600' : 'text-slate-400'}`}>
+                                    <label className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Phone && touchedFields.has('Phone') ? 'text-red-600' : 'text-slate-400'}`}>
                                         Phone
                                     </label>
                                     <div className="relative h-14">
@@ -486,7 +486,7 @@ const InvigilatorRequest: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label htmlFor="reason" className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Reason && touchedFields.has('Reason') ? 'text-red-600' : 'text-slate-400'}`}>
+                                    <label className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Reason && touchedFields.has('Reason') ? 'text-red-600' : 'text-slate-400'}`}>
                                         Reason for joining
                                     </label>
                                     <div className={`relative border rounded-xl transition-all overflow-hidden ${errors.Reason && touchedFields.has('Reason') ? 'border-red-500' : 'border-slate-200'}`}>

@@ -6,6 +6,8 @@ import {
     bulkCreateRooms,
     updateRoom,
     disableRoom,
+    enableRoom,
+    deleteRoom,
     autoZoneRoom
 } from "../controllers/room.controller.js";
 
@@ -214,6 +216,8 @@ router.put("/:roomId", AuthMiddleware.requireRootAuth, updateRoom);
  *         description: Room not found
  */
 router.patch("/:roomId/disable", AuthMiddleware.requireRootAuth, disableRoom);
+router.patch("/:roomId/enable", AuthMiddleware.requireRootAuth, enableRoom);
+router.delete("/:id", AuthMiddleware.requireRootAuth, deleteRoom);
 
 /**
  * @swagger

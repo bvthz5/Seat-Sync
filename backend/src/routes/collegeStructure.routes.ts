@@ -495,31 +495,6 @@ router.post("/rooms/bulk", bulkCreateRooms);
  */
 router.put("/rooms/:id", updateRoom);
 
-/**
- * @swagger
- * /api/admin/college-structure/rooms/{id}:
- *   delete:
- *     summary: Delete a room
- *     tags: [Structure]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Room ID
- *     responses:
- *       200:
- *         description: Room deleted successfully
- *       400:
- *         description: Cannot delete room with history
- *       500:
- *         description: Server error
- */
-router.delete("/rooms/:id", deleteRoom);
-
 // --- ZONES ---
 router.get("/rooms/:roomId/zones", getZones);
 router.post("/rooms/:roomId/zones", createZone);

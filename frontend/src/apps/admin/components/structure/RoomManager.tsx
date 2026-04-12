@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip, Button, useDisclosure, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Input, Select, SelectItem, Checkbox, Tooltip, Autocomplete, AutocompleteItem } from '@heroui/react';
-import { Plus, Edit, Ban, DoorOpen, Search, Building2, Layers, AlertCircle, AlertTriangle, CheckSquare, Copy, ChevronLeft, ChevronRight, FileSpreadsheet, UploadCloud, Download } from 'lucide-react';  
+import { Plus, Edit, Ban, DoorOpen, Search, Building2, Layers, AlertCircle, AlertTriangle, CheckSquare, Copy, ChevronLeft, ChevronRight, FileSpreadsheet, UploadCloud, Download, CheckCircle2, Trash2 } from 'lucide-react';  
 import { structureService } from '../../services/structureService';
 import * as XLSX from 'xlsx';
 import { Block, Floor, Room } from '../../types/collegeStructure';
@@ -26,7 +26,7 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
     const [totalPages, setTotalPages] = useState(1);
     const [totalItems, setTotalItems] = useState(0);
     const [searchQuery, setSearchQuery] = useState("");
-    const [statusFilter, setStatusFilter] = useState("all");
+    const [statusFilter, setStatusFilter] = useState("Active");  // Default to Active as per requirement
     const [limit] = useState(10);
 
     // --- Modal State ---
@@ -49,6 +49,10 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
         capacity: 40
     });
 
+    // --- Action Confirm Modal State ---
+    const { isOpen: isConfirmOpen, onOpen: onConfirmOpen, onClose: onConfirmClose } = useDisclosure();
+    const [confirmAction, setConfirmAction] = useState<{type: 'delete' | 'disable' | 'enable', roomId: number} | null>(null);
+
     // --- Data Loading ---
 
     useEffect(() => {
@@ -56,20 +60,22 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
     }, []);
 
     useEffect(() => {
-        if (selectedBlockId) {
+        if (selectedBlockId && selectedBlockId !== "all") {
             loadFloors(Number(selectedBlockId));
+        } else {
             setFloors([]);
-            setSelectedFloorId("");
-            setRooms([]);
         }
+        setSelectedFloorId("");
     }, [selectedBlockId]);
 
     useEffect(() => {
-        if (selectedFloorId && selectedBlockId) {
-            loadRooms(Number(selectedBlockId), Number(selectedFloorId), page, searchQuery, statusFilter);
-        } else {
-            setRooms([]);
-        }
+        loadRooms(
+            selectedBlockId && selectedBlockId !== "all" ? Number(selectedBlockId) : undefined, 
+            selectedFloorId && selectedFloorId !== "all" ? Number(selectedFloorId) : undefined, 
+            page, 
+            searchQuery, 
+            statusFilter
+        );
     }, [selectedFloorId, selectedBlockId, page, searchQuery, statusFilter]);
 
     const loadBlocks = async () => {
@@ -78,7 +84,7 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
             const response = await structureService.getBlocks({ limit: 100 });
             const data = response && response.data ? response.data : (Array.isArray(response) ? response : []);
             setBlocks(data);
-            if (data.length > 0 && !selectedBlockId) setSelectedBlockId(data[0].BlockID.toString());
+            // Do not pre-select block so we show all rooms
         } catch (e) {
             console.error("Failed to load blocks", e);
         }
@@ -94,15 +100,15 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
         }
     };
 
-    const loadRooms = async (blockId: number, floorId: number, currentPage = 1, search = "", status = "all") => {
+    const loadRooms = async (blockId?: number, floorId?: number, currentPage = 1, search = "", status = "all") => {
         setLoading(true);
         try {
             const params: any = {
-                floorId,
-                blockId,
                 page: currentPage,
                 limit,
             };
+            if (floorId) params.floorId = floorId;
+            if (blockId) params.blockId = blockId;
             if (search) params.search = search;
             if (status !== "all") params.status = status;
 
@@ -150,19 +156,33 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
         onOpen();
     };
 
-    const handleDisable = async (id: number) => {
-        if (readOnly) return;
-        if (!confirm("Are you sure you want to disable this room? It will be hidden from new allocations.")) return;
+    const openConfirmModal = (type: 'delete' | 'disable' | 'enable', roomId: number) => {
+        setConfirmAction({ type, roomId });
+        onConfirmOpen();
+    };
 
+    const executeConfirmAction = async () => {
+        if (!confirmAction) return;
         try {
-            await structureService.disableRoom(id);
-            toast.success("Room disabled successfully");
+            setLoading(true);
+            if (confirmAction.type === 'delete') {
+                await structureService.deleteRoom(confirmAction.roomId);
+                toast.success("Room deleted successfully");
+            } else if (confirmAction.type === 'disable') {
+                await structureService.disableRoom(confirmAction.roomId);
+                toast.success("Room disabled successfully");
+            } else if (confirmAction.type === 'enable') {
+                await structureService.enableRoom(confirmAction.roomId);
+                toast.success("Room enabled successfully");
+            }
             loadRooms(Number(selectedBlockId), Number(selectedFloorId), page, searchQuery, statusFilter);
         } catch (error: any) {
             toast.error(error.response?.data?.message || "Operation failed");
+        } finally {
+            setLoading(false);
+            onConfirmClose();
         }
     };
-
 
 
     // --- Columns ---
@@ -403,22 +423,31 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                     }
                                 }}
                             >
-                                {(blocks || []).map((b) => (
+                                {[
                                     <AutocompleteItem
-                                        key={b.BlockID}
-                                        textValue={b.BlockName}
-                                        description={`${b.floorCount || 0} floors configured`}
+                                        key="all"
+                                        textValue="All Building Blocks"
                                         startContent={<Building2 size={18} className="text-slate-300 group-data-[hover=true]:text-blue-400" />}
                                     >
-                                        {b.BlockName}
-                                    </AutocompleteItem>
-                                ))}
+                                        All Building Blocks
+                                    </AutocompleteItem>,
+                                    ...(blocks || []).map((b) => (
+                                        <AutocompleteItem
+                                            key={b.BlockID.toString()}
+                                            textValue={b.BlockName}
+                                            description={`${b.floorCount || 0} floors configured`}
+                                            startContent={<Building2 size={18} className="text-slate-300 group-data-[hover=true]:text-blue-400" />}
+                                        >
+                                            {b.BlockName}
+                                        </AutocompleteItem>
+                                    ))
+                                ]}
                             </Autocomplete>
                         </div>
 
                         {/* Floor Selector */}
                         <div className="flex flex-col gap-2 w-full md:w-72">
-                            <label htmlFor="room-floor-select" className={`flex items-center gap-1.5 ml-1 text-[11px] font-bold uppercase tracking-widest ${!selectedBlockId ? 'text-slate-300' : 'text-slate-400'}`}>
+                            <label htmlFor="room-floor-select" className={`flex items-center gap-1.5 ml-1 text-[11px] font-bold uppercase tracking-widest ${(!selectedBlockId || selectedBlockId === 'all') ? 'text-slate-300' : 'text-slate-400'}`}>
                                 <Layers size={12} strokeWidth={2.5} /> Floor Level
                             </label>
                             <Autocomplete
@@ -426,7 +455,7 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                 name="floor-select"
                                 aria-label="Select Floor"
                                 placeholder="Select floor..."
-                                isDisabled={!selectedBlockId}
+                                isDisabled={!selectedBlockId || selectedBlockId === "all"}
                                 variant="bordered"
                                 selectedKey={selectedFloorId}
                                 onSelectionChange={(key) => setSelectedFloorId(key ? key.toString() : "")}
@@ -439,7 +468,7 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                     name: "floor-select",
                                     classNames: {
                                         input: "text-base font-semibold text-slate-700 placeholder:text-slate-400 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0",
-                                        inputWrapper: `h-[52px] rounded-xl border-1 transition-all duration-200 ${!selectedBlockId ? 'bg-slate-50 border-slate-100 text-slate-300' : 'bg-white border-slate-200 hover:border-blue-400 group-data-[focus=true]:border-blue-600 group-data-[focus=true]:shadow-md shadow-sm'}`
+                                        inputWrapper: `h-[52px] rounded-xl border-1 transition-all duration-200 ${(!selectedBlockId || selectedBlockId === 'all') ? 'bg-slate-50 border-slate-100 text-slate-300' : 'bg-white border-slate-200 hover:border-blue-400 group-data-[focus=true]:border-blue-600 group-data-[focus=true]:shadow-md shadow-sm'}`
                                     }
                                 }}
                                 listboxProps={{
@@ -455,30 +484,44 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                     }
                                 }}
                             >
-                                {(floors || []).map((f) => (
+                                {[
                                     <AutocompleteItem
-                                        key={f.FloorID}
-                                        textValue={`Floor ${f.FloorNumber}`}
+                                        key="all"
+                                        textValue="All Floors"
                                         startContent={<Layers size={18} className="text-slate-300 group-data-[hover=true]:text-indigo-400" />}
                                     >
-                                        {`Floor ${f.FloorNumber}`}
-                                    </AutocompleteItem>
-                                ))}
+                                        All Floors
+                                    </AutocompleteItem>,
+                                    ...(floors || []).map((f) => (
+                                        <AutocompleteItem
+                                            key={f.FloorID.toString()}
+                                            textValue={`Floor ${f.FloorNumber}`}
+                                            startContent={<Layers size={18} className="text-slate-300 group-data-[hover=true]:text-indigo-400" />}
+                                        >
+                                            {`Floor ${f.FloorNumber}`}
+                                        </AutocompleteItem>
+                                    ))
+                                ]}
                             </Autocomplete>
                         </div>
                     </div>
 
                     {!readOnly && (
                         <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto z-10">
-                            <Button
-                                onPress={() => handleOpen()}
-                                color="primary"
-                                size="lg"
-                                startContent={<Plus size={20} strokeWidth={2.5} />}
-                                className="font-bold shadow-lg shadow-blue-600/20 rounded-xl h-[52px] px-8 text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:scale-[1.02] transition-transform"
-                            >
-                                Add Room
-                            </Button>
+                            <Tooltip content={(!selectedBlockId || selectedBlockId === 'all' || !selectedFloorId || selectedFloorId === 'all') ? "Select a block and floor to add rooms" : ""}>
+                                <div>
+                                    <Button
+                                        onPress={() => handleOpen()}
+                                        color="primary"
+                                        size="lg"
+                                        isDisabled={!selectedBlockId || selectedBlockId === 'all' || !selectedFloorId || selectedFloorId === 'all'}
+                                        startContent={<Plus size={20} strokeWidth={2.5} />}
+                                        className="font-bold shadow-lg shadow-blue-600/20 rounded-xl h-[52px] px-8 text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:scale-[1.02] transition-transform"
+                                    >
+                                        Add Room
+                                    </Button>
+                                </div>
+                            </Tooltip>
                         </div>
                     )}
                 </div>
@@ -517,6 +560,18 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                 trigger: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 shadow-sm rounded-xl h-11 transition-all",
                                 selectorIcon: "right-3"
                             }}
+                            popoverProps={{
+                                classNames: {
+                                    base: "before:bg-white",
+                                    content: "bg-white p-1 border border-slate-100 shadow-xl rounded-xl"
+                                }
+                            }}
+                            listboxProps={{
+                                itemClasses: {
+                                    base: "rounded-lg data-[hover=true]:bg-blue-50 data-[hover=true]:text-blue-600 px-3 py-2 transition-colors",
+                                    title: "font-medium text-slate-700"
+                                }
+                            }}
                         >
                             <SelectItem key="all" textValue="All Status">All Status</SelectItem>
                             <SelectItem key="Active" textValue="Active">Active</SelectItem>
@@ -549,7 +604,35 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                             <StatusBadge status={room.Status} />
                                         </div>
                                     </TableCell>
-                                    <TableCell>{!readOnly && (<div className="flex justify-end gap-2"><Tooltip content="Edit Room"><Button isIconOnly size="sm" variant="light" onPress={() => handleOpen(room)}><Edit size={18} className="text-slate-400 hover:text-blue-600" /></Button></Tooltip><Tooltip content="Disable Room"><Button isIconOnly size="sm" variant="light" color="danger" onPress={() => handleDisable(room.RoomID)}><Ban size={18} className="text-slate-400 hover:text-red-600" /></Button></Tooltip></div>)}</TableCell>
+                                    <TableCell>
+                                        {!readOnly && (
+                                            <div className="flex items-center justify-end gap-2">
+                                                <Tooltip content="Edit Room">
+                                                    <Button isIconOnly size="sm" variant="light" onPress={() => handleOpen(room)}>
+                                                        <Edit size={18} className="text-slate-400 hover:text-blue-600" />
+                                                    </Button>
+                                                </Tooltip>
+                                                {room.Status === 'Active' ? (
+                                                    <Tooltip content="Disable Room">
+                                                        <Button isIconOnly size="sm" variant="light" color="warning" onPress={() => openConfirmModal('disable', room.RoomID)}>
+                                                            <Ban size={18} className="text-slate-400 hover:text-warning-600" />
+                                                        </Button>
+                                                    </Tooltip>
+                                                ) : (
+                                                    <Tooltip content="Enable Room">
+                                                        <Button isIconOnly size="sm" variant="light" color="success" onPress={() => openConfirmModal('enable', room.RoomID)}>
+                                                            <CheckCircle2 size={18} className="text-slate-400 hover:text-success-600" />
+                                                        </Button>
+                                                    </Tooltip>
+                                                )}
+                                                <Tooltip content="Delete Room">
+                                                    <Button isIconOnly size="sm" variant="light" color="danger" onPress={() => openConfirmModal('delete', room.RoomID)}>
+                                                        <Trash2 size={18} className="text-slate-400 hover:text-danger-600" />
+                                                    </Button>
+                                                </Tooltip>
+                                            </div>
+                                        )}
+                                    </TableCell>
                                 </TableRow>
                             )}
                         </TableBody>
@@ -845,6 +928,70 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                 <Button color="danger" variant="light" onPress={onClose} className="font-semibold text-slate-500">Cancel</Button>
                                 <Button color="primary" className="font-bold shadow-lg shadow-blue-500/20 rounded-xl h-11 px-6 text-white" onPress={() => handleSubmit(onClose)} isDisabled={loading || (isBulkMode && previewRooms.length === 0)}>
                                     {editingRoom ? "Update Room" : (isBulkMode ? `Create ${previewRooms.length} Rooms` : "Create Room")}
+                                </Button>
+                            </ModalFooter>
+                        </>
+                    )}
+                </ModalContent>
+            </Modal>
+            {/* Confirmation Modal */}
+            <Modal isOpen={isConfirmOpen} onClose={onConfirmClose} size="md" backdrop="blur" classNames={{
+                base: confirmAction?.type === 'delete' ? 'border-danger-200' : confirmAction?.type === 'disable' ? 'border-warning-200' : 'border-success-200'
+            }}>
+                <ModalContent>
+                    {(onClose) => (
+                        <>
+                            <ModalHeader className="flex flex-col gap-1 pb-2">
+                                <h2 className={`text-xl font-bold tracking-tight ${
+                                    confirmAction?.type === 'delete' ? 'text-danger-600' : 
+                                    confirmAction?.type === 'disable' ? 'text-warning-600' : 
+                                    'text-success-600'
+                                }`}>
+                                    Confirm {confirmAction?.type === 'delete' ? 'Delete' : confirmAction?.type === 'disable' ? 'Disable' : 'Enable'} Room
+                                </h2>
+                            </ModalHeader>
+                            <ModalBody className="py-4">
+                                <form>
+                                    <div className="flex gap-4 items-start">
+                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                                            confirmAction?.type === 'delete' ? 'bg-danger-100 text-danger-600' : 
+                                            confirmAction?.type === 'disable' ? 'bg-warning-100 text-warning-600' : 
+                                            'bg-success-100 text-success-600'
+                                        }`}>
+                                            {confirmAction?.type === 'delete' ? <Trash2 size={20} /> : confirmAction?.type === 'disable' ? <Ban size={20} /> : <CheckCircle2 size={20} />}
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <p className="text-slate-700 font-medium">
+                                                Are you sure you want to {confirmAction?.type} this room?
+                                            </p>
+                                            <p className="text-slate-500 text-sm mt-1">
+                                                {confirmAction?.type === 'delete' 
+                                                    ? 'This action cannot be undone and will permanently remove the room.' 
+                                                    : confirmAction?.type === 'disable'
+                                                        ? 'This will prevent the room from being used in future exam allocations.'
+                                                        : 'This will make the room available for future exam allocations.'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Hidden submit button to allow Enter key to work */}
+                                    <button type="submit" className="hidden" onClick={(e) => {
+                                        e.preventDefault();
+                                        executeConfirmAction();
+                                    }} />
+                                </form>
+                            </ModalBody>
+                            <ModalFooter className="border-t border-slate-100 mt-2">
+                                <Button variant="flat" color="default" onPress={onClose} className="font-semibold text-slate-600">
+                                    Cancel
+                                </Button>
+                                <Button 
+                                    color={confirmAction?.type === 'delete' ? 'danger' : confirmAction?.type === 'disable' ? 'warning' : 'success'} 
+                                    onPress={executeConfirmAction} 
+                                    className="font-bold shadow-sm"
+                                    isLoading={loading}
+                                >
+                                    Yes, {confirmAction?.type === 'delete' ? 'Delete Room' : confirmAction?.type === 'disable' ? 'Disable Room' : 'Enable Room'}
                                 </Button>
                             </ModalFooter>
                         </>

@@ -218,7 +218,7 @@ const StudentLogin: React.FC = () => {
 
                         <div className="space-y-5">
                             <div className="group">
-                                <label htmlFor="student-identifier" className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
                                     {loginMethod === 'email' ? 'Official Student Email' : 'Register Number'}
                                 </label>
                                 <div className="relative flex items-center transition-all duration-300">
@@ -240,7 +240,7 @@ const StudentLogin: React.FC = () => {
                             </div>
 
                             <div className="group">
-                                <label htmlFor="student-password" className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
                                     Access Password
                                 </label>
                                 <div className="relative flex items-center transition-all duration-300">

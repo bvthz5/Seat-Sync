@@ -107,7 +107,7 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
 
                             {/* Exam Name */}
                             <div>
-                                <label htmlFor="edit-exam-name" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Exam Name</label>
+                                <label className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Exam Name</label>
                                 <Input aria-label="e.g. End Semester Exam" id="edit-exam-name"
                                     name="ExamName"
                                     autoComplete="off"
@@ -128,7 +128,7 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
                             {/* Date & Session */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <label htmlFor="edit-exam-date" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Date</label>
+                                    <label className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Date</label>
                                     <Input
                                         id="edit-exam-date"
                                         type="date"
@@ -150,7 +150,7 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
                                 <div>
                                     <span className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-3">Session</span>
                                     <div className="flex gap-6 h-[48px] items-center">
-                                        <label htmlFor="session-fn" className="flex items-center gap-2 cursor-pointer group">
+                                        <label className="flex items-center gap-2 cursor-pointer group">
                                             <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${formData.Session === 'FN' ? 'border-blue-600 bg-white' : 'border-gray-300 bg-white group-hover:border-gray-400'}`}>
                                                 {formData.Session === 'FN' && <div className="w-2.5 h-2.5 bg-blue-600 rounded-full" />}
                                             </div>
@@ -161,7 +161,7 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
                                             </div>
                                         </label>
 
-                                        <label htmlFor="session-an" className="flex items-center gap-2 cursor-pointer group">
+                                        <label className="flex items-center gap-2 cursor-pointer group">
                                             <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${formData.Session === 'AN' ? 'border-blue-600 bg-white' : 'border-gray-300 bg-white group-hover:border-gray-400'}`}>
                                                 {formData.Session === 'AN' && <div className="w-2.5 h-2.5 bg-blue-600 rounded-full" />}
                                             </div>
@@ -177,7 +177,7 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
 
                             {/* Duration */}
                             <div>
-                                <label htmlFor="edit-exam-duration" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Duration (Minutes)</label>
+                                <label className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Duration (Minutes)</label>
                                 <Input
                                     id="edit-exam-duration"
                                     type="number"

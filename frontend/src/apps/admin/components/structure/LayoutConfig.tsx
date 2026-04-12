@@ -453,27 +453,27 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                         <CardBody className="p-6 flex flex-col gap-8">
                             <div className="space-y-5">
                                 <div className="flex flex-col gap-2">
-                                    <label className="text-sm font-semibold text-slate-700 flex items-center gap-2 px-1">
+                                    <label htmlFor="select-block" className="text-sm font-semibold text-slate-700 flex items-center gap-2 px-1">
                                         <Building size={16} className="text-indigo-500" /> Building Block
                                     </label>
-                                    <Autocomplete aria-label="Building Block" placeholder="Select a block..." size="md" variant="bordered" selectedKey={selectedBlockId} onSelectionChange={(k) => setSelectedBlockId(k as string)} popoverProps={{ classNames: { content: "bg-white border border-slate-200 shadow-xl rounded-xl z-50 p-1" } }} inputProps={{ classNames: { inputWrapper: "bg-white hover:bg-slate-50 transition-colors shadow-sm" } }}>
+                                    <Autocomplete id="select-block" aria-label="Building Block" placeholder="Select a block..." size="md" variant="bordered" selectedKey={selectedBlockId} onSelectionChange={(k) => setSelectedBlockId(k as string)} popoverProps={{ classNames: { content: "bg-white border border-slate-200 shadow-xl rounded-xl z-50 p-1" } }} inputProps={{ classNames: { inputWrapper: "bg-white hover:bg-slate-50 transition-colors shadow-sm" } }}>
                                         {blocks.map(b => <AutocompleteItem key={b.BlockID} textValue={b.BlockName} className="text-slate-700 data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700">{b.BlockName}</AutocompleteItem>)}
                                     </Autocomplete>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="flex flex-col gap-2">
-                                        <label className="text-sm font-semibold text-slate-700 flex items-center gap-2 px-1">
+                                        <label htmlFor="select-floor" className="text-sm font-semibold text-slate-700 flex items-center gap-2 px-1">
                                             <Layers size={16} className="text-indigo-500" /> Floor
                                         </label>
-                                        <Autocomplete aria-label="Floor" placeholder="Select floor..." isDisabled={!selectedBlockId} size="md" variant="bordered" selectedKey={selectedFloorId} onSelectionChange={(k) => setSelectedFloorId(k as string)} popoverProps={{ classNames: { content: "bg-white border border-slate-200 shadow-xl rounded-xl z-50 p-1" } }} inputProps={{ classNames: { inputWrapper: "bg-white hover:bg-slate-50 transition-colors shadow-sm" } }}>
+                                        <Autocomplete id="select-floor" aria-label="Floor" placeholder="Select floor..." isDisabled={!selectedBlockId} size="md" variant="bordered" selectedKey={selectedFloorId} onSelectionChange={(k) => setSelectedFloorId(k as string)} popoverProps={{ classNames: { content: "bg-white border border-slate-200 shadow-xl rounded-xl z-50 p-1" } }} inputProps={{ classNames: { inputWrapper: "bg-white hover:bg-slate-50 transition-colors shadow-sm" } }}>
                                             {floors.map(f => <AutocompleteItem key={f.FloorID} textValue={`Floor ${f.FloorNumber}`} className="text-slate-700 data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700">{`Floor ${f.FloorNumber}`}</AutocompleteItem>)}
                                         </Autocomplete>
                                     </div>
                                     <div className="flex flex-col gap-2">
-                                        <label className="text-sm font-semibold text-slate-700 flex items-center gap-2 px-1">
+                                        <label htmlFor="select-room" className="text-sm font-semibold text-slate-700 flex items-center gap-2 px-1">
                                             <DoorOpen size={16} className="text-indigo-500" /> Room
                                         </label>
-                                        <Autocomplete aria-label="Room" placeholder="Select room..." isDisabled={!selectedFloorId} size="md" variant="bordered" selectedKey={selectedRoomId} onSelectionChange={(k) => setSelectedRoomId(k as string)} popoverProps={{ classNames: { content: "bg-white border border-slate-200 shadow-xl rounded-xl z-50 p-1" } }} inputProps={{ classNames: { inputWrapper: "bg-white hover:bg-slate-50 transition-colors shadow-sm" } }}>
+                                        <Autocomplete id="select-room" aria-label="Room" placeholder="Select room..." isDisabled={!selectedFloorId} size="md" variant="bordered" selectedKey={selectedRoomId} onSelectionChange={(k) => setSelectedRoomId(k as string)} popoverProps={{ classNames: { content: "bg-white border border-slate-200 shadow-xl rounded-xl z-50 p-1" } }} inputProps={{ classNames: { inputWrapper: "bg-white hover:bg-slate-50 transition-colors shadow-sm" } }}>
                                             {rooms.map(r => <AutocompleteItem key={r.RoomID} textValue={r.RoomCode || r.RoomName || 'Room'} className="text-slate-700 data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700">{r.RoomCode || r.RoomName}</AutocompleteItem>)}
                                         </Autocomplete>
                                     </div>
@@ -488,19 +488,19 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                         <div className="space-y-6">
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div className="flex flex-col gap-2">
-                                                    <label className="text-sm font-semibold text-slate-700 flex items-center gap-2 px-1">
+                                                    <label htmlFor="select-room-type" className="text-sm font-semibold text-slate-700 flex items-center gap-2 px-1">
                                                         <Box size={16} className="text-indigo-500" /> Room Type
                                                     </label>
-                                                    <Select aria-label="Room Type" placeholder="Select Type..." size="md" variant="bordered" selectedKeys={[config.roomType]} onChange={(e) => setConfig({ ...config, roomType: e.target.value as RoomType })} classNames={{ trigger: "bg-white hover:bg-slate-50 transition-colors shadow-sm", popoverContent: "bg-white border border-slate-200 shadow-xl rounded-xl z-50 p-1" }}>
+                                                    <Select id="select-room-type" aria-label="Room Type" placeholder="Select Type..." size="md" variant="bordered" selectedKeys={[config.roomType]} onChange={(e) => setConfig({ ...config, roomType: e.target.value as RoomType })} classNames={{ trigger: "bg-white hover:bg-slate-50 transition-colors shadow-sm", popoverContent: "bg-white border border-slate-200 shadow-xl rounded-xl z-50 p-1" }}>
                                                         <SelectItem key="ROOM" className="text-slate-700 data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700">Classroom</SelectItem>
                                                         <SelectItem key="HALL" className="text-slate-700 data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700">Exam Hall</SelectItem>
                                                     </Select>
                                                 </div>
                                                 <div className="flex flex-col gap-2">
-                                                    <label className="text-sm font-semibold text-slate-700 flex items-center gap-2 px-1">
+                                                    <label htmlFor="select-bench-mode" className="text-sm font-semibold text-slate-700 flex items-center gap-2 px-1">
                                                         <Grid size={16} className="text-indigo-500" /> Bench Mode
                                                     </label>
-                                                    <Select aria-label="Bench Mode" placeholder="Select Mode..." size="md" variant="bordered" selectedKeys={[config.benchMode]} onChange={(e) => setConfig({ ...config, benchMode: e.target.value as BenchMode })} classNames={{ trigger: "bg-white hover:bg-slate-50 transition-colors shadow-sm", popoverContent: "bg-white border border-slate-200 shadow-xl rounded-xl z-50 p-1" }}>
+                                                    <Select id="select-bench-mode" aria-label="Bench Mode" placeholder="Select Mode..." size="md" variant="bordered" selectedKeys={[config.benchMode]} onChange={(e) => setConfig({ ...config, benchMode: e.target.value as BenchMode })} classNames={{ trigger: "bg-white hover:bg-slate-50 transition-colors shadow-sm", popoverContent: "bg-white border border-slate-200 shadow-xl rounded-xl z-50 p-1" }}>
                                                         <SelectItem key="PAIRED" className="text-slate-700 data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700">Standard</SelectItem>
                                                         <SelectItem key="ALTERNATING" className="text-slate-700 data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700">Split Logic</SelectItem>
                                                     </Select>

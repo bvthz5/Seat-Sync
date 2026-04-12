@@ -160,7 +160,7 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                 {/* Exam Series Selection */}
                                 <div className="space-y-2">
                                     <div className="flex justify-between items-end">
-                                        <label htmlFor="import-series-select" className="block text-sm font-medium text-slate-700">
+                                        <label className="block text-sm font-medium text-slate-700">
                                             Target Exam Series <span className="text-red-500">*</span>
                                         </label>
                                     </div>
@@ -192,7 +192,7 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
 
                                 {/* Exam Series Title Input */}
                                 <div>
-                                    <label htmlFor="examTitle" className="block text-sm font-medium text-slate-700 mb-1">
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">
                                         Exam Name Prefix (Optional)
                                     </label>
                                     <input id="examTitle"
@@ -238,7 +238,6 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                         id="file-upload"
                                     />
                                     <label
-                                        htmlFor="file-upload"
                                         className={`
                                             flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer transition-all
                                             ${selectedFile

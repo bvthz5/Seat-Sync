@@ -125,7 +125,7 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
 
                     {/* Faculty ID */}
                     <div className="space-y-1.5">
-                        <label htmlFor="facultyId" className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                             <Hash size={10} /> Staff / Faculty ID <span className="text-rose-400">*</span>
                         </label>
                         <input
@@ -143,7 +143,7 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
 
                     {/* Email */}
                     <div className="space-y-1.5">
-                        <label htmlFor="email" className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                             <Hash size={10} /> Email Address <span className="text-rose-400">*</span>
                         </label>
                         <input
@@ -161,7 +161,7 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
 
                     {/* Name */}
                     <div className="space-y-1.5">
-                        <label htmlFor="fullName" className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                             <User size={10} /> Full Name <span className="text-rose-400">*</span>
                         </label>
                         <input
@@ -179,7 +179,7 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
 
                     {/* Department */}
                     <div className="space-y-1.5">
-                        <label htmlFor="department" className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                             <Building2 size={10} /> Department <span className="text-rose-400">*</span>
                         </label>
                         <select
@@ -201,7 +201,7 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
 
                     {/* Phone */}
                     <div className="space-y-1.5">
-                        <label htmlFor="phone" className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                             <Briefcase size={10} /> Phone <span className="text-slate-300 font-normal normal-case tracking-normal">optional</span>
                         </label>
                         <input
@@ -218,7 +218,7 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
 
                     {/* Designation */}
                     <div className="space-y-1.5">
-                        <label htmlFor="designation" className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                             <Briefcase size={10} /> Designation <span className="text-slate-300 font-normal normal-case tracking-normal">optional</span>
                         </label>
                         <input

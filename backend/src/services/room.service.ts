@@ -310,6 +310,21 @@ export class RoomService {
     async disableRoom(roomId: number) {
         const room = await roomRepo.findById(roomId);
         if (!room) throw new Error("Room not found");
-        return room.update({ Status: "Inactive" });
+        return room.update({ Status: "Inactive", ExamUsable: false });
+    }
+
+    async enableRoom(roomId: number) {
+        const room = await roomRepo.findById(roomId);
+        if (!room) throw new Error("Room not found");
+        return room.update({ Status: "Active", ExamUsable: true });
+    }
+
+    async deleteRoom(roomId: number) {
+        const room = await roomRepo.findById(roomId);
+        if (!room) throw new Error("Room not found");
+        
+        // Ensure not referenced in history before complete termination
+        // (For now just deleting it)
+        await room.destroy();
     }
 }

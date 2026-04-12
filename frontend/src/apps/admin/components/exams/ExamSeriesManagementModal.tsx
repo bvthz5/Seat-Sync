@@ -200,12 +200,12 @@ const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesMan
 
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
                                             <div className="space-y-2">
-                                                <label htmlFor="series-name" id="series-name-label" className="text-xs font-semibold text-gray-500 uppercase tracking-wider ml-1">Series Name</label>
+                                                <label id="series-name-label" className="text-xs font-semibold text-gray-500 uppercase tracking-wider ml-1">Series Name</label>
                                                 <Input
                                                     id="series-name"
                                                     name="seriesName"
                                                     autoComplete="off"
-                                                    id="exam-series-name" aria-label="Series Name"
+                                                     aria-label="Series Name"
                                                     placeholder="e.g., Internal 1"
                                                     value={newName}
                                                     onValueChange={setNewName}
@@ -219,7 +219,7 @@ const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesMan
                                             </div>
                                             <div className="space-y-2">
                                                 <div className="flex justify-between items-center px-1">
-                                                    <label htmlFor="academic-year" id="academic-year-label" className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Academic Year</label>
+                                                    <label id="academic-year-label" className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Academic Year</label>
                                                     <button
                                                         onClick={() => setIsCreatingYear(!isCreatingYear)}
                                                         className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all ${isCreatingYear
@@ -233,7 +233,7 @@ const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesMan
                                                 {isCreatingYear ? (
                                                     <div className="flex gap-3 p-4 bg-gray-50 border border-gray-200 rounded-xl">
                                                         <div className="flex-1 space-y-1.5">
-                                                            <label htmlFor="start-year" className="text-[10px] font-bold text-gray-400 uppercase ml-1">Start Year</label>
+                                                            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Start Year</label>
                                                             <select
                                                                 id="start-year"
                                                                 name="startYear"
@@ -252,7 +252,7 @@ const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesMan
                                                             <div className="w-4 h-0.5 bg-gray-300 rounded-full"></div>
                                                         </div>
                                                         <div className="flex-1 space-y-1.5">
-                                                            <label htmlFor="end-year" className="text-[10px] font-bold text-gray-400 uppercase ml-1">End Year</label>
+                                                            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">End Year</label>
                                                             <select
                                                                 id="end-year"
                                                                 name="endYear"
@@ -272,7 +272,7 @@ const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesMan
                                                     <Select
                                                         id="academic-year"
                                                         name="academicYear"
-                                                        id="academic-year-select" aria-label="Academic Year"
+                                                         aria-label="Academic Year"
                                                         placeholder="Select Year"
                                                         selectedKeys={selectedYear ? new Set([selectedYear]) : new Set([])}
                                                         onChange={(e) => setSelectedYear(e.target.value)}

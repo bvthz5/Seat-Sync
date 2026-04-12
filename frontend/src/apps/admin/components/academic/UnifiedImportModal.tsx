@@ -126,7 +126,7 @@ export const UnifiedImportModal = ({ isOpen, onOpenChange, onSuccess }: UnifiedI
                                             className="hidden"
                                             id="file-upload"
                                         />
-                                        <label htmlFor="file-upload" className="cursor-pointer">
+                                        <label className="cursor-pointer">
                                             <Upload className="mx-auto text-slate-400 mb-2" size={40} />
                                             {selectedFile ? (
                                                 <div>

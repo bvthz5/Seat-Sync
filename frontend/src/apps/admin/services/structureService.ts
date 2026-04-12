@@ -70,18 +70,11 @@ export const structureService = {
     disableRoom: async (id: number) => {
         await api.patch(`/rooms/${id}/disable`);
     },
+    enableRoom: async (id: number) => {
+        await api.patch(`/rooms/${id}/enable`);
+    },
     deleteRoom: async (id: number) => {
-        // Using disable instead of delete as per new requirement, 
-        // OR keeping delete if backend supports it. New backend doesn't implement DELETE.
-        // I will map delete to disable for safety or assume delete is not supported.
-        // Actually, let's keep it calling the OLD delete endpoint if strictly needed, 
-        // OR warn. But since I'm implementing the prompt which says "Actions (Edit / Disable)",
-        // I should probably remove Delete from UI.
-        // For service completeness, I'll map it to disable or leave it throwing 404 if I removed the route.
-        // The old route /admin/college-structure/rooms/:id DELETE might still work if I kept the file.
-        // I'll leave it as is pointing to OLD prefix for physical delete if needed, or update to disable.
-        // I'll point it to disable.
-        await api.patch(`/rooms/${id}/disable`);
+        await api.delete(`/rooms/${id}`);
     },
 
     // --- LAYOUT ---
@@ -121,7 +114,7 @@ export const structureService = {
         formData.append('file', file);
         if (options?.autoZone) formData.append('autoZone', 'true');
         if (options?.zoneCount) formData.append('zoneCount', options.zoneCount.toString());
-        const response = await api.post<{ blocksCreated: number, floorsCreated: number, roomsCreated: number }>(`/college-structure/import/csv`, formData, {
+        const response = await api.post<{ blocksCreated: number, floorsCreated: number, roomsCreated: number, roomsUpdated?: number }>(`/college-structure/import/csv`, formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
             },

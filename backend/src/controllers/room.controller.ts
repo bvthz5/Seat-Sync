@@ -95,6 +95,27 @@ export const disableRoom = async (req: Request, res: Response) => {
     }
 };
 
+export const enableRoom = async (req: Request, res: Response) => {
+    try {
+        const roomId = Number(req.params.roomId);
+        await roomService.enableRoom(roomId);
+        res.json({ message: "Room enabled successfully" });
+    } catch (error: any) {
+        res.status(400).json({ message: error.message });
+    }
+};
+
+export const deleteRoom = async (req: Request, res: Response) => {
+    try {
+        // use params.id mapped to API /:id earlier
+        const roomId = Number(req.params.id);
+        await roomService.deleteRoom(roomId);
+        res.json({ message: "Room deleted successfully" });
+    } catch (error: any) {
+        res.status(400).json({ message: error.message });
+    }
+};
+
 export const autoZoneRoom = async (req: Request, res: Response) => {
     try {
         const roomId = Number(req.params.roomId);

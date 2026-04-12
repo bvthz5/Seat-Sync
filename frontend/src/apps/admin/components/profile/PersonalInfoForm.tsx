@@ -75,7 +75,7 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ profile, onUpdate }
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Full Name */}
                     <div className="space-y-1 md:col-span-2">
-                        <label htmlFor="profile-fullname" className="block text-sm font-medium text-gray-700">Full Name</label>
+                        <label className="block text-sm font-medium text-gray-700">Full Name</label>
                         <input
                             id="profile-fullname"
                             type="text"
@@ -91,7 +91,7 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ profile, onUpdate }
 
                     {/* College Email (Read-only) */}
                     <div className="space-y-1">
-                        <label htmlFor="profile-email" className="block text-sm font-medium text-gray-500">College Email</label>
+                        <label className="block text-sm font-medium text-gray-500">College Email</label>
                         <input
                             id="profile-email"
                             name="Email"
@@ -105,7 +105,7 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ profile, onUpdate }
 
                     {/* Role (Read-only) */}
                     <div className="space-y-1">
-                        <label htmlFor="profile-role" className="block text-sm font-medium text-gray-500">Role</label>
+                        <label className="block text-sm font-medium text-gray-500">Role</label>
                         <input
                             id="profile-role"
                             name="Role"

@@ -221,7 +221,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Personal Information</h3>
                             <div className="grid grid-cols-2 gap-5">
                                 <div className="space-y-1.5">
-                                    <label htmlFor="full-name" className="text-sm font-semibold text-gray-700 ml-1">
+                                    <label className="text-sm font-semibold text-gray-700 ml-1">
                                         Full Name <span className="text-red-500">*</span>
                                     </label>
                                     <Input aria-label="Input" id="full-name"
@@ -241,7 +241,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                                     />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label htmlFor="college-email" className="text-sm font-semibold text-gray-700 ml-1">
+                                    <label className="text-sm font-semibold text-gray-700 ml-1">
                                         College Email <span className="text-red-500">*</span> <span className="text-green-500 text-xs font-normal">(Credentials sent)</span>
                                     </label>
                                     <Input aria-label="Input" id="college-email"
@@ -270,7 +270,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                             <div className="space-y-5">
                                 <div className="grid grid-cols-2 gap-5">
                                     <div className="space-y-1.5">
-                                        <label htmlFor="register-number" className="text-sm font-semibold text-gray-700 ml-1">
+                                        <label className="text-sm font-semibold text-gray-700 ml-1">
                                             Register Number <span className="text-red-500">*</span>
                                         </label>
                                         <Input aria-label="Input" id="register-number"
@@ -290,7 +290,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                                         />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label htmlFor="batch-year" className="text-sm font-semibold text-gray-700 ml-1">
+                                        <label className="text-sm font-semibold text-gray-700 ml-1">
                                             Batch Year <span className="text-red-500">*</span>
                                         </label>
                                         <Input aria-label="2026" id="batch-year"
@@ -313,7 +313,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
 
                                 <div className="grid grid-cols-2 gap-5">
                                     <div className="space-y-1.5">
-                                        <label htmlFor="department" className="text-sm font-semibold text-gray-700 ml-1">
+                                        <label className="text-sm font-semibold text-gray-700 ml-1">
                                             Department <span className="text-red-500">*</span>
                                         </label>
                                         <select
@@ -332,7 +332,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                                         {errors.DepartmentID && <p className="text-red-500 text-xs font-medium mt-1">{errors.DepartmentID}</p>}
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label htmlFor="program" className="text-sm font-semibold text-gray-700 ml-1">
+                                        <label className="text-sm font-semibold text-gray-700 ml-1">
                                             Program <span className="text-red-500">*</span>
                                         </label>
                                         <select

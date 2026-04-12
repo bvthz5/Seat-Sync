@@ -105,7 +105,7 @@ export const EmergencyPanel: React.FC<EmergencyPanelProps> = ({ examId, examName
                         <button
                             key={t.id}
                             role="tab"
-                              id={`tab-${t.id}`}
+                              
                               aria-selected={tab === t.id}
                             aria-controls={`panel-${t.id}`}
                             id={`tab-${t.id}`}
@@ -134,7 +134,7 @@ export const EmergencyPanel: React.FC<EmergencyPanelProps> = ({ examId, examName
 
                             <div className="space-y-5">
                                 <div className="space-y-2">
-                                    <label htmlFor="target-exam" className="text-sm font-bold text-slate-700 block">Target Exam</label>
+                                    <label className="text-sm font-bold text-slate-700 block">Target Exam</label>
                                     <Input
                                         id="target-exam"
                                         name="target-exam"
@@ -151,7 +151,7 @@ export const EmergencyPanel: React.FC<EmergencyPanelProps> = ({ examId, examName
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label htmlFor="exclude-rooms" className="text-sm font-bold text-slate-700 block">Exclude Room IDs</label>
+                                    <label className="text-sm font-bold text-slate-700 block">Exclude Room IDs</label>
                                     <Input
                                         id="exclude-rooms"
                                         name="exclude-rooms"
@@ -186,7 +186,7 @@ export const EmergencyPanel: React.FC<EmergencyPanelProps> = ({ examId, examName
                             </div>
 
                             <div className="space-y-2">
-                                <label htmlFor="room-id" className="text-sm font-bold text-slate-700 block">Room ID</label>
+                                <label className="text-sm font-bold text-slate-700 block">Room ID</label>
                                 <Input
                                     id="room-id"
                                     name="room-id"
@@ -200,7 +200,7 @@ export const EmergencyPanel: React.FC<EmergencyPanelProps> = ({ examId, examName
                             </div>
 
                             <div className="space-y-2">
-                                <label htmlFor="disable-reason" className="text-sm font-bold text-slate-700 block">Reason (Mandatory)</label>
+                                <label className="text-sm font-bold text-slate-700 block">Reason (Mandatory)</label>
                                 <Input
                                     id="disable-reason"
                                     name="disable-reason"
@@ -227,7 +227,7 @@ export const EmergencyPanel: React.FC<EmergencyPanelProps> = ({ examId, examName
                     {tab === 'broadcast' && (
                         <div role="tabpanel" id="panel-broadcast" aria-labelledby="tab-broadcast" className="space-y-6 max-w-xl mx-auto">
                             <div className="space-y-2">
-                                <label htmlFor="target-audience" className="text-sm font-bold text-slate-700 block">Target Audience</label>
+                                <label className="text-sm font-bold text-slate-700 block">Target Audience</label>
                                 <Input
                                     id="target-audience"
                                     name="target-audience"
@@ -243,7 +243,7 @@ export const EmergencyPanel: React.FC<EmergencyPanelProps> = ({ examId, examName
                             </div>
 
                             <div className="space-y-2">
-                                <label htmlFor="audit-message" className="text-sm font-bold text-slate-700 block">Audit Message</label>
+                                <label className="text-sm font-bold text-slate-700 block">Audit Message</label>
                                 <textarea
                                     id="audit-message"
                                     name="audit-message"

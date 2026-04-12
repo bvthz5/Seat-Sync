@@ -400,7 +400,7 @@ const Reports: React.FC = () => {
                                         value={search}
                                         onValueChange={v => { setSearch(v); setPage(1); }}
                                         classNames={{ inputWrapper: 'bg-slate-50 shadow-none border border-slate-100 group-data-[focus=true]:border-indigo-400 rounded-xl h-10', input: 'text-sm' }}
-                                        aria-label="Search records"
+                                        
                                     />
                                     <div className="flex gap-2 flex-wrap">
                                         <Select id="field-6mp8hht" name="field-6mp8hht" aria-label="Department" placeholder="All Departments" size="sm" className="w-44" variant="bordered"

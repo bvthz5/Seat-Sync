@@ -271,12 +271,12 @@ export const getRoomLayout = async (req: Request, res: Response) => {
         if (!room) return res.status(404).json({ message: "Room not found" });
 
         const seats = await Seat.findAll({
-            attributes: ['SeatID', 'RoomID', 'RowLabel', 'BenchNumber', 'SeatNumber', 'IsActive', 'ZoneID'], // Explicitly select ZoneID
+            attributes: ['SeatID', 'RoomID', 'RowIndex', 'BenchIndex', 'SeatIndex', 'IsActive', 'ZoneID'], // Explicitly select ZoneID
             where: { RoomID: roomId },
             order: [
-                ['RowLabel', 'ASC'],
-                ['BenchNumber', 'ASC'],
-                ['SeatNumber', 'ASC']
+                ['RowIndex', 'ASC'],
+                ['BenchIndex', 'ASC'],
+                ['SeatIndex', 'ASC']
             ]
         });
 
@@ -325,8 +325,17 @@ export const createRoom = async (req: Request, res: Response) => {
 
 export const updateRoom = async (req: Request, res: Response) => {
     try {
+        console.log("UPDATE ROOM PAYLOAD:", req.body);
         const id = Number(req.params.id);
-        const { RoomCode, Status, ExamUsable, TotalRows, BenchesPerRow, SeatsPerBench, Capacity, RoomType, RowLayout } = req.body;
+        const RoomCode = req.body.RoomCode || req.body.roomCode;
+        const Status = req.body.Status || req.body.status;
+        const ExamUsable = req.body.ExamUsable !== undefined ? req.body.ExamUsable : req.body.examUsable;
+        const TotalRows = req.body.TotalRows || req.body.totalRows;
+        const BenchesPerRow = req.body.BenchesPerRow || req.body.benchesPerRow;
+        const SeatsPerBench = req.body.SeatsPerBench !== undefined ? req.body.SeatsPerBench : req.body.seatsPerBench;
+        const Capacity = req.body.Capacity !== undefined ? req.body.Capacity : req.body.capacity;
+        const RoomType = req.body.RoomType || req.body.roomType;
+        const RowLayout = req.body.RowLayout || req.body.rowLayout;
 
         const room = await Room.findByPk(id) as any;
         if (!room) return res.status(404).json({ message: "Room not found" });
@@ -385,6 +394,7 @@ export const updateRoom = async (req: Request, res: Response) => {
 
         res.json(room);
     } catch (error: any) {
+        console.error("updateRoom Error:", error);
         res.status(500).json({ message: error.message });
     }
 };

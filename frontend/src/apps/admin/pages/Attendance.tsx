@@ -360,7 +360,7 @@ const Attendance: React.FC = () => {
                                 inputWrapper: 'bg-gray-50 shadow-none border border-gray-100 group-data-[focus=true]:border-blue-400 rounded-xl h-10',
                                 input: 'text-sm text-gray-700',
                             }}
-                            aria-label="Search attendance"
+                            
                         />
                     </div>
                     <div className="flex items-center gap-2 shrink-0">

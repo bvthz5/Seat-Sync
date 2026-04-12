@@ -330,7 +330,7 @@ const Exams: React.FC = () => {
                             }}
                             selectedKeys={[statusFilter]}
                             onChange={(e) => setStatusFilter(e.target.value)}
-                            aria-label="Filter by Status"
+                            
                             disallowEmptySelection
                         >
                             <SelectItem

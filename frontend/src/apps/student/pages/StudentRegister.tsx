@@ -380,7 +380,7 @@ const StudentRegister: React.FC = () => {
                                 />
                                 
                                 <div className="relative group col-span-1">
-                                    <label htmlFor="BatchYear" className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ml-1 ${errors.BatchYear && touchedFields.has('BatchYear') ? 'text-red-600' : 'text-slate-500'}`}>
+                                    <label className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ml-1 ${errors.BatchYear && touchedFields.has('BatchYear') ? 'text-red-600' : 'text-slate-500'}`}>
                                         Batch Year (Year Joined)
                                     </label>
                                     <div className="relative flex items-center transition-all duration-300">
@@ -415,7 +415,7 @@ const StudentRegister: React.FC = () => {
                                 </div>
 
                                 <div className="relative group col-span-1">
-                                    <label htmlFor="DepartmentID" className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ml-1 ${errors.DepartmentID && touchedFields.has('DepartmentID') ? 'text-red-600' : 'text-slate-500'}`}>
+                                    <label className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ml-1 ${errors.DepartmentID && touchedFields.has('DepartmentID') ? 'text-red-600' : 'text-slate-500'}`}>
                                         Department
                                     </label>
                                     <div className="relative flex items-center transition-all duration-300">
@@ -450,7 +450,7 @@ const StudentRegister: React.FC = () => {
                                 </div>
 
                                 <div className="relative group col-span-1">
-                                    <label htmlFor="ProgramID" className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ml-1 ${errors.ProgramID && touchedFields.has('ProgramID') ? 'text-red-600' : 'text-slate-500'}`}>
+                                    <label className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ml-1 ${errors.ProgramID && touchedFields.has('ProgramID') ? 'text-red-600' : 'text-slate-500'}`}>
                                         Program
                                     </label>
                                     <div className="relative flex items-center transition-all duration-300">

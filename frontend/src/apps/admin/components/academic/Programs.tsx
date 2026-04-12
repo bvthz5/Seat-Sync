@@ -332,7 +332,7 @@ export const Programs: React.FC<ProgramsProps> = ({ academicYearId }) => {
                                         </Select>
                                     </div>
                                     <div>
-                                        <label htmlFor="progCode" className="text-sm font-medium text-slate-700 block mb-1">Program Code</label>
+                                        <label className="text-sm font-medium text-slate-700 block mb-1">Program Code</label>
                                         <input
                                             id="progCode"
                                             name="ProgramCode"
@@ -344,7 +344,7 @@ export const Programs: React.FC<ProgramsProps> = ({ academicYearId }) => {
                                         />
                                     </div>
                                     <div>
-                                        <label htmlFor="progName" className="text-sm font-medium text-slate-700 block mb-1">Program Name</label>
+                                        <label className="text-sm font-medium text-slate-700 block mb-1">Program Name</label>
                                         <input
                                             id="progName"
                                             name="ProgramName"
@@ -356,7 +356,7 @@ export const Programs: React.FC<ProgramsProps> = ({ academicYearId }) => {
                                         />
                                     </div>
                                     <div>
-                                        <label htmlFor="progDuration" className="text-sm font-medium text-slate-700 block mb-1">Duration (Years)</label>
+                                        <label className="text-sm font-medium text-slate-700 block mb-1">Duration (Years)</label>
                                         <input
                                             id="progDuration"
                                             name="DurationYears"

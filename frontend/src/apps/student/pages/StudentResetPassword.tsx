@@ -97,7 +97,7 @@ const StudentResetPassword: React.FC = () => {
 
                 <form onSubmit={handleReset} className="space-y-5">
                     <div className="relative group">
-                        <label htmlFor="reset-token" className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 ml-1">
+                        <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 ml-1">
                                 Reset Token
                             </label>
                         <div className="relative flex items-center transition-all duration-300">
@@ -116,7 +116,7 @@ const StudentResetPassword: React.FC = () => {
                     </div>
 
                     <div className="relative group">
-                        <label htmlFor="new-password" className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 ml-1">
+                        <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 ml-1">
                                 New Password
                             </label>
                         <div className="relative flex items-center transition-all duration-300">
@@ -135,7 +135,7 @@ const StudentResetPassword: React.FC = () => {
                     </div>
 
                     <div className="relative group">
-                        <label htmlFor="confirm-password" className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 ml-1">
+                        <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 ml-1">
                                 Confirm Password
                             </label>
                         <div className="relative flex items-center transition-all duration-300">

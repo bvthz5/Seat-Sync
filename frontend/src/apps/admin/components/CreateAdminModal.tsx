@@ -72,7 +72,7 @@ const CreateAdminModal: React.FC<CreateAdminModalProps> = ({ isOpen, onClose, on
                                 )}
 
                                 <div className="space-y-2">
-                                    <label htmlFor="fullName" className="text-sm font-medium text-slate-700">Full Name</label>
+                                    <label className="text-sm font-medium text-slate-700">Full Name</label>
                                     <div className="relative">
                                         <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                                         <input
@@ -90,7 +90,7 @@ const CreateAdminModal: React.FC<CreateAdminModalProps> = ({ isOpen, onClose, on
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label htmlFor="email" className="text-sm font-medium text-slate-700">Email Address</label>
+                                    <label className="text-sm font-medium text-slate-700">Email Address</label>
                                     <div className="relative">
                                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                                         <input

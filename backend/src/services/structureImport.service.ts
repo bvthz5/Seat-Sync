@@ -9,10 +9,12 @@ interface SheetRow {
     [key: string]: any;
 }
 
+
 interface ImportResult {
     blocksCreated: number;
     floorsCreated: number;
     roomsCreated: number;
+    roomsUpdated?: number;
 }
 
 export class StructureImportService {
@@ -55,18 +57,18 @@ export class StructureImportService {
      * Helper: Identify if headers contain the detailed Excel format
      * with "Room Number with block" or similar merged header format
      */
-    private parseUnifiedFile(fileBuffer: Buffer): { roomName: string; rowLayout: number[]; capacity: number }[] {
+private parseUnifiedFile(fileBuffer: Buffer): { roomName: string; block?: string; floor?: number; rowLayout: number[]; capacity: number }[] {
         const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
         const sheetName = workbook.SheetNames[0];
         if (!sheetName) throw new Error("No sheets found in file");
-        
+
         const sheet = workbook.Sheets[sheetName];
         if (!sheet) throw new Error("Sheet not found");
 
         let rows = XLSX.utils.sheet_to_json<any>(sheet, { defval: null });
         if (!rows || rows.length === 0) throw new Error("File is empty or invalid format.");
 
-        const results: { roomName: string; rowLayout: number[]; capacity: number }[] = [];
+        const results: { roomName: string; block?: string; floor?: number; rowLayout: number[]; capacity: number }[] = [];
         const seenRooms = new Set<string>();
 
         const firstRowHeaders = Object.keys(rows[0]);
@@ -76,27 +78,33 @@ export class StructureImportService {
              if (m && m[1]) colMap.set(m[1].toLowerCase(), h);
         }
 
-        const roomHeader = firstRowHeaders.find(h => h.toLowerCase().includes('room') && (h.toLowerCase().includes('number') || h.toLowerCase().includes('code')));
-        
+        let roomCol = firstRowHeaders.find(h => h.toLowerCase().includes('room') || h.toLowerCase() === 'code' || h.toLowerCase() === 'roomcode' || h.toLowerCase() === 'roomname');
+        let capCol = firstRowHeaders.find(h => h.toLowerCase().includes('capacit') || h.toLowerCase() === 'seats' || h.toLowerCase() === 'cap');
+        let blockCol = firstRowHeaders.find(h => h.toLowerCase().includes('block') || h.toLowerCase() === 'building');
+        let floorCol = firstRowHeaders.find(h => h.toLowerCase().includes('floor') || h.toLowerCase() === 'level');
+
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
             const lineNum = i + 2;
 
             if (Object.keys(row).every(k => !row[k])) continue;
-            
-            // Disregard logic
+
             const disregardTypes = Object.values(row).some(v => typeof v === 'string' && v.includes('//Disregard//'));
             if (disregardTypes) continue;
 
-            let roomName = "";
-            if (roomHeader && row[roomHeader]) {
-               roomName = String(row[roomHeader]).trim();
-            } else if (row['RoomCode']) {
-               roomName = String(row['RoomCode']).trim();
-            }
+            let roomVal = roomCol ? row[roomCol] : (row['RoomCode'] || row['RoomName'] || row['Code']);
+            let capVal = capCol ? row[capCol] : (row['Capacity'] || row['Cap']);
+            let blockVal = blockCol ? row[blockCol] : (row['BlockName'] || row['Block']);
+            let floorVal = floorCol ? row[floorCol] : (row['FloorNumber'] || row['Floor']);
 
-            if (!roomName) continue;
+            if (!roomVal && !capVal) continue;
             
+            let roomName = String(roomVal || '').trim();
+            if (!roomName) continue;
+
+            let blockStr = blockVal ? String(blockVal).trim().toUpperCase() : undefined;
+            let floorNum = floorVal !== null && floorVal !== undefined && !isNaN(Number(floorVal)) ? Math.floor(Number(floorVal)) : undefined;
+
             if (seenRooms.has(roomName.toLowerCase())) {
                 throw new Error(`Row ${lineNum}: Duplicate room name '${roomName}'`);
             }
@@ -114,7 +122,7 @@ export class StructureImportService {
                   }
                }
             } else {
-               const cap = parseInt(row['Capacity']) || 0;
+               const cap = parseInt(capVal) || 0;
                if (cap > 0) {
                    const benches = Math.ceil(cap / 2);
                    const cols = Math.min(benches, 3);
@@ -129,12 +137,15 @@ export class StructureImportService {
                    rCapacity = cap;
                }
             }
-            
+
             if (rowLayout.length > 6) {
                 rowLayout = rowLayout.slice(0, 6);
             }
 
-            results.push({ roomName, rowLayout, capacity: rCapacity });
+            const res:any = { roomName, rowLayout, capacity: rCapacity };
+            if (blockStr !== undefined) res.block = blockStr;
+            if (floorNum !== undefined) res.floor = floorNum;
+            results.push(res);
         }
         
         return results;
@@ -145,11 +156,12 @@ export class StructureImportService {
         try {
             parsedData = await Promise.resolve(this.parseUnifiedFile(fileBuffer));
         } catch(e) { throw e; }
-        
+
         const transaction = await sequelize.transaction();
         let blocksCreated = 0;
         let floorsCreated = 0;
         let roomsCreated = 0;
+        let roomsUpdated = 0;
         const roomsToZone: number[] = [];
 
         try {
@@ -159,9 +171,18 @@ export class StructureImportService {
 
             for (const item of parsedData) {
                 const parsed = this.parseRoomCode(item.roomName);
-                const blockName = parsed.block;
-                const roomCode = String(parsed.roomNumber);
-                const floorNum = parsed.floor;
+                
+                const blockName = item.block || parsed.block;
+                let floorNum = item.floor !== undefined ? item.floor : parsed.floor;
+                
+                let roomCode = item.roomName;
+                if (!item.roomName.includes(blockName)) {
+                    const roomNumber = parsed.roomNumber > 0 ? parsed.roomNumber : (parseInt(item.roomName.replace(/\D/g, '')) || 0);
+                    if (roomNumber > 0) {
+                        roomCode = `${blockName} - ${roomNumber}`;
+                    }
+                }
+
                 const isExamUsable = true;
 
                 let blockId = blockCache.get(blockName.toLowerCase());
@@ -230,8 +251,45 @@ export class StructureImportService {
                     await generateSeats(newRoom, transaction);
                     
                     if (options?.autoZone) roomsToZone.push(newRoom.RoomID);
-                } else if (options?.autoZone) {
-                    roomsToZone.push(existingRoom.RoomID);
+                } else {
+                    // Update existing room if capacity or layout changed
+                    let needsUpdate = false;
+                    
+                    if (existingRoom.Capacity !== item.capacity) {
+                        existingRoom.Capacity = item.capacity;
+                        needsUpdate = true;
+                    }
+
+                    // Check if RowLayout explicitly differs
+                    const currentLayout = existingRoom.RowLayout || [];
+                    const newLayout = item.rowLayout || [];
+                    let layoutChanged = currentLayout.length !== newLayout.length;
+                    if (!layoutChanged) {
+                        for (let i = 0; i < currentLayout.length; i++) {
+                            if (currentLayout[i] !== newLayout[i]) {
+                                layoutChanged = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (layoutChanged) {
+                        existingRoom.RowLayout = newLayout;
+                        needsUpdate = true;
+                    }
+
+                    if (needsUpdate) {
+                        try {
+                            await existingRoom.save({ transaction });
+                            // Re-generate seats efficiently if properties updated
+                            await generateSeats(existingRoom, transaction);
+                            roomsUpdated++;
+                        } catch (err) {
+                            console.error('Update room error', err);
+                        }
+                    }
+
+                    if (options?.autoZone) roomsToZone.push(existingRoom.RoomID);
                 }
             }
 
@@ -252,7 +310,8 @@ export class StructureImportService {
             return {
                 blocksCreated,
                 floorsCreated,
-                roomsCreated
+                roomsCreated,
+                roomsUpdated
             };
         } catch (error) {
             await transaction.rollback();
@@ -260,3 +319,10 @@ export class StructureImportService {
         }
     }
 }
+
+
+
+
+
+
+

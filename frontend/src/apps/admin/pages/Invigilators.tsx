@@ -562,7 +562,7 @@ const Invigilators: React.FC = () => {
                         )}
                     </div>
                     <div className="w-px h-5 bg-slate-200 shrink-0" />
-                    <label htmlFor="deptFilter" className="flex items-center gap-2 shrink-0">
+                    <label className="flex items-center gap-2 shrink-0">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Dept</span>
                         <div className="relative">
                             <select id="deptFilter" name="deptFilter"
@@ -575,7 +575,7 @@ const Invigilators: React.FC = () => {
                         </div>
                     </label>
                     <div className="w-px h-5 bg-slate-200 shrink-0" />
-                    <label htmlFor="statusFilter" className="flex items-center gap-2 shrink-0">
+                    <label className="flex items-center gap-2 shrink-0">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</span>
                         <div className="relative">
                             <select id="statusFilter" name="statusFilter"

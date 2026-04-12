@@ -256,7 +256,7 @@ export const Departments: React.FC<DepartmentsProps> = ({ academicYearId }) => {
                             <ModalBody>
                                 <div className="space-y-4">
                                     <div>
-                                        <label htmlFor="deptCode" className="text-sm font-medium text-slate-700 block mb-1">Department Code</label>
+                                        <label className="text-sm font-medium text-slate-700 block mb-1">Department Code</label>
                                         <input
                                             id="deptCode"
                                             name="DepartmentCode"
@@ -268,7 +268,7 @@ export const Departments: React.FC<DepartmentsProps> = ({ academicYearId }) => {
                                         />
                                     </div>
                                     <div>
-                                        <label htmlFor="deptName" className="text-sm font-medium text-slate-700 block mb-1">Department Name</label>
+                                        <label className="text-sm font-medium text-slate-700 block mb-1">Department Name</label>
                                         <input
                                             id="deptName"
                                             name="DepartmentName"
