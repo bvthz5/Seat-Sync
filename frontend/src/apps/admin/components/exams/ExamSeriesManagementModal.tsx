@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Modal, ModalContent, ModalHeader, ModalBody, Button, Input, Select, SelectItem, Chip } from '@heroui/react';
-import { Plus, Trash2, Calendar, BookOpen, AlertTriangle, X, Sparkles, Edit2, Check } from 'lucide-react';
+import { Modal, ModalContent, ModalHeader, ModalBody, Button, Input, Chip } from '@heroui/react';
+import { Plus, Trash2, BookOpen, AlertTriangle, X, Sparkles, Edit2, Check, ClipboardList } from 'lucide-react';
 import { SeriesService } from '../../services/seriesService';
-import { academicService } from '../../services/academicService';
 import { toast } from 'react-hot-toast';
 
 interface ExamSeriesManagementModalProps {
@@ -13,12 +12,11 @@ interface ExamSeriesManagementModalProps {
 
 const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesManagementModalProps) => {
     const [seriesList, setSeriesList] = useState<any[]>([]);
-    const [years, setYears] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
 
     // Form state
     const [newName, setNewName] = useState('');
-    const [selectedYear, setSelectedYear] = useState<string>('');
+    const [examType, setExamType] = useState<'Internal' | 'EndSemester'>('Internal');
     const [submitting, setSubmitting] = useState(false);
 
     // Delete confirmation state
@@ -27,18 +25,6 @@ const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesMan
     // Edit state
     const [editTarget, setEditTarget] = useState<{ id: number; name: string } | null>(null);
     const [editName, setEditName] = useState('');
-
-    // Integrated Year Creation State
-    const [isCreatingYear, setIsCreatingYear] = useState(false);
-    const [startYear, setStartYear] = useState<string>(new Date().getFullYear().toString());
-    const [endYear, setEndYear] = useState<string>((new Date().getFullYear() + 1).toString());
-    const [newYearName, setNewYearName] = useState<string>("");
-
-    useEffect(() => {
-        if (startYear && endYear) {
-            setNewYearName(`${startYear}-${endYear.slice(-2)}`);
-        }
-    }, [startYear, endYear]);
 
     useEffect(() => {
         if (isOpen) {
@@ -50,58 +36,43 @@ const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesMan
     const fetchInitialData = async () => {
         setLoading(true);
         try {
-            const [seriesRes, yearsRes] = await Promise.all([
-                SeriesService.getAll(),
-                academicService.getYears()
-            ]);
+            const seriesRes = await SeriesService.getAll();
             if (seriesRes.success) setSeriesList(seriesRes.data);
-            setYears(yearsRes.data.data || yearsRes.data);
-            const currentYear = (yearsRes.data.data || yearsRes.data).find((y: any) => y.IsCurrent);
-            if (currentYear) setSelectedYear(String(currentYear.AcademicYearID));
         } catch (error) {
             console.error(error);
-            toast.error("Failed to load data");
+            toast.error("Failed to load series");
         } finally {
             setLoading(false);
         }
     };
 
     const handleCreate = async () => {
-        if (!newName) { toast.error("Series name is required"); return; }
-        if (!isCreatingYear && !selectedYear) { toast.error("Please select an academic year"); return; }
+        if (!newName || newName.trim() === '') { 
+            toast.error("Series name is required"); 
+            return; 
+        }
 
         setSubmitting(true);
         try {
-            let yearID = parseInt(selectedYear);
-
-            if (isCreatingYear) {
-                const yearRes = await academicService.createYear({
-                    YearName: newYearName,
-                    StartDate: `${startYear}-06-01`,
-                    EndDate: `${endYear}-05-31`
-                });
-                if (yearRes.data?.success) {
-                    yearID = (yearRes.data?.data || yearRes.data).AcademicYearID;
-                } else {
-                    throw new Error("Failed to create academic year");
-                }
-            }
-
             const response = await SeriesService.create({
-                SeriesName: newName,
-                AcademicYearID: yearID,
-                Description: `${newName} session`
+                SeriesName: newName.trim(),
+                ExamType: examType
             });
 
+            if (!response.success) {
+                throw new Error(response.message || "Failed to create exam series");
+            }
+
             if (response.success) {
-                toast.success(isCreatingYear ? "Year & Series created" : "Exam series created");
+                toast.success("Exam series created successfully");
                 setNewName('');
-                setIsCreatingYear(false);
+                setExamType('Internal');
                 fetchInitialData();
                 if (onSuccess) onSuccess();
             }
         } catch (error: any) {
-            toast.error(error.response?.data?.message || "Operation failed");
+            console.error('Series creation error:', error);
+            toast.error(error.response?.data?.message || error.message || "Operation failed");
         } finally {
             setSubmitting(false);
         }
@@ -171,7 +142,7 @@ const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesMan
                 }}
             >
                 <ModalContent>
-                    {(onClose) => (
+                    {(onClose: () => void) => (
                         <>
                             <ModalHeader className="flex flex-col gap-1">
                                 <div className="flex items-center gap-3">
@@ -217,81 +188,61 @@ const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesMan
                                                     }}
                                                 />
                                             </div>
+
+                                            {/* Exam Type Selector */}
                                             <div className="space-y-2">
-                                                <div className="flex justify-between items-center px-1">
-                                                    <label id="academic-year-label" className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Academic Year</label>
+                                                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider ml-1">Exam Type</label>
+                                                <div className="flex gap-3">
                                                     <button
-                                                        onClick={() => setIsCreatingYear(!isCreatingYear)}
-                                                        className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all ${isCreatingYear
-                                                            ? 'bg-red-50 text-red-600 hover:bg-red-100'
-                                                            : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}
+                                                        type="button"
+                                                        onClick={() => setExamType('Internal')}
+                                                        className={`flex-1 flex items-center gap-3 p-3.5 rounded-xl border-2 transition-all duration-200 ${
+                                                            examType === 'Internal'
+                                                                ? 'border-blue-500 bg-blue-50/70 shadow-sm shadow-blue-500/10'
+                                                                : 'border-gray-200 bg-gray-50/50 hover:border-gray-300 hover:bg-gray-50'
+                                                        }`}
                                                     >
-                                                        {isCreatingYear ? 'Cancel' : <><Plus size={10} strokeWidth={3} /> Add New</>}
+                                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                                                            examType === 'Internal' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-500'
+                                                        }`}>
+                                                            <ClipboardList size={16} />
+                                                        </div>
+                                                        <div className="text-left">
+                                                            <p className={`text-sm font-bold ${examType === 'Internal' ? 'text-blue-700' : 'text-gray-600'}`}>Internal</p>
+                                                            <p className="text-[10px] text-gray-400 font-medium">Internal Examination</p>
+                                                        </div>
+                                                        {examType === 'Internal' && (
+                                                            <div className="ml-auto w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
+                                                                <Check size={12} className="text-white" strokeWidth={3} />
+                                                            </div>
+                                                        )}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setExamType('EndSemester')}
+                                                        className={`flex-1 flex items-center gap-3 p-3.5 rounded-xl border-2 transition-all duration-200 ${
+                                                            examType === 'EndSemester'
+                                                                ? 'border-indigo-500 bg-indigo-50/70 shadow-sm shadow-indigo-500/10'
+                                                                : 'border-gray-200 bg-gray-50/50 hover:border-gray-300 hover:bg-gray-50'
+                                                        }`}
+                                                    >
+                                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                                                            examType === 'EndSemester' ? 'bg-indigo-500 text-white' : 'bg-gray-200 text-gray-500'
+                                                        }`}>
+                                                            <BookOpen size={16} />
+                                                        </div>
+                                                        <div className="text-left">
+                                                            <p className={`text-sm font-bold ${examType === 'EndSemester' ? 'text-indigo-700' : 'text-gray-600'}`}>End Semester</p>
+                                                            <p className="text-[10px] text-gray-400 font-medium">End Semester Examination</p>
+                                                        </div>
+                                                        {examType === 'EndSemester' && (
+                                                            <div className="ml-auto w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center">
+                                                                <Check size={12} className="text-white" strokeWidth={3} />
+                                                            </div>
+                                                        )}
                                                     </button>
                                                 </div>
 
-                                                {isCreatingYear ? (
-                                                    <div className="flex gap-3 p-4 bg-gray-50 border border-gray-200 rounded-xl">
-                                                        <div className="flex-1 space-y-1.5">
-                                                            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Start Year</label>
-                                                            <select
-                                                                id="start-year"
-                                                                name="startYear"
-                                                                aria-label="Start Year"
-                                                                className="w-full h-11 px-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all"
-                                                                value={startYear}
-                                                                onChange={(e) => setStartYear(e.target.value)}
-                                                            >
-                                                                {Array.from({ length: 5 }).map((_, i) => {
-                                                                    const y = new Date().getFullYear() - 1 + i;
-                                                                    return <option key={y} value={y}>{y}</option>
-                                                                })}
-                                                            </select>
-                                                        </div>
-                                                        <div className="flex items-center pt-6 text-gray-300">
-                                                            <div className="w-4 h-0.5 bg-gray-300 rounded-full"></div>
-                                                        </div>
-                                                        <div className="flex-1 space-y-1.5">
-                                                            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">End Year</label>
-                                                            <select
-                                                                id="end-year"
-                                                                name="endYear"
-                                                                aria-label="End Year"
-                                                                className="w-full h-11 px-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all"
-                                                                value={endYear}
-                                                                onChange={(e) => setEndYear(e.target.value)}
-                                                            >
-                                                                {Array.from({ length: 5 }).map((_, i) => {
-                                                                    const y = new Date().getFullYear() + i;
-                                                                    return <option key={y} value={y}>{y}</option>
-                                                                })}
-                                                            </select>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <Select
-                                                        id="academic-year"
-                                                        name="academicYear"
-                                                         aria-label="Academic Year"
-                                                        placeholder="Select Year"
-                                                        selectedKeys={selectedYear ? new Set([selectedYear]) : new Set([])}
-                                                        onChange={(e) => setSelectedYear(e.target.value)}
-                                                        variant="bordered"
-                                                        size="lg"
-                                                        classNames={{
-                                                            trigger: "bg-gray-50/50 border-gray-200 data-[hover=true]:bg-gray-50 data-[focus=true]:bg-white data-[focus=true]:border-blue-500 rounded-xl transition-all relative h-12",
-                                                            value: "font-medium text-gray-700",
-                                                            popoverContent: "bg-white border border-gray-100 shadow-xl rounded-xl",
-                                                            selectorIcon: "absolute right-3"
-                                                        }}
-                                                    >
-                                                        {years.map((y) => (
-                                                            <SelectItem key={String(y.AcademicYearID)} textValue={y.YearName} classNames={{ title: "font-medium text-gray-700" }}>
-                                                                {y.YearName}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </Select>
-                                                )}
                                             </div>
                                         </div>
 
@@ -389,6 +340,17 @@ const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesMan
                                                                         <div className="flex items-center gap-2 mt-1">
                                                                             <Calendar size={12} className="text-gray-400" />
                                                                             <span className="text-xs text-gray-500 font-medium">{item.AcademicYear?.YearName || '–'}</span>
+                                                                            <span className="text-gray-200">•</span>
+                                                                            <Chip
+                                                                                size="sm"
+                                                                                variant="flat"
+                                                                                className={item.ExamType === 'EndSemester'
+                                                                                    ? "bg-indigo-50 text-indigo-700 border-none h-5 text-[10px]"
+                                                                                    : "bg-blue-50 text-blue-700 border-none h-5 text-[10px]"
+                                                                                }
+                                                                            >
+                                                                                {item.ExamType === 'EndSemester' ? 'End Sem' : 'Internal'}
+                                                                            </Chip>
                                                                             <span className="text-gray-200">•</span>
                                                                             <Chip
                                                                                 size="sm"

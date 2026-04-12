@@ -3,8 +3,9 @@ import api from '../../../services/api';
 import { toast } from '../../../utils/toast';
 import {
     Building2, Layers, Plus, Upload, Download, RefreshCw, Trash2, Edit3,
-    X, AlertTriangle, Search, ChevronDown, BookOpen, GraduationCap, FileSpreadsheet
+    X, AlertTriangle, Search, ChevronDown, BookOpen, GraduationCap, FileSpreadsheet, Calendar
 } from 'lucide-react';
+import { AcademicYears } from '../components/academic/AcademicYears';
 
 /* ────────────────────────── types ────────────────────────── */
 interface Department {
@@ -27,7 +28,7 @@ interface Program {
    MAIN PAGE
 ═══════════════════════════════════════════════════════════ */
 const AcademicSetup: React.FC = () => {
-    const [tab, setTab] = useState<'departments' | 'programs'>('departments');
+    const [tab, setTab] = useState<'years' | 'departments' | 'programs'>('years');
 
     return (
         <div className="min-h-screen bg-[#f7f8fc]">
@@ -40,7 +41,7 @@ const AcademicSetup: React.FC = () => {
                         </div>
                         <div>
                             <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Academic Setup</h1>
-                            <p className="text-sm text-slate-500 mt-0.5">Manage Departments and Programs</p>
+                            <p className="text-sm text-slate-500 mt-0.5">Manage Academic Years, Departments, and Programs</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -55,6 +56,7 @@ const AcademicSetup: React.FC = () => {
             <div className="bg-white border-b border-slate-200 px-8">
                 <div className="max-w-6xl mx-auto flex gap-0">
                     {[
+                        { key: 'years', label: 'Academic Years', icon: Calendar },
                         { key: 'departments', label: 'Departments', icon: Building2 },
                         { key: 'programs', label: 'Programs', icon: Layers },
                     ].map(({ key, label, icon: Icon }) => (
@@ -75,6 +77,7 @@ const AcademicSetup: React.FC = () => {
 
             {/* ── Content ─────────────────────────────────────── */}
             <div className="max-w-6xl mx-auto px-8 py-8">
+                {tab === 'years' && <AcademicYears onYearChange={() => {}} />}
                 {tab === 'departments' && <DepartmentsTab />}
                 {tab === 'programs' && <ProgramsTab />}
             </div>
