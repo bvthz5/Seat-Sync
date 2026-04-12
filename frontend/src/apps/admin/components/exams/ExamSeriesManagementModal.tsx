@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Modal, ModalContent, ModalHeader, ModalBody, Button, Input, Chip } from '@heroui/react';
-import { Plus, Trash2, BookOpen, AlertTriangle, X, Sparkles, Edit2, Check, ClipboardList } from 'lucide-react';
+import { Plus, Trash2, BookOpen, AlertTriangle, X, Sparkles, Edit2, Check, ClipboardList, Calendar } from 'lucide-react';
 import { SeriesService } from '../../services/seriesService';
 import { toast } from 'react-hot-toast';
 
