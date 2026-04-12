@@ -93,7 +93,7 @@ export const getAllStudents = async (req: Request, res: Response) => {
         // Calculate Stats (Parallel for performance)
         const commonInclude = search ? [{ model: User, attributes: [], required: true }] : [];
 
-        const [deptResults, batchResults, incompleteProfiles, totalDatabaseCount] = await Promise.all([
+        const [deptResults, batchResults, incompleteProfiles, totalDatabaseCount, activeStudents, selfRegistered] = await Promise.all([
             Student.findAll({
                 where: studentWhere,
                 include: commonInclude,
@@ -121,14 +121,42 @@ export const getAllStudents = async (req: Request, res: Response) => {
                 distinct: true,
                 col: 'StudentID'
             }),
-            Student.count()
+            Student.count(),
+            Student.count({
+                include: [{
+                    model: User,
+                    attributes: [],
+                    required: true,
+                    where: { IsActive: true }
+                }],
+                distinct: true,
+                col: 'StudentID'
+            }),
+            Student.count({
+                include: [{
+                    model: User,
+                    attributes: [],
+                    required: true,
+                    where: {
+                        Role: 'student',
+                        Email: { [Op.notLike]: '%@student.internal' }
+                    }
+                }],
+                distinct: true,
+                col: 'StudentID'
+            })
         ]);
+
+        const adminAdded = Math.max(totalDatabaseCount - selfRegistered, 0);
 
         const stats = {
             activeDepartments: deptResults.length,
             activeBatches: batchResults.length,
             incompleteProfiles,
-            totalDatabaseCount
+            totalDatabaseCount,
+            activeStudents,
+            selfRegistered,
+            adminAdded
         };
         res.json({
             totalItems: count,
@@ -235,20 +263,135 @@ export const importStudents = async (req: Request, res: Response) => {
         let successCount = 0;
         let errors: string[] = [];
 
+        const toKey = (value: string) => value.trim().toUpperCase();
+        const toNormalizedKey = (value: string) => toKey(value).replace(/[^A-Z0-9]/g, '');
+
+        const getFlexibleValue = (cache: Map<string, any>, normalizedCache: Map<string, any>, input: unknown) => {
+            if (input === undefined || input === null) return null;
+            const raw = String(input).trim();
+            if (!raw) return null;
+            return cache.get(toKey(raw)) || normalizedCache.get(toNormalizedKey(raw)) || null;
+        };
+
+        const parseBatchInfo = (batchValue: unknown): {
+            startYear?: number;
+            endYear?: number;
+            semesterNumber?: number;
+            leadingCode?: string;
+            batchPrefix?: string;
+            prefixTokens?: string[];
+        } => {
+            if (batchValue === undefined || batchValue === null) return {};
+            const text = String(batchValue).trim();
+            if (!text) return {};
+
+            const yearMatch = text.match(/\b(20\d{2})\s*-\s*(20\d{2})\b/);
+            const semesterMatch = text.match(/\(\s*S(?:EM)?\s*([0-9]+)\s*\)/i) || text.match(/\bS(?:EM)?\s*([0-9]+)\b/i);
+            const leadingCodeMatch = text.match(/^\s*([A-Z]{2,10})\b/i);
+            const prefixRaw = yearMatch?.index !== undefined ? text.slice(0, yearMatch.index).trim() : text;
+            const normalizedPrefix = prefixRaw.toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+            const prefixTokens = normalizedPrefix ? normalizedPrefix.split(/\s+/).filter(Boolean) : [];
+            const info: {
+                startYear?: number;
+                endYear?: number;
+                semesterNumber?: number;
+                leadingCode?: string;
+                batchPrefix?: string;
+                prefixTokens?: string[];
+            } = {};
+
+            if (yearMatch?.[1]) {
+                info.startYear = parseInt(yearMatch[1], 10);
+            }
+            if (yearMatch?.[2]) {
+                info.endYear = parseInt(yearMatch[2], 10);
+            }
+            if (semesterMatch?.[1]) {
+                info.semesterNumber = parseInt(semesterMatch[1], 10);
+            }
+            if (leadingCodeMatch?.[1]) {
+                info.leadingCode = leadingCodeMatch[1].toUpperCase();
+            } else if (prefixTokens.length > 0) {
+                info.leadingCode = prefixTokens[0];
+            }
+            if (normalizedPrefix) {
+                info.batchPrefix = normalizedPrefix;
+            }
+            if (prefixTokens.length > 0) {
+                info.prefixTokens = prefixTokens;
+            }
+
+            return info;
+        };
+
+        const normalizeSemesterNumber = (value: unknown): number | null => {
+            if (value === undefined || value === null) return null;
+            const text = String(value).trim();
+            if (!text) return null;
+            const match = text.match(/([0-9]+)/);
+            if (!match?.[1]) return null;
+            const sem = parseInt(match[1], 10);
+            return Number.isNaN(sem) ? null : sem;
+        };
+
+        const resolveByCodeVariants = (
+            cache: Map<string, any>,
+            normalizedCache: Map<string, any>,
+            rawCode: unknown
+        ) => {
+            if (rawCode === undefined || rawCode === null) return null;
+            const code = String(rawCode).trim().toUpperCase();
+            if (!code) return null;
+
+            const exact = getFlexibleValue(cache, normalizedCache, code);
+            if (exact) return exact;
+
+            const normalized = toNormalizedKey(code);
+            if (!normalized) return null;
+
+            const variants: string[] = [];
+            for (let i = normalized.length - 1; i >= 2; i--) {
+                variants.push(normalized.slice(0, i));
+            }
+            for (let i = 1; i <= normalized.length - 2; i++) {
+                variants.push(normalized.slice(i));
+            }
+
+            for (const variant of variants) {
+                const found = cache.get(variant) || normalizedCache.get(variant);
+                if (found) return found;
+            }
+            return null;
+        };
+
         // Cache for Lookups to speed up loop
-        const programCache = new Map<string, any>(); // Code -> Program
-        const deptCache = new Map<string, any>();    // Code -> Department
+        const programCache = new Map<string, any>();
+        const programNormalizedCache = new Map<string, any>();
+        const deptCache = new Map<string, any>();
+        const deptNormalizedCache = new Map<string, any>();
+        const programsByDept = new Map<number, any[]>();
         const programsAll = await Program.findAll();
         const deptsAll = await Department.findAll();
 
         programsAll.forEach((p: any) => {
-            if (p.ProgramCode) programCache.set(p.ProgramCode.toUpperCase(), p);
-            programCache.set(p.ProgramName.toUpperCase(), p); // Also support Name match
+            const programKeys = [p.ProgramCode, p.ProgramName].filter(Boolean) as string[];
+            for (const key of programKeys) {
+                programCache.set(toKey(key), p);
+                programNormalizedCache.set(toNormalizedKey(key), p);
+            }
+            if (p.DepartmentID) {
+                const existing = programsByDept.get(p.DepartmentID) || [];
+                existing.push(p);
+                programsByDept.set(p.DepartmentID, existing);
+            }
         });
 
         deptsAll.forEach((d: any) => {
-            deptCache.set(d.DepartmentCode.toUpperCase(), d);
-            deptCache.set(d.DepartmentName.toUpperCase(), d);
+            const deptKeys = [d.DepartmentCode, d.DepartmentName].filter(Boolean) as string[];
+            for (const key of deptKeys) {
+                deptCache.set(toKey(key), d);
+                deptNormalizedCache.set(toNormalizedKey(key), d);
+            }
         });
 
 
@@ -276,15 +419,40 @@ export const importStudents = async (req: Request, res: Response) => {
 
         for (const row of data) {
             // Flexible Key Matching
-            const regNo = normalizeKey(row, ['Register Number', 'RegisterNumber', 'Reg No', 'RegNo', 'Register No']);
+            const regNoRaw = normalizeKey(row, [
+                'Register Number',
+                'RegisterNumber',
+                'Reg No',
+                'RegNo',
+                'Register No',
+                'University RegNo',
+                'University Reg No',
+                'UniversityRegNo'
+            ]);
             const name = normalizeKey(row, ['Name', 'Student Name', 'Full Name', 'StudentName']);
             const email = normalizeKey(row, ['Email', 'E-mail', 'Mail']);
-            const programInput = normalizeKey(row, ['Program', 'Course', 'Branch', 'Stream']);
+            const programInput = normalizeKey(row, ['Program', 'Program Name', 'Programme', 'Course', 'Branch', 'Stream']);
             const semesterInput = normalizeKey(row, ['Semester', 'Sem', 'Term']);
+            const departmentInput = normalizeKey(row, ['Department', 'Department Name', 'DepartmentCode', 'Dept']);
+            const batchInput = normalizeKey(row, ['Batch', 'Batch Name', 'Class']);
+            const batchInfo = parseBatchInfo(batchInput);
+            const regNo = String(regNoRaw ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+            const normalizedName = String(name ?? '').trim();
 
             try {
+                const looksLikeBlankSeparator = !regNo && !normalizedName && !String(batchInput ?? '').trim();
+                const looksLikeRepeatedHeader =
+                    regNo === 'UNIVERSITYREGNO' ||
+                    regNo === 'REGISTERNUMBER' ||
+                    regNo === 'REGNO' ||
+                    normalizedName.toUpperCase() === 'NAME';
+
+                if (looksLikeBlankSeparator || looksLikeRepeatedHeader) {
+                    continue;
+                }
+
                 // 1. Validation basics
-                if (!regNo || !name) {
+                if (!regNo || !normalizedName) {
                     throw new Error(`Missing required fields (Register Number, Name) for row`);
                 }
 
@@ -294,109 +462,207 @@ export const importStudents = async (req: Request, res: Response) => {
                 // Group 2: Year (24 -> 2024)
                 // Group 3: Code (MCA, CS, etc)
                 // Group 4: Number
-                const idRegex = /^(L?SJC)(\d{2})([A-Z]+)(\d+)$/i;
+                const idRegex = /^(?:L?SJC|SJ)(\d{2})([A-Z]+)(\d+)$/i;
                 const match = String(regNo).trim().match(idRegex);
 
                 let targetProgram: any = null;
                 let targetDept: any = null;
                 let derivedBatchYear: number | null = null;
 
-                if (match) {
-                    const full = match[0];
-                    const prefix = match[1];
-                    const yearShort = match[2];
-                    const code = match[3];
-                    const num = match[4];
+                const regCode = match?.[2] ? String(match[2]).toUpperCase() : undefined;
+                if (match?.[1]) {
+                    derivedBatchYear = 2000 + parseInt(match[1], 10);
+                }
+                if (!derivedBatchYear && batchInfo.startYear) {
+                    derivedBatchYear = batchInfo.startYear;
+                }
 
-                    if (yearShort && code) {
-                        derivedBatchYear = 2000 + parseInt(yearShort, 10);
-                        const codeUpper = code.toUpperCase();
+                targetDept =
+                    getFlexibleValue(deptCache, deptNormalizedCache, departmentInput) ||
+                    resolveByCodeVariants(deptCache, deptNormalizedCache, batchInfo.leadingCode) ||
+                    (batchInfo.prefixTokens || [])
+                        .map((token) => resolveByCodeVariants(deptCache, deptNormalizedCache, token))
+                        .find(Boolean) ||
+                    getFlexibleValue(deptCache, deptNormalizedCache, regCode) ||
+                    getFlexibleValue(deptCache, deptNormalizedCache, batchInfo.leadingCode);
 
-                        // Strategy A: Try to find Program by Code (e.g. MCAI)
-                        if (programCache.has(codeUpper)) {
-                            targetProgram = programCache.get(codeUpper);
-                            targetDept = deptsAll.find((d: any) => d.DepartmentID === targetProgram.DepartmentID);
-                        }
-                        // Strategy B: If no Program, try Department (e.g. CS)
-                        else if (deptCache.has(codeUpper)) {
-                            targetDept = deptCache.get(codeUpper);
-                            // Program is still unknown, check Excel input
+                targetProgram =
+                    getFlexibleValue(programCache, programNormalizedCache, programInput) ||
+                    resolveByCodeVariants(programCache, programNormalizedCache, batchInfo.leadingCode) ||
+                    (batchInfo.prefixTokens || [])
+                        .map((token) => resolveByCodeVariants(programCache, programNormalizedCache, token))
+                        .find(Boolean) ||
+                    getFlexibleValue(programCache, programNormalizedCache, regCode) ||
+                    getFlexibleValue(programCache, programNormalizedCache, batchInfo.leadingCode);
+
+                // If we found a program first, trust its department link.
+                if (targetProgram?.DepartmentID) {
+                    targetDept = deptsAll.find((d: any) => d.DepartmentID === targetProgram.DepartmentID) || targetDept;
+                }
+
+                // If only department is known, try to resolve an unambiguous program.
+                if (!targetProgram && targetDept) {
+                    const deptPrograms = programsByDept.get(targetDept.DepartmentID) || [];
+                    if (deptPrograms.length === 1) {
+                        targetProgram = deptPrograms[0];
+                    } else if (deptPrograms.length > 1) {
+                        const candidates = [programInput, regCode, batchInfo.leadingCode]
+                            .filter(Boolean)
+                            .map((v) => String(v).toUpperCase());
+                        for (const hint of candidates) {
+                            const matchedProgram = deptPrograms.find((p: any) => {
+                                const programCode = p.ProgramCode ? String(p.ProgramCode).toUpperCase() : '';
+                                const programName = p.ProgramName ? String(p.ProgramName).toUpperCase() : '';
+                                return programCode === hint || programName.includes(hint);
+                            });
+                            if (matchedProgram) {
+                                targetProgram = matchedProgram;
+                                break;
+                            }
                         }
                     }
                 }
 
-                // override/fallback with Excel inputs
-                if (programInput) {
-                    const pInputUpper = String(programInput).trim().toUpperCase();
-                    if (programCache.has(pInputUpper)) {
-                        targetProgram = programCache.get(pInputUpper);
-                        // Update dept if not already set or mismatch? Trust Program's dept.
-                        if (targetProgram.DepartmentID) {
-                            targetDept = deptsAll.find((d: any) => d.DepartmentID === targetProgram.DepartmentID);
-                        }
-                    } else {
-                        // If program not found in cache, maybe we can try to find it by name or code dynamically?
+                if (!targetDept && batchInfo.leadingCode) {
+                    const deptCode = batchInfo.leadingCode.slice(0, 20);
+                    const deptName = (batchInfo.batchPrefix || batchInfo.leadingCode).slice(0, 150);
+                    const createdOrFoundDept = await Department.findOne({
+                        where: { DepartmentCode: deptCode },
+                        transaction: t
+                    }) || await Department.create({
+                        DepartmentCode: deptCode,
+                        DepartmentName: deptName,
+                        IsActive: true
+                    }, { transaction: t });
+
+                    targetDept = createdOrFoundDept;
+                    deptCache.set(toKey(deptCode), createdOrFoundDept);
+                    deptNormalizedCache.set(toNormalizedKey(deptCode), createdOrFoundDept);
+                    if (deptName) {
+                        deptCache.set(toKey(deptName), createdOrFoundDept);
+                        deptNormalizedCache.set(toNormalizedKey(deptName), createdOrFoundDept);
                     }
                 }
 
-                // FIX: If Program found but Dept not linked, try to find Dept by Program Name keywords
-                if (targetProgram && !targetDept) {
-                    if (targetProgram.ProgramName.includes('Computer') || targetProgram.ProgramName.includes('MCA')) {
-                        targetDept = deptsAll.find((d: any) => d.DepartmentCode === 'MCA' || d.DepartmentCode === 'CSE');
+                if (!targetProgram) {
+                    const hints = [programInput, departmentInput, regCode, batchInfo.leadingCode, ...(batchInfo.prefixTokens || [])]
+                        .filter(Boolean)
+                        .map((value) => String(value).toUpperCase());
+
+                    const hasMBAHint = hints.some((hint) => hint.includes('MBA'));
+                    const hasCAHint = hints.some((hint) => hint === 'CA' || hint.includes('MCA') || hint.includes('PGCS'));
+                    const hasBtechHint = hints.some((hint) => hint.includes('BTECH') || hint === 'EC' || hint === 'EE' || hint === 'ME' || hint === 'CE' || hint === 'CS' || hint === 'CSE');
+
+                    if (hasMBAHint) {
+                        targetProgram =
+                            getFlexibleValue(programCache, programNormalizedCache, 'MBA') ||
+                            getFlexibleValue(programCache, programNormalizedCache, 'Master of Business Administration');
+                    } else if (hasCAHint) {
+                        targetProgram =
+                            getFlexibleValue(programCache, programNormalizedCache, 'MCAI') ||
+                            getFlexibleValue(programCache, programNormalizedCache, 'IMCA-Short') ||
+                            getFlexibleValue(programCache, programNormalizedCache, 'MCA');
+                    } else if (hasBtechHint) {
+                        targetProgram =
+                            getFlexibleValue(programCache, programNormalizedCache, 'BTECH') ||
+                            getFlexibleValue(programCache, programNormalizedCache, 'Bachelor of Technology');
                     }
+                }
+
+                if (!targetProgram && targetDept && batchInfo.leadingCode) {
+                    const deptPrograms = programsByDept.get(targetDept.DepartmentID) || [];
+                    if (deptPrograms.length === 0) {
+                        const inferredDuration =
+                            batchInfo.startYear && batchInfo.endYear && batchInfo.endYear > batchInfo.startYear
+                                ? Math.min(Math.max(batchInfo.endYear - batchInfo.startYear, 1), 8)
+                                : undefined;
+                        const inferredSemesters = inferredDuration ? inferredDuration * 2 : undefined;
+
+                        const newProgram = await Program.create({
+                            ProgramCode: batchInfo.leadingCode.slice(0, 20),
+                            ProgramName: (batchInfo.batchPrefix || batchInfo.leadingCode).slice(0, 100),
+                            DepartmentID: targetDept.DepartmentID,
+                            DurationYears: inferredDuration,
+                            TotalSemesters: inferredSemesters,
+                            IsActive: true
+                        }, { transaction: t });
+
+                        targetProgram = newProgram;
+                        programsByDept.set(targetDept.DepartmentID, [newProgram]);
+
+                        const programKeys = [newProgram.ProgramCode, newProgram.ProgramName].filter(Boolean) as string[];
+                        for (const key of programKeys) {
+                            programCache.set(toKey(key), newProgram);
+                            programNormalizedCache.set(toNormalizedKey(key), newProgram);
+                        }
+                    }
+                }
+
+                if (!targetProgram) {
+                    targetProgram =
+                        getFlexibleValue(programCache, programNormalizedCache, 'BTECH') ||
+                        getFlexibleValue(programCache, programNormalizedCache, 'Bachelor of Technology');
                 }
 
                 // Final Validations
                 if (!targetProgram) {
-                    // Try to match "Generic" program for the department if only Dept is known? 
-                    // No, "CS" Dept has "B.Tech CS" and "M.Tech CS". We cannot guess.
-                    throw new Error(`Could not identify Program/Course '${programInput}'. Please check spelling or add it to Academic Setup.`);
+                    throw new Error(`Could not identify Program/Course for '${regNo}'. Add Program column or ensure program code can be inferred.`);
                 }
                 if (!targetDept) {
-                    // Inferred failed. 
-                    throw new Error(`Could not identify Department. Ensure Program '${targetProgram.ProgramName}' is linked to a Department or Department Code is known.`);
-                }
+                    const hints = [departmentInput, regCode, batchInfo.leadingCode, ...(batchInfo.prefixTokens || [])]
+                        .filter(Boolean)
+                        .map((value) => String(value).toUpperCase());
+                    const hasCAHint = hints.some((hint) => hint === 'PGC' || hint === 'PGCS' || hint === 'PGR' || hint.includes('PGCS') || hint.includes('MCA'));
+                    const hasECHint = hints.some((hint) => hint.startsWith('EC'));
+                    const hasCEHint = hints.some((hint) => hint.startsWith('CE'));
 
-                // Semester Logic
-                let targetSemester: any = null;
-                if (semesterInput) {
-                    // Try to find matching semester number
-                    const semNum = parseInt(String(semesterInput).replace(/S/i, ''), 10); // "S3" -> 3
-                    if (!isNaN(semNum)) {
-                        targetSemester = await Semester.findOne({
-                            where: { ProgramID: targetProgram.ProgramID, SemesterNumber: semNum },
-                            transaction: t
-                        });
+                    if (hasCAHint) {
+                        targetDept =
+                            getFlexibleValue(deptCache, deptNormalizedCache, 'CA') ||
+                            getFlexibleValue(deptCache, deptNormalizedCache, 'Computer Applications');
+                    } else if (hasECHint) {
+                        targetDept =
+                            getFlexibleValue(deptCache, deptNormalizedCache, 'EC') ||
+                            getFlexibleValue(deptCache, deptNormalizedCache, 'ECE');
+                    } else if (hasCEHint) {
+                        targetDept =
+                            getFlexibleValue(deptCache, deptNormalizedCache, 'CE') ||
+                            getFlexibleValue(deptCache, deptNormalizedCache, 'CIVIL');
                     }
                 }
 
-                // Fallback: If no semester input or not found, default to S1
+                if (!targetDept) {
+                    throw new Error(`Could not identify Department. Ensure Program '${targetProgram.ProgramName}' is linked to a Department.`);
+                }
+
+                // Semester Logic
+                const parsedSemester = normalizeSemesterNumber(semesterInput) || batchInfo.semesterNumber || 1;
+                let targetSemester: any = null;
                 if (!targetSemester) {
                     targetSemester = await Semester.findOne({
-                        where: { ProgramID: targetProgram.ProgramID, SemesterNumber: 1 },
+                        where: { ProgramID: targetProgram.ProgramID, SemesterNumber: parsedSemester },
                         transaction: t
                     });
                 }
 
                 if (!targetSemester) {
-                    // Auto-create S1 if missing?
                     targetSemester = await Semester.create({
                         ProgramID: targetProgram.ProgramID,
-                        SemesterNumber: 1,
-                        SemesterName: 'S1',
+                        SemesterNumber: parsedSemester,
+                        SemesterName: `S${parsedSemester}`,
                         IsActive: true
                     }, { transaction: t });
                 }
 
                 if (!targetSemester) {
-                    throw new Error(`Invalid Semester '${semesterInput}' for Program '${targetProgram.ProgramName}'`);
+                    throw new Error(`Invalid Semester '${semesterInput || batchInput}' for Program '${targetProgram.ProgramName}'`);
                 }
 
 
                 // 3. Find/Create User (Login)
                 // Use RegisterNumber as unique identifier instead of email
                 // Default Password: First 4 chars of Name + @123
-                const passwordStr = (name.replace(/\s/g, '').substring(0, 4) + '@123'); // Simple logic
+                const passwordStr = (normalizedName.replace(/\s/g, '').substring(0, 4) + '@123'); // Simple logic
                 const defaultPassword = await bcrypt.hash(passwordStr, 10);
 
                 // Use register number as email (for now, until login system is updated)
@@ -406,15 +672,15 @@ export const importStudents = async (req: Request, res: Response) => {
                 if (!user) {
                     user = await User.create({
                         Email: userEmail,
-                        FullName: name,
+                        FullName: normalizedName,
                         PasswordHash: defaultPassword,
                         Role: 'student',
                         IsRootAdmin: false
                     }, { transaction: t });
                 } else {
                     // Always update FullName from Excel import (fresh data takes precedence)
-                    if (name) {
-                        await user.update({ FullName: name }, { transaction: t });
+                    if (normalizedName) {
+                        await user.update({ FullName: normalizedName }, { transaction: t });
                     }
                 }
 

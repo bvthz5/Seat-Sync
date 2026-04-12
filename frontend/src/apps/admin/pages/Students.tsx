@@ -274,12 +274,14 @@ const Students: React.FC = () => {
                 setTotalPages(res.data.totalPages || 1);
 
                 const rawStats = res.data.stats || {};
-                const total = rawStats.totalDatabaseCount ?? 0;
                 setStats({
-                    ...rawStats,
-                    activeStudents: Math.floor(total * 0.85),
-                    selfRegistered: Math.floor(total * 0.4),
-                    adminAdded: Math.floor(total * 0.6),
+                    activeDepartments: rawStats.activeDepartments ?? 0,
+                    activeBatches: rawStats.activeBatches ?? 0,
+                    incompleteProfiles: rawStats.incompleteProfiles ?? 0,
+                    totalDatabaseCount: rawStats.totalDatabaseCount ?? 0,
+                    activeStudents: rawStats.activeStudents ?? 0,
+                    selfRegistered: rawStats.selfRegistered ?? 0,
+                    adminAdded: rawStats.adminAdded ?? 0,
                 });
             });
         } catch (error) {
@@ -1122,8 +1124,6 @@ const Students: React.FC = () => {
                     }}
                 </ModalContent>
             </Modal>
-
-            <StudentImportModal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} onSuccess={() => fetchStudents()} />
 
             {/* Some minimal global styles for scrollbar and animation */}
             <style>{`

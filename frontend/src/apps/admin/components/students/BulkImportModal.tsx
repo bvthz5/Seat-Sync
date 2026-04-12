@@ -86,7 +86,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClos
                     </div>
                     <div className="flex flex-col gap-1">
                         <span className="text-xl font-semibold text-gray-900  tracking-tight">Import Students</span>
-                        <span className="text-sm font-medium text-gray-500 ">Upload an Excel file to bulk add student records.</span>
+                        <span className="text-sm font-medium text-gray-500 ">Upload Excel with Name + Reg No (University RegNo), plus Batch/Department details.</span>
                     </div>
                 </ModalHeader>
                 <ModalBody className="p-6">
@@ -101,7 +101,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClos
                                     <p className="font-medium text-gray-700  text-lg">
                                         <span className="text-primary font-semibold hover:underline">Click to upload</span> or drag and drop
                                     </p>
-                                    <p className="text-sm text-gray-400 mt-1">.xlsx or .xls files (max 5MB)</p>
+                                    <p className="text-sm text-gray-400 mt-1">.xlsx or .xls (max 5MB) • supports Batch + University RegNo format</p>
                                 </div>
                                 <input id="input-b63izrf" name="input-b63izrf" type="file"
                                     accept=".xlsx, .xls"

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Upload, FileSpreadsheet, CheckCircle, AlertCircle, Info, Hash } from 'lucide-react';
 import academicService from '../../services/academicService';
@@ -14,6 +14,7 @@ interface StudentImportModalProps {
 const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose, onSuccess }) => {
     const [file, setFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [uploadStats, setUploadStats] = useState<{ success: number; errors: number; active: boolean }>({
         success: 0,
         errors: 0,
@@ -112,11 +113,16 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
               border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center text-center transition-all group cursor-pointer
               ${file ? 'border-green-500/30 bg-green-50' : 'border-gray-200 hover:border-blue-400 hover:bg-blue-50/50'}
             `}
-                            onClick={() => document.getElementById('file-upload')?.click()}
+                            onClick={() => {
+                                if (fileInputRef.current) {
+                                    fileInputRef.current.value = '';
+                                    fileInputRef.current.click();
+                                }
+                            }}
                         >
                             <input
                                 type="file"
-                                id="file-upload"
+                                ref={fileInputRef}
                                 name="fileUpload"
                                 aria-label="Upload Excel File"
                                 className="hidden"
