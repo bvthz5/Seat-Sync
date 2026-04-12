@@ -27,10 +27,6 @@ export const getAllInvigilators = async (req: Request, res: Response) => {
     try {
         // Fetch all faculties
         const faculties = await Faculty.findAll();
-        console.log("Fetched Faculties count:", faculties.length);
-        if (faculties.length > 0) {
-            console.log("Sample Faculty:", faculties[0]?.toJSON());
-        }
 
         const today = new Date().toISOString().split('T')[0];
 
