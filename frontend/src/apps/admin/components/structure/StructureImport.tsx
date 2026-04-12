@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { Button, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure, Chip, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from '@heroui/react';
+import { Button, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure, Chip, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Checkbox, Input } from '@heroui/react';
 import { UploadCloud, FileText, CheckCircle, AlertTriangle, XCircle, ArrowRight, Download } from 'lucide-react';
 import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 import { structureService } from '../../services/structureService';
 import { toast } from 'react-hot-toast';
 import { Spinner } from '../../../../components/GlobalLoader';
@@ -21,6 +22,8 @@ export const StructureImport: React.FC<{ onChange?: () => void }> = ({ onChange 
     const [errors, setErrors] = useState<string[]>([]);
     const [loading, setLoading] = useState(false);
     const [isValidating, setIsValidating] = useState(false);
+    const [autoZone, setAutoZone] = useState(false);
+    const [zoneCount, setZoneCount] = useState<number>(2);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -31,12 +34,36 @@ export const StructureImport: React.FC<{ onChange?: () => void }> = ({ onChange 
     };
 
     const handleFile = (file: File) => {
-        if (file.type !== "text/csv") {
-            toast.error("Please upload a CSV file");
+        const isCsv = file.type === "text/csv" || file.name.endsWith('.csv');
+        const isExcel = file.name.endsWith('.xlsx') || file.type.includes("spreadsheetml");
+        if (!isCsv && !isExcel) {
+            toast.error("Please upload a CSV or Excel (.xlsx) file");
             return;
         }
         setFile(file);
-        parseFile(file);
+        if (isCsv) {
+            parseFile(file);
+        } else if (isExcel) {
+            parseExcel(file);
+        }
+    };
+
+    const parseExcel = async (file: File) => {
+        setIsValidating(true);
+        setErrors([]);
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            const wb = XLSX.read(arrayBuffer, { type: 'array' });
+            const wsname = wb.SheetNames[0];
+            const ws = wb.Sheets[wsname];
+            const data = XLSX.utils.sheet_to_json<CSVData>(ws);
+            setPreviewData(data);
+            validateData(data);
+        } catch (err: any) {
+            toast.error("Failed to parse Excel: " + err.message);
+        } finally {
+            setIsValidating(false);
+        }
     };
 
     const parseFile = (file: File) => {
@@ -98,7 +125,7 @@ export const StructureImport: React.FC<{ onChange?: () => void }> = ({ onChange 
 
         setLoading(true);
         try {
-            const result = await structureService.importStructure(file);
+            const result = await structureService.importStructure(file, { autoZone, zoneCount });
             toast.success(`Import successful! Added ${result.blocksCreated} Blocks, ${result.floorsCreated} Floors, ${result.roomsCreated} Rooms.`);
             if (onChange) onChange();
             onClose();
@@ -112,7 +139,7 @@ export const StructureImport: React.FC<{ onChange?: () => void }> = ({ onChange 
     };
 
     const getSampleCSV = () => {
-        const csvContent = "BlockName,FloorNumber,RoomCode,Capacity,IsExamUsable\nScience Block,1,LH-101,60,TRUE\nScience Block,1,LH-102,60,TRUE\nAdmin Block,2,Conf-A,20,FALSE";
+        const csvContent = "RoomName,Capacity,A,B,C\nMTB 301,60,10,10,10\nMTB 302,40,6,7,7\nAdmin 101,20,5,5,0";
         const blob = new Blob([csvContent], { type: 'text/csv' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -131,7 +158,7 @@ export const StructureImport: React.FC<{ onChange?: () => void }> = ({ onChange 
                 startContent={<UploadCloud size={20} />}
                 className="font-bold border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
             >
-                Import CSV
+                Import Data
             </Button>
 
             <Modal isOpen={isOpen} onOpenChange={onOpenChange} size="4xl" backdrop="blur" scrollBehavior="inside">
@@ -153,12 +180,11 @@ export const StructureImport: React.FC<{ onChange?: () => void }> = ({ onChange 
                                             <UploadCloud size={32} className="text-blue-500" />
                                         </div>
                                         <h3 className="text-lg font-bold text-slate-700">Click to upload or drag and drop</h3>
-                                        <p className="text-slate-500 max-w-sm mt-2">Supports .csv files only. Max 5MB.</p>
-                                        <input
-                                            type="file"
+                                        <p className="text-slate-500 max-w-sm mt-2">Supports .csv or .xlsx (ex: RoomName, Capacity, A, B).</p>
+                                        <input id="input-qzk2b9g" name="input-qzk2b9g" type="file"
                                             ref={fileInputRef}
                                             className="hidden"
-                                            accept=".csv"
+                                            accept=".csv, .xlsx"
                                             onChange={handleFileSelect}
                                         />
                                         <Button size="sm" variant="light" color="primary" className="mt-6 font-bold" onClick={(e) => { e.stopPropagation(); getSampleCSV(); }} startContent={<Download size={16} />}>
@@ -194,9 +220,29 @@ export const StructureImport: React.FC<{ onChange?: () => void }> = ({ onChange 
                                         ) : isValidating ? (
                                             <div className="text-center py-4 text-slate-500">Validating...</div>
                                         ) : (
-                                            <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3 text-green-800 font-bold">
-                                                <CheckCircle size={20} className="text-green-600" />
-                                                Ready for Import
+                                            <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between">
+                                                <div className="flex items-center gap-3 text-green-800 font-bold">
+                                                    <CheckCircle size={20} className="text-green-600" />
+                                                    Ready for Import
+                                                </div>
+                                                
+                                                {/* Auto-Zone Controls */}
+                                                <div className="flex items-center gap-4 border-l border-green-200 pl-4">
+                                                    <Checkbox isSelected={autoZone} onValueChange={setAutoZone} color="primary" className="text-sm font-semibold">
+                                                        Auto-Zone Rooms
+                                                    </Checkbox>
+                                                    {autoZone && (
+                                                        <Input
+                                                            type="number"
+                                                            size="sm"
+                                                            value={zoneCount.toString()}
+                                                            onValueChange={(val) => setZoneCount(Number(val) || 2)}
+                                                            className="w-24"
+                                                            min={1}
+                                                            max={10}
+                                                        />
+                                                    )}
+                                                </div>
                                             </div>
                                         )}
 

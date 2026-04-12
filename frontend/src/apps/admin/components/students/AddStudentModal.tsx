@@ -224,8 +224,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                                     <label htmlFor="full-name" className="text-sm font-semibold text-gray-700 ml-1">
                                         Full Name <span className="text-red-500">*</span>
                                     </label>
-                                    <Input
-                                        id="full-name"
+                                    <Input aria-label="Input" id="full-name"
                                         autoComplete="name"
                                         startContent={<User className="text-gray-400" size={15} />}
                                         placeholder="John Doe"
@@ -245,8 +244,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                                     <label htmlFor="college-email" className="text-sm font-semibold text-gray-700 ml-1">
                                         College Email <span className="text-red-500">*</span> <span className="text-green-500 text-xs font-normal">(Credentials sent)</span>
                                     </label>
-                                    <Input
-                                        id="college-email"
+                                    <Input aria-label="Input" id="college-email"
                                         autoComplete="email"
                                         type="email"
                                         startContent={<Mail className="text-gray-400" size={15} />}
@@ -275,8 +273,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                                         <label htmlFor="register-number" className="text-sm font-semibold text-gray-700 ml-1">
                                             Register Number <span className="text-red-500">*</span>
                                         </label>
-                                        <Input
-                                            id="register-number"
+                                        <Input aria-label="Input" id="register-number"
                                             autoComplete="off"
                                             startContent={<Hash className="text-gray-400" size={15} />}
                                             placeholder="SJC24MCA001"
@@ -296,8 +293,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                                         <label htmlFor="batch-year" className="text-sm font-semibold text-gray-700 ml-1">
                                             Batch Year <span className="text-red-500">*</span>
                                         </label>
-                                        <Input
-                                            id="batch-year"
+                                        <Input aria-label="2026" id="batch-year"
                                             type="number"
                                             placeholder="2026"
                                             value={formData.BatchYear}

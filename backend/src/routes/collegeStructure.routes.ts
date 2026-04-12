@@ -3,7 +3,7 @@ import { AuthMiddleware } from "../middlewares/auth.middleware.js";
 import {
     getBlocks, createBlock, updateBlock, deleteBlock,
     getFloors, createFloor, updateFloor, deleteFloor,
-    getRooms, createRoom, updateRoom, deleteRoom, getRoomLayout,
+    getRooms, createRoom, updateRoom, deleteRoom, getRoomLayout, bulkCreateRooms, autoZoneRoom,
     getZones, createZone, deleteZone, updateSeatZones
 } from "../controllers/collegeStructure.controller.js";
 
@@ -444,6 +444,7 @@ router.get("/rooms/:id/layout", getRoomLayout);
  *         description: Server error
  */
 router.post("/rooms", createRoom);
+router.post("/rooms/bulk", bulkCreateRooms);
 
 /**
  * @swagger
@@ -522,6 +523,7 @@ router.delete("/rooms/:id", deleteRoom);
 // --- ZONES ---
 router.get("/rooms/:roomId/zones", getZones);
 router.post("/rooms/:roomId/zones", createZone);
+router.post("/rooms/:roomId/auto-zone", autoZoneRoom);
 router.delete("/zones/:id", deleteZone);
 
 // --- SEAT MANAGEMENT ---

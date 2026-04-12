@@ -70,8 +70,7 @@ export const ActiveSessionsPanel: React.FC<ActiveSessionsPanelProps> = ({ sessio
                     </Chip>
                 </div>
                 <div className="flex gap-3 w-full sm:w-auto">
-                    <Input
-                        classNames={{
+                    <Input id="field-1fqs5u5" name="field-1fqs5u5" aria-label="Search user or IP..." classNames={{
                             base: "max-w-xs h-9",
                             mainWrapper: "h-full",
                             input: "text-small",

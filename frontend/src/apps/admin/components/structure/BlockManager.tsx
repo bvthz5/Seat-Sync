@@ -348,9 +348,9 @@ export const BlockManager: React.FC<BlockManagerProps> = ({ readOnly = false }) 
                             <ModalBody>
                                 <div className="flex flex-col gap-6">
                                     <div className="flex flex-col gap-2">
-                                        <label htmlFor="modal-block-name" className="text-sm font-bold text-slate-700 uppercase tracking-wide ml-1">
+                                        <div className="text-sm font-bold text-slate-700 uppercase tracking-wide ml-1 cursor-default">
                                             Block Name
-                                        </label>
+                                        </div>
                                         <Input
                                             id="modal-block-name"
                                             name="BlockName"

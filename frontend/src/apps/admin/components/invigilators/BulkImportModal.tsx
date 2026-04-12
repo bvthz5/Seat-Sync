@@ -235,7 +235,7 @@ const BulkImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
                                                 <span key={ext} className="bg-slate-100 border border-slate-200 rounded-md px-2.5 py-1 text-[10px] font-mono text-slate-500">{ext}</span>
                                             ))}
                                         </div>
-                                        <input type="file" accept=".xlsx,.xls,.csv" ref={fileRef} className="hidden" onChange={handleFileInput} />
+                                        <input id="input-f1oopcu" name="input-f1oopcu" type="file" accept=".xlsx,.xls,.csv" ref={fileRef} className="hidden" onChange={handleFileInput} />
                                     </div>
                                     {parseErrors.length > 0 && (
                                         <div className="border border-rose-200 rounded-xl p-3 bg-rose-50">

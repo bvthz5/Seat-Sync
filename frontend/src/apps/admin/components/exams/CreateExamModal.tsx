@@ -140,12 +140,12 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
 
                                 {/* 1. Subject Search */}
                                 <div className="relative">
-                                    <label id="subject-search-label" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Subject Name or Code</label>
+                                    <label htmlFor="subjectSearch" id="subject-search-label" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Subject Name or Code</label>
                                     <Input
                                         id="subjectSearch"
                                         name="subjectSearch"
                                         autoComplete="off"
-                                        aria-labelledby="subject-search-label"
+                                        id="subject-search-input" aria-label="Subject"
                                         placeholder="e.g. CS101 - Intro to Comp Sci"
                                         value={subjectSearch}
                                         onValueChange={handleSearchChange}
@@ -176,7 +176,7 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
 
                                 {/* 2. Exam Type */}
                                 <div>
-                                    <label className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Exam Type</label>
+                                    <h4 className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Exam Type</h4>
                                     <div className="flex gap-3">
                                         {['Internal Assessment', 'Semester End', 'Supplementary'].map((type) => (
                                             <button
@@ -197,13 +197,13 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
                                 {/* 3. Date & Session */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
-                                        <label id="exam-date-label" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Date</label>
+                                        <label htmlFor="ExamDate" id="exam-date-label" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Date</label>
                                         <Input
                                             id="ExamDate"
                                             type="date"
                                             name="ExamDate"
                                             autoComplete="off"
-                                            aria-labelledby="exam-date-label"
+                                            id="exam-date-input" aria-label="Exam Date"
                                             value={formData.ExamDate}
                                             onChange={handleChange}
                                             variant="flat"
@@ -217,24 +217,24 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-3">Session</label>
+                                        <span className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-3">Session</span>
                                         <div className="flex gap-6 h-[48px] items-center">
-                                            <label className="flex items-center gap-2 cursor-pointer group">
+                                            <label htmlFor="session-fn" className="flex items-center gap-2 cursor-pointer group">
                                                 <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${formData.Session === 'FN' ? 'border-blue-600 bg-white' : 'border-gray-300 bg-white group-hover:border-gray-400'}`}>
                                                     {formData.Session === 'FN' && <div className="w-2.5 h-2.5 bg-blue-600 rounded-full" />}
                                                 </div>
-                                                <input type="radio" className="hidden" name="Session" value="FN" checked={formData.Session === 'FN'} onChange={handleChange} />
+                                                <input id="session-fn" type="radio" className="hidden" name="Session" value="FN" checked={formData.Session === 'FN'} onChange={handleChange} />
                                                 <div className="text-sm">
                                                     <span className="font-bold text-gray-700 block">Forenoon</span>
                                                     <span className="text-xs text-gray-400 font-medium">(FN)</span>
                                                 </div>
                                             </label>
 
-                                            <label className="flex items-center gap-2 cursor-pointer group">
+                                            <label htmlFor="session-an" className="flex items-center gap-2 cursor-pointer group">
                                                 <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${formData.Session === 'AN' ? 'border-blue-600 bg-white' : 'border-gray-300 bg-white group-hover:border-gray-400'}`}>
                                                     {formData.Session === 'AN' && <div className="w-2.5 h-2.5 bg-blue-600 rounded-full" />}
                                                 </div>
-                                                <input type="radio" className="hidden" name="Session" value="AN" checked={formData.Session === 'AN'} onChange={handleChange} />
+                                                <input id="session-an" type="radio" className="hidden" name="Session" value="AN" checked={formData.Session === 'AN'} onChange={handleChange} />
                                                 <div className="text-sm">
                                                     <span className="font-bold text-gray-700 block">Afternoon</span>
                                                     <span className="text-xs text-gray-400 font-medium">(AN)</span>
@@ -246,13 +246,13 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
 
                                 {/* 4. Duration - Fixed Overlap */}
                                 <div>
-                                    <label id="duration-label" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Duration (Minutes)</label>
+                                    <label htmlFor="Duration" id="duration-label" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Duration (Minutes)</label>
                                     <Input
                                         id="Duration"
                                         type="number"
                                         name="Duration"
                                         autoComplete="off"
-                                        aria-labelledby="duration-label"
+                                        id="exam-duration-input" aria-label="Duration (Minutes)"
                                         placeholder="180"
                                         value={formData.Duration}
                                         onChange={handleChange}

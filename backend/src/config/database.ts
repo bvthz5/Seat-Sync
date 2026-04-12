@@ -526,6 +526,45 @@ async function ensureSchemaIntegrity() {
             END
         `, { type: QueryTypes.RAW });
 
+        // Add missing columns to Rooms due to Layout Refactor
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Rooms' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'Capacity')
+                BEGIN
+                    ALTER TABLE [dbo].[Rooms] ADD [Capacity] INT NOT NULL DEFAULT 0;
+                END
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'RoomType')
+                BEGIN
+                    ALTER TABLE [dbo].[Rooms] ADD [RoomType] NVARCHAR(20) NOT NULL DEFAULT 'ROOM';
+                END
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'LayoutType')
+                BEGIN
+                    ALTER TABLE [dbo].[Rooms] ADD [LayoutType] NVARCHAR(20) NOT NULL DEFAULT 'CUSTOM';
+                END
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'RowLayout')
+                BEGIN
+                    ALTER TABLE [dbo].[Rooms] ADD [RowLayout] NVARCHAR(MAX) NOT NULL DEFAULT '[]';
+                END
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'SeatsPerBench')
+                BEGIN
+                    ALTER TABLE [dbo].[Rooms] ADD [SeatsPerBench] INT NOT NULL DEFAULT 2;
+                END
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'Status')
+                BEGIN
+                    ALTER TABLE [dbo].[Rooms] ADD [Status] NVARCHAR(20) NOT NULL DEFAULT 'Active';
+                END
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'ExamUsable')
+                BEGIN
+                    ALTER TABLE [dbo].[Rooms] ADD [ExamUsable] BIT NOT NULL DEFAULT 1;
+                END
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'IsLayoutLocked')
+                BEGIN
+                    ALTER TABLE [dbo].[Rooms] ADD [IsLayoutLocked] BIT NOT NULL DEFAULT 0;
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
     } catch (error) {
         console.warn("Schema integrity check warning (non-fatal):", error);
     }

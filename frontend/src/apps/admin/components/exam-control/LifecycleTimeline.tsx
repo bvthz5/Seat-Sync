@@ -137,8 +137,7 @@ export const LifecycleTimeline: React.FC<TimelineProps> = ({ currentStatus, exam
                                 </p>
 
                                 <div className="space-y-4 py-2">
-                                    <Input
-                                        label={`Reason for Change ${isDestructive() ? '(Req)' : ''}`}
+                                    <Input id="field-0a92jvr" name="field-0a92jvr" label={`Reason for Change ${isDestructive() ? '(Req)' : ''}`}
                                         placeholder="E.g. Administrative error, Emergency stop..."
                                         value={reason}
                                         onChange={(e) => setReason(e.target.value)}
@@ -146,8 +145,8 @@ export const LifecycleTimeline: React.FC<TimelineProps> = ({ currentStatus, exam
 
                                     {isDestructive() && (
                                         <div className="space-y-2 bg-red-50 p-4 rounded border border-red-100">
-                                            <Label className="text-red-700 font-bold block mb-1 text-sm">Type "EXAM-{examId}" to confirm</Label>
-                                            <Input
+                                            <LabelComponent className="text-red-700 font-bold block mb-1 text-sm">Type "EXAM-{examId}" to confirm</LabelComponent>
+                                            <Input aria-label="Input" id="confirm-action"
                                                 placeholder={`EXAM-${examId}`}
                                                 value={confirmText}
                                                 onChange={(e) => setConfirmText(e.target.value)}
@@ -180,4 +179,4 @@ export const LifecycleTimeline: React.FC<TimelineProps> = ({ currentStatus, exam
 };
 
 // Helper label component strictly for internal use since HeroUI Input handles labels, but for the custom box logic
-const Label = ({ children, className }: any) => <label className={className}>{children}</label>;
+const LabelComponent = ({ children, className }: any) => <span className={className}>{children}</span>;

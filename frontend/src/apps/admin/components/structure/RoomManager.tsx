@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Chip, Button, useDisclosure, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Input, Select, SelectItem, Checkbox, Tooltip, Autocomplete, AutocompleteItem } from '@heroui/react';
-import { Plus, Edit, Ban, DoorOpen, Search, Building2, Layers, AlertCircle, AlertTriangle, CheckSquare, Copy, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Edit, Ban, DoorOpen, Search, Building2, Layers, AlertCircle, AlertTriangle, CheckSquare, Copy, ChevronLeft, ChevronRight, FileSpreadsheet, UploadCloud, Download } from 'lucide-react';  
 import { structureService } from '../../services/structureService';
+import * as XLSX from 'xlsx';
 import { Block, Floor, Room } from '../../types/collegeStructure';
 import { toast } from '../../../../utils/toast';
 
@@ -174,13 +175,15 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
     ];
 
     // --- Advanced Bulk State ---
-    type BulkModeType = 'auto' | 'list' | 'manual';
+    type BulkModeType = 'auto' | 'list' | 'manual' | 'excel';
     const [bulkModeType, setBulkModeType] = useState<BulkModeType>('auto');
     const [listInput, setListInput] = useState(""); // For 'list' mode: "101, 102, 104"
     const [manualRooms, setManualRooms] = useState<{ code: string; capacity: number }[]>([
         { code: "", capacity: 60 }
     ]);
+    const [excelRooms, setExcelRooms] = useState<{ code: string; capacity: number }[]>([]);
     const [previewRooms, setPreviewRooms] = useState<{ code: string; capacity: number }[]>([]);
+    const excelInputRef = useRef<HTMLInputElement>(null);
 
     // --- Preview Generator ---
     useEffect(() => {
@@ -210,9 +213,14 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                 code: r.code.startsWith(bulkData.prefix) ? r.code : `${bulkData.prefix}-${r.code}`,
                 capacity: r.capacity
             }));
+        } else if (bulkModeType === 'excel') {
+            generated = excelRooms.filter(r => r.code).map(r => ({
+                code: r.code.toString(),
+                capacity: Number(r.capacity)
+            }));
         }
         setPreviewRooms(generated);
-    }, [bulkModeType, bulkData, listInput, manualRooms, isBulkMode, isOpen]);
+    }, [bulkModeType, bulkData, listInput, manualRooms, excelRooms, isBulkMode, isOpen]);
 
     const handleManualRowChange = (index: number, field: 'code' | 'capacity', value: string | number) => {
         const newRows = [...manualRooms];
@@ -227,6 +235,43 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
     const removeManualRow = (index: number) => {
         const newRows = manualRooms.filter((_, i) => i !== index);
         setManualRooms(newRows);
+    };
+
+    const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            const wb = XLSX.read(arrayBuffer, { type: 'array' });
+            const wsname = wb.SheetNames[0];
+            const ws = wb.Sheets[wsname];
+            const data = XLSX.utils.sheet_to_json<any>(ws);
+
+            const parsedRooms: { code: string; capacity: number }[] = [];
+            data.forEach((row, idx) => {
+                const code = row.code || row.Code || row.RoomCode || row.roomCode || row.RoomName || row.Name;
+                const cap = row.capacity || row.Capacity || row.Cap || row.Seats;
+                
+                if (code) {
+                    parsedRooms.push({
+                        code: code.toString().trim(),
+                        capacity: Number(cap) || 0
+                    });
+                }
+            });
+
+            if (parsedRooms.length === 0) {
+                toast.error("No valid room data found in Excel. Need 'RoomCode' and 'Capacity' columns.");
+                return;
+            }
+
+            setExcelRooms(parsedRooms);
+            toast.success(`Loaded ${parsedRooms.length} rooms from Excel`);
+        } catch (err: any) {
+            toast.error("Failed to parse Excel: " + err.message);
+        }
+        if (excelInputRef.current) excelInputRef.current.value = '';
     };
 
     const handleSubmit = async (onClose: () => void) => {
@@ -423,7 +468,7 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                         </div>
                     </div>
 
-                    {!readOnly && selectedFloorId && (
+                    {!readOnly && (
                         <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto z-10">
                             <Button
                                 onPress={() => handleOpen()}
@@ -440,9 +485,8 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
             </div>
 
             {/* Pagination & Filter Info */}
-            {selectedFloorId && (
-                <div className="flex-none flex flex-col md:flex-row justify-between items-center gap-4 px-2">
-                    <div className="flex items-center gap-4 w-full md:w-auto flex-1">
+            <div className="flex-none flex flex-col md:flex-row justify-between items-center gap-4 px-2">
+                <div className="flex items-center gap-4 w-full md:w-auto flex-1">
                         <Input
                             id="rooms-search"
                             name="rooms-search"
@@ -483,25 +527,10 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                         Showing <span className="text-slate-900 font-bold">{(rooms?.length || 0) === 0 ? 0 : (page - 1) * limit + 1}</span> - <span className="text-slate-900 font-bold">{Math.min(page * limit, totalItems)}</span> of <span className="text-slate-900 font-bold">{totalItems}</span>
                     </div>
                 </div>
-            )}
 
             {/* Content Area */}
             <div className="flex-1 min-h-0 relative">
-                {!selectedFloorId ? (
-                    <div className="h-full flex flex-col items-center justify-center py-24 bg-gradient-to-b from-white to-slate-50/50 rounded-3xl border border-dashed border-slate-300 relative overflow-hidden group">
-                        <div className="absolute inset-0 opacity-10" />
-                        <div className="w-24 h-24 bg-white rounded-3xl flex items-center justify-center shadow-xl shadow-indigo-100 mb-6 ring-4 ring-slate-50 z-10 group-hover:scale-105 transition-transform duration-300">
-                            <div className="w-16 h-16 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center">
-                                <Building2 size={32} strokeWidth={1.5} />
-                            </div>
-                        </div>
-                        <h3 className="text-xl font-bold text-slate-800 mb-2 z-10">Select Location Context</h3>
-                        <p className="text-slate-500 max-w-sm text-center font-medium px-4 z-10">
-                            Choose a <span className="text-blue-600 font-bold">Building Block</span> and <span className="text-indigo-600 font-bold">Floor Level</span> above to begin managing rooms.
-                        </p>
-                    </div>
-                ) : (
-                    // Table
+                {/* Table */}
                     <Table isHeaderSticky aria-label="Rooms table" classNames={{ base: "h-full", wrapper: "bg-white shadow-sm border border-slate-200 rounded-3xl p-0 h-full overflow-auto custom-scrollbar", th: "bg-slate-50/50 text-slate-500 font-bold text-[11px] uppercase tracking-wider py-4 px-6 border-b border-slate-100", td: "py-4 px-6 border-b border-slate-50 group-last:border-0", tr: "hover:bg-blue-50/30 transition-colors cursor-default" }}>
                         <TableHeader columns={columns}>{(column) => <TableColumn key={column.uid} align={column.uid === "actions" ? "end" : (["status", "usable", "capacity"].includes(column.uid) ? "center" : "start")}>{column.name}</TableColumn>}</TableHeader>
                         <TableBody items={rooms} isLoading={loading} emptyContent={<div className="py-12 flex flex-col items-center text-center"><Search className="text-slate-300 mb-3" size={32} /><p className="text-slate-500 font-medium">No rooms found.</p></div>}>
@@ -525,11 +554,10 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                             )}
                         </TableBody>
                     </Table>
-                )}
             </div>
 
             {/* Floating Pagination */}
-            {selectedFloorId && totalPages > 1 && (
+            {totalPages > 1 && (
                 <div className="flex-none flex justify-center pb-2">
                     <div className="flex items-center gap-4 p-2 pl-6 pr-2 bg-white border border-slate-200 rounded-full shadow-xl shadow-slate-200/50">
                         <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mr-2">
@@ -591,12 +619,13 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                             </ModalHeader>
                             <ModalBody className="px-8 py-8 gap-8">
                                 {!editingRoom && (
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                         {/* Mode Selectors */}
                                         {[
                                             { id: 'auto', label: 'Auto Sequence', desc: 'Generate continuous range', icon: Layers },
                                             { id: 'list', label: 'Custom List', desc: 'Paste specific numbers', icon: CheckSquare },
-                                            { id: 'manual', label: 'Manual Entry', desc: 'Full control per row', icon: Edit }
+                                            { id: 'manual', label: 'Manual Entry', desc: 'Full control per row', icon: Edit },
+                                            { id: 'excel', label: 'Excel Import', desc: 'Upload .xlsx array', icon: FileSpreadsheet }
                                         ].map((m) => (
                                             <div
                                                 key={m.id}
@@ -747,6 +776,34 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                                     <Button size="sm" variant="flat" fullWidth onPress={addManualRow} startContent={<Plus size={16} />}>Add Row</Button>
                                                 </div>
                                             )}
+
+                                            {bulkModeType === 'excel' && (
+                                                <div className="flex flex-col gap-4">
+                                                    <div 
+                                                        className="border-2 border-dashed border-slate-300 rounded-2xl p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50/50 transition-all group"
+                                                        onClick={() => excelInputRef.current?.click()}
+                                                    >
+                                                        <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mb-3 group-hover:bg-blue-100 transition-colors">
+                                                            <UploadCloud size={24} className="text-blue-500" />
+                                                        </div>
+                                                        <h3 className="text-sm font-bold text-slate-700">Upload .xlsx File</h3>
+                                                        <p className="text-xs text-slate-500 mt-1 max-w-[200px]">Requires 'RoomCode' and 'Capacity' columns.</p>
+                                                        <input 
+                                                            type="file"
+                                                            ref={excelInputRef}
+                                                            className="hidden"
+                                                            accept=".csv, .xlsx"
+                                                            onChange={handleExcelUpload}
+                                                        />
+                                                    </div>
+                                                    {excelRooms.length > 0 && (
+                                                        <div className="text-sm font-medium text-emerald-600 flex justify-between items-center bg-emerald-50 px-4 py-2 rounded-lg border border-emerald-200">
+                                                            <span>Loaded {excelRooms.length} rows successfully</span>
+                                                            <Button size="sm" color="danger" variant="light" isIconOnly onPress={() => setExcelRooms([])}><Ban size={16}/></Button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Right: Preview Terminal */}
@@ -797,3 +854,7 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
         </div>
     );
 };
+
+
+
+

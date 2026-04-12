@@ -97,15 +97,15 @@ const StudentResetPassword: React.FC = () => {
 
                 <form onSubmit={handleReset} className="space-y-5">
                     <div className="relative group">
-                        <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 ml-1">
-                            Reset Token
-                        </label>
+                        <label htmlFor="reset-token" className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 ml-1">
+                                Reset Token
+                            </label>
                         <div className="relative flex items-center transition-all duration-300">
                             <div className="absolute left-4 text-gray-400 group-focus-within:text-indigo-600">
                                 <RectangleEllipsis className="w-5 h-5" />
                             </div>
                             <input
-                                type="text"
+                                 id="reset-token" type="text"
                                 value={token}
                                 onChange={(e) => setToken(e.target.value)}
                                 className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 text-sm rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 block pl-12 pr-4 py-3.5 transition-all"
@@ -116,15 +116,15 @@ const StudentResetPassword: React.FC = () => {
                     </div>
 
                     <div className="relative group">
-                        <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 ml-1">
-                            New Password
-                        </label>
+                        <label htmlFor="new-password" className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 ml-1">
+                                New Password
+                            </label>
                         <div className="relative flex items-center transition-all duration-300">
                             <div className="absolute left-4 text-gray-400 group-focus-within:text-indigo-600">
                                 <KeyRound className="w-5 h-5" />
                             </div>
                             <input
-                                type="password"
+                                 id="new-password" type="password"
                                 value={newPassword}
                                 onChange={(e) => setNewPassword(e.target.value)}
                                 className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 text-sm rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 block pl-12 pr-4 py-3.5 transition-all"
@@ -135,15 +135,15 @@ const StudentResetPassword: React.FC = () => {
                     </div>
 
                     <div className="relative group">
-                        <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 ml-1">
-                            Confirm Password
-                        </label>
+                        <label htmlFor="confirm-password" className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 ml-1">
+                                Confirm Password
+                            </label>
                         <div className="relative flex items-center transition-all duration-300">
                             <div className="absolute left-4 text-gray-400 group-focus-within:text-indigo-600">
                                 <Lock className="w-5 h-5" />
                             </div>
                             <input
-                                type="password"
+                                 id="confirm-password" type="password"
                                 value={confirmPassword}
                                 onChange={(e) => setConfirmPassword(e.target.value)}
                                 className="w-full bg-gray-50/50 border border-gray-200 text-gray-900 text-sm rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 block pl-12 pr-4 py-3.5 transition-all"

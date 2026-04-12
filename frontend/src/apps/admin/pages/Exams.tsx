@@ -215,8 +215,7 @@ const Exams: React.FC = () => {
 
                     {/* Search */}
                     <div className="w-full lg:w-72">
-                        <Input
-                            id="search-exams"
+                        <Input aria-label="Search subject or code..." id="search-exams"
                             name="search-exams"
                             placeholder="Search subject or code..."
                             startContent={<Search size={18} className="text-gray-400" />}
@@ -233,8 +232,7 @@ const Exams: React.FC = () => {
 
                     {/* Dropdowns */}
                     <div className="flex gap-2 w-full lg:w-auto overflow-x-auto pb-1 lg:pb-0">
-                        <Select
-                            id="filter-department"
+                        <Select id="filter-department"
                             name="filter-department"
                             placeholder="Department: All"
                             size="sm"
@@ -274,8 +272,7 @@ const Exams: React.FC = () => {
                             ))}
                         </Select>
 
-                        <Select
-                            id="filter-session"
+                        <Select id="filter-session"        
                             name="filter-session"
                             placeholder="Session"
                             size="sm"
@@ -320,8 +317,7 @@ const Exams: React.FC = () => {
                             </SelectItem>
                         </Select>
 
-                        <Select
-                            id="filter-status"
+                        <Select aria-label="Status" id="filter-status"
                             name="filter-status"
                             placeholder="Status"
                             size="sm"

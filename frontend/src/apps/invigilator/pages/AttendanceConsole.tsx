@@ -235,8 +235,7 @@ export default function AttendanceConsole() {
                     <div className="p-4 border-b border-slate-100 space-y-3 bg-white">
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                            <input
-                                type="text"
+                            <input id="input-2w75d9z" name="input-2w75d9z" type="text"
                                 placeholder="Search seat or Reg No..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}

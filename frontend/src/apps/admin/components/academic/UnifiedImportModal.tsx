@@ -115,9 +115,9 @@ export const UnifiedImportModal = ({ isOpen, onOpenChange, onSuccess }: UnifiedI
 
                                 {/* File Upload */}
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                                    <div className="block text-sm font-medium text-slate-700 mb-2">
                                         Upload Excel File
-                                    </label>
+                                    </div>
                                     <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
                                         <input
                                             type="file"

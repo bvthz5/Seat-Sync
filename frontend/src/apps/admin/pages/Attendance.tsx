@@ -352,8 +352,7 @@ const Attendance: React.FC = () => {
                 {/* ── Search & Filter Bar ── */}
                 <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-3 flex flex-col sm:flex-row items-center gap-3">
                     <div className="flex-1 w-full">
-                        <Input
-                            placeholder="Search by Hall or Invigilator..."
+                        <Input id="field-v9fpend" name="field-v9fpend" aria-label="Search by Hall or Invigilator..." placeholder="Search by Hall or Invigilator..."
                             startContent={<Search size={16} className="text-gray-400" />}
                             value={search}
                             onValueChange={(v) => { setSearch(v); setPage(1); }}

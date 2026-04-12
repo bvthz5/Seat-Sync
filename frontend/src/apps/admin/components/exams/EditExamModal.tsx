@@ -96,7 +96,7 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
 
                             {/* Subject (Read-only) */}
                             <div>
-                                <label className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Subject</label>
+                                <span className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Subject</span>
                                 <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
                                     <p className="text-sm font-semibold text-gray-800">
                                         {exam?.Subject?.SubjectName || 'Unknown Subject'}
@@ -108,8 +108,7 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
                             {/* Exam Name */}
                             <div>
                                 <label htmlFor="edit-exam-name" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Exam Name</label>
-                                <Input
-                                    id="edit-exam-name"
+                                <Input aria-label="e.g. End Semester Exam" id="edit-exam-name"
                                     name="ExamName"
                                     autoComplete="off"
                                     placeholder="e.g. End Semester Exam"
@@ -149,24 +148,24 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-3">Session</label>
+                                    <span className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-3">Session</span>
                                     <div className="flex gap-6 h-[48px] items-center">
-                                        <label className="flex items-center gap-2 cursor-pointer group">
+                                        <label htmlFor="session-fn" className="flex items-center gap-2 cursor-pointer group">
                                             <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${formData.Session === 'FN' ? 'border-blue-600 bg-white' : 'border-gray-300 bg-white group-hover:border-gray-400'}`}>
                                                 {formData.Session === 'FN' && <div className="w-2.5 h-2.5 bg-blue-600 rounded-full" />}
                                             </div>
-                                            <input type="radio" className="hidden" name="Session" value="FN" checked={formData.Session === 'FN'} onChange={() => handleChange('Session', 'FN')} />
+                                            <input id="session-fn" type="radio" className="hidden" name="Session" value="FN" checked={formData.Session === 'FN'} onChange={() => handleChange('Session', 'FN')} />
                                             <div className="text-sm">
                                                 <span className="font-bold text-gray-700 block">Forenoon</span>
                                                 <span className="text-xs text-gray-400 font-medium">(FN)</span>
                                             </div>
                                         </label>
 
-                                        <label className="flex items-center gap-2 cursor-pointer group">
+                                        <label htmlFor="session-an" className="flex items-center gap-2 cursor-pointer group">
                                             <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${formData.Session === 'AN' ? 'border-blue-600 bg-white' : 'border-gray-300 bg-white group-hover:border-gray-400'}`}>
                                                 {formData.Session === 'AN' && <div className="w-2.5 h-2.5 bg-blue-600 rounded-full" />}
                                             </div>
-                                            <input type="radio" className="hidden" name="Session" value="AN" checked={formData.Session === 'AN'} onChange={() => handleChange('Session', 'AN')} />
+                                            <input id="session-an" type="radio" className="hidden" name="Session" value="AN" checked={formData.Session === 'AN'} onChange={() => handleChange('Session', 'AN')} />
                                             <div className="text-sm">
                                                 <span className="font-bold text-gray-700 block">Afternoon</span>
                                                 <span className="text-xs text-gray-400 font-medium">(AN)</span>

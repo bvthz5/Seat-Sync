@@ -756,7 +756,7 @@ const SeatingPlans: React.FC = () => {
                                 {/* Series */}
                                 <div className="space-y-0.5">
                                     <span className="text-[8px] font-semibold text-slate-400 uppercase tracking-widest">Series (opt)</span>
-                                    <Select aria-label="Exam Series" placeholder="ΓÇö All Series ΓÇö" variant="bordered"
+                                    <Select id="field-5xyf6xl" name="field-5xyf6xl" aria-label="Exam Series" placeholder="ΓÇö All Series ΓÇö" variant="bordered"
                                         selectedKeys={selectedSeries ? [selectedSeries] : []}
                                         onSelectionChange={(k: any) => setSelectedSeries(Array.from(k)[0] as string || '')}
                                         classNames={{
@@ -789,7 +789,7 @@ const SeatingPlans: React.FC = () => {
 
                                 <div className="space-y-0.5">
                                     <span className="text-[8px] font-semibold text-slate-400 uppercase tracking-widest">Date</span>
-                                    <Select aria-label="Exam Date" placeholder="ΓÇö Select Date ΓÇö" variant="bordered"
+                                    <Select id="field-r4rtsv6" name="field-r4rtsv6" aria-label="Exam Date" placeholder="ΓÇö Select Date ΓÇö" variant="bordered"
                                         selectedKeys={selectedDate ? [selectedDate] : []}
                                         onSelectionChange={(k: any) => setSelectedDate(Array.from(k)[0] as string || '')}
                                         classNames={{
@@ -876,7 +876,7 @@ const SeatingPlans: React.FC = () => {
                                 <div className="grid grid-cols-2 gap-2">
                                     <div className="space-y-0.5">
                                         <span className="text-[8px] font-semibold text-slate-400 uppercase tracking-widest">Left Dept</span>
-                                        <Select aria-label="Left Department" placeholder="ΓÇö None ΓÇö" variant="bordered"
+                                        <Select id="field-o8lcqzi" name="field-o8lcqzi" aria-label="Left Department" placeholder="ΓÇö None ΓÇö" variant="bordered"
                                             selectedKeys={leftDept ? [leftDept] : []}
                                             onSelectionChange={(k: any) => setLeftDept(Array.from(k)[0] as string || '')}
                                             classNames={{
@@ -888,7 +888,7 @@ const SeatingPlans: React.FC = () => {
                                     </div>
                                     <div className="space-y-0.5">
                                         <span className="text-[8px] font-semibold text-slate-400 uppercase tracking-widest">Right Dept</span>
-                                        <Select aria-label="Right Department" placeholder="ΓÇö None ΓÇö" variant="bordered"
+                                        <Select id="field-kz63nbb" name="field-kz63nbb" aria-label="Right Department" placeholder="ΓÇö None ΓÇö" variant="bordered"
                                             selectedKeys={rightDept ? [rightDept] : []}
                                             onSelectionChange={(k: any) => setRightDept(Array.from(k)[0] as string || '')}
                                             classNames={{
@@ -1351,9 +1351,8 @@ const SeatingPlans: React.FC = () => {
                         </div>
                     </ModalHeader>
                     <ModalBody className="p-6">
-                        <label className="text-[13px] font-semibold text-slate-300 mb-2 block">New Room Capacity</label>
-                        <Input
-                            type="number"
+                        <span className="text-[13px] font-semibold text-slate-300 mb-2 block">New Room Capacity</span>
+                        <Input id="field-sjo5kdn" name="field-sjo5kdn" aria-label="e.g. 60" type="number"
                             value={editCapacity}
                             onValueChange={setEditCapacity}
                             placeholder="e.g. 60"

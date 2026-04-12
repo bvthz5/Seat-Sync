@@ -105,7 +105,8 @@ export const EmergencyPanel: React.FC<EmergencyPanelProps> = ({ examId, examName
                         <button
                             key={t.id}
                             role="tab"
-                            aria-selected={tab === t.id}
+                              id={`tab-${t.id}`}
+                              aria-selected={tab === t.id}
                             aria-controls={`panel-${t.id}`}
                             id={`tab-${t.id}`}
                             onClick={() => setTab(t.id as any)}

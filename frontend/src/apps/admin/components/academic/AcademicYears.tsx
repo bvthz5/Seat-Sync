@@ -111,8 +111,7 @@ export const AcademicYears: React.FC<AcademicYearsProps> = ({ onYearChange }) =>
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden min-h-[600px] flex flex-col">
             {/* Toolbar */}
             <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-white gap-4">
-                <Input
-                    isClearable
+                <Input id="field-iteksfz" name="field-iteksfz" aria-label="Search academic years..." isClearable
                     classNames={{
                         base: "w-full sm:max-w-[44%]",
                         inputWrapper: "border-1 bg-slate-50 hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:bg-white transition-colors",
@@ -279,9 +278,8 @@ export const AcademicYears: React.FC<AcademicYearsProps> = ({ onYearChange }) =>
 
                                     {/* Auto-Generated Name */}
                                     <div className="space-y-2">
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Year Name</label>
-                                        <Input
-                                            aria-label="Year Name"
+                                        <div className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Year Name</div>
+                                        <Input id="field-93nrw97" name="field-93nrw97" aria-label="Year Name"
                                             value={yearName}
                                             onValueChange={setYearName}
                                             variant="faded"
@@ -297,7 +295,7 @@ export const AcademicYears: React.FC<AcademicYearsProps> = ({ onYearChange }) =>
                                     {/* Year Selectors */}
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
-                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Start Year</label>
+                                            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Start Year</div>
                                             <select
                                                 className="w-full h-12 px-4 bg-white border border-slate-200 rounded-xl text-slate-700 font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                                 value={startYear}
@@ -310,7 +308,7 @@ export const AcademicYears: React.FC<AcademicYearsProps> = ({ onYearChange }) =>
                                             </select>
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">End Year</label>
+                                            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">End Year</div>
                                             <select
                                                 className="w-full h-12 px-4 bg-white border border-slate-200 rounded-xl text-slate-700 font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                                 value={endYear}

@@ -53,9 +53,16 @@ SeatAllocation.init(
     sequelize,
     tableName: "SeatAllocations",
     timestamps: false,
+    indexes: [
+      {
+        fields: ["SeatID"], // Optimize lookups for a specific seat
+      },
+      {
+        fields: ["StudentID"], // Optimize lookups for a student's exams
+      },
+    ],
   }
 );
-
 /**
  * Associations
  */

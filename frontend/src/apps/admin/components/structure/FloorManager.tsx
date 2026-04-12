@@ -262,7 +262,7 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                         </Autocomplete>
                     </div>
 
-                    {!readOnly && selectedBlockId && (
+                    {!readOnly && (
                         <Button
                             onPress={() => handleOpen()}
                             color="primary"
@@ -277,32 +277,18 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
             </div>
 
             {/* Pagination Info Top */}
-            {selectedBlockId && (
-                <div className="flex-none flex justify-between items-center px-4 -mb-2 z-10">
-                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                        Showing <span className="text-slate-900">{(floors?.length || 0) === 0 ? 0 : (page - 1) * limit + 1}</span> - <span className="text-slate-900">{Math.min(page * limit, totalItems)}</span> of <span className="text-slate-900">{totalItems}</span>
-                    </div>
+            <div className="flex-none flex justify-between items-center px-4 -mb-2 z-10">
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Showing <span className="text-slate-900">{(floors?.length || 0) === 0 ? 0 : (page - 1) * limit + 1}</span> - <span className="text-slate-900">{Math.min(page * limit, totalItems)}</span> of <span className="text-slate-900">{totalItems}</span>
                 </div>
-            )}
+            </div>
 
             <div className="flex-1 min-h-0 relative z-0">
-                {!selectedBlockId ? (
-                    // Empty State
-                    <div className="h-full flex flex-col items-center justify-center bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200">
-                        <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-lg shadow-slate-200/50 mb-6 ring-1 ring-slate-100">
-                            <Building2 className="text-slate-400" size={36} strokeWidth={1.5} />
-                        </div>
-                        <h3 className="text-xl font-bold text-slate-800 mb-2">Select a Building</h3>
-                        <p className="text-slate-500 max-w-sm text-center font-medium leading-relaxed">
-                            Please select a building block from the dropdown above to view and manage its floors.
-                        </p>
-                    </div>
-                ) : (
-                    // Table
-                    <Table
-                        isHeaderSticky
-                        aria-label="Floors table"
-                        classNames={{
+                {/* Table */}
+                <Table
+                    isHeaderSticky
+                    aria-label="Floors table"
+                    classNames={{
                             base: "h-full",
                             wrapper: "bg-white shadow-sm border border-slate-200 rounded-3xl p-0 h-full overflow-auto custom-scrollbar",
                             th: "bg-slate-50/50 text-slate-500 font-bold text-[11px] uppercase tracking-wider py-4 px-6 border-b border-slate-100",
@@ -383,11 +369,10 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                             )}
                         </TableBody>
                     </Table>
-                )}
-            </div>
+                </div>
 
-            {/* Floating Pagination */}
-            {selectedBlockId && totalPages > 1 && (
+                {/* Floating Pagination */}
+                {totalPages > 1 && (
                 <div className="flex-none flex justify-center pb-2">
                     <div className="flex items-center gap-4 p-2 pl-6 pr-2 bg-white border border-slate-200 rounded-full shadow-xl shadow-slate-200/50">
                         <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mr-2">

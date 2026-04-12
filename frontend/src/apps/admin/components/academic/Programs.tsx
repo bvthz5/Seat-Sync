@@ -222,8 +222,7 @@ export const Programs: React.FC<ProgramsProps> = ({ academicYearId }) => {
 
                 {/* Filter */}
                 <div className="ml-auto w-64">
-                    <Select
-                        placeholder="Filter by Department"
+                    <Select id="field-zkws6r2" name="field-zkws6r2" aria-label="Filter by Department" placeholder="Filter by Department"
                         selectedKeys={filterDept ? [filterDept] : []}
                         onChange={(e) => setFilterDept(e.target.value)}
                         startContent={<Filter size={16} />}
@@ -319,9 +318,8 @@ export const Programs: React.FC<ProgramsProps> = ({ academicYearId }) => {
                             <ModalBody>
                                 <div className="space-y-4">
                                     <div>
-                                        <label className="text-sm font-medium text-slate-700 block mb-1">Department</label>
-                                        <Select
-                                            placeholder="Select Department"
+                                        <div className="text-sm font-medium text-slate-700 block mb-1">Department</div>
+                                        <Select id="field-ecyoty8" name="field-ecyoty8" aria-label="Select Department" placeholder="Select Department"
                                             selectedKeys={formData.DepartmentID ? [formData.DepartmentID] : []}
                                             onChange={(e) => setFormData({...formData, DepartmentID: e.target.value})}
                                             variant="bordered"
@@ -334,9 +332,11 @@ export const Programs: React.FC<ProgramsProps> = ({ academicYearId }) => {
                                         </Select>
                                     </div>
                                     <div>
-                                        <label className="text-sm font-medium text-slate-700">Program Code</label>
-                                        <input 
-                                            type="text" 
+                                        <label htmlFor="progCode" className="text-sm font-medium text-slate-700 block mb-1">Program Code</label>
+                                        <input
+                                            id="progCode"
+                                            name="ProgramCode"
+                                            type="text"
                                             value={formData.ProgramCode}
                                             onChange={(e) => setFormData({...formData, ProgramCode: e.target.value.toUpperCase()})}
                                             className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:outline-none"
@@ -344,9 +344,11 @@ export const Programs: React.FC<ProgramsProps> = ({ academicYearId }) => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-sm font-medium text-slate-700">Program Name</label>
-                                        <input 
-                                            type="text" 
+                                        <label htmlFor="progName" className="text-sm font-medium text-slate-700 block mb-1">Program Name</label>
+                                        <input
+                                            id="progName"
+                                            name="ProgramName"
+                                            type="text"
                                             value={formData.ProgramName}
                                             onChange={(e) => setFormData({...formData, ProgramName: e.target.value})}
                                             className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:outline-none"
@@ -354,8 +356,10 @@ export const Programs: React.FC<ProgramsProps> = ({ academicYearId }) => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-sm font-medium text-slate-700">Duration (Years)</label>
-                                        <input 
+                                        <label htmlFor="progDuration" className="text-sm font-medium text-slate-700 block mb-1">Duration (Years)</label>
+                                        <input
+                                            id="progDuration"
+                                            name="DurationYears"
                                             type="number" 
                                             min="1" max="10"
                                             value={formData.DurationYears}
@@ -481,9 +485,9 @@ export const Programs: React.FC<ProgramsProps> = ({ academicYearId }) => {
 
                                 {/* File Upload */}
                                 <div className="mt-6">
-                                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                                    <div className="block text-sm font-semibold text-slate-700 mb-2">
                                         Select Excel File
-                                    </label>
+                                    </div>
                                     <input
                                         id="prog-file-input-modal"
                                         type="file"

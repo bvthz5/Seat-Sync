@@ -82,7 +82,7 @@ export const CreateNotification: React.FC = () => {
             }
 
             let apiTargetType = 'ALL';
-            let apiTargetId = null;
+            let apiTargetId: string | null = null;
 
             switch (audienceType) {
                 case 'all': apiTargetType = 'ALL'; break;
@@ -144,8 +144,7 @@ export const CreateNotification: React.FC = () => {
                                 <label htmlFor="title" className="block text-sm font-bold text-slate-700 ml-1">
                                     Subject Line <span className="text-red-500">*</span>
                                 </label>
-                                <Input
-                                    id="title"
+                                <Input aria-label="e.g., Final Exam Schedule Update" id="title"
                                     placeholder="e.g., Final Exam Schedule Update"
                                     variant="flat"
                                     radius="lg"
@@ -165,8 +164,7 @@ export const CreateNotification: React.FC = () => {
                                 <label htmlFor="message" className="block text-sm font-bold text-slate-700 ml-1">
                                     Message Body <span className="text-red-500">*</span>
                                 </label>
-                                <Textarea
-                                    id="message"
+                                <Textarea aria-label="Enter the main content of your notification..." id="message"
                                     placeholder="Enter the main content of your notification..."
                                     variant="flat"
                                     radius="lg"
@@ -267,9 +265,8 @@ export const CreateNotification: React.FC = () => {
                         <div className="min-h-[50px]">
                             {audienceType === 'exam' && (
                                 <div className="animate-in fade-in slide-in-from-top-2 space-y-2">
-                                    <label className="block text-sm font-bold text-slate-700 ml-1">Which Exam?</label>
-                                    <Select
-                                        placeholder="Select an exam series"
+                                    <span className="block text-sm font-bold text-slate-700 ml-1">Which Exam?</span>
+                                    <Select id="field-o5xqsr5" name="field-o5xqsr5" aria-label="Select an exam series" placeholder="Select an exam series"
                                         variant="flat"
                                         selectedKeys={selectedExam ? [selectedExam] : []}
                                         onChange={(e) => setSelectedExam(e.target.value)}

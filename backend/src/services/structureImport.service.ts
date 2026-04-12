@@ -20,275 +20,150 @@ export class StructureImportService {
      * Helper: Extract room code and block name from "Room Number with block" format
      * Examples: "A101", "B-205", "Block A Room 101"
      */
-    private parseRoomNumberWithBlock(roomStr: string): { blockName: string; roomCode: string } {
-        const trimmed = roomStr.trim();
+    private parseRoomCode(roomStr: string): { block: string; roomNumber: number; floor: number } {
+        if (!roomStr || typeof roomStr !== "string") {
+            return { block: "MAIN", roomNumber: 0, floor: 0 };
+        }
         
-        // Try pattern: "BlockName Room/Code" or "BlockName-Code" or "BlockNameCode"
-        const match1 = trimmed.match(/^([A-Za-z]+)\s*[-]?\s*([A-Za-z0-9]+)$/);
-        if (match1 && match1[1] && match1[2]) {
-            return {
-                blockName: match1[1].toUpperCase(),
-                roomCode: match1[2]
-            };
+        const trimmed = roomStr.trim();
+        let block = "MAIN";
+        let roomNumber = 0;
+        
+        const match = trimmed.match(/^(?:room\s+)?(?:block\s+)?([a-zA-Z]+)(?:\s+room)?\s*[-_#]*\s*(\d+)$/i);
+        const validBlockMatch = match && match[1] && match[2] && !/^(room|block)$/i.test(match[1]);
+        
+        if (validBlockMatch && match && match[1] && match[2]) {
+            block = match[1].toUpperCase();
+            roomNumber = parseInt(match[2], 10);
+        } else {
+            const numMatch = trimmed.match(/(\d+)/);
+            if (numMatch && numMatch[1]) roomNumber = parseInt(numMatch[1], 10);
+            
+            const alphaMatch = trimmed.match(/([a-zA-Z]+)/g);
+            if (alphaMatch) {
+                const validAlpha = alphaMatch.find(i => !/^(room|block)$/i.test(i));
+                if (validAlpha) block = validAlpha.toUpperCase();
+            }
         }
-
-        // Try pattern: "Room Block Name Code" (e.g., "Room A 101")
-        const match2 = trimmed.match(/(?:room\s+)?([A-Za-z]+)\s+(\d+)/i);
-        if (match2 && match2[1] && match2[2]) {
-            return {
-                blockName: match2[1].toUpperCase(),
-                roomCode: match2[2]
-            };
-        }
-
-        // Fallback: treat entire string as room code with default block
-        return {
-            blockName: 'MAIN',
-            roomCode: trimmed
-        };
+        
+        const floor = Math.floor(roomNumber / 100);
+        
+        return { block, roomNumber, floor };
     }
 
     /**
      * Helper: Identify if headers contain the detailed Excel format
      * with "Room Number with block" or similar merged header format
      */
-    private detectFormat(headers: string[]):
-        { type: 'detailed'; rowNumberCol: string } |
-        { type: 'legacy' } |
-        null {
-        // Check for "Room Number with block" or similar variants
-        const roomNumberCol = headers.find(h =>
-            h.toLowerCase().includes('room') &&
-            h.toLowerCase().includes('number') &&
-            h.toLowerCase().includes('block')
-        );
-
-        if (roomNumberCol) {
-            return { type: 'detailed', rowNumberCol: roomNumberCol };
-        }
-
-        // Check for legacy format
-        if (headers.includes('BlockName') && 
-            headers.includes('FloorNumber') && 
-            headers.includes('RoomCode')) {
-            return { type: 'legacy' };
-        }
-
-        return null;
-    }
-
-    /**
-     * Helper: Extract numeric row layout from detailed Excel columns
-     * Filters out __EMPTY and non-numeric columns, returns desk counts per row
-     */
-    private extractRowLayout(row: SheetRow, headers: string[]): number[] {
-        const layout: number[] = [];
-        
-        for (const header of headers) {
-            // Skip metadata columns
-            if (header.toLowerCase().includes('room') || 
-                header.toLowerCase().includes('block') ||
-                header.toLowerCase().includes('capacity') ||
-                header === 'Capacity' ||
-                !header.trim() || 
-                header.toLowerCase().startsWith('__empty')) {
-                continue;
-            }
-            
-            const value = row[header];
-            if (value !== undefined && value !== null && value !== '') {
-                const numValue = Number(value);
-                if (!isNaN(numValue) && numValue > 0) {
-                    layout.push(numValue);
-                }
-            }
-        }
-        
-        // Remove trailing zeros
-        while (layout.length > 0 && layout[layout.length - 1] === 0) {
-            layout.pop();
-        }
-        
-        return layout;
-    }
-
-    async importFromCSV(fileBuffer: Buffer): Promise<ImportResult> {
-        // 1. Read workbook (handles both CSV and Excel seamlessly)
+    private parseUnifiedFile(fileBuffer: Buffer): { roomName: string; rowLayout: number[]; capacity: number }[] {
         const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
         const sheetName = workbook.SheetNames[0];
         if (!sheetName) throw new Error("No sheets found in file");
         
         const sheet = workbook.Sheets[sheetName];
         if (!sheet) throw new Error("Sheet not found");
-        
-        let rows = XLSX.utils.sheet_to_json<SheetRow>(sheet, { defval: '' });
 
-        if (!rows || rows.length === 0) {
-            throw new Error("File is empty or invalid format.");
+        let rows = XLSX.utils.sheet_to_json<any>(sheet, { defval: null });
+        if (!rows || rows.length === 0) throw new Error("File is empty or invalid format.");
+
+        const results: { roomName: string; rowLayout: number[]; capacity: number }[] = [];
+        const seenRooms = new Set<string>();
+
+        const firstRowHeaders = Object.keys(rows[0]);
+        const colMap = new Map<string, string>();
+        for (const h of firstRowHeaders) {
+             const m = h.toLowerCase().trim().match(/^(?:row\s*)?([a-f])$/i);
+             if (m && m[1]) colMap.set(m[1].toLowerCase(), h);
         }
 
-        // Clean out spaces in keys (e.g. ' BlockName ' -> 'BlockName')
-        const normalizedRows = rows.map(row => {
-            const nr: any = {};
-            for (const key in row) {
-                const val = typeof row[key] === 'string' ? row[key].trim() : String(row[key]);
-                nr[key.trim()] = val;
+        const roomHeader = firstRowHeaders.find(h => h.toLowerCase().includes('room') && (h.toLowerCase().includes('number') || h.toLowerCase().includes('code')));
+        
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const lineNum = i + 2;
+
+            if (Object.keys(row).every(k => !row[k])) continue;
+            
+            // Disregard logic
+            const disregardTypes = Object.values(row).some(v => typeof v === 'string' && v.includes('//Disregard//'));
+            if (disregardTypes) continue;
+
+            let roomName = "";
+            if (roomHeader && row[roomHeader]) {
+               roomName = String(row[roomHeader]).trim();
+            } else if (row['RoomCode']) {
+               roomName = String(row['RoomCode']).trim();
             }
-            return nr;
-        });
 
-        // 2. Detect format
-        const firstRowHeaders = Object.keys(normalizedRows[0]);
-        const formatInfo = this.detectFormat(firstRowHeaders);
-        
-        if (!formatInfo) {
-            throw new Error(
-                `Unsupported file format. Expected either:\n` +
-                `- Legacy: [BlockName, FloorNumber, RoomCode, Capacity]\n` +
-                `- Detailed: [Room Number with block, Row A, Row B, ...]\n` +
-                `Columns found: ${firstRowHeaders.join(', ')}`
-            );
+            if (!roomName) continue;
+            
+            if (seenRooms.has(roomName.toLowerCase())) {
+                throw new Error(`Row ${lineNum}: Duplicate room name '${roomName}'`);
+            }
+            seenRooms.add(roomName.toLowerCase());
+
+            let rowLayout: number[] = [];
+            let rCapacity = 0;
+            if (colMap.size > 0) {
+               for (const char of ['a', 'b', 'c', 'd', 'e', 'f']) {
+                  if (colMap.has(char)) {
+                     const val = row[colMap.get(char)!];
+                     const benches = val === null || val === undefined ? 0 : Number(val) || 0;
+                     rowLayout.push(benches);
+                     rCapacity += benches * 2;
+                  }
+               }
+            } else {
+               const cap = parseInt(row['Capacity']) || 0;
+               if (cap > 0) {
+                   const benches = Math.ceil(cap / 2);
+                   const cols = Math.min(benches, 3);
+                   if (cols > 0) {
+                       const rowSize = Math.floor(benches / cols);
+                       for (let c = 0; c < cols; c++) rowLayout.push(rowSize);
+                       const rem = benches % cols;
+                       if (rem > 0 && rowLayout.length > 0) {
+                           rowLayout[0] = (rowLayout[0] || 0) + rem;
+                       }
+                   }
+                   rCapacity = cap;
+               }
+            }
+            
+            if (rowLayout.length > 6) {
+                rowLayout = rowLayout.slice(0, 6);
+            }
+
+            results.push({ roomName, rowLayout, capacity: rCapacity });
         }
+        
+        return results;
+    }
 
-        const isDetailedFormat = formatInfo.type === 'detailed';
-        const roomNumberCol = isDetailedFormat ? (formatInfo as any).rowNumberCol : undefined;
-
+    async importFromCSV(fileBuffer: Buffer, options?: { autoZone: boolean; zoneCount: number }): Promise<ImportResult> {
+        let parsedData;
+        try {
+            parsedData = await Promise.resolve(this.parseUnifiedFile(fileBuffer));
+        } catch(e) { throw e; }
+        
         const transaction = await sequelize.transaction();
         let blocksCreated = 0;
         let floorsCreated = 0;
         let roomsCreated = 0;
+        const roomsToZone: number[] = [];
 
         try {
-            const processedRooms = new Set<string>();
             const blockCache = new Map<string, number>();
             const floorCache = new Map<string, number>();
-            const seatsPerBench = 2; // Fixed per exam hall standards
+            const seatsPerBench = 2;
 
-            for (let i = 0; i < normalizedRows.length; i++) {
-                const row = normalizedRows[i];
-                const lineNum = i + 2;
+            for (const item of parsedData) {
+                const parsed = this.parseRoomCode(item.roomName);
+                const blockName = parsed.block;
+                const roomCode = String(parsed.roomNumber);
+                const floorNum = parsed.floor;
+                const isExamUsable = true;
 
-                // Skip completely empty rows
-                if (Object.keys(row).every(k => !row[k])) continue;
-
-                let blockName = "MAIN";
-                let roomCode = "";
-                let floorNum = 0;
-                let isExamUsable = true;
-                let rowLayout: number[] = [];
-
-                // ========== PARSE BASED ON FORMAT ==========
-                if (isDetailedFormat) {
-                    // Detailed format: extract from "Room Number with block" column
-                    const roomNumberValue = row[roomNumberCol!];
-                    if (!roomNumberValue) continue;
-
-                    const parsed = this.parseRoomNumberWithBlock(String(roomNumberValue));
-                    blockName = parsed.blockName;
-                    roomCode = parsed.roomCode;
-
-                    // Assume floor number can be derived from room code if it's numeric
-                    const roomNum = parseInt(roomCode);
-                    if (!isNaN(roomNum)) {
-                        floorNum = Math.floor(roomNum / 100) || 0;
-                    } else {
-                        floorNum = 0; // Ground floor by default
-                    }
-
-                    // Extract row layout from numeric columns
-                    rowLayout = this.extractRowLayout(row, firstRowHeaders);
-
-                    // Override with explicit Capacity if provided
-                    if (row.Capacity) {
-                        const explicitCapacity = parseInt(row.Capacity);
-                        if (!isNaN(explicitCapacity) && explicitCapacity > 0) {
-                            // Use capacity to derive layout if not present
-                            if (rowLayout.length === 0) {
-                                const benches = Math.ceil(explicitCapacity / seatsPerBench);
-                                const cols = Math.min(benches, 3);
-                                if (cols > 0) {
-                                    const rowSize = Math.floor(benches / cols);
-                                    for (let c = 0; c < cols; c++) rowLayout.push(rowSize);
-                                    const rem = benches % cols;
-                                    if (rem > 0 && rowLayout.length > 0) {
-                                        rowLayout[0] = (rowLayout[0] || 0) + rem;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    // Legacy format
-                    blockName = row.BlockName || "MAIN";
-                    floorNum = parseInt(row.FloorNumber) || 0;
-                    roomCode = String(row.RoomCode || "");
-                    
-                    if (row.IsExamUsable !== undefined) {
-                        isExamUsable = String(row.IsExamUsable).toLowerCase() === 'true';
-                    }
-
-                    // Build row layout from single letter columns (A, B, C, etc.)
-                    const layoutColumns = firstRowHeaders
-                        .filter(col => /^[A-Z]$/i.test(col))
-                        .sort();
-
-                    for (const col of layoutColumns) {
-                        const benchCount = Number(row[col]) || 0;
-                        rowLayout.push(benchCount);
-                        if (rowLayout.length >= 10) break;
-                    }
-
-                    // Remove trailing zeros
-                    while (rowLayout.length > 0 && rowLayout[rowLayout.length - 1] === 0) {
-                        rowLayout.pop();
-                    }
-
-                    // Fallback: use explicit Capacity if no layout
-                    const capacityStr = row.Capacity || "0";
-                    const explicitCapacity = parseInt(capacityStr);
-                    
-                    if (rowLayout.length === 0 && explicitCapacity > 0) {
-                        const benches = Math.ceil(explicitCapacity / seatsPerBench);
-                        const cols = Math.min(benches, 3);
-                        if (cols > 0) {
-                            const rowSize = Math.floor(benches / cols);
-                            for (let c = 0; c < cols; c++) rowLayout.push(rowSize);
-                            const rem = benches % cols;
-                            if (rem > 0 && rowLayout.length > 0) {
-                                rowLayout[0] = (rowLayout[0] || 0) + rem;
-                            }
-                        }
-                    }
-                }
-
-                // ========== VALIDATE ==========
-                if (!roomCode) {
-                    throw new Error(`Row ${lineNum}: Cannot derive RoomCode`);
-                }
-
-                if (processedRooms.has(roomCode.toLowerCase())) {
-                    throw new Error(`Row ${lineNum}: Duplicate Room '${roomCode}' in file.`);
-                }
-                processedRooms.add(roomCode.toLowerCase());
-
-                // Calculate total capacity
-                let totalCapacity = 0;
-                if (rowLayout.length > 0) {
-                    totalCapacity = rowLayout.reduce(
-                        (sum, benches) => sum + (benches * seatsPerBench), 
-                        0
-                    );
-                } else {
-                    // Fallback: assume some default or skip
-                    continue; // Skip rows with no valid layout
-                }
-
-                if (!totalCapacity || totalCapacity <= 0) {
-                    throw new Error(`Row ${lineNum}: Room '${roomCode}' has invalid layout / capacity (0).`);
-                }
-
-                // ========== DATABASE WRITES ==========
-                // Create or fetch Block
                 let blockId = blockCache.get(blockName.toLowerCase());
                 if (!blockId) {
                     let block = await Block.findOne(
@@ -308,7 +183,6 @@ export class StructureImportService {
 
                 if (!blockId) throw new Error("BlockID required");
 
-                // Create or fetch Floor
                 const floorKey = `${blockId}-${floorNum}`;
                 let floorId = floorCache.get(floorKey);
                 if (!floorId) {
@@ -329,43 +203,22 @@ export class StructureImportService {
 
                 if (!floorId) throw new Error("FloorID required");
 
-                // Create or Update Room
                 let existingRoom = await Room.findOne(
                     { where: { RoomCode: roomCode, FloorID: floorId }, transaction }
                 );
 
-                if (existingRoom) {
-                    const roomData = (existingRoom as any).toJSON ? (existingRoom as any).toJSON() : existingRoom;
-                    
-                    // Skip if layout is locked
-                    if (roomData.IsLayoutLocked) continue;
-
-                    await Room.update(
-                        {
-                            Capacity: totalCapacity,
-                            RowLayout: rowLayout,
-                        },
-                        { where: { RoomID: roomData.RoomID }, transaction }
-                    );
-
-                    // Refresh and regenerate seats
-                    existingRoom = await Room.findOne(
-                        { where: { RoomID: roomData.RoomID }, transaction }
-                    );
-                    await generateSeats(existingRoom as any);
-                } else {
-                    // Create new room
+                if (!existingRoom) {
                     const newRoom = await Room.create(
                         {
                             RoomCode: roomCode,
                             BlockID: blockId,
                             FloorID: floorId,
-                            Capacity: totalCapacity,
+                            Capacity: item.capacity,
                             ExamUsable: isExamUsable,
                             Status: 'Active',
                             RoomType: 'ROOM',
                             LayoutType: 'CUSTOM',
-                            RowLayout: rowLayout,
+                            RowLayout: item.rowLayout,
                             SeatsPerBench: seatsPerBench,
                             IsLayoutLocked: false
                         },
@@ -373,11 +226,28 @@ export class StructureImportService {
                     );
                     roomsCreated++;
 
-                    await generateSeats(newRoom as any);
+                    // Generate exact seats inside the room transaction
+                    await generateSeats(newRoom, transaction);
+                    
+                    if (options?.autoZone) roomsToZone.push(newRoom.RoomID);
+                } else if (options?.autoZone) {
+                    roomsToZone.push(existingRoom.RoomID);
                 }
             }
 
             await transaction.commit();
+
+            if (options?.autoZone && roomsToZone.length > 0) {
+                const { RoomService } = await import('./room.service.js');
+                const roomService = new RoomService();
+                for (const rId of roomsToZone) {
+                    try {
+                        await roomService.autoZoneRoom(rId, options.zoneCount);
+                    } catch (err: any) {
+                        console.error(`AutoZoning failed for room ${rId}:`, err.message);
+                    }
+                }
+            }
 
             return {
                 blocksCreated,

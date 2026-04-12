@@ -103,6 +103,12 @@ export const structureService = {
         await api.delete(`${PREFIX}/zones/${zoneId}`);
     },
 
+    // --- AUTO-ZONE ---
+    autoZoneRoom: async (roomId: number, zoneCount: number) => {
+        const response = await api.post(`${PREFIX}/rooms/${roomId}/auto-zone`, { zoneCount });
+        return response.data;
+    },
+
     // --- SEAT UPDATES ---
     updateSeatZones: async (roomId: number, updates: { SeatID: number, ZoneID?: number | null, IsActive?: boolean }[]) => {
         const response = await api.put(`${PREFIX}/rooms/${roomId}/seats`, { updates });
@@ -110,9 +116,11 @@ export const structureService = {
     },
 
     // --- IMPORT ---
-    importStructure: async (file: File) => {
+    importStructure: async (file: File, options?: { autoZone: boolean, zoneCount: number }) => {
         const formData = new FormData();
         formData.append('file', file);
+        if (options?.autoZone) formData.append('autoZone', 'true');
+        if (options?.zoneCount) formData.append('zoneCount', options.zoneCount.toString());
         const response = await api.post<{ blocksCreated: number, floorsCreated: number, roomsCreated: number }>(`/college-structure/import/csv`, formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',

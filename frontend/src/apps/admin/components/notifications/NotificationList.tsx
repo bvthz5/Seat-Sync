@@ -96,8 +96,7 @@ export const NotificationList: React.FC = () => {
     return (
         <div className="flex flex-col gap-4">
             <div className="flex justify-between gap-3 items-end">
-                <Input
-                    isClearable
+                <Input id="field-2s28dr9" name="field-2s28dr9" aria-label="Search by name..." isClearable
                     className="w-full sm:max-w-[44%]"
                     placeholder="Search by name..."
                     startContent={<Search className="w-4 h-4 text-default-400" />}
@@ -107,8 +106,7 @@ export const NotificationList: React.FC = () => {
                     variant="bordered"
                 />
                 <div className="flex gap-3">
-                    <Select
-                        placeholder="Status"
+                    <Select id="field-tzqn676" name="field-tzqn676" aria-label="Status" placeholder="Status"
                         variant="bordered"
                         defaultSelectedKeys={["all"]}
                         className="w-[150px]"

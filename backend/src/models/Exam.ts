@@ -106,6 +106,14 @@ Exam.init(
     sequelize,
     tableName: "Exams",
     timestamps: false,
+    indexes: [
+      {
+        fields: ["ExamDate"], // Optmize query for exams on a specific date
+      },
+      {
+        fields: ["ExamSeriesID"],
+      },
+    ],
   }
 );
 

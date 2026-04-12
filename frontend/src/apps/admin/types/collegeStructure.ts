@@ -31,6 +31,7 @@ export interface Room {
     BenchMode?: 'PAIRED' | 'ALTERNATING';
     IsLayoutLocked?: boolean;
     Floor?: Floor;
+    Block?: Block;
 }
 
 // Stats interface for layout visualization

@@ -103,8 +103,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClos
                                     </p>
                                     <p className="text-sm text-gray-400 mt-1">.xlsx or .xls files (max 5MB)</p>
                                 </div>
-                                <input
-                                    type="file"
+                                <input id="input-b63izrf" name="input-b63izrf" type="file"
                                     accept=".xlsx, .xls"
                                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                                     onChange={handleFileChange}

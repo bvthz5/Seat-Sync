@@ -376,7 +376,7 @@ const InvigilatorRequest: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Department && touchedFields.has('Department') ? 'text-red-600' : 'text-slate-400'}`}>
+                                    <label htmlFor="department" className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Department && touchedFields.has('Department') ? 'text-red-600' : 'text-slate-400'}`}>
                                         Department <span className="text-rose-400">*</span>
                                     </label>
                                     <input type="hidden" id="department" name="department" value={formData.Department} />

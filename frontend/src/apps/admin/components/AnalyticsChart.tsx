@@ -27,18 +27,18 @@ const CustomTooltip = ({ active, payload }: any) => {
     return null;
 };
 
-// Suppress recharts console warnings
+// Removed custom console warning interceptor as it obfuscated component stack traces.
 const silenceConsoleWarnings = () => {
-    if (typeof window !== 'undefined') {
-        const originalWarn = console.warn;
-        console.warn = (...args: any[]) => {
-            const message = args[0]?.toString?.() || '';
-            if (message.includes('width') && message.includes('height') && message.includes('chart')) {
-                return;
-            }
-            originalWarn(...args);
-        };
-    }
+    // Only silence specific recharts warnings, don't intercept everything.
+    const originalWarn = console.warn;
+    console.warn = (...args: any[]) => {
+        const message = args[0]?.toString?.() || '';
+        if (message.includes('width') && message.includes('height') && message.includes('chart')) {
+            return; // Ignore recharts layout warning
+        }
+        // Let React/HeroUI throw their own warnings natively to preserve their stack traces
+        originalWarn(...args);
+    };
 };
 
 export const AnalyticsChart: React.FC = () => {

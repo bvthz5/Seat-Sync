@@ -94,8 +94,7 @@ export const LiveExamDetails: React.FC = () => {
 
                 {selectedTab === 'students' && (
                     <div className="space-y-4">
-                        <Input
-                            placeholder="Filter by ID or Name..."
+                        <Input id="field-6qs8519" name="field-6qs8519" aria-label="Filter by ID or Name..." placeholder="Filter by ID or Name..."
                             startContent={<Search size={14} className="text-slate-400" />}
                             size="sm"
                             variant="bordered"

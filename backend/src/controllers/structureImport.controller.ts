@@ -8,8 +8,11 @@ export const importStructureMetrics = async (req: Request, res: Response) => {
         if (!req.file) {
             return res.status(400).json({ message: "No CSV file uploaded" });
         }
+        
+        const autoZone = req.body.autoZone === 'true' || req.body.autoZone === true;
+        const zoneCount = parseInt(req.body.zoneCount, 10) || 3;
 
-        const result = await importService.importFromCSV(req.file.buffer);
+        const result = await importService.importFromCSV(req.file.buffer, { autoZone, zoneCount });
         res.status(200).json(result);
 
     } catch (error: any) {

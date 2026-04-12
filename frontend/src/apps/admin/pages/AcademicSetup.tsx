@@ -201,8 +201,7 @@ const DepartmentsTab: React.FC = () => {
             <div className="flex flex-col sm:flex-row justify-between gap-3 mb-5">
                 <div className="relative flex-1 max-w-xs">
                     <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                        value={search} onChange={e => setSearch(e.target.value)}
+                    <input id="input-xafreus" name="input-xafreus" value={search} onChange={e => setSearch(e.target.value)}
                         placeholder="Search departments…"
                         className="w-full pl-9 pr-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
                     />
@@ -214,7 +213,7 @@ const DepartmentsTab: React.FC = () => {
                     <button onClick={downloadTemplate} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-medium hover:border-blue-300 shadow-sm transition-all">
                         <Download size={15} /> Template
                     </button>
-                    <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImport} />
+                    <input id="input-bryximc" name="input-bryximc" ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImport} />
                     <button onClick={() => fileRef.current?.click()} disabled={importing} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-medium hover:border-blue-300 shadow-sm transition-all">
                         <Upload size={15} /> {importing ? 'Importing…' : 'Import'}
                     </button>
@@ -505,8 +504,7 @@ const ProgramsTab: React.FC = () => {
                 <div className="flex gap-2 flex-1 max-w-lg">
                     <div className="relative flex-1">
                         <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input
-                            value={search} onChange={e => setSearch(e.target.value)}
+                        <input id="input-56mzqix" name="input-56mzqix" value={search} onChange={e => setSearch(e.target.value)}
                             placeholder="Search programs…"
                             className="w-full pl-9 pr-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
                         />
@@ -526,7 +524,7 @@ const ProgramsTab: React.FC = () => {
                     <button onClick={downloadTemplate} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-medium hover:border-blue-300 shadow-sm">
                         <Download size={15} /> Template
                     </button>
-                    <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImport} />
+                    <input id="input-e81hh9h" name="input-e81hh9h" ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImport} />
                     <button onClick={() => fileRef.current?.click()} disabled={importing} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-medium hover:border-blue-300 shadow-sm">
                         <Upload size={15} /> {importing ? 'Importing…' : 'Import'}
                     </button>
@@ -784,7 +782,7 @@ const ConfirmModal: React.FC<{ title: string; message: string; onConfirm: () => 
 
 const FormField: React.FC<{ label: string; hint?: string; children: React.ReactNode }> = ({ label, hint, children }) => (
     <div>
-        <label className="block text-sm font-semibold text-slate-700 mb-1.5">{label}</label>
+        <span className="block text-sm font-semibold text-slate-700 mb-1.5">{label}</span>
         {children}
         {hint && <p className="text-xs text-slate-400 mt-1">{hint}</p>}
     </div>

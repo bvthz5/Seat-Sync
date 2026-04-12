@@ -12,20 +12,19 @@ interface RoomAttributes {
   FloorID: number;
   RoomCode: string; // Renamed from RoomName
   Capacity: number; // New field
-  TotalRows: number;
-  BenchesPerRow: number;
+  RoomType: "ROOM" | "HALL";
+  LayoutType: "CUSTOM";
+  RowLayout: number[];
   SeatsPerBench: number;
   Status: "Active" | "Inactive";
   ExamUsable: boolean;
-  RoomType: "ROOM" | "HALL";
-  BenchMode: "PAIRED" | "ALTERNATING";
   IsLayoutLocked: boolean;
 }
 
 /**
  * Attributes required when creating a room
  */
-interface RoomCreationAttributes extends Optional<RoomAttributes, "RoomID" | "TotalRows" | "BenchesPerRow" | "SeatsPerBench" | "RoomType" | "BenchMode" | "IsLayoutLocked"> { }
+interface RoomCreationAttributes extends Optional<RoomAttributes, "RoomID" | "RoomType" | "LayoutType" | "RowLayout" | "SeatsPerBench" | "IsLayoutLocked"> { }
 
 export class Room extends Model<RoomAttributes, RoomCreationAttributes>
   implements RoomAttributes {
@@ -34,13 +33,12 @@ export class Room extends Model<RoomAttributes, RoomCreationAttributes>
   declare FloorID: number;
   declare RoomCode: string;
   declare Capacity: number;
-  declare TotalRows: number;
-  declare BenchesPerRow: number;
+  declare RoomType: "ROOM" | "HALL";
+  declare LayoutType: "CUSTOM";
+  declare RowLayout: number[];
   declare SeatsPerBench: number;
   declare Status: "Active" | "Inactive";
   declare ExamUsable: boolean;
-  declare RoomType: "ROOM" | "HALL";
-  declare BenchMode: "PAIRED" | "ALTERNATING";
   declare IsLayoutLocked: boolean;
 }
 
@@ -80,20 +78,25 @@ Room.init(
         min: 0
       }
     },
-    TotalRows: {
-      type: DataTypes.INTEGER,
+    RoomType: {
+      type: DataTypes.ENUM("ROOM", "HALL"),
       allowNull: false,
-      defaultValue: 0,
+      defaultValue: "ROOM",
     },
-    BenchesPerRow: {
-      type: DataTypes.INTEGER,
+    LayoutType: {
+      type: DataTypes.ENUM("CUSTOM"),
       allowNull: false,
-      defaultValue: 0,
+      defaultValue: "CUSTOM",
+    },
+    RowLayout: {
+      type: DataTypes.JSON, // or STRING if you parse manually
+      allowNull: false,
+      defaultValue: [],
     },
     SeatsPerBench: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      defaultValue: 0,
+      defaultValue: 2,
     },
     Status: {
       type: DataTypes.ENUM("Active", "Inactive"),
@@ -104,16 +107,6 @@ Room.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: true,
-    },
-    RoomType: {
-      type: DataTypes.ENUM("ROOM", "HALL"),
-      allowNull: false,
-      defaultValue: "ROOM",
-    },
-    BenchMode: {
-      type: DataTypes.ENUM("PAIRED", "ALTERNATING"),
-      allowNull: false,
-      defaultValue: "PAIRED",
     },
     IsLayoutLocked: {
       type: DataTypes.BOOLEAN,

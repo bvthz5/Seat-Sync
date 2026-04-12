@@ -33,8 +33,7 @@ export const AccountProtectionTools: React.FC = () => {
             </CardHeader>
             <CardBody className="p-4 flex flex-col gap-4">
                 <div className="flex gap-2">
-                    <Input
-                        placeholder="Enter user email..."
+                    <Input id="field-o77krsf" name="field-o77krsf" aria-label="Enter user email..." placeholder="Enter user email..."
                         size="sm"
                         startContent={<Search className="w-3 h-3 text-slate-400" />}
                         value={searchEmail}

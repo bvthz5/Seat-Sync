@@ -18,20 +18,19 @@ const resolveExamIds = async (examDate: string, session: string): Promise<number
 /* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
  * Helper: Auto-generate Seat rows for a room if none exist yet
  * ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
-const ensureSeatsExist = async (room: Room): Promise<void> => {
+const ensureSeatsExist = async (room: any): Promise<void> => {
     const existing = await Seat.count({ where: { RoomID: room.RoomID } });
     if (existing > 0) return;
 
-    const rows = room.TotalRows || 5;
-    const benchesPerRow = room.BenchesPerRow || 6;
+    const layout = room.RowLayout || [];
     const seatsPerBench = room.SeatsPerBench || 2;
 
-    const records: { RoomID: number; RowLabel: string; BenchNumber: number; SeatNumber: number; IsActive: boolean }[] = [];
-    for (let r = 0; r < rows; r++) {
-        const rowLabel = String.fromCharCode(65 + r);
-        for (let b = 1; b <= benchesPerRow; b++) {
+    const records: { RoomID: number; RowIndex: number; BenchIndex: number; SeatIndex: number; IsActive: boolean }[] = [];
+    for (let r = 0; r < layout.length; r++) {
+        const benches = layout[r] || 0;
+        for (let b = 1; b <= benches; b++) {
             for (let s = 1; s <= seatsPerBench; s++) {
-                records.push({ RoomID: room.RoomID, RowLabel: rowLabel, BenchNumber: b, SeatNumber: s, IsActive: true });
+                records.push({ RoomID: room.RoomID, RowIndex: r, BenchIndex: b, SeatIndex: s, IsActive: true });
             }
         }
     }
@@ -197,23 +196,23 @@ export const getHallLayout = async (req: Request, res: Response) => {
         // Fetch ALL seats (active + inactive) so the UI can show disabled ones
         const seats = await Seat.findAll({
             where: { RoomID: Number(hallId) },
-            order: [["RowLabel", "ASC"], ["BenchNumber", "ASC"], ["SeatNumber", "ASC"]],
+            order: [["RowIndex", "ASC"], ["BenchIndex", "ASC"], ["SeatIndex", "ASC"]],
         });
 
         const activeSeats = seats.filter(s => s.IsActive).length;
 
         const benchMap: Record<string, Record<number, any[]>> = {};
         for (const seat of seats) {
-            if (!benchMap[seat.RowLabel]) benchMap[seat.RowLabel] = {};
-            const rowMap = benchMap[seat.RowLabel]!;
-            if (!rowMap[seat.BenchNumber]) rowMap[seat.BenchNumber] = [];
-            rowMap[seat.BenchNumber]!.push(seat);
+            if (!benchMap[seat.RowIndex]) benchMap[seat.RowIndex] = {};
+            const rowMap = benchMap[seat.RowIndex]!;
+            if (!rowMap[seat.BenchIndex]) rowMap[seat.BenchIndex] = [];
+            rowMap[seat.BenchIndex]!.push(seat);
         }
 
         const benches: any[] = [];
         for (const row of Object.keys(benchMap).sort()) {
             for (const benchNum of Object.keys(benchMap[row] ?? {}).map(Number).sort((a, b) => a - b)) {
-                benches.push({ rowLabel: row, benchNumber: benchNum, seats: (benchMap[row] ?? {})[benchNum] ?? [] });
+                benches.push({ rowIndex: row, benchIndex: benchNum, seats: (benchMap[row] ?? {})[benchNum] ?? [] });
             }
         }
 
@@ -277,7 +276,7 @@ export const autoAssign = async (req: Request, res: Response) => {
         // Fetch seats
         const seats = await Seat.findAll({
             where: { RoomID: Number(hallId), IsActive: true },
-            order: [["RowLabel", "ASC"], ["BenchNumber", "ASC"], ["SeatNumber", "ASC"]],
+            order: [["RowIndex", "ASC"], ["BenchIndex", "ASC"], ["SeatIndex", "ASC"]],
         });
         if (seats.length === 0) return res.status(400).json({ message: "No active seats found for this hall" });
 
@@ -350,10 +349,10 @@ export const autoAssign = async (req: Request, res: Response) => {
         // Build bench map and assign
         const benchMap: Record<string, Record<number, any[]>> = {};
         for (const seat of seats) {
-            if (!benchMap[seat.RowLabel]) benchMap[seat.RowLabel] = {};
-            const rowMap = benchMap[seat.RowLabel]!;
-            if (!rowMap[seat.BenchNumber]) rowMap[seat.BenchNumber] = [];
-            rowMap[seat.BenchNumber]!.push(seat);
+            if (!benchMap[seat.RowIndex]) benchMap[seat.RowIndex] = {};
+            const rowMap = benchMap[seat.RowIndex]!;
+            if (!rowMap[seat.BenchIndex]) rowMap[seat.BenchIndex] = [];
+            rowMap[seat.BenchIndex]!.push(seat);
         }
 
         let leftIdx = 0, rightIdx = 0;
@@ -367,9 +366,9 @@ export const autoAssign = async (req: Request, res: Response) => {
 
         for (const benchNum of allBenchNums) {
             for (const row of allRows) {
-                const benchSeats = ((benchMap[row] ?? {})[benchNum] ?? []).sort((a: any, b: any) => a.SeatNumber - b.SeatNumber);
+                const benchSeats = ((benchMap[row] ?? {})[benchNum] ?? []).sort((a: any, b: any) => a.SeatIndex - b.SeatIndex);
                 for (const seat of benchSeats) {
-                    if (seat.SeatNumber === 1 && leftIdx < leftStudents.length) {
+                    if (seat.SeatIndex === 1 && leftIdx < leftStudents.length) {
                         const s = leftStudents[leftIdx++] as any;
                         assignments[seat.SeatID] = {
                             seatId: seat.SeatID, studentId: s.StudentID,
@@ -377,7 +376,7 @@ export const autoAssign = async (req: Request, res: Response) => {
                             registerNumber: s.RegisterNumber,
                             deptCode: s.Department?.DepartmentCode || "", side: "left",
                         };
-                    } else if (seat.SeatNumber !== 1 && rightIdx < rightStudents.length) {
+                    } else if (seat.SeatIndex !== 1 && rightIdx < rightStudents.length) {
                         const s = rightStudents[rightIdx++] as any;
                         assignments[seat.SeatID] = {
                             seatId: seat.SeatID, studentId: s.StudentID,
@@ -438,7 +437,7 @@ export const getAllocationForHall = async (req: Request, res: Response) => {
                 studentName: s?.User?.FullName || "Unknown",
                 registerNumber: s?.RegisterNumber,
                 deptCode: s?.Department?.DepartmentCode || "",
-                side: seat?.SeatNumber === 1 ? "left" : "right",
+                side: seat?.SeatIndex === 1 ? "left" : "right",
             };
         }
 
@@ -665,7 +664,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
 
             const seats = await Seat.findAll({
                 where: { RoomID: hall.RoomID, IsActive: true },
-                order: [["RowLabel", "ASC"], ["BenchNumber", "ASC"], ["SeatNumber", "ASC"]],
+                order: [["RowIndex", "ASC"], ["BenchIndex", "ASC"], ["SeatIndex", "ASC"]],
                 transaction,
             });
 
@@ -680,10 +679,10 @@ export const bulkAssign = async (req: Request, res: Response) => {
 
             const benchMap: Record<string, Record<number, any[]>> = {};
             for (const seat of seats) {
-                if (!benchMap[seat.RowLabel]) benchMap[seat.RowLabel] = {};
-                const rowMap = benchMap[seat.RowLabel]!;
-                if (!rowMap[seat.BenchNumber]) rowMap[seat.BenchNumber] = [];
-                rowMap[seat.BenchNumber]!.push(seat);
+                if (!benchMap[seat.RowIndex]) benchMap[seat.RowIndex] = {};
+                const rowMap = benchMap[seat.RowIndex]!;
+                if (!rowMap[seat.BenchIndex]) rowMap[seat.BenchIndex] = [];
+                rowMap[seat.BenchIndex]!.push(seat);
             }
 
             const records: { ExamID: number; SeatID: number; StudentID: number }[] = [];
@@ -697,12 +696,12 @@ export const bulkAssign = async (req: Request, res: Response) => {
 
             for (const benchNum of allBenchNums) {
                 for (const row of allRows) {
-                    const benchSeats = (benchMap[row]?.[benchNum] || []).sort((a: any, b: any) => a.SeatNumber - b.SeatNumber);
+                    const benchSeats = (benchMap[row]?.[benchNum] || []).sort((a: any, b: any) => a.SeatIndex - b.SeatIndex);
                     for (const seat of benchSeats) {
-                        if (seat.SeatNumber === 1 && leftIdx < leftStudents.length) {
+                        if (seat.SeatIndex === 1 && leftIdx < leftStudents.length) {
                             records.push({ ExamID: primaryExamId, SeatID: seat.SeatID, StudentID: leftStudents[leftIdx++].StudentID as number });
                             hallLeft++;
-                        } else if (seat.SeatNumber !== 1 && rightIdx < rightStudents.length) {
+                        } else if (seat.SeatIndex !== 1 && rightIdx < rightStudents.length) {
                             records.push({ ExamID: primaryExamId, SeatID: seat.SeatID, StudentID: rightStudents[rightIdx++].StudentID as number });
                             hallRight++;
                         }
@@ -771,7 +770,7 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
             transaction,
         });
         const seatNumMap = new Map<number, number>();
-        for (const s of allSeats) seatNumMap.set(s.SeatID, s.SeatNumber);
+        for (const s of allSeats) seatNumMap.set(s.SeatID, s.SeatIndex);
 
         const leftAllocations = existingAllocations.filter(a => seatNumMap.get(a.SeatID) === 1);
         const rightAllocations = existingAllocations.filter(a => seatNumMap.get(a.SeatID) !== 1);
@@ -790,11 +789,11 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
         const roomOrder = new Map<number, string>();
         for (const r of rooms) roomOrder.set(r.RoomID, r.RoomCode);
 
-        // Column-by-column sort: roomCode ΓåÆ benchNumber ΓåÆ rowLabel ΓåÆ seatNumber
+        // Column-by-column sort: roomCode ΓåÆ benchIndex ΓåÆ rowIndex ΓåÆ seatIndex
         const columnSort = (seatId: number) => {
             const s = seatInfoMap.get(seatId);
             if (!s) return '';
-            return `${roomOrder.get(s.RoomID) ?? ''}_${String(s.BenchNumber).padStart(6, '0')}_${s.RowLabel}_${s.SeatNumber}`;
+            return `${roomOrder.get(s.RoomID) ?? ''}_${String(s.BenchIndex).padStart(6, '0')}_${s.RowIndex}_${s.SeatIndex}`;
         };
 
         // Sort seats column-by-column
@@ -1085,7 +1084,7 @@ export const importSeatingFromExcel = async (req: Request, res: Response) => {
 
             const seats = await Seat.findAll({
                 where: { RoomID: hall.RoomID, IsActive: true },
-                order: [["RowLabel", "ASC"], ["BenchNumber", "ASC"], ["SeatNumber", "ASC"]],
+                order: [["RowIndex", "ASC"], ["BenchIndex", "ASC"], ["SeatIndex", "ASC"]],
                 transaction,
             });
 
@@ -1100,10 +1099,10 @@ export const importSeatingFromExcel = async (req: Request, res: Response) => {
 
             const benchMap: Record<string, Record<number, any[]>> = {};
             for (const seat of seats) {
-                if (!benchMap[seat.RowLabel]) benchMap[seat.RowLabel] = {};
-                const rowMap = benchMap[seat.RowLabel]!;
-                if (!rowMap[seat.BenchNumber]) rowMap[seat.BenchNumber] = [];
-                rowMap[seat.BenchNumber]!.push(seat);
+                if (!benchMap[seat.RowIndex]) benchMap[seat.RowIndex] = {};
+                const rowMap = benchMap[seat.RowIndex]!;
+                if (!rowMap[seat.BenchIndex]) rowMap[seat.BenchIndex] = [];
+                rowMap[seat.BenchIndex]!.push(seat);
             }
 
             // Column-by-column order: A1, B1, C1... then A2, B2, C2...
@@ -1114,11 +1113,11 @@ export const importSeatingFromExcel = async (req: Request, res: Response) => {
 
             for (const benchNum of allBenchNums) {
                 for (const row of allRows) {
-                    const benchSeats = (benchMap[row]?.[benchNum] || []).sort((a: any, b: any) => a.SeatNumber - b.SeatNumber);
+                    const benchSeats = (benchMap[row]?.[benchNum] || []).sort((a: any, b: any) => a.SeatIndex - b.SeatIndex);
                     for (const seat of benchSeats) {
-                        if (seat.SeatNumber === 1 && leftIdx < leftStudentIds.length) {
+                        if (seat.SeatIndex === 1 && leftIdx < leftStudentIds.length) {
                             newRecords.push({ ExamID: primaryExamId, SeatID: seat.SeatID, StudentID: leftStudentIds[leftIdx++] as number });
-                        } else if (seat.SeatNumber !== 1 && rightIdx < rightStudentIds.length) {
+                        } else if (seat.SeatIndex !== 1 && rightIdx < rightStudentIds.length) {
                             newRecords.push({ ExamID: primaryExamId, SeatID: seat.SeatID, StudentID: rightStudentIds[rightIdx++] as number });
                         }
                     }
@@ -1187,10 +1186,10 @@ export const searchStudent = async (req: Request, res: Response) => {
         const allocMap = new Map<number, any>();
         if (examIds.length > 0) {
             const allocations = await sequelize.query<{
-                StudentID: number; SeatID: number; RowLabel: string;
-                BenchNumber: number; SeatNumber: number; RoomID: number; RoomCode: string;
+                StudentID: number; SeatID: number; RowIndex: string;
+                BenchIndex: number; SeatIndex: number; RoomID: number; RoomCode: string;
             }>(
-                `SELECT sa.StudentID, sa.SeatID, st.RowLabel, st.BenchNumber, st.SeatNumber,
+                `SELECT sa.StudentID, sa.SeatID, st.RowIndex, st.BenchIndex, st.SeatIndex,
                         r.RoomID, r.RoomName AS RoomCode
                  FROM SeatAllocations sa
                  JOIN Seats st ON sa.SeatID = st.SeatID
@@ -1210,10 +1209,10 @@ export const searchStudent = async (req: Request, res: Response) => {
                 allocated: !!alloc,
                 hallCode: alloc?.RoomCode ?? null,
                 hallId: alloc?.RoomID ?? null,
-                rowLabel: alloc?.RowLabel ?? null,
-                benchNumber: alloc?.BenchNumber ?? null,
-                side: alloc ? (Number(alloc.SeatNumber) === 1 ? 'Left' : 'Right') : null,
-                seatLabel: alloc ? `${alloc.RowLabel}${alloc.BenchNumber}` : null,
+                rowIndex: alloc?.RowIndex ?? null,
+                benchIndex: alloc?.BenchIndex ?? null,
+                side: alloc ? (Number(alloc.SeatIndex) === 1 ? 'Left' : 'Right') : null,
+                seatLabel: alloc ? `${alloc.RowIndex}${alloc.BenchIndex}` : null,
             };
         });
 

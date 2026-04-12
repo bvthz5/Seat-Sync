@@ -256,9 +256,11 @@ export const Departments: React.FC<DepartmentsProps> = ({ academicYearId }) => {
                             <ModalBody>
                                 <div className="space-y-4">
                                     <div>
-                                        <label className="text-sm font-medium text-slate-700">Department Code</label>
-                                        <input 
-                                            type="text" 
+                                        <label htmlFor="deptCode" className="text-sm font-medium text-slate-700 block mb-1">Department Code</label>
+                                        <input
+                                            id="deptCode"
+                                            name="DepartmentCode"
+                                            type="text"
                                             value={formData.DepartmentCode}
                                             onChange={(e) => setFormData({...formData, DepartmentCode: e.target.value.toUpperCase()})}
                                             className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:outline-none"
@@ -266,9 +268,11 @@ export const Departments: React.FC<DepartmentsProps> = ({ academicYearId }) => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-sm font-medium text-slate-700">Department Name</label>
-                                        <input 
-                                            type="text" 
+                                        <label htmlFor="deptName" className="text-sm font-medium text-slate-700 block mb-1">Department Name</label>
+                                        <input
+                                            id="deptName"
+                                            name="DepartmentName"
+                                            type="text"
                                             value={formData.DepartmentName}
                                             onChange={(e) => setFormData({...formData, DepartmentName: e.target.value})}
                                             className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:outline-none"
@@ -376,9 +380,9 @@ export const Departments: React.FC<DepartmentsProps> = ({ academicYearId }) => {
 
                                 {/* File Upload */}
                                 <div className="mt-6">
-                                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                                    <div className="block text-sm font-semibold text-slate-700 mb-2">
                                         Select Excel File
-                                    </label>
+                                    </div>
                                     <input
                                         id="dept-file-input-modal"
                                         type="file"

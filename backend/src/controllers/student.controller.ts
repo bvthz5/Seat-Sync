@@ -116,8 +116,8 @@ export const getAllStudents = async (req: Request, res: Response) => {
                         { ProgramID: null },
                         { SemesterID: null }
                     ]
-                },
-                include: commonInclude,
+                } as any,
+                include: commonInclude as any,
                 distinct: true,
                 col: 'StudentID'
             }),
@@ -1238,7 +1238,7 @@ export const resetStudentPassword = async (req: Request, res: Response) => {
         }
 
         // Generate temporary password: First 4 chars of name + @123
-        let firstName = (user.FullName || 'User').split(' ')[0];
+        let firstName = (user.FullName || 'User').split(' ')[0] || 'User';
         const tempPassword = firstName.substring(0, 4) + '@123';
 
         // Hash and update password

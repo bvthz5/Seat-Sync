@@ -123,8 +123,7 @@ export const Subjects: React.FC<SubjectsProps> = ({ academicYearId }) => {
                             <ModalHeader className="flex flex-col gap-1">Add Subject</ModalHeader>
                             <ModalBody>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <Select
-                                        label="Department"
+                                    <Select id="field-6icypne" name="field-6icypne" label="Department"
                                         placeholder="Select Dept"
                                         selectedKeys={formData.DepartmentID ? [formData.DepartmentID] : []}
                                         onChange={(e) => setFormData({ ...formData, DepartmentID: e.target.value, ProgramID: '', SemesterID: '' })}
@@ -134,8 +133,7 @@ export const Subjects: React.FC<SubjectsProps> = ({ academicYearId }) => {
                                         {departments.map(d => <SelectItem key={d.DepartmentID}>{d.DepartmentName}</SelectItem>)}
                                     </Select>
 
-                                    <Select
-                                        label="Program"
+                                    <Select id="field-pdprsup" name="field-pdprsup" label="Program"
                                         placeholder={formData.DepartmentID ? "Select Program" : "Select Dept First"}
                                         isDisabled={!formData.DepartmentID}
                                         selectedKeys={formData.ProgramID ? [formData.ProgramID] : []}
@@ -146,8 +144,7 @@ export const Subjects: React.FC<SubjectsProps> = ({ academicYearId }) => {
                                         {filteredPrograms.map(p => <SelectItem key={p.ProgramID}>{p.ProgramName}</SelectItem>)}
                                     </Select>
 
-                                    <Select
-                                        label="Semester"
+                                    <Select id="field-sib8nhu" name="field-sib8nhu" label="Semester"
                                         placeholder={formData.ProgramID ? "Select Semester" : "Select Program First"}
                                         isDisabled={!formData.ProgramID}
                                         selectedKeys={formData.SemesterID ? [formData.SemesterID] : []}
@@ -158,11 +155,11 @@ export const Subjects: React.FC<SubjectsProps> = ({ academicYearId }) => {
                                         {filteredSemesters.map(s => <SelectItem key={s.SemesterID}>{s.SemesterName}</SelectItem>)}
                                     </Select>
 
-                                    <Input type="number" label="Credits" value={formData.Credits.toString()} onValueChange={v => setFormData({ ...formData, Credits: Number(v) })} variant="bordered" labelPlacement="outside" />
+                                    <Input id="field-4y519k3" name="field-4y519k3" type="number" label="Credits" value={formData.Credits.toString()} onValueChange={v => setFormData({ ...formData, Credits: Number(v) })} variant="bordered" labelPlacement="outside" />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <Input label="Subject Code" placeholder="e.g. CS101" value={formData.SubjectCode} onValueChange={v => setFormData({ ...formData, SubjectCode: v })} variant="bordered" labelPlacement="outside" />
-                                    <Input label="Subject Name" placeholder="e.g. Intro to CS" value={formData.SubjectName} onValueChange={v => setFormData({ ...formData, SubjectName: v })} variant="bordered" labelPlacement="outside" />
+                                    <Input id="field-7rsrris" name="field-7rsrris" label="Subject Code" placeholder="e.g. CS101" value={formData.SubjectCode} onValueChange={v => setFormData({ ...formData, SubjectCode: v })} variant="bordered" labelPlacement="outside" />
+                                    <Input id="field-vim4375" name="field-vim4375" label="Subject Name" placeholder="e.g. Intro to CS" value={formData.SubjectName} onValueChange={v => setFormData({ ...formData, SubjectName: v })} variant="bordered" labelPlacement="outside" />
                                 </div>
                             </ModalBody>
                             <ModalFooter>
