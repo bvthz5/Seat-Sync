@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Card, CardBody, Button } from "@heroui/react";
-import { BookOpen, Plus, Clock, FileText, AlertCircle, ArrowLeft } from "lucide-react";
+import { BookOpen, Plus, Clock, FileText, AlertCircle, ArrowLeft, CheckCircle, CalendarDays } from "lucide-react";
 import { toast } from 'react-hot-toast';
 import { ExamService } from '../services/examService';
 import { SeriesService } from '../services/seriesService';
@@ -53,63 +53,83 @@ const ExamSeriesList: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800">
-            {/* Animated background elements */}
-            <div className="fixed inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 animate-pulse"></div>
-                <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4 animate-pulse" style={{ animationDelay: '1s' }}></div>
-                <div className="absolute top-1/2 left-1/2 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl -translate-y-1/2 -translate-x-1/2"></div>
-            </div>
-
-            {/* Content */}
-            <div className="relative z-10 p-8 lg:p-12 max-w-[1600px] mx-auto">
-                
-                {/* Header */}
-                <div className="mb-12">
-                    <div className="flex items-center gap-4 mb-4">
+        <div className="min-h-screen bg-[#f4f6f9] pb-12">
+            {/* Page Header (consistent with light theme Dashboards) */}
+            <div className="bg-white border-b border-slate-200/80 px-8 py-8 mb-8 shadow-sm">
+                <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                    <div className="flex items-center gap-4">
                         <Button
                             isIconOnly
                             variant="light"
-                            className="text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-all"
+                            className="text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all"
                             onPress={() => navigate('/admin/exams')}
                         >
                             <ArrowLeft size={24} />
                         </Button>
+                        <div className="w-14 h-14 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0 border border-indigo-100 hidden sm:flex">
+                            <BookOpen className="text-indigo-600" size={30} />
+                        </div>
                         <div>
-                            <p className="text-slate-400 text-sm font-semibold uppercase tracking-widest">Examination Management</p>
-                            <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight">
+                            <p className="text-indigo-600 text-xs font-bold uppercase tracking-widest mb-1">
+                                Examination Management
+                            </p>
+                            <h1 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
                                 {seriesName || 'Exams'}
                             </h1>
+                            <p className="text-slate-500 font-medium mt-1 max-w-xl">
+                                Create and manage exams for {seriesName}
+                            </p>
                         </div>
                     </div>
-                    <p className="text-slate-300 text-lg ml-14 font-light">
-                        Create and manage exams for {seriesName}
-                    </p>
                 </div>
+            </div>
 
+            {/* Content Container */}
+            <div className="px-8 max-w-[1600px] mx-auto">
+                
                 {/* Action & Stats Bar */}
-                <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center mb-8">
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 flex-1">
-                        <div className="bg-white/5 border border-white/10 backdrop-blur-md rounded-xl p-4 hover:bg-white/10 transition-all">
-                            <p className="text-slate-400 text-sm">Total Exams</p>
-                            <h3 className="text-2xl font-bold text-white mt-1">{exams.length}</h3>
+                <div className="flex flex-col lg:flex-row gap-6 justify-between items-start lg:items-center mb-8">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-6 w-full lg:w-auto flex-1">
+                        <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-slate-500 text-sm font-semibold uppercase tracking-wider mb-1">Total Exams</p>
+                                    <h3 className="text-4xl font-extrabold text-slate-900">{exams.length}</h3>
+                                </div>
+                                <div className="w-14 h-14 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hidden xl:flex">
+                                    <FileText size={28} />
+                                </div>
+                            </div>
                         </div>
-                        <div className="bg-white/5 border border-white/10 backdrop-blur-md rounded-xl p-4 hover:bg-white/10 transition-all">
-                            <p className="text-slate-400 text-sm">Scheduled</p>
-                            <h3 className="text-2xl font-bold text-blue-400 mt-1">{exams.filter((e: any) => e.Status === 'Scheduled').length}</h3>
+                        <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-slate-500 text-sm font-semibold uppercase tracking-wider mb-1">Scheduled</p>
+                                    <h3 className="text-4xl font-extrabold text-blue-600">{exams.filter((e: any) => e.Status === 'Scheduled').length}</h3>
+                                </div>
+                                <div className="w-14 h-14 rounded-full bg-blue-50 flex items-center justify-center text-blue-500 hidden xl:flex">
+                                    <Clock size={28} />
+                                </div>
+                            </div>
                         </div>
-                        <div className="bg-white/5 border border-white/10 backdrop-blur-md rounded-xl p-4 hover:bg-white/10 transition-all">
-                            <p className="text-slate-400 text-sm">Completed</p>
-                            <h3 className="text-2xl font-bold text-emerald-400 mt-1">{exams.filter((e: any) => e.Status === 'Completed').length}</h3>
+                        <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow col-span-2 md:col-span-1">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-slate-500 text-sm font-semibold uppercase tracking-wider mb-1">Completed</p>
+                                    <h3 className="text-4xl font-extrabold text-emerald-600">{exams.filter((e: any) => e.Status === 'Completed').length}</h3>
+                                </div>
+                                <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-500 hidden xl:flex">
+                                    <CheckCircle size={28} />
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <Button
                         onPress={handleCreateExam}
-                        className="bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 hover:scale-105 transition-all px-8 rounded-xl"
-                        startContent={<Plus size={20} />}
-                        size="lg"
+                        className="bg-indigo-600 text-white font-bold shadow-md hover:bg-indigo-700 transition-all px-8 rounded-xl h-14 w-full lg:w-auto"
+                        startContent={<Plus size={20} strokeWidth={3} />}
                     >
-                        Create Exam
+                        Create Pattern
                     </Button>
                 </div>
 
@@ -117,51 +137,66 @@ const ExamSeriesList: React.FC = () => {
                 {loading ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {[1, 2, 3, 4, 5, 6].map((i) => (
-                            <div key={i} className="h-64 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-md animate-pulse"></div>
+                            <div key={i} className="h-64 bg-slate-100/50 border border-slate-200 rounded-2xl animate-pulse"></div>
                         ))}
                     </div>
                 ) : exams.length === 0 ? (
-                    <div className="text-center py-24 bg-white/5 border border-white/10 backdrop-blur-md rounded-2xl">
-                        <BookOpen className="w-16 h-16 mx-auto mb-4 text-slate-400" />
-                        <p className="text-slate-300 font-semibold text-lg mb-2">No exams yet</p>
-                        <p className="text-slate-400 text-sm mb-8">Create your first exam to get started</p>
+                    <div className="text-center py-24 bg-white border border-slate-200 rounded-2xl shadow-sm">
+                        <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <BookOpen className="w-10 h-10 text-slate-400" />
+                        </div>
+                        <p className="text-slate-800 font-bold text-xl mb-2">No exams yet</p>
+                        <p className="text-slate-500 text-sm mb-8">Create your first exam configuration to get started</p>
                         <Button
                             onPress={handleCreateExam}
-                            className="bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold shadow-lg shadow-blue-500/30"
+                            className="bg-indigo-600 text-white font-bold shadow-md hover:bg-indigo-700"
                             startContent={<Plus size={18} />}
                         >
                             Create First Exam
                         </Button>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {exams.map((exam) => (
                             <Card
                                 key={exam.ExamID}
-                                className="bg-white/5 border border-white/10 backdrop-blur-md hover:bg-white/10 hover:border-white/20 hover:shadow-2xl hover:shadow-blue-500/10 transition-all duration-300 group rounded-2xl overflow-hidden"
+                                className="bg-white border border-slate-200 hover:border-slate-300 hover:shadow-lg transition-all duration-300 group rounded-2xl overflow-hidden"
                             >
-                                <div className="h-2 bg-gradient-to-r from-blue-600 to-purple-600"></div>
-                                <CardBody className="p-6 space-y-4">
-                                    <div>
-                                        <h3 className="text-lg font-bold text-white group-hover:text-blue-300 transition-colors">
+                                <div className="h-1.5 w-full bg-indigo-500"></div>
+                                <CardBody className="p-6 space-y-5">
+                                    <div className="min-h-[4rem]">
+                                        <h3 className="text-xl font-bold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-2">
                                             {exam.ExamName}
                                         </h3>
-                                        <p className="text-slate-400 text-sm mt-1">{exam.Subject?.SubjectCode}</p>
+                                        <div className="flex items-center gap-2 mt-2">
+                                            <span className="text-slate-500 font-medium text-sm flex-1 truncate" title={exam.Subject?.SubjectName || exam.Subject?.SubjectCode}>
+                                                {exam.Subject?.SubjectCode} 
+                                                {exam.Subject?.SubjectName ? ` - ${exam.Subject?.SubjectName}` : ''}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <div className="flex gap-2 flex-wrap">
-                                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                                            exam.Status === 'Scheduled' ? 'bg-blue-500/20 text-blue-300' :
-                                            exam.Status === 'Completed' ? 'bg-emerald-500/20 text-emerald-300' :
-                                            'bg-purple-500/20 text-purple-300'
+                                    
+                                    <div className="flex flex-wrap gap-2">
+                                        <span className={`px-2.5 py-1 rounded-md text-xs font-bold border ${
+                                            exam.Status === 'Scheduled' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                            exam.Status === 'Completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                            'bg-purple-50 text-purple-700 border-purple-200'
                                         }`}>
                                             {exam.Status}
                                         </span>
-                                        <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-700 text-slate-200">
-                                            {exam.Session === 'FN' ? 'Morning' : 'Afternoon'}
+                                        <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                            {exam.Session === 'FN' ? '☀️ Morning' : '🌙 Afternoon'}
                                         </span>
                                     </div>
-                                    <div className="text-slate-400 text-sm pt-2 border-t border-white/10">
-                                        <p>{new Date(exam.ExamDate).toLocaleDateString()}</p>
+                                    
+                                    {/* Divider */}
+                                    <div className="h-px bg-slate-100"></div>
+
+                                    <div className="flex items-center justify-between text-slate-500 text-sm font-medium pt-1 group-hover:text-indigo-600 transition-colors">
+                                        <div className="flex items-center gap-1.5">
+                                            <CalendarDays size={16} />
+                                            <span>{new Date(exam.ExamDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                        </div>
                                     </div>
                                 </CardBody>
                             </Card>
