@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { getAllStudents, importStudents, createStudent, getCreateOptions, getFilterOptions, updateStudent, deleteStudent, exportStudents, deleteAllStudents, bulkImportStudents, bulkImportStudentsWithSeats, getStudentImportTemplate, importSeatingBatch, toggleStudentAccountStatus, resetStudentPassword, softDeleteStudent } from '../controllers/student.controller.js';
+import { getAllStudents, importStudents, createStudent, getCreateOptions, getFilterOptions, updateStudent, deleteStudent, exportStudents, deleteAllStudents, bulkImportStudents, bulkImportStudentsWithSeats, getStudentImportTemplate, importSeatingBatch, toggleStudentAccountStatus, resetStudentPassword, softDeleteStudent, syncSemesters } from '../controllers/student.controller.js';
 import { AuthMiddleware } from '../middlewares/auth.middleware.js';
 
 const router = express.Router();
@@ -191,6 +191,21 @@ router.get('/', AuthMiddleware.verifyAccessToken, getAllStudents);
  *         description: Server error
  */
 router.post('/', AuthMiddleware.verifyAccessToken, createStudent);
+
+/**
+ * @swagger
+ * /api/students/sync-semesters:
+ *   post:
+ *     tags:
+ *       - Students
+ *     summary: Dynamically syncs and calculates the latest semester for all active students.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Sync successful
+ */
+router.post('/sync-semesters', AuthMiddleware.verifyAccessToken, syncSemesters);
 
 /**
  * @swagger

@@ -1,54 +1,77 @@
 import cron from "node-cron";
 import { Student } from "../models/Student.js";
 import { Semester } from "../models/Semester.js";
+import { Program } from "../models/Program.js";
 import { Op } from "sequelize";
 
 export async function promoteStudents() {
-  console.log("[CRON] Starting Student Promotion Job...");
+  console.log("[CRON] Starting Absolute Student Promotion/Sync Job...");
   try {
     const students = await Student.findAll({ where: { Status: 'ACTIVE' } });
-
-    // Fetch max semesters for each program to determine graduation
     const semesters = await Semester.findAll();
-    const programMaxSemesters: Record<number, number> = {};
+    const programs = await Program.findAll();
     
-    // Determine highest SemesterID or SemesterNumber per program
-    semesters.forEach(s => {
-      const pid = s.ProgramID;
-      // Depending on your Semester numbering, we compare SemesterNumber to find max
-      // If your SemesterID is sequential and ordered, we could compare that. The prompt assumes SemesterID increments.
-      if (!programMaxSemesters[pid] || (s.SemesterNumber && s.SemesterNumber > programMaxSemesters[pid])) {
-        programMaxSemesters[pid] = s.SemesterNumber || s.SemesterID;
-      }
-    });
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth(); // 0-indexed (Jan=0, Jun=5, Dec=11)
+
+    let updatedCount = 0;
+    let graduatedCount = 0;
 
     for (let s of students) {
-      const currentSem = semesters.find(sem => sem.SemesterID === s.SemesterID);
-      const pid = s.ProgramID;
+      if (!s.BatchYear || !s.ProgramID) continue;
+      
+      const program = programs.find(p => p.ProgramID === s.ProgramID);
+      if (!program) continue;
 
-      if (!currentSem) continue;
+      const programDurationYears = program.DurationYears || 3;
+      const maxSems = program.TotalSemesters || 6;
 
-      const maxSemNum = programMaxSemesters[pid];
+      const monthAdjustment = currentMonth >= 6 ? 0 : -1;
+      const academicYearsCompleted = (currentYear - s.BatchYear) + monthAdjustment;
 
-      if (maxSemNum && currentSem.SemesterNumber && currentSem.SemesterNumber < maxSemNum) {
-        // Find next semester for the program
-        const nextSem = semesters.find(sem => sem.ProgramID === pid && sem.SemesterNumber === currentSem.SemesterNumber! + 1);
-        if (nextSem) {
-          s.SemesterID = nextSem.SemesterID;
-        } else {
-            // Fallback: If no matching next semester by number, manually increment ID safely if possible
-            s.SemesterID += 1;
-        }
-      } else if (maxSemNum && currentSem.SemesterNumber && currentSem.SemesterNumber >= maxSemNum) {
-        s.Status = "GRADUATED";
+      let calcSem = 1;
+      let shouldGraduate = false;
+
+      if (academicYearsCompleted < 0) {
+          calcSem = 1;
+      } else if (academicYearsCompleted >= programDurationYears) {
+          calcSem = maxSems;
+          shouldGraduate = true;
+      } else {
+          const firstSemOfCurrentYear = (academicYearsCompleted * 2) + 1;
+          const semesterOfYear = currentMonth >= 6 ? 1 : 2;
+          calcSem = Math.min(firstSemOfCurrentYear + (semesterOfYear - 1), maxSems);
       }
-      await s.save();
+
+      calcSem = Math.min(Math.max(calcSem, 1), maxSems);
+
+      // Find the specific Semester object
+      let targetSem = semesters.find(sem => sem.ProgramID === s.ProgramID && sem.SemesterNumber === calcSem);
+      
+      // If the dynamic semester calculation requires an update
+      let changed = false;
+      if (targetSem && s.SemesterID !== targetSem.SemesterID) {
+          s.SemesterID = targetSem.SemesterID;
+          changed = true;
+          updatedCount++;
+      }
+
+      if (shouldGraduate && s.Status !== "GRADUATED") {
+          s.Status = "GRADUATED";
+          changed = true;
+          graduatedCount++;
+      }
+
+      if (changed) {
+          await s.save();
+      }
     }
-    console.log("[CRON] Student Promotion Job Finished Successfully.");
+    console.log(`[CRON] Student Sync Finished. Updated ${updatedCount} semesters, graduated ${graduatedCount} students.`);
   } catch (error) {
     console.error("[CRON] Error during Student Promotion:", error);
   }
 }
 
-// Run every 6 months (1st of Jan & Jul)
-cron.schedule("0 0 1 JAN,JUL *", promoteStudents);
+// Run every month or automatically at startup to ensure consistent DB states
+cron.schedule("0 0 1 * *", promoteStudents);
