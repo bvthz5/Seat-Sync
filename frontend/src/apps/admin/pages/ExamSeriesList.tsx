@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Card, CardBody, Button } from "@heroui/react";
-import { BookOpen, Plus, Clock, FileText, AlertCircle, ArrowLeft, CheckCircle, CalendarDays } from "lucide-react";
+import { BookOpen, Plus, Clock, FileText, AlertCircle, ArrowLeft, CheckCircle, CalendarDays, Upload } from "lucide-react";
 import { toast } from 'react-hot-toast';
 import { ExamService } from '../services/examService';
 import { SeriesService } from '../services/seriesService';
 import CreateExamModal from '../components/exams/CreateExamModal';
+import ExamImportModal from '../components/exams/ExamImportModal';
 
 const ExamSeriesList: React.FC = () => {
     const navigate = useNavigate();
@@ -13,6 +14,7 @@ const ExamSeriesList: React.FC = () => {
     const [exams, setExams] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [seriesName, setSeriesName] = useState<string>('');
 
     useEffect(() => {
@@ -124,13 +126,23 @@ const ExamSeriesList: React.FC = () => {
                             </div>
                         </div>
                     </div>
-                    <Button
-                        onPress={handleCreateExam}
-                        className="bg-indigo-600 text-white font-bold shadow-md hover:bg-indigo-700 transition-all px-8 rounded-xl h-14 w-full lg:w-auto"
-                        startContent={<Plus size={20} strokeWidth={3} />}
-                    >
-                        Create Pattern
-                    </Button>
+                    <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+                        <Button
+                            onPress={() => setIsImportModalOpen(true)}
+                            variant="flat"
+                            className="bg-white text-slate-700 border border-slate-300 font-semibold hover:bg-slate-50 transition-all px-6 rounded-xl h-14 w-full lg:w-auto"
+                            startContent={<Upload size={18} />}
+                        >
+                            Import Timetable
+                        </Button>
+                        <Button
+                            onPress={handleCreateExam}
+                            className="bg-indigo-600 text-white font-bold shadow-md hover:bg-indigo-700 transition-all px-8 rounded-xl h-14 w-full lg:w-auto"
+                            startContent={<Plus size={20} strokeWidth={3} />}
+                        >
+                            Create Pattern
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Exams Grid or Empty State */}
@@ -153,6 +165,14 @@ const ExamSeriesList: React.FC = () => {
                             startContent={<Plus size={18} />}
                         >
                             Create First Exam
+                        </Button>
+                        <Button
+                            onPress={() => setIsImportModalOpen(true)}
+                            variant="light"
+                            className="mt-3 text-slate-700"
+                            startContent={<Upload size={16} />}
+                        >
+                            Import Timetable
                         </Button>
                     </div>
                 ) : (
@@ -214,6 +234,13 @@ const ExamSeriesList: React.FC = () => {
                     fetchExams();
                 }}
                 seriesId={seriesId}
+            />
+
+            <ExamImportModal
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                onSuccess={fetchExams}
+                preSelectedSeriesId={seriesId}
             />
         </div>
     );
