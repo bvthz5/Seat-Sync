@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button, Select, SelectItem } from '@heroui/react';
 import { Upload, Download, FileSpreadsheet, CheckCircle2, Plus } from 'lucide-react';
 import { ExamService } from '../../services/examService';
@@ -20,6 +20,7 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
     const [series, setSeries] = useState<any[]>([]);
     const [selectedSeriesId, setSelectedSeriesId] = useState<string>('');
     const [loadingSeries, setLoadingSeries] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
         if (isOpen) {
@@ -253,8 +254,11 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                         onChange={handleFileSelect}
                                         className="hidden"
                                         id="file-upload"
+                                        ref={fileInputRef}
                                     />
                                     <label
+                                        htmlFor="file-upload"
+                                        onClick={() => fileInputRef.current?.click()}
                                         className={`
                                             flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer transition-all
                                             ${selectedFile
