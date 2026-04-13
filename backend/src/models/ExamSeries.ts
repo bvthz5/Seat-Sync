@@ -67,6 +67,7 @@ ExamSeries.init(
         sequelize,
         tableName: "ExamSeries",
         timestamps: true,
+        returning: false,
     }
 );
 
