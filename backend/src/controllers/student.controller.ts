@@ -312,7 +312,7 @@ export const importStudents = async (req: Request, res: Response) => {
             if (leadingCodeMatch?.[1]) {
                 info.leadingCode = leadingCodeMatch[1].toUpperCase();
             } else if (prefixTokens.length > 0) {
-                info.leadingCode = prefixTokens[0];
+                info.leadingCode = prefixTokens[0] as string;
             }
             if (normalizedPrefix) {
                 info.batchPrefix = normalizedPrefix;
@@ -575,8 +575,8 @@ export const importStudents = async (req: Request, res: Response) => {
                         const inferredDuration =
                             batchInfo.startYear && batchInfo.endYear && batchInfo.endYear > batchInfo.startYear
                                 ? Math.min(Math.max(batchInfo.endYear - batchInfo.startYear, 1), 8)
-                                : undefined;
-                        const inferredSemesters = inferredDuration ? inferredDuration * 2 : undefined;
+                                : null;
+                        const inferredSemesters = inferredDuration ? inferredDuration * 2 : null;
 
                         const newProgram = await Program.create({
                             ProgramCode: batchInfo.leadingCode.slice(0, 20),
