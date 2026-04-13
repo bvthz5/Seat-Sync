@@ -51,7 +51,24 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
-            setSelectedFile(e.target.files[0]);
+            const file = e.target.files[0];
+            const fileName = file.name.toLowerCase();
+            const accepted =
+                fileName.endsWith('.xlsx') ||
+                fileName.endsWith('.xls') ||
+                fileName.endsWith('.csv') ||
+                fileName.endsWith('.pdf');
+
+            if (!accepted) {
+                toast.error('Only .xlsx, .xls, .csv, and .pdf files are supported');
+                return;
+            }
+
+            if (fileName.endsWith('.pdf')) {
+                toast('PDF import is best-effort. Please verify the result after import.', { icon: 'ℹ️' });
+            }
+
+            setSelectedFile(file);
         }
     };
 
@@ -213,7 +230,7 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                 <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg bg-slate-50">
                                     <div className="flex flex-col">
                                         <span className="font-medium text-slate-900">Download Template</span>
-                                        <span className="text-sm text-slate-500">Use this Excel format for importing</span>
+                                        <span className="text-sm text-slate-500">Recommended: use this Excel format for highest import accuracy</span>
                                     </div>
                                     <Button
                                         size="sm"
@@ -232,7 +249,7 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                     <input
                                         type="file"
                                         name="fileUpload"
-                                        accept=".xlsx,.xls"
+                                        accept=".xlsx,.xls,.csv,.pdf"
                                         onChange={handleFileSelect}
                                         className="hidden"
                                         id="file-upload"
@@ -264,7 +281,7 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                                         Click to upload or drag and drop
                                                     </p>
                                                     <p className="text-xs text-slate-500 mt-1">
-                                                        Excel files only (.xlsx, .xls)
+                                                        .xlsx, .xls, .csv, .pdf
                                                     </p>
                                                 </>
                                             )}

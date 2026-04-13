@@ -9,7 +9,71 @@ import { AcademicYear } from "../models/AcademicYear.js";
 import { Op, QueryTypes } from 'sequelize';
 import { ExamSeries } from '../models/index.js';
 import * as XLSX from 'xlsx';
+import { PDFParse } from 'pdf-parse';
 import { sequelize } from '../config/database.js';
+
+const DATE_PATTERN =
+    /\b(?:\d{4}-\d{2}-\d{2}|\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})\b/;
+const SUBJECT_CODE_PATTERN = /\b[A-Z]{2,}[0-9]{2,}[A-Z0-9-]*\b/;
+const TIME_RANGE_PATTERN =
+    /\b\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*[-–]\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b/i;
+
+const extractRowsFromSpreadsheet = (buffer: Buffer) => {
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    if (!sheetName) {
+        throw new Error('Invalid file: No sheets found');
+    }
+    const sheet = workbook.Sheets[sheetName];
+    if (!sheet) {
+        throw new Error('Invalid file: Sheet not found');
+    }
+    return XLSX.utils.sheet_to_json(sheet) as any[];
+};
+
+const extractRowsFromPdf = async (buffer: Buffer) => {
+    const parser = new PDFParse({ data: buffer });
+    try {
+        const textResult = await parser.getText();
+        const lines = (textResult.text || '')
+            .split(/\r?\n/)
+            .map((line) => line.replace(/\s+/g, ' ').trim())
+            .filter(Boolean);
+
+        const rows: any[] = [];
+
+        for (const line of lines) {
+            const dateMatch = line.match(DATE_PATTERN);
+            const codeMatch = line.match(SUBJECT_CODE_PATTERN);
+            if (!dateMatch || !codeMatch) {
+                continue;
+            }
+
+            const timeMatch = line.match(TIME_RANGE_PATTERN);
+            const dateValue = dateMatch[0];
+            const codeValue = codeMatch[0];
+            const timeValue = timeMatch?.[0];
+
+            const subjectName = line
+                .replace(dateValue, ' ')
+                .replace(codeValue, ' ')
+                .replace(timeValue || '', ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+
+            rows.push({
+                Date: dateValue,
+                'Course Code': codeValue,
+                'Course Name': subjectName || codeValue,
+                Time: timeValue || undefined
+            });
+        }
+
+        return rows;
+    } finally {
+        await parser.destroy();
+    }
+};
 
 export class ExamController {
 
@@ -281,23 +345,27 @@ export class ExamController {
         }
     }
 
-    // Import timetable from Excel
+    // Import timetable from Excel/CSV/PDF
     static async importTimetable(req: Request, res: Response) {
         if (!req.file) {
             return res.status(400).json({ message: "No file uploaded" });
         }
 
         try {
-            const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-            const sheetName = workbook.SheetNames[0];
-            if (!sheetName) {
-                return res.status(400).json({ message: "Invalid Excel file: No sheets found" });
+            const filename = (req.file.originalname || '').toLowerCase();
+            const isPdf = req.file.mimetype === 'application/pdf' || filename.endsWith('.pdf');
+            const data: any[] = isPdf
+                ? await extractRowsFromPdf(req.file.buffer)
+                : extractRowsFromSpreadsheet(req.file.buffer);
+
+            if (!Array.isArray(data) || data.length === 0) {
+                return res.status(400).json({
+                    message: isPdf
+                        ? "No timetable rows could be parsed from PDF. Please verify the PDF format or use the Excel template."
+                        : "No rows found in uploaded file"
+                });
             }
-            const sheet = workbook.Sheets[sheetName];
-            if (!sheet) {
-                return res.status(400).json({ message: "Invalid Excel file: Sheet not found" });
-            }
-            const data: any[] = XLSX.utils.sheet_to_json(sheet);
+
             const { seriesId } = req.body;
 
             // Optional: check if series exists
@@ -541,7 +609,7 @@ export class ExamController {
 
             return res.json({
                 success: true,
-                message: "Import processing complete",
+                message: isPdf ? "PDF import processing complete" : "Import processing complete",
                 successCount,
                 updatedCount,
                 errorCount: errors.length,
