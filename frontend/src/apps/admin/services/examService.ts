@@ -28,6 +28,13 @@ export const ExamService = {
         return response.data;
     },
 
+    deleteAll: async (seriesId?: number | string) => {
+        const response = await api.delete(`${PREFIX}/delete-all`, {
+            params: seriesId ? { seriesId } : undefined
+        });
+        return response.data;
+    },
+
     importTimetable: async (file: File, seriesId?: number, examTitle?: string) => {
         const formData = new FormData();
         formData.append('file', file);

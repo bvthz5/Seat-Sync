@@ -14,7 +14,7 @@ interface ExamImportModalProps {
 }
 
 const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: ExamImportModalProps) => {
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [importing, setImporting] = useState(false);
     const [examTitle, setExamTitle] = useState('');
     const [series, setSeries] = useState<any[]>([]);
@@ -51,26 +51,47 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
     };
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            const file = e.target.files[0];
+        if (!e.target.files || e.target.files.length === 0) return;
+
+        const files = Array.from(e.target.files);
+        const validFiles: File[] = [];
+        let hasPdf = false;
+        let hasWordRtf = false;
+
+        for (const file of files) {
             const fileName = file.name.toLowerCase();
             const accepted =
                 fileName.endsWith('.xlsx') ||
                 fileName.endsWith('.xls') ||
                 fileName.endsWith('.csv') ||
-                fileName.endsWith('.pdf');
+                fileName.endsWith('.pdf') ||
+                fileName.endsWith('.doc') ||
+                fileName.endsWith('.docx') ||
+                fileName.endsWith('.rtf');
 
-            if (!accepted) {
-                toast.error('Only .xlsx, .xls, .csv, and .pdf files are supported');
-                return;
-            }
-
-            if (fileName.endsWith('.pdf')) {
-                toast('PDF import is best-effort. Please verify the result after import.', { icon: 'ℹ️' });
-            }
-
-            setSelectedFile(file);
+            if (!accepted) continue;
+            if (fileName.endsWith('.pdf')) hasPdf = true;
+            if (fileName.endsWith('.doc') || fileName.endsWith('.docx') || fileName.endsWith('.rtf')) hasWordRtf = true;
+            validFiles.push(file);
         }
+
+        if (validFiles.length === 0) {
+            toast.error('Only .xlsx, .xls, .csv, .pdf, .doc, .docx, and .rtf files are supported');
+            return;
+        }
+
+        if (validFiles.length !== files.length) {
+            toast.error(`${files.length - validFiles.length} unsupported file(s) were skipped`);
+        }
+
+        if (hasPdf) {
+            toast('PDF import is best-effort. Please verify the result after import.', { icon: 'ℹ️' });
+        }
+        if (hasWordRtf) {
+            toast('Word/RTF import is best-effort. Please verify the result after import.', { icon: 'ℹ️' });
+        }
+
+        setSelectedFiles(validFiles);
     };
 
     const handleDownloadTemplate = async () => {
@@ -84,8 +105,8 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
     };
 
     const handleImport = async () => {
-        if (!selectedFile) {
-            toast.error('Please select a file first');
+        if (selectedFiles.length === 0) {
+            toast.error('Please select at least one file');
             return;
         }
 
@@ -96,26 +117,38 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
 
         setImporting(true);
         try {
-            const result = await ExamService.importTimetable(
-                selectedFile,
-                parseInt(selectedSeriesId),
-                examTitle
-            );
+            let totalCreated = 0;
+            let totalUpdated = 0;
+            let totalRowErrors = 0;
+            let fileFailures = 0;
 
-            const created = result.successCount || 0;
-            const updated = result.updatedCount || 0;
+            for (const file of selectedFiles) {
+                try {
+                    const result = await ExamService.importTimetable(
+                        file,
+                        parseInt(selectedSeriesId),
+                        examTitle
+                    );
 
-            if (created > 0 || updated > 0) {
-                toast.success(`Complete: ${created} created, ${updated} updated`);
+                    totalCreated += result.successCount || 0;
+                    totalUpdated += result.updatedCount || 0;
+                    totalRowErrors += result.errorCount || 0;
+                } catch (error: any) {
+                    fileFailures++;
+                    console.error(`Import failed for ${file.name}:`, error);
+                }
+            }
+
+            if (totalCreated > 0 || totalUpdated > 0) {
+                toast.success(`Complete: ${totalCreated} created, ${totalUpdated} updated`);
             } else {
                 toast('No changes made', { icon: 'ℹ️' });
             }
-
-            if (result.errorCount > 0) {
-                toast.error(`Failed: ${result.errorCount} errors (Check console)`);
-                console.error("Import Errors:", result.errors);
+            if (totalRowErrors > 0 || fileFailures > 0) {
+                toast.error(`Completed with issues: ${totalRowErrors} row errors, ${fileFailures} file failures`);
             }
-            setSelectedFile(null);
+
+            setSelectedFiles([]);
             onSuccess();
             onClose();
         } catch (error: any) {
@@ -133,7 +166,7 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
     };
 
     const handleClose = () => {
-        setSelectedFile(null);
+        setSelectedFiles([]);
         onClose();
     };
 
@@ -170,7 +203,7 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                         <CheckCircle2 className="text-purple-600 flex-shrink-0" size={20} />
                                         <div className="text-sm text-purple-800">
                                             <p className="font-semibold mb-1">Upload Timetable</p>
-                                            <p>Upload your Excel timetable containing Date, Session, and Subject Codes. The system will automatically check for scheduling conflicts.</p>
+                                            <p>Upload timetable files (.xlsx/.xls/.csv/.pdf/.doc/.docx/.rtf). The system will automatically check for scheduling conflicts.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -250,7 +283,8 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                     <input
                                         type="file"
                                         name="fileUpload"
-                                        accept=".xlsx,.xls,.csv,.pdf"
+                                        accept=".xlsx,.xls,.csv,.pdf,.doc,.docx,.rtf"
+                                        multiple
                                         onChange={handleFileSelect}
                                         className="hidden"
                                         id="file-upload"
@@ -261,21 +295,22 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                         onClick={() => fileInputRef.current?.click()}
                                         className={`
                                             flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer transition-all
-                                            ${selectedFile
+                                            ${selectedFiles.length > 0
                                                 ? 'border-purple-500 bg-purple-50'
                                                 : 'border-slate-300 hover:border-purple-400 hover:bg-slate-50'
                                             }
                                         `}
                                     >
                                         <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                            {selectedFile ? (
+                                            {selectedFiles.length > 0 ? (
                                                 <>
                                                     <FileSpreadsheet className="w-8 h-8 text-purple-600 mb-2" />
                                                     <p className="text-sm text-purple-900 font-medium">
-                                                        {selectedFile.name}
+                                                        {selectedFiles.length} file(s) selected
                                                     </p>
                                                     <p className="text-xs text-purple-500 mt-1">
-                                                        {(selectedFile.size / 1024).toFixed(2)} KB
+                                                        {selectedFiles.slice(0, 2).map(f => f.name).join(', ')}
+                                                        {selectedFiles.length > 2 ? ` +${selectedFiles.length - 2} more` : ''}
                                                     </p>
                                                 </>
                                             ) : (
@@ -285,7 +320,7 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                                         Click to upload or drag and drop
                                                     </p>
                                                     <p className="text-xs text-slate-500 mt-1">
-                                                        .xlsx, .xls, .csv, .pdf
+                                                        .xlsx, .xls, .csv, .pdf, .doc, .docx, .rtf
                                                     </p>
                                                 </>
                                             )}
@@ -301,11 +336,11 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                             <Button
                                 color="primary"
                                 isLoading={importing}
-                                isDisabled={!selectedFile}
+                                isDisabled={selectedFiles.length === 0}
                                 onPress={handleImport}
                                 className="font-bold bg-purple-600 text-white shadow-lg shadow-purple-500/20"
                             >
-                                {importing ? 'Importing...' : 'Start Import'}
+                                {importing ? 'Importing...' : `Start Import${selectedFiles.length > 1 ? ` (${selectedFiles.length})` : ''}`}
                             </Button>
                         </ModalFooter>
                     </>

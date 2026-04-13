@@ -10,16 +10,132 @@ import { Op, QueryTypes } from 'sequelize';
 import { ExamSeries } from '../models/index.js';
 import * as XLSX from 'xlsx';
 import { PDFParse } from 'pdf-parse';
+import { createWorker } from 'tesseract.js';
+import { createRequire } from 'module';
+import os from 'os';
+import path from 'path';
+import mammoth from 'mammoth';
 import { sequelize } from '../config/database.js';
 
+const require = createRequire(import.meta.url);
+
 const DATE_PATTERN =
-    /\b(?:\d{4}-\d{2}-\d{2}|\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})\b/;
-const SUBJECT_CODE_PATTERN = /\b[A-Z]{2,}[0-9]{2,}[A-Z0-9-]*\b/;
+    /\b(?:\d{4}-\d{2}-\d{2}|\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{1,2}\s*[A-Za-z]{3,9}\.?\s*\d{4})\b/;
+const SUBJECT_CODE_PATTERN = /\b(?:2\d[A-Z]{2,}[A-Z0-9]*\d{2,}|[A-Z]{2,}[0-9]{2,}[A-Z0-9-]*)\b/;
 const TIME_RANGE_PATTERN =
-    /\b\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*[-–]\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b/i;
+    /\b\d{1,2}(?::|\.)\d{2}\s*(?:am|pm)\s*(?:-|–|to)\s*\d{1,2}(?::|\.)\d{2}\s*(?:am|pm)\b/i;
+const OCR_CACHE_PATH = path.join(os.tmpdir(), 'seat-sync-tesseract-cache');
+
+const excelSerialToDate = (serial: number): Date | null => {
+    if (!Number.isFinite(serial)) return null;
+    const utcDays = Math.floor(serial - 25569);
+    const utcValue = utcDays * 86400;
+    const dateInfo = new Date(utcValue * 1000);
+    if (isNaN(dateInfo.getTime())) return null;
+    return new Date(dateInfo.getFullYear(), dateInfo.getMonth(), dateInfo.getDate());
+};
+
+const parseExamDateValue = (raw: unknown): Date | null => {
+    if (raw instanceof Date && !isNaN(raw.getTime())) {
+        return new Date(raw.getFullYear(), raw.getMonth(), raw.getDate());
+    }
+
+    if (typeof raw === 'number') {
+        return excelSerialToDate(raw);
+    }
+
+    const text = String(raw ?? '').trim();
+    if (!text) return null;
+
+    if (/^\d+(\.\d+)?$/.test(text)) {
+        return excelSerialToDate(parseFloat(text));
+    }
+
+    const ymdMatch = text.match(/^(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})$/);
+    if (ymdMatch && ymdMatch[1] && ymdMatch[2] && ymdMatch[3]) {
+        const y = parseInt(ymdMatch[1]);
+        const m = parseInt(ymdMatch[2]);
+        const d = parseInt(ymdMatch[3]);
+        const parsed = new Date(y, m - 1, d);
+        if (!isNaN(parsed.getTime())) {
+            return parsed;
+        }
+    }
+
+    const ddmmyyyyMatch = text.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$/);
+    if (ddmmyyyyMatch && ddmmyyyyMatch[1] && ddmmyyyyMatch[2] && ddmmyyyyMatch[3]) {
+        const d = parseInt(ddmmyyyyMatch[1]);
+        const m = parseInt(ddmmyyyyMatch[2]);
+        let y = parseInt(ddmmyyyyMatch[3]);
+        if (y < 100) y += 2000;
+        const manualDate = new Date(y, m - 1, d);
+        if (!isNaN(manualDate.getTime())) {
+            return manualDate;
+        }
+    }
+
+    const standardDate = new Date(text);
+    if (!isNaN(standardDate.getTime())) {
+        return new Date(standardDate.getFullYear(), standardDate.getMonth(), standardDate.getDate());
+    }
+
+    return null;
+};
+
+const formatDateForDb = (date: Date): string => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+};
+
+const parseDepartmentCodes = (raw: unknown): string[] => {
+    const text = String(raw ?? '').trim();
+    if (!text) return [];
+    return [...new Set(
+        text
+            .split(/[,&/;|]+/)
+            .map((s) => s.trim())
+            .filter(Boolean)
+    )];
+};
+
+const flattenRtfText = (node: any): string => {
+    if (node === null || node === undefined) return '';
+    if (typeof node === 'string') return node;
+    if (Array.isArray(node)) {
+        return node.map((item) => flattenRtfText(item)).join('');
+    }
+    if (typeof node === 'object') {
+        if (typeof node.value === 'string') {
+            return node.value;
+        }
+        if (Array.isArray(node.content)) {
+            return node.content.map((item: any) => flattenRtfText(item)).join('');
+        }
+    }
+    return '';
+};
+
+const stripRtfToText = (rtf: string): string => {
+    const withHexDecoded = rtf.replace(/\\'([0-9a-fA-F]{2})/g, (_m, hex) =>
+        String.fromCharCode(parseInt(hex, 16))
+    );
+
+    return withHexDecoded
+        .replace(/\\par[d]?/g, '\n')
+        .replace(/\\line/g, '\n')
+        .replace(/\\tab/g, ' ')
+        .replace(/\\[a-zA-Z]+-?\d* ?/g, ' ')
+        .replace(/[{}]/g, ' ')
+        .replace(/\u00a0/g, ' ')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+};
 
 const extractRowsFromSpreadsheet = (buffer: Buffer) => {
-    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
     const sheetName = workbook.SheetNames[0];
     if (!sheetName) {
         throw new Error('Invalid file: No sheets found');
@@ -31,45 +147,183 @@ const extractRowsFromSpreadsheet = (buffer: Buffer) => {
     return XLSX.utils.sheet_to_json(sheet) as any[];
 };
 
-const extractRowsFromPdf = async (buffer: Buffer) => {
-    const parser = new PDFParse({ data: buffer });
-    try {
-        const textResult = await parser.getText();
-        const lines = (textResult.text || '')
-            .split(/\r?\n/)
-            .map((line) => line.replace(/\s+/g, ' ').trim())
-            .filter(Boolean);
+const extractRowsFromTextDocument = async (buffer: Buffer, fileType: 'docx' | 'doc' | 'rtf') => {
+    let text = '';
 
-        const rows: any[] = [];
-
-        for (const line of lines) {
-            const dateMatch = line.match(DATE_PATTERN);
-            const codeMatch = line.match(SUBJECT_CODE_PATTERN);
-            if (!dateMatch || !codeMatch) {
-                continue;
-            }
-
-            const timeMatch = line.match(TIME_RANGE_PATTERN);
-            const dateValue = dateMatch[0];
-            const codeValue = codeMatch[0];
-            const timeValue = timeMatch?.[0];
-
-            const subjectName = line
-                .replace(dateValue, ' ')
-                .replace(codeValue, ' ')
-                .replace(timeValue || '', ' ')
-                .replace(/\s+/g, ' ')
-                .trim();
-
-            rows.push({
-                Date: dateValue,
-                'Course Code': codeValue,
-                'Course Name': subjectName || codeValue,
-                Time: timeValue || undefined
+    if (fileType === 'docx') {
+        const result = await mammoth.extractRawText({ buffer });
+        text = result.value || '';
+    } else if (fileType === 'doc') {
+        const WordExtractor = require('word-extractor');
+        const extractor = new WordExtractor();
+        const doc = await extractor.extract(buffer);
+        text = doc.getBody() || '';
+    } else {
+        const rtfParser = require('rtf-parser');
+        const rtfString = buffer.toString('latin1');
+        const doc: any = await new Promise((resolve, reject) => {
+            rtfParser.string(rtfString, (err: Error | null, parsed: any) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                resolve(parsed);
             });
+        });
+        const paragraphs: any[] = Array.isArray(doc?.content) ? doc.content : [];
+        text = paragraphs
+            .map((paragraph: any) => flattenRtfText(paragraph).trim())
+            .filter(Boolean)
+            .join('\n');
+
+        if (!text) {
+            text = stripRtfToText(rtfString);
+        }
+    }
+
+    return extractRowsFromLines(normalizeLines(text));
+};
+
+const normalizeLines = (text: string) =>
+    text
+        .split(/\r?\n/)
+        .map((line) => line.replace(/\s+/g, ' ').trim())
+        .filter(Boolean);
+
+const getFirstCodeFromLine = (line: string) => {
+    const matches = line.match(new RegExp(SUBJECT_CODE_PATTERN.source, 'g'));
+    return matches?.[0] || null;
+};
+
+const buildSubjectName = (line: string, codeValue: string, dateValue?: string, timeValue?: string) =>
+    line
+        .replace(dateValue || '', ' ')
+        .replace(codeValue, ' ')
+        .replace(timeValue || '', ' ')
+        .replace(/^[\s|:-]+|[\s|:-]+$/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+const extractRowsFromLines = (lines: string[]) => {
+    const rows: any[] = [];
+    const seen = new Set<string>();
+
+    for (const line of lines) {
+        const dateMatch = line.match(DATE_PATTERN);
+        const codeValue = getFirstCodeFromLine(line);
+        if (!dateMatch || !codeValue) {
+            continue;
         }
 
+        const timeMatch = line.match(TIME_RANGE_PATTERN);
+        const dateValue = dateMatch[0];
+        const timeValue = timeMatch?.[0];
+
+        const subjectName = buildSubjectName(line, codeValue, dateValue, timeValue);
+
+        rows.push({
+            Date: dateValue,
+            'Course Code': codeValue,
+            'Course Name': subjectName || codeValue,
+            Time: timeValue || undefined
+        });
+
+        seen.add(`${dateValue}::${codeValue}`);
+    }
+
+    if (rows.length > 0) {
         return rows;
+    }
+
+    // OCR fallback extraction: date/time and code can be in adjacent lines.
+    let currentDate: string | null = null;
+    let currentTime: string | null = null;
+    for (let i = 0; i < lines.length; i++) {
+        const current = lines[i] || '';
+        const lineDateMatch = current.match(DATE_PATTERN);
+        if (lineDateMatch?.[0]) {
+            currentDate = lineDateMatch[0];
+        }
+        const lineTimeMatch = current.match(TIME_RANGE_PATTERN);
+        if (lineTimeMatch?.[0]) {
+            currentTime = lineTimeMatch[0];
+        }
+
+        const codeValue = getFirstCodeFromLine(current);
+        if (!codeValue) continue;
+
+        const contextStart = Math.max(0, i - 4);
+        const contextEnd = Math.min(lines.length, i + 3);
+        const context = lines.slice(contextStart, contextEnd).join(' ');
+        const contextDateMatch = context.match(DATE_PATTERN);
+        const contextTimeMatch = context.match(TIME_RANGE_PATTERN);
+
+        const dateValue = contextDateMatch?.[0] || currentDate;
+        if (!dateValue) continue;
+
+        const timeValue = contextTimeMatch?.[0] || currentTime || undefined;
+        const key = `${dateValue}::${codeValue}`;
+        if (seen.has(key)) continue;
+
+        const nextLine = lines[i + 1] || '';
+        const subjectName = buildSubjectName(current, codeValue, dateValue, timeValue) || nextLine.trim() || codeValue;
+
+        rows.push({
+            Date: dateValue,
+            'Course Code': codeValue,
+            'Course Name': subjectName,
+            Time: timeValue
+        });
+        seen.add(key);
+    }
+
+    return rows;
+};
+
+const extractRowsFromPdf = async (buffer: Buffer) => {
+    const parser = new PDFParse({ data: buffer });
+    let usedOcr = false;
+
+    try {
+        const textResult = await parser.getText();
+        const textLines = normalizeLines(textResult.text || '');
+        let rows = extractRowsFromLines(textLines);
+
+        if (rows.length > 0) {
+            return { rows, usedOcr };
+        }
+
+        usedOcr = true;
+
+        // OCR fallback for scanned/image-only PDFs
+        const screenshots = await parser.getScreenshot({
+            scale: 3,
+            imageBuffer: true,
+            imageDataUrl: false
+        });
+
+        if (!screenshots.pages?.length) {
+            return { rows: [], usedOcr };
+        }
+
+        const worker = await createWorker('eng', undefined, {
+            cachePath: OCR_CACHE_PATH
+        });
+        try {
+            const ocrLines: string[] = [];
+            for (const page of screenshots.pages) {
+                if (!page.data || page.data.length === 0) {
+                    continue;
+                }
+                const ocrResult = await worker.recognize(Buffer.from(page.data));
+                ocrLines.push(...normalizeLines(ocrResult.data?.text || ''));
+            }
+            rows = extractRowsFromLines(ocrLines);
+        } finally {
+            await worker.terminate();
+        }
+
+        return { rows, usedOcr };
     } finally {
         await parser.destroy();
     }
@@ -251,6 +505,44 @@ export class ExamController {
         }
     }
 
+    // Delete all exams (optionally by series)
+    static async deleteAllExams(req: Request, res: Response) {
+        try {
+            const { seriesId } = req.query;
+            const parsedSeriesId = seriesId ? parseInt(String(seriesId), 10) : null;
+
+            if (seriesId && (!parsedSeriesId || Number.isNaN(parsedSeriesId))) {
+                return res.status(400).json({ message: 'Invalid seriesId' });
+            }
+
+            if (parsedSeriesId) {
+                await sequelize.query(
+                    'DELETE FROM ExamRegistrations WHERE ExamID IN (SELECT ExamID FROM Exams WHERE ExamSeriesID = :seriesId)',
+                    {
+                        replacements: { seriesId: parsedSeriesId },
+                        type: QueryTypes.DELETE
+                    }
+                );
+
+                const deletedCount = await Exam.destroy({ where: { ExamSeriesID: parsedSeriesId } });
+                return res.json({
+                    message: 'Exams deleted successfully',
+                    deletedCount
+                });
+            }
+
+            await sequelize.query('DELETE FROM ExamRegistrations', { type: QueryTypes.DELETE });
+            const deletedCount = await Exam.destroy({ where: {} });
+
+            return res.json({
+                message: 'All exams deleted successfully',
+                deletedCount
+            });
+        } catch (error: any) {
+            return res.status(500).json({ message: 'Error deleting exams', error: error.message });
+        }
+    }
+
     // Get statistics for dashboard
     static async getStats(req: Request, res: Response) {
         try {
@@ -354,14 +646,25 @@ export class ExamController {
         try {
             const filename = (req.file.originalname || '').toLowerCase();
             const isPdf = req.file.mimetype === 'application/pdf' || filename.endsWith('.pdf');
+            const isDocx = filename.endsWith('.docx');
+            const isDoc = filename.endsWith('.doc');
+            const isRtf = filename.endsWith('.rtf');
+
+            const pdfExtractResult = isPdf ? await extractRowsFromPdf(req.file.buffer) : null;
+            const textDocData = (isDocx || isDoc || isRtf)
+                ? await extractRowsFromTextDocument(req.file.buffer, isDocx ? 'docx' : isDoc ? 'doc' : 'rtf')
+                : null;
+
             const data: any[] = isPdf
-                ? await extractRowsFromPdf(req.file.buffer)
-                : extractRowsFromSpreadsheet(req.file.buffer);
+                ? pdfExtractResult?.rows || []
+                : (textDocData || extractRowsFromSpreadsheet(req.file.buffer));
 
             if (!Array.isArray(data) || data.length === 0) {
                 return res.status(400).json({
                     message: isPdf
-                        ? "No timetable rows could be parsed from PDF. Please verify the PDF format or use the Excel template."
+                        ? "No timetable rows could be parsed from PDF (including OCR fallback). Please verify the PDF format or use the Excel template."
+                        : (isDocx || isDoc || isRtf)
+                            ? "No timetable rows could be parsed from the Word/RTF file. Please verify the document format or use the Excel template."
                         : "No rows found in uploaded file"
                 });
             }
@@ -426,7 +729,7 @@ export class ExamController {
             existingDepts.forEach(d => deptCache.set(d.DepartmentCode, d.DepartmentID));
 
             const existingSubjects = await Subject.findAll();
-            existingSubjects.forEach(s => subjectCache.set(s.SubjectCode, s.SubjectID));
+            existingSubjects.forEach(s => subjectCache.set(`${s.SubjectCode}::${s.DepartmentID}`, s.SubjectID));
 
             for (const row of data) {
                 try {
@@ -440,7 +743,6 @@ export class ExamController {
                     const durationRaw = row['Duration'];
 
                     const code = codeRaw ? String(codeRaw).trim() : null;
-                    const deptCode = deptRaw ? String(deptRaw).trim() : null;
                     const subjectName = nameRaw ? String(nameRaw).trim() : (code || 'Unknown Subject');
 
                     if (!code || !dateRaw) {
@@ -448,76 +750,16 @@ export class ExamController {
                         throw new Error(`Missing required fields (Code/Date) for row: ${JSON.stringify(row)}`);
                     }
 
-                    // 1. Resolve Department (Find or Create)
-                    let departmentID: number = 1; // Default
-                    if (deptCode) {
-                        const firstDeptRaw = String(deptCode).split(',')[0];
-                        const firstDept = firstDeptRaw ? firstDeptRaw.trim() : 'Unknown';
-                        const cachedID = deptCache.get(firstDept);
-
-                        if (cachedID !== undefined) {
-                            departmentID = cachedID;
-                        } else {
-                            const [dept] = await Department.findOrCreate({
-                                where: { DepartmentCode: firstDept },
-                                defaults: {
-                                    DepartmentCode: firstDept,
-                                    DepartmentName: firstDept
-                                }
-                            });
-                            departmentID = dept.DepartmentID;
-                            deptCache.set(firstDept, departmentID);
-                        }
-                    }
-
-                    // 2. Resolve Subject (Find or Create)
-                    let subjectID: number;
                     const cleanCode = String(code).trim();
-                    const cachedSubjID = subjectCache.get(cleanCode);
-
-                    if (cachedSubjID !== undefined) {
-                        subjectID = cachedSubjID;
-                    } else {
-                        const [subj] = await Subject.findOrCreate({
-                            where: { SubjectCode: cleanCode },
-                            defaults: {
-                                SubjectCode: cleanCode,
-                                SubjectName: subjectName,
-                                DepartmentID: departmentID,
-                                SemesterID: defaultSemesterID
-                            }
-                        });
-                        subjectID = subj.SubjectID;
-                        subjectCache.set(cleanCode, subjectID);
-                    }
 
                     // 3. Parse Date
-                    let examDate: Date | null = null;
+                    const examDate = parseExamDateValue(dateRaw);
                     const dateStrRaw: string = String(dateRaw).trim();
-
-                    // Try standard JS parsing first
-                    const standardDate = new Date(dateStrRaw);
-                    if (!isNaN(standardDate.getTime())) {
-                        examDate = standardDate;
-                    } else {
-                        // Try parsing common DD/MM/YYYY formats
-                        const ddmmyyyyMatch = dateStrRaw.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$/);
-                        if (ddmmyyyyMatch && ddmmyyyyMatch[1] && ddmmyyyyMatch[2] && ddmmyyyyMatch[3]) {
-                            const d = parseInt(ddmmyyyyMatch[1]);
-                            const m = parseInt(ddmmyyyyMatch[2]);
-                            let y = parseInt(ddmmyyyyMatch[3]);
-                            if (y < 100) y += 2000;
-                            const manualDate = new Date(y, m - 1, d);
-                            if (!isNaN(manualDate.getTime())) {
-                                examDate = manualDate;
-                            }
-                        }
-                    }
 
                     if (!examDate) {
                         throw new Error(`Invalid Date format for '${cleanCode}': ${dateStrRaw}. Expected DD/MM/YYYY or YYYY-MM-DD.`);
                     }
-                    const formattedDate: string = examDate.toISOString().split('T')[0] as string;
+                    const formattedDate: string = formatDateForDb(examDate);
 
                     // 4. Parse Session
                     let session = 'FN';
@@ -554,39 +796,84 @@ export class ExamController {
                         }
                     }
 
-                    // 5. Check Conflicts
-                    const existingExam = await Exam.findOne({
-                        where: {
-                            SubjectID: subjectID,
-                            ExamDate: formattedDate,
-                            Session: session
-                        }
-                    });
+                    const deptCodes = parseDepartmentCodes(deptRaw);
+                    const targetDeptCodes = deptCodes.length > 0 ? deptCodes : [null];
 
-                    if (existingExam) {
-                        // Update existing (UPSERT behavior)
-                        console.log(`Updating existing exam: ${cleanCode} on ${formattedDate}`);
-                        await existingExam.update({
-                            ExamName: importedExamName || existingExam.ExamName,
-                            Duration: durationRaw ? parseInt(String(durationRaw)) : existingExam.Duration,
-                            ExamSeriesID: seriesId ? parseInt(String(seriesId)) : (existingExam.ExamSeriesID || null),
-                            Status: new Date(formattedDate as any) < new Date() ? 'Completed' : 'Scheduled' // Auto-update status based on date
-                        } as any);
-                        updatedCount++;
-                    } else {
-                        // Create New
-                        const rawTitle = req.body.title;
-                        const defaultPrefix: string = rawTitle ? String(rawTitle) : 'Exam';
-                        await Exam.create({
-                            SubjectID: subjectID,
-                            ExamSeriesID: seriesId ? parseInt(String(seriesId)) : undefined,
-                            ExamName: importedExamName || `${defaultPrefix} - ${subjectName}`,
-                            ExamDate: formattedDate as any,
-                            Session: session.toUpperCase(),
-                            Duration: durationRaw ? parseInt(String(durationRaw)) : 180,
-                            Status: new Date(formattedDate as any) < new Date() ? 'Completed' : 'Scheduled'
-                        } as any);
-                        successCount++;
+                    for (const deptCode of targetDeptCodes) {
+                        // 1. Resolve Department (Find or Create)
+                        let departmentID: number = 1; // Default if department column is missing
+                        if (deptCode) {
+                            const cachedID = deptCache.get(deptCode);
+                            if (cachedID !== undefined) {
+                                departmentID = cachedID;
+                            } else {
+                                const [dept] = await Department.findOrCreate({
+                                    where: { DepartmentCode: deptCode },
+                                    defaults: {
+                                        DepartmentCode: deptCode,
+                                        DepartmentName: deptCode
+                                    }
+                                });
+                                departmentID = dept.DepartmentID;
+                                deptCache.set(deptCode, departmentID);
+                            }
+                        }
+
+                        // 2. Resolve Subject (Find or Create) per dept
+                        let subjectID: number;
+                        const subjectKey = `${cleanCode}::${departmentID}`;
+                        const cachedSubjID = subjectCache.get(subjectKey);
+
+                        if (cachedSubjID !== undefined) {
+                            subjectID = cachedSubjID;
+                        } else {
+                            const [subj] = await Subject.findOrCreate({
+                                where: {
+                                    SubjectCode: cleanCode,
+                                    DepartmentID: departmentID
+                                },
+                                defaults: {
+                                    SubjectCode: cleanCode,
+                                    SubjectName: subjectName,
+                                    DepartmentID: departmentID,
+                                    SemesterID: defaultSemesterID
+                                }
+                            });
+                            subjectID = subj.SubjectID;
+                            subjectCache.set(subjectKey, subjectID);
+                        }
+
+                        // 3. Upsert exam for this subject/department
+                        const existingExam = await Exam.findOne({
+                            where: {
+                                SubjectID: subjectID,
+                                ExamDate: formattedDate,
+                                Session: session
+                            }
+                        });
+
+                        if (existingExam) {
+                            await existingExam.update({
+                                ExamName: importedExamName || existingExam.ExamName,
+                                Duration: durationRaw ? parseInt(String(durationRaw)) : existingExam.Duration,
+                                ExamSeriesID: seriesId ? parseInt(String(seriesId)) : (existingExam.ExamSeriesID || null),
+                                Status: new Date(formattedDate as any) < new Date() ? 'Completed' : 'Scheduled'
+                            } as any);
+                            updatedCount++;
+                        } else {
+                            const rawTitle = req.body.title;
+                            const defaultPrefix: string = rawTitle ? String(rawTitle) : 'Exam';
+                            await Exam.create({
+                                SubjectID: subjectID,
+                                ExamSeriesID: seriesId ? parseInt(String(seriesId)) : undefined,
+                                ExamName: importedExamName || `${defaultPrefix} - ${subjectName}`,
+                                ExamDate: formattedDate as any,
+                                Session: session.toUpperCase(),
+                                Duration: durationRaw ? parseInt(String(durationRaw)) : 180,
+                                Status: new Date(formattedDate as any) < new Date() ? 'Completed' : 'Scheduled'
+                            } as any);
+                            successCount++;
+                        }
                     }
                 } catch (err: any) {
                     console.error("Row Error:", err.message);
@@ -610,6 +897,15 @@ export class ExamController {
             return res.json({
                 success: true,
                 message: isPdf ? "PDF import processing complete" : "Import processing complete",
+                parseMode: isPdf
+                    ? (pdfExtractResult?.usedOcr ? 'pdf-ocr' : 'pdf-text')
+                    : isDocx
+                        ? 'docx-text'
+                        : isDoc
+                            ? 'doc-text'
+                            : isRtf
+                                ? 'rtf-text'
+                                : 'spreadsheet',
                 successCount,
                 updatedCount,
                 errorCount: errors.length,

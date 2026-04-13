@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Upload, FileSpreadsheet, CheckCircle, AlertCircle, Info, Hash, AlertTriangle } from 'lucide-react';
 import { SeatingService } from '../../services/seatingService';
@@ -208,7 +208,7 @@ const SeatingImportModal: React.FC<SeatingImportModalProps> = ({
                             </h2>
                             <p className="text-gray-400 text-sm mt-1">
                                 For <span className="text-indigo-300 font-medium">{displayDate} - {session}</span>
-                                {selectedHalls && selectedHalls.length > 0 && ` ΓÇó ${selectedHalls.length} Halls Selected`}
+                                {selectedHalls && selectedHalls.length > 0 && ` • ${selectedHalls.length} Halls Selected`}
                             </p>
                         </div>
                         <button onClick={onClose} className="p-2 hover:bg-gray-800 rounded-full transition-colors">
@@ -265,8 +265,8 @@ const SeatingImportModal: React.FC<SeatingImportModalProps> = ({
                                         <div>
                                             <h3 className="text-white font-medium">{file.name}</h3>
                                             <p className="text-gray-400 text-sm">
-                                                {validCount} valid rows ΓÇó {(file.size / 1024).toFixed(1)} KB
-                                                {hasErrors && <span className="text-red-400 ml-2">ΓÇó Has errors</span>}
+                                                {validCount} valid rows • {(file.size / 1024).toFixed(1)} KB
+                                                {hasErrors && <span className="text-red-400 ml-2">• Has errors</span>}
                                             </p>
                                         </div>
                                     </div>

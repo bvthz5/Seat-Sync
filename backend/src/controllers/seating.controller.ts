@@ -1,12 +1,12 @@
-﻿import { Request, Response } from "express";
+import { Request, Response } from "express";
 import { Room, Seat, Student, User, Department, Exam, SeatAllocation, ExamSeries, Subject, Semester, Program } from "../models/index.js";
 import { Op, QueryTypes } from "sequelize";
 import { sequelize } from "../config/database.js";
 import bcrypt from "bcrypt";
 
-/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+/* ────────────────────────────────────────────────────────────
  * Helper: resolve exam IDs for a given date + session
- * ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
+ * ──────────────────────────────────────────────────────────── */
 const resolveExamIds = async (examDate: string, session: string): Promise<number[]> => {
     const exams = await Exam.findAll({
         attributes: ["ExamID"],
@@ -15,22 +15,23 @@ const resolveExamIds = async (examDate: string, session: string): Promise<number
     return exams.map(e => e.ExamID);
 };
 
-/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+/* ────────────────────────────────────────────────────────────
  * Helper: Auto-generate Seat rows for a room if none exist yet
- * ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */
-const ensureSeatsExist = async (room: any): Promise<void> => {
+ * ──────────────────────────────────────────────────────────── */
+const ensureSeatsExist = async (room: Room): Promise<void> => {
     const existing = await Seat.count({ where: { RoomID: room.RoomID } });
     if (existing > 0) return;
 
-    const layout = room.RowLayout || [];
+    const rows = room.TotalRows || 5;
+    const benchesPerRow = room.BenchesPerRow || 6;
     const seatsPerBench = room.SeatsPerBench || 2;
 
-    const records: { RoomID: number; RowIndex: number; BenchIndex: number; SeatIndex: number; IsActive: boolean }[] = [];
-    for (let r = 0; r < layout.length; r++) {
-        const benches = layout[r] || 0;
-        for (let b = 1; b <= benches; b++) {
+    const records: { RoomID: number; RowLabel: string; BenchNumber: number; SeatNumber: number; IsActive: boolean }[] = [];
+    for (let r = 0; r < rows; r++) {
+        const rowLabel = String.fromCharCode(65 + r);
+        for (let b = 1; b <= benchesPerRow; b++) {
             for (let s = 1; s <= seatsPerBench; s++) {
-                records.push({ RoomID: room.RoomID, RowIndex: r, BenchIndex: b, SeatIndex: s, IsActive: true });
+                records.push({ RoomID: room.RoomID, RowLabel: rowLabel, BenchNumber: b, SeatNumber: s, IsActive: true });
             }
         }
     }
@@ -40,10 +41,10 @@ const ensureSeatsExist = async (room: any): Promise<void> => {
     }
 };
 
-/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+/* ════════════════════════════════════════════════════════════
  *  GET /api/seating/series
  *  Returns all exam series for the optional filter dropdown
- * ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */
+ * ════════════════════════════════════════════════════════════ */
 export const getSeries = async (_req: Request, res: Response) => {
     try {
         const series = await ExamSeries.findAll({
@@ -57,11 +58,11 @@ export const getSeries = async (_req: Request, res: Response) => {
     }
 };
 
-/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+/* ════════════════════════════════════════════════════════════
  *  GET /api/seating/exam-dates?seriesId=  (optional)
  *  Returns distinct dates with their session + exam count
  *  Response: [{ examDate, session, examCount }]
- * ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */
+ * ════════════════════════════════════════════════════════════ */
 export const getExamDates = async (req: Request, res: Response) => {
     try {
         const { seriesId } = req.query;
@@ -94,81 +95,60 @@ export const getExamDates = async (req: Request, res: Response) => {
     }
 };
 
-/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
- *  GET /api/seating/exam-departments
- *  Returns all departments with exams on a given date+session
- *  Query params: examDate, session, seriesId (optional)
- *  Response: [{ departmentId, departmentName, departmentCode, studentCount }]
- * ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */
+/* ════════════════════════════════════════════════════════════
+ *  GET /api/seating/exam-departments?examDate=...&session=...&seriesId=...
+ *  Departments participating in the selected slot
+ * ════════════════════════════════════════════════════════════ */
 export const getExamDepartments = async (req: Request, res: Response) => {
     try {
         const { examDate, session, seriesId } = req.query;
-
         if (!examDate || !session) {
             return res.status(400).json({ message: "examDate and session are required" });
         }
 
-        const where: any = { ExamDate: examDate, Session: session };
-        if (seriesId) where.ExamSeriesID = Number(seriesId);
-
-        // Find all exams on this date+session, include Subject and Department
-        const exams = await Exam.findAll({
-            where,
-            include: [
-                {
-                    model: Subject,
-                    attributes: ["SubjectID", "SubjectName", "SubjectCode"],
-                    include: [
-                        {
-                            model: Department,
-                            attributes: ["DepartmentID", "DepartmentName", "DepartmentCode"],
-                        }
-                    ]
-                }
-            ]
-        });
-
-        // Extract unique departments and get student counts
-        const deptMap = new Map<number, { departmentId: number; departmentName: string; departmentCode: string; studentCount: number }>();
-
-        for (const exam of exams) {
-            const subject = (exam as any).Subject;
-            if (subject?.Department) {
-                const dept = subject.Department;
-                if (!deptMap.has(dept.DepartmentID)) {
-                    deptMap.set(dept.DepartmentID, {
-                        departmentId: dept.DepartmentID,
-                        departmentName: dept.DepartmentName,
-                        departmentCode: dept.DepartmentCode,
-                        studentCount: 0 // Will populate below
-                    });
-                }
-            }
+        const whereParts = ["e.ExamDate = :examDate", "e.Session = :session"];
+        const replacements: Record<string, any> = {
+            examDate: String(examDate),
+            session: String(session),
+        };
+        if (seriesId !== undefined && seriesId !== null && String(seriesId).trim() !== "") {
+            whereParts.push("e.ExamSeriesID = :seriesId");
+            replacements.seriesId = Number(seriesId);
         }
 
-        // Get student counts for each department
-        for (const dept of deptMap.values()) {
-            const count = await Student.count({
-                where: { DepartmentID: dept.departmentId }
-            });
-            dept.studentCount = count;
-        }
-
-        // Sort by department name
-        const result = Array.from(deptMap.values()).sort((a, b) =>
-            a.departmentName.localeCompare(b.departmentName)
+        const rows = await sequelize.query<any>(
+            `
+            SELECT
+                d.DepartmentID,
+                d.DepartmentName,
+                d.DepartmentCode,
+                COUNT(s.StudentID) AS studentCount
+            FROM Exams e
+            INNER JOIN Subjects sub ON sub.SubjectID = e.SubjectID
+            INNER JOIN Departments d ON d.DepartmentID = sub.DepartmentID
+            LEFT JOIN Students s ON s.DepartmentID = d.DepartmentID
+            WHERE ${whereParts.join(" AND ")}
+            GROUP BY d.DepartmentID, d.DepartmentName, d.DepartmentCode
+            ORDER BY d.DepartmentName ASC
+            `,
+            { type: QueryTypes.SELECT, replacements }
         );
 
-        res.json(result);
+        res.json(rows.map((r: any) => ({
+            DepartmentID: Number(r.DepartmentID),
+            DepartmentName: String(r.DepartmentName || ""),
+            DepartmentCode: String(r.DepartmentCode || ""),
+            studentCount: Number(r.studentCount || 0),
+        })));
     } catch (error: any) {
         console.error("GET EXAM DEPARTMENTS ERROR:", error);
         res.status(500).json({ message: error.message });
     }
 };
 
-/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+/* ════════════════════════════════════════════════════════════
  *  GET /api/seating/halls
- * ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */
+ * ════════════════════════════════════════════════════════════ */
 export const getHalls = async (_req: Request, res: Response) => {
     try {
         const halls = await Room.findAll({
@@ -182,9 +162,9 @@ export const getHalls = async (_req: Request, res: Response) => {
     }
 };
 
-/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+/* ════════════════════════════════════════════════════════════
  *  GET /api/seating/halls/:hallId/layout
- * ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */
+ * ════════════════════════════════════════════════════════════ */
 export const getHallLayout = async (req: Request, res: Response) => {
     try {
         const { hallId } = req.params;
@@ -196,23 +176,23 @@ export const getHallLayout = async (req: Request, res: Response) => {
         // Fetch ALL seats (active + inactive) so the UI can show disabled ones
         const seats = await Seat.findAll({
             where: { RoomID: Number(hallId) },
-            order: [["RowIndex", "ASC"], ["BenchIndex", "ASC"], ["SeatIndex", "ASC"]],
+            order: [["RowLabel", "ASC"], ["BenchNumber", "ASC"], ["SeatNumber", "ASC"]],
         });
 
         const activeSeats = seats.filter(s => s.IsActive).length;
 
         const benchMap: Record<string, Record<number, any[]>> = {};
         for (const seat of seats) {
-            if (!benchMap[seat.RowIndex]) benchMap[seat.RowIndex] = {};
-            const rowMap = benchMap[seat.RowIndex]!;
-            if (!rowMap[seat.BenchIndex]) rowMap[seat.BenchIndex] = [];
-            rowMap[seat.BenchIndex]!.push(seat);
+            if (!benchMap[seat.RowLabel]) benchMap[seat.RowLabel] = {};
+            const rowMap = benchMap[seat.RowLabel]!;
+            if (!rowMap[seat.BenchNumber]) rowMap[seat.BenchNumber] = [];
+            rowMap[seat.BenchNumber]!.push(seat);
         }
 
         const benches: any[] = [];
         for (const row of Object.keys(benchMap).sort()) {
             for (const benchNum of Object.keys(benchMap[row] ?? {}).map(Number).sort((a, b) => a - b)) {
-                benches.push({ rowIndex: row, benchIndex: benchNum, seats: (benchMap[row] ?? {})[benchNum] ?? [] });
+                benches.push({ rowLabel: row, benchNumber: benchNum, seats: (benchMap[row] ?? {})[benchNum] ?? [] });
             }
         }
 
@@ -223,9 +203,9 @@ export const getHallLayout = async (req: Request, res: Response) => {
     }
 };
 
-/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+/* ════════════════════════════════════════════════════════════
  *  GET /api/seating/departments
- * ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */
+ * ════════════════════════════════════════════════════════════ */
 export const getDepartments = async (_req: Request, res: Response) => {
     try {
         const departments = await Department.findAll({ order: [["DepartmentName", "ASC"]] });
@@ -250,10 +230,10 @@ export const getDepartments = async (_req: Request, res: Response) => {
     }
 };
 
-/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+/* ════════════════════════════════════════════════════════════
  *  POST /api/seating/auto-assign
  *  Body: { examDate, session, hallId, leftDeptId, rightDeptId }
- * ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */
+ * ════════════════════════════════════════════════════════════ */
 export const autoAssign = async (req: Request, res: Response) => {
     try {
         const { examDate, session, hallId, leftDeptId, rightDeptId } = req.body;
@@ -276,7 +256,7 @@ export const autoAssign = async (req: Request, res: Response) => {
         // Fetch seats
         const seats = await Seat.findAll({
             where: { RoomID: Number(hallId), IsActive: true },
-            order: [["RowIndex", "ASC"], ["BenchIndex", "ASC"], ["SeatIndex", "ASC"]],
+            order: [["RowLabel", "ASC"], ["BenchNumber", "ASC"], ["SeatNumber", "ASC"]],
         });
         if (seats.length === 0) return res.status(400).json({ message: "No active seats found for this hall" });
 
@@ -286,14 +266,14 @@ export const autoAssign = async (req: Request, res: Response) => {
         });
         const allocatedStudentIds = new Set(existingAllocations.map((a: any) => a.StudentID));
 
-        // ΓöÇΓöÇ Fetch students ΓöÇΓöÇ
+        // ── Fetch students ──
         let leftStudents: any[] = [];
         let rightStudents: any[] = [];
         const excludeIds = allocatedStudentIds.size > 0 ? [...allocatedStudentIds] : [-1];
         const sameDept = leftDeptId && rightDeptId && Number(leftDeptId) === Number(rightDeptId);
 
         if (sameDept) {
-            // Same department for both sides ΓÇö fetch once and split evenly
+            // Same department for both sides — fetch once and split evenly
             const allStudents = await Student.findAll({
                 where: {
                     DepartmentID: Number(leftDeptId),
@@ -305,7 +285,7 @@ export const autoAssign = async (req: Request, res: Response) => {
                 ],
                 order: [["RegisterNumber", "ASC"]],
             });
-            // Alternate: odd index ΓåÆ left, even index ΓåÆ right
+            // Alternate: odd index → left, even index → right
             allStudents.forEach((s, i) => {
                 if (i % 2 === 0) leftStudents.push(s);
                 else rightStudents.push(s);
@@ -349,10 +329,10 @@ export const autoAssign = async (req: Request, res: Response) => {
         // Build bench map and assign
         const benchMap: Record<string, Record<number, any[]>> = {};
         for (const seat of seats) {
-            if (!benchMap[seat.RowIndex]) benchMap[seat.RowIndex] = {};
-            const rowMap = benchMap[seat.RowIndex]!;
-            if (!rowMap[seat.BenchIndex]) rowMap[seat.BenchIndex] = [];
-            rowMap[seat.BenchIndex]!.push(seat);
+            if (!benchMap[seat.RowLabel]) benchMap[seat.RowLabel] = {};
+            const rowMap = benchMap[seat.RowLabel]!;
+            if (!rowMap[seat.BenchNumber]) rowMap[seat.BenchNumber] = [];
+            rowMap[seat.BenchNumber]!.push(seat);
         }
 
         let leftIdx = 0, rightIdx = 0;
@@ -366,9 +346,9 @@ export const autoAssign = async (req: Request, res: Response) => {
 
         for (const benchNum of allBenchNums) {
             for (const row of allRows) {
-                const benchSeats = ((benchMap[row] ?? {})[benchNum] ?? []).sort((a: any, b: any) => a.SeatIndex - b.SeatIndex);
+                const benchSeats = ((benchMap[row] ?? {})[benchNum] ?? []).sort((a: any, b: any) => a.SeatNumber - b.SeatNumber);
                 for (const seat of benchSeats) {
-                    if (seat.SeatIndex === 1 && leftIdx < leftStudents.length) {
+                    if (seat.SeatNumber === 1 && leftIdx < leftStudents.length) {
                         const s = leftStudents[leftIdx++] as any;
                         assignments[seat.SeatID] = {
                             seatId: seat.SeatID, studentId: s.StudentID,
@@ -376,7 +356,7 @@ export const autoAssign = async (req: Request, res: Response) => {
                             registerNumber: s.RegisterNumber,
                             deptCode: s.Department?.DepartmentCode || "", side: "left",
                         };
-                    } else if (seat.SeatIndex !== 1 && rightIdx < rightStudents.length) {
+                    } else if (seat.SeatNumber !== 1 && rightIdx < rightStudents.length) {
                         const s = rightStudents[rightIdx++] as any;
                         assignments[seat.SeatID] = {
                             seatId: seat.SeatID, studentId: s.StudentID,
@@ -400,10 +380,10 @@ export const autoAssign = async (req: Request, res: Response) => {
     }
 };
 
-/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+/* ════════════════════════════════════════════════════════════
  *  GET /api/seating/allocation/:examDate/:session/:hallId
  *  Fetch saved allocations for a date + session + hall
- * ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */
+ * ════════════════════════════════════════════════════════════ */
 export const getAllocationForHall = async (req: Request, res: Response) => {
     try {
         const { examDate, session, hallId } = req.params;
@@ -437,7 +417,7 @@ export const getAllocationForHall = async (req: Request, res: Response) => {
                 studentName: s?.User?.FullName || "Unknown",
                 registerNumber: s?.RegisterNumber,
                 deptCode: s?.Department?.DepartmentCode || "",
-                side: seat?.SeatIndex === 1 ? "left" : "right",
+                side: seat?.SeatNumber === 1 ? "left" : "right",
             };
         }
 
@@ -448,10 +428,10 @@ export const getAllocationForHall = async (req: Request, res: Response) => {
     }
 };
 
-/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+/* ════════════════════════════════════════════════════════════
  *  POST /api/seating/save
  *  Body: { examDate, session, hallId, assignments: [{ seatId, studentId }] }
- * ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */
+ * ════════════════════════════════════════════════════════════ */
 export const saveAllocation = async (req: Request, res: Response) => {
     const transaction = await sequelize.transaction();
     try {
@@ -507,10 +487,10 @@ export const saveAllocation = async (req: Request, res: Response) => {
     }
 };
 
-/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+/* ════════════════════════════════════════════════════════════
  *  DELETE /api/seating/allocation/:examDate/:session/:hallId
  *  Clear all allocations for a date + session + hall
- * ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */
+ * ════════════════════════════════════════════════════════════ */
 export const clearAllocation = async (req: Request, res: Response) => {
     try {
         const { examDate, session, hallId } = req.params;
@@ -534,9 +514,9 @@ export const clearAllocation = async (req: Request, res: Response) => {
     }
 };
 
-/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+/* ════════════════════════════════════════════════════════════
  *  GET /api/seating/students/:deptId
- * ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */
+ * ════════════════════════════════════════════════════════════ */
 export const getStudentsByDept = async (req: Request, res: Response) => {
     try {
         const { deptId } = req.params;
@@ -561,10 +541,10 @@ export const getStudentsByDept = async (req: Request, res: Response) => {
     }
 };
 
-/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+/* ════════════════════════════════════════════════════════════
  *  GET /api/seating/allocation-summary/:examDate/:session
  *  Returns per-hall fill status for quick overview
- * ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */
+ * ════════════════════════════════════════════════════════════ */
 export const getAllocationSummary = async (req: Request, res: Response) => {
     try {
         const { examDate, session } = req.params;
@@ -598,11 +578,11 @@ export const getAllocationSummary = async (req: Request, res: Response) => {
     }
 };
 
-/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+/* ════════════════════════════════════════════════════════════
  *  POST /api/seating/bulk-assign
  *  Body: { examDate, session, hallIds: number[], leftDeptId, rightDeptId }
  *  Distributes students across multiple halls continuously
- * ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */
+ * ════════════════════════════════════════════════════════════ */
 export const bulkAssign = async (req: Request, res: Response) => {
     const transaction = await sequelize.transaction();
     try {
@@ -664,7 +644,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
 
             const seats = await Seat.findAll({
                 where: { RoomID: hall.RoomID, IsActive: true },
-                order: [["RowIndex", "ASC"], ["BenchIndex", "ASC"], ["SeatIndex", "ASC"]],
+                order: [["RowLabel", "ASC"], ["BenchNumber", "ASC"], ["SeatNumber", "ASC"]],
                 transaction,
             });
 
@@ -679,10 +659,10 @@ export const bulkAssign = async (req: Request, res: Response) => {
 
             const benchMap: Record<string, Record<number, any[]>> = {};
             for (const seat of seats) {
-                if (!benchMap[seat.RowIndex]) benchMap[seat.RowIndex] = {};
-                const rowMap = benchMap[seat.RowIndex]!;
-                if (!rowMap[seat.BenchIndex]) rowMap[seat.BenchIndex] = [];
-                rowMap[seat.BenchIndex]!.push(seat);
+                if (!benchMap[seat.RowLabel]) benchMap[seat.RowLabel] = {};
+                const rowMap = benchMap[seat.RowLabel]!;
+                if (!rowMap[seat.BenchNumber]) rowMap[seat.BenchNumber] = [];
+                rowMap[seat.BenchNumber]!.push(seat);
             }
 
             const records: { ExamID: number; SeatID: number; StudentID: number }[] = [];
@@ -696,12 +676,12 @@ export const bulkAssign = async (req: Request, res: Response) => {
 
             for (const benchNum of allBenchNums) {
                 for (const row of allRows) {
-                    const benchSeats = (benchMap[row]?.[benchNum] || []).sort((a: any, b: any) => a.SeatIndex - b.SeatIndex);
+                    const benchSeats = (benchMap[row]?.[benchNum] || []).sort((a: any, b: any) => a.SeatNumber - b.SeatNumber);
                     for (const seat of benchSeats) {
-                        if (seat.SeatIndex === 1 && leftIdx < leftStudents.length) {
+                        if (seat.SeatNumber === 1 && leftIdx < leftStudents.length) {
                             records.push({ ExamID: primaryExamId, SeatID: seat.SeatID, StudentID: leftStudents[leftIdx++].StudentID as number });
                             hallLeft++;
-                        } else if (seat.SeatIndex !== 1 && rightIdx < rightStudents.length) {
+                        } else if (seat.SeatNumber !== 1 && rightIdx < rightStudents.length) {
                             records.push({ ExamID: primaryExamId, SeatID: seat.SeatID, StudentID: rightStudents[rightIdx++].StudentID as number });
                             hallRight++;
                         }
@@ -731,11 +711,11 @@ export const bulkAssign = async (req: Request, res: Response) => {
     }
 };
 
-/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+/* ════════════════════════════════════════════════════════════
  *  POST /api/seating/shuffle-global
  *  Body: { examDate, session }
  *  Randomly shuffles all currently assigned students (lefts with lefts, rights with rights) across all halls
- * ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */
+ * ════════════════════════════════════════════════════════════ */
 export const shuffleGlobal = async (req: Request, res: Response) => {
     const transaction = await sequelize.transaction();
     try {
@@ -770,7 +750,7 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
             transaction,
         });
         const seatNumMap = new Map<number, number>();
-        for (const s of allSeats) seatNumMap.set(s.SeatID, s.SeatIndex);
+        for (const s of allSeats) seatNumMap.set(s.SeatID, s.SeatNumber);
 
         const leftAllocations = existingAllocations.filter(a => seatNumMap.get(a.SeatID) === 1);
         const rightAllocations = existingAllocations.filter(a => seatNumMap.get(a.SeatID) !== 1);
@@ -789,11 +769,11 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
         const roomOrder = new Map<number, string>();
         for (const r of rooms) roomOrder.set(r.RoomID, r.RoomCode);
 
-        // Column-by-column sort: roomCode ΓåÆ benchIndex ΓåÆ rowIndex ΓåÆ seatIndex
+        // Column-by-column sort: roomCode → benchNumber → rowLabel → seatNumber
         const columnSort = (seatId: number) => {
             const s = seatInfoMap.get(seatId);
             if (!s) return '';
-            return `${roomOrder.get(s.RoomID) ?? ''}_${String(s.BenchIndex).padStart(6, '0')}_${s.RowIndex}_${s.SeatIndex}`;
+            return `${roomOrder.get(s.RoomID) ?? ''}_${String(s.BenchNumber).padStart(6, '0')}_${s.RowLabel}_${s.SeatNumber}`;
         };
 
         // Sort seats column-by-column
@@ -808,7 +788,7 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
             .sort((a, b) => columnSort(a.SeatID as number).localeCompare(columnSort(b.SeatID as number)))
             .map(a => a.StudentID);
 
-        // Rotate the group by a random offset ΓÇö order is preserved but they start at a different room/position
+        // Rotate the group by a random offset — order is preserved but they start at a different room/position
         const rotate = (arr: any[], offset: number) => [...arr.slice(offset), ...arr.slice(0, offset)];
         const leftOffset = leftStudents.length > 1 ? Math.floor(Math.random() * leftStudents.length) : 0;
         const rightOffset = rightStudents.length > 1 ? Math.floor(Math.random() * rightStudents.length) : 0;
@@ -843,11 +823,11 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
     }
 };
 
-/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+/* ════════════════════════════════════════════════════════════
  *  POST /api/seating/quick-add-slot
  *  Body: { examDate, session, seriesId? }
  *  Creates a placeholder Exam record so SeatingPlans can use the slot
- * ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */
+ * ════════════════════════════════════════════════════════════ */
 export const quickAddExamSlot = async (req: Request, res: Response) => {
     try {
         const { examDate, session, seriesId } = req.body;
@@ -855,7 +835,7 @@ export const quickAddExamSlot = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "examDate and session are required" });
         }
 
-        // ΓöÇΓöÇ Step 1: Ensure a system Program exists (needed by Semester FK) ΓöÇΓöÇ
+        // ── Step 1: Ensure a system Program exists (needed by Semester FK) ──
         const [systemProgram] = await Program.findOrCreate({
             where: { ProgramCode: 'SYS-SEAT' },
             defaults: {
@@ -865,7 +845,7 @@ export const quickAddExamSlot = async (req: Request, res: Response) => {
             }
         });
 
-        // ΓöÇΓöÇ Step 2: Ensure a system Semester exists (needed by Subject FK) ΓöÇΓöÇ
+        // ── Step 2: Ensure a system Semester exists (needed by Subject FK) ──
         const [systemSemester] = await Semester.findOrCreate({
             where: { SemesterName: 'SYSTEM-SEAT-SEM' },
             defaults: {
@@ -876,7 +856,7 @@ export const quickAddExamSlot = async (req: Request, res: Response) => {
             }
         });
 
-        // ΓöÇΓöÇ Step 3: Ensure a system Department exists ΓöÇΓöÇ
+        // ── Step 3: Ensure a system Department exists ──
         const [genericDept] = await Department.findOrCreate({
             where: { DepartmentCode: 'SEAT-DEPT' },
             defaults: {
@@ -886,7 +866,7 @@ export const quickAddExamSlot = async (req: Request, res: Response) => {
             }
         });
 
-        // ΓöÇΓöÇ Step 4: Ensure a system Subject exists ΓöÇΓöÇ
+        // ── Step 4: Ensure a system Subject exists ──
         const [genericSubject] = await Subject.findOrCreate({
             where: { SubjectCode: 'SEAT-SLOT' },
             defaults: {
@@ -897,7 +877,7 @@ export const quickAddExamSlot = async (req: Request, res: Response) => {
             }
         });
 
-        // ΓöÇΓöÇ Step 5: Check if exam slot already exists for this date+session ΓöÇΓöÇ
+        // ── Step 5: Check if exam slot already exists for this date+session ──
         const existing = await Exam.findOne({
             where: {
                 SubjectID: genericSubject.SubjectID,
@@ -910,7 +890,7 @@ export const quickAddExamSlot = async (req: Request, res: Response) => {
             return res.json({ message: "Slot already exists", exam: existing });
         }
 
-        // ΓöÇΓöÇ Step 6: Create the placeholder exam ΓöÇΓöÇ
+        // ── Step 6: Create the placeholder exam ──
         const newExam = await Exam.create({
             SubjectID: genericSubject.SubjectID,
             ExamSeriesID: seriesId ? parseInt(seriesId) : undefined,
@@ -928,10 +908,10 @@ export const quickAddExamSlot = async (req: Request, res: Response) => {
     }
 };
 
-/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+/* ════════════════════════════════════════════════════════════
  *  POST /api/seating/import-excel
  *  Body: { examDate, session, hallIds?: number[], rows: [{ registerNumber, side }] }
- * ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */
+ * ════════════════════════════════════════════════════════════ */
 export const importSeatingFromExcel = async (req: Request, res: Response) => {
     const transaction = await sequelize.transaction();
     try {
@@ -1057,7 +1037,7 @@ export const importSeatingFromExcel = async (req: Request, res: Response) => {
         if (leftStudentIds.length === 0 && rightStudentIds.length === 0) {
             await transaction.rollback();
             return res.status(400).json({
-                message: `Debug ΓÇö Input:${rawInputRows.length} rows, DB students:${(allStudents as any[]).length}, AutoCreated:${autoCreatedCount}, NotFound:${notFound.length}. Sample input: ${JSON.stringify(rawInputRows.slice(0, 2))}. NotFound sample: ${JSON.stringify(notFound.slice(0, 3))}`,
+                message: `Debug — Input:${rawInputRows.length} rows, DB students:${(allStudents as any[]).length}, AutoCreated:${autoCreatedCount}, NotFound:${notFound.length}. Sample input: ${JSON.stringify(rawInputRows.slice(0, 2))}. NotFound sample: ${JSON.stringify(notFound.slice(0, 3))}`,
                 notFound
             });
         }
@@ -1084,7 +1064,7 @@ export const importSeatingFromExcel = async (req: Request, res: Response) => {
 
             const seats = await Seat.findAll({
                 where: { RoomID: hall.RoomID, IsActive: true },
-                order: [["RowIndex", "ASC"], ["BenchIndex", "ASC"], ["SeatIndex", "ASC"]],
+                order: [["RowLabel", "ASC"], ["BenchNumber", "ASC"], ["SeatNumber", "ASC"]],
                 transaction,
             });
 
@@ -1099,10 +1079,10 @@ export const importSeatingFromExcel = async (req: Request, res: Response) => {
 
             const benchMap: Record<string, Record<number, any[]>> = {};
             for (const seat of seats) {
-                if (!benchMap[seat.RowIndex]) benchMap[seat.RowIndex] = {};
-                const rowMap = benchMap[seat.RowIndex]!;
-                if (!rowMap[seat.BenchIndex]) rowMap[seat.BenchIndex] = [];
-                rowMap[seat.BenchIndex]!.push(seat);
+                if (!benchMap[seat.RowLabel]) benchMap[seat.RowLabel] = {};
+                const rowMap = benchMap[seat.RowLabel]!;
+                if (!rowMap[seat.BenchNumber]) rowMap[seat.BenchNumber] = [];
+                rowMap[seat.BenchNumber]!.push(seat);
             }
 
             // Column-by-column order: A1, B1, C1... then A2, B2, C2...
@@ -1113,11 +1093,11 @@ export const importSeatingFromExcel = async (req: Request, res: Response) => {
 
             for (const benchNum of allBenchNums) {
                 for (const row of allRows) {
-                    const benchSeats = (benchMap[row]?.[benchNum] || []).sort((a: any, b: any) => a.SeatIndex - b.SeatIndex);
+                    const benchSeats = (benchMap[row]?.[benchNum] || []).sort((a: any, b: any) => a.SeatNumber - b.SeatNumber);
                     for (const seat of benchSeats) {
-                        if (seat.SeatIndex === 1 && leftIdx < leftStudentIds.length) {
+                        if (seat.SeatNumber === 1 && leftIdx < leftStudentIds.length) {
                             newRecords.push({ ExamID: primaryExamId, SeatID: seat.SeatID, StudentID: leftStudentIds[leftIdx++] as number });
-                        } else if (seat.SeatIndex !== 1 && rightIdx < rightStudentIds.length) {
+                        } else if (seat.SeatNumber !== 1 && rightIdx < rightStudentIds.length) {
                             newRecords.push({ ExamID: primaryExamId, SeatID: seat.SeatID, StudentID: rightStudentIds[rightIdx++] as number });
                         }
                     }
@@ -1147,11 +1127,11 @@ export const importSeatingFromExcel = async (req: Request, res: Response) => {
     }
 };
 
-/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+/* ════════════════════════════════════════════════════════════
  *  GET /api/seating/search-student?examDate=&session=&q=
  *  Search for a student by register number or name and return
  *  their current hall, bench, row and side for that exam slot.
- * ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */
+ * ════════════════════════════════════════════════════════════ */
 export const searchStudent = async (req: Request, res: Response) => {
     try {
         const { examDate, session, q } = req.query as { examDate: string; session: string; q: string };
@@ -1186,10 +1166,10 @@ export const searchStudent = async (req: Request, res: Response) => {
         const allocMap = new Map<number, any>();
         if (examIds.length > 0) {
             const allocations = await sequelize.query<{
-                StudentID: number; SeatID: number; RowIndex: string;
-                BenchIndex: number; SeatIndex: number; RoomID: number; RoomCode: string;
+                StudentID: number; SeatID: number; RowLabel: string;
+                BenchNumber: number; SeatNumber: number; RoomID: number; RoomCode: string;
             }>(
-                `SELECT sa.StudentID, sa.SeatID, st.RowIndex, st.BenchIndex, st.SeatIndex,
+                `SELECT sa.StudentID, sa.SeatID, st.RowLabel, st.BenchNumber, st.SeatNumber,
                         r.RoomID, r.RoomName AS RoomCode
                  FROM SeatAllocations sa
                  JOIN Seats st ON sa.SeatID = st.SeatID
@@ -1209,10 +1189,10 @@ export const searchStudent = async (req: Request, res: Response) => {
                 allocated: !!alloc,
                 hallCode: alloc?.RoomCode ?? null,
                 hallId: alloc?.RoomID ?? null,
-                rowIndex: alloc?.RowIndex ?? null,
-                benchIndex: alloc?.BenchIndex ?? null,
-                side: alloc ? (Number(alloc.SeatIndex) === 1 ? 'Left' : 'Right') : null,
-                seatLabel: alloc ? `${alloc.RowIndex}${alloc.BenchIndex}` : null,
+                rowLabel: alloc?.RowLabel ?? null,
+                benchNumber: alloc?.BenchNumber ?? null,
+                side: alloc ? (Number(alloc.SeatNumber) === 1 ? 'Left' : 'Right') : null,
+                seatLabel: alloc ? `${alloc.RowLabel}${alloc.BenchNumber}` : null,
             };
         });
 

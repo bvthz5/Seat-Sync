@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Card, CardBody, Button } from "@heroui/react";
-import { BookOpen, Plus, Clock, FileText, AlertCircle, ArrowLeft, CheckCircle, CalendarDays, Upload } from "lucide-react";
+import { BookOpen, Plus, Clock, FileText, AlertCircle, ArrowLeft, CheckCircle, CalendarDays, Upload, Pencil, Trash2 } from "lucide-react";
 import { toast } from 'react-hot-toast';
 import { ExamService } from '../services/examService';
 import { SeriesService } from '../services/seriesService';
 import CreateExamModal from '../components/exams/CreateExamModal';
 import ExamImportModal from '../components/exams/ExamImportModal';
+import EditExamModal from '../components/exams/EditExamModal';
+import ConfirmationModal from '../components/ConfirmationModal';
 
 const ExamSeriesList: React.FC = () => {
     const navigate = useNavigate();
@@ -15,6 +17,10 @@ const ExamSeriesList: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [deleteExamId, setDeleteExamId] = useState<number | null>(null);
+    const [isDeleteAllOpen, setIsDeleteAllOpen] = useState(false);
+    const [selectedExam, setSelectedExam] = useState<any>(null);
     const [seriesName, setSeriesName] = useState<string>('');
 
     useEffect(() => {
@@ -52,6 +58,38 @@ const ExamSeriesList: React.FC = () => {
 
     const handleCreateExam = () => {
         setIsCreateModalOpen(true);
+    };
+
+    const handleEdit = (exam: any) => {
+        setSelectedExam(exam);
+        setIsEditModalOpen(true);
+    };
+
+    const handleDeleteClick = (id: number) => {
+        setDeleteExamId(id);
+    };
+
+    const confirmDelete = async () => {
+        if (!deleteExamId) return;
+        try {
+            await ExamService.delete(deleteExamId);
+            toast.success("Exam deleted successfully");
+            fetchExams();
+        } catch (error) {
+            toast.error("Failed to delete exam");
+            throw error;
+        }
+    };
+
+    const confirmDeleteAll = async () => {
+        try {
+            await ExamService.deleteAll(seriesId);
+            toast.success("All exams deleted successfully");
+            fetchExams();
+        } catch (error) {
+            toast.error("Failed to delete all exams");
+            throw error;
+        }
     };
 
     return (
@@ -136,6 +174,14 @@ const ExamSeriesList: React.FC = () => {
                             Import Timetable
                         </Button>
                         <Button
+                            onPress={() => setIsDeleteAllOpen(true)}
+                            variant="flat"
+                            className="bg-red-50 text-red-600 border border-red-200 font-semibold hover:bg-red-100 transition-all px-6 rounded-xl h-14 w-full lg:w-auto"
+                            startContent={<Trash2 size={18} />}
+                        >
+                            Delete All Exams
+                        </Button>
+                        <Button
                             onPress={handleCreateExam}
                             className="bg-indigo-600 text-white font-bold shadow-md hover:bg-indigo-700 transition-all px-8 rounded-xl h-14 w-full lg:w-auto"
                             startContent={<Plus size={20} strokeWidth={3} />}
@@ -218,6 +264,27 @@ const ExamSeriesList: React.FC = () => {
                                             <span>{new Date(exam.ExamDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
                                         </div>
                                     </div>
+
+                                    <div className="flex items-center gap-2 pt-1">
+                                        <Button
+                                            size="sm"
+                                            variant="flat"
+                                            className="bg-slate-100 text-slate-700 hover:bg-slate-200 font-medium"
+                                            startContent={<Pencil size={14} />}
+                                            onPress={() => handleEdit(exam)}
+                                        >
+                                            Edit
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="flat"
+                                            className="bg-red-50 text-red-600 hover:bg-red-100 font-medium"
+                                            startContent={<Trash2 size={14} />}
+                                            onPress={() => handleDeleteClick(exam.ExamID)}
+                                        >
+                                            Delete
+                                        </Button>
+                                    </div>
                                 </CardBody>
                             </Card>
                         ))}
@@ -241,6 +308,40 @@ const ExamSeriesList: React.FC = () => {
                 onClose={() => setIsImportModalOpen(false)}
                 onSuccess={fetchExams}
                 preSelectedSeriesId={seriesId}
+            />
+
+            {selectedExam && (
+                <EditExamModal
+                    isOpen={isEditModalOpen}
+                    onClose={() => setIsEditModalOpen(false)}
+                    onSuccess={() => {
+                        setIsEditModalOpen(false);
+                        fetchExams();
+                    }}
+                    exam={selectedExam}
+                />
+            )}
+
+            <ConfirmationModal
+                isOpen={!!deleteExamId}
+                onClose={() => setDeleteExamId(null)}
+                onConfirm={confirmDelete}
+                title="Delete Exam"
+                message="Are you sure you want to delete this exam? This action cannot be undone."
+                confirmText="Delete Exam"
+                cancelText="Cancel"
+                type="danger"
+            />
+
+            <ConfirmationModal
+                isOpen={isDeleteAllOpen}
+                onClose={() => setIsDeleteAllOpen(false)}
+                onConfirm={confirmDeleteAll}
+                title="Delete All Exams"
+                message="Are you sure you want to delete all exams in this series? This action cannot be undone."
+                confirmText="Delete All"
+                cancelText="Cancel"
+                type="danger"
             />
         </div>
     );

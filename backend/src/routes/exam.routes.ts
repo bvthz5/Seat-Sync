@@ -135,6 +135,7 @@ router.put('/:id', AuthMiddleware.verifyAccessToken, ExamController.updateExam);
  *       200:
  *         description: Exam deleted
  */
+router.delete('/delete-all', AuthMiddleware.verifyAccessToken, ExamController.deleteAllExams);
 router.delete('/:id', AuthMiddleware.verifyAccessToken, ExamController.deleteExam);
 
 /**

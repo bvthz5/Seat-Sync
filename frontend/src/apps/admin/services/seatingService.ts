@@ -1,4 +1,4 @@
-﻿import api from '../../../services/api';
+import api from '../../../services/api';
 
 const PREFIX = '/seating';
 
@@ -9,14 +9,6 @@ export const SeatingService = {
     /** Get distinct exam dates (optionally by seriesId) */
     getExamDates: async (seriesId?: number) => {
         const r = await api.get(`${PREFIX}/exam-dates`, { params: seriesId ? { seriesId } : {} });
-        return r.data;
-    },
-
-    /** Get departments with exams on a specific date+session */
-    getExamDepartments: async (examDate: string, session: string, seriesId?: number) => {
-        const params: any = { examDate, session };
-        if (seriesId) params.seriesId = seriesId;
-        const r = await api.get(`${PREFIX}/exam-departments`, { params });
         return r.data;
     },
 
