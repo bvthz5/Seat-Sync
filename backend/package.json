@@ -44,7 +44,7 @@
     "node-cron": "^4.2.1",
     "nodemailer": "^7.0.12",
     "open": "^11.0.0",
-    "pdf-parse": "^2.4.5",
+    "pdf-parse-fork": "^1.2.0",
     "sequelize": "^6.37.7",
     "socket.io": "^4.8.3",
     "sqlite3": "^5.0.2",

@@ -9,7 +9,8 @@ import { AcademicYear } from "../models/AcademicYear.js";
 import { Op, QueryTypes } from 'sequelize';
 import { ExamSeries } from '../models/index.js';
 import * as XLSX from 'xlsx';
-import { PDFParse } from 'pdf-parse';
+// @ts-ignore
+import pdfParse from 'pdf-parse-fork';
 import { sequelize } from '../config/database.js';
 
 const DATE_PATTERN =
@@ -32,12 +33,11 @@ const extractRowsFromSpreadsheet = (buffer: Buffer) => {
 };
 
 const extractRowsFromPdf = async (buffer: Buffer) => {
-    const parser = new PDFParse({ data: buffer });
     try {
-        const textResult = await parser.getText();
+        const textResult = await pdfParse(buffer);
         const lines = (textResult.text || '')
             .split(/\r?\n/)
-            .map((line) => line.replace(/\s+/g, ' ').trim())
+            .map((line: string) => line.replace(/\s+/g, ' ').trim())
             .filter(Boolean);
 
         const rows: any[] = [];
@@ -70,8 +70,8 @@ const extractRowsFromPdf = async (buffer: Buffer) => {
         }
 
         return rows;
-    } finally {
-        await parser.destroy();
+    } catch (e: any) {
+        throw new Error('Error extracting rows: ' + e.message);
     }
 };
 
