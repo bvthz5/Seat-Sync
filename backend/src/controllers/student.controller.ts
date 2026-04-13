@@ -11,6 +11,27 @@ import * as XLSX from 'xlsx';
 import { BulkStudentImportService } from '../services/bulkStudentImport.service.js';
 import { emailService } from '../services/email.service.js';
 
+const STUDENT_EMAIL_DOMAIN = 'sjcetpalai.ac.in';
+
+const normalizeEmailToken = (value: string) =>
+    value.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const buildImportedStudentEmail = (
+    fullName: string,
+    departmentCode: string,
+    batchYear: number,
+    programDurationYears?: number | null
+) => {
+    const nameToken = normalizeEmailToken(fullName) || 'student';
+    const deptToken = normalizeEmailToken(departmentCode) || 'dept';
+    const durationYears =
+        typeof programDurationYears === 'number' && programDurationYears > 0
+            ? programDurationYears
+            : 2;
+    const passoutYear = batchYear + durationYears;
+    return `${nameToken}${passoutYear}@${deptToken}.${STUDENT_EMAIL_DOMAIN}`;
+};
+
 export const getAllStudents = async (req: Request, res: Response) => {
     try {
         const page = parseInt(req.query.page as string) || 1;
@@ -659,16 +680,44 @@ export const importStudents = async (req: Request, res: Response) => {
                 }
 
 
+                const existingStudent = await Student.findOne({ where: { RegisterNumber: regNo }, transaction: t });
+                const effectiveBatchYear = derivedBatchYear || existingStudent?.BatchYear || new Date().getFullYear();
+
                 // 3. Find/Create User (Login)
-                // Use RegisterNumber as unique identifier instead of email
                 // Default Password: First 4 chars of Name + @123
                 const passwordStr = (normalizedName.replace(/\s/g, '').substring(0, 4) + '@123'); // Simple logic
                 const defaultPassword = await bcrypt.hash(passwordStr, 10);
 
-                // Use register number as email (for now, until login system is updated)
-                const userEmail = `${regNo.toLowerCase()}@student.internal`;
+                const generatedEmail = buildImportedStudentEmail(
+                    normalizedName,
+                    targetDept.DepartmentCode || targetDept.DepartmentName || '',
+                    effectiveBatchYear,
+                    targetProgram.DurationYears
+                );
 
-                let user = await User.findOne({ where: { Email: userEmail }, transaction: t });
+                let userEmail = generatedEmail;
+                let user = existingStudent?.UserID
+                    ? await User.findByPk(existingStudent.UserID, { transaction: t })
+                    : null;
+
+                if (!user) {
+                    const emailOwner = await User.findOne({ where: { Email: generatedEmail }, transaction: t });
+                    if (emailOwner) {
+                        const linkedStudent = await Student.findOne({
+                            where: { UserID: emailOwner.UserID },
+                            transaction: t
+                        });
+
+                        // Handle rare collisions (same name + department + passout year) safely.
+                        if (linkedStudent && linkedStudent.RegisterNumber !== regNo) {
+                            const regSuffix = normalizeEmailToken(regNo).slice(-4) || '1';
+                            userEmail = generatedEmail.replace('@', `${regSuffix}@`);
+                        } else {
+                            user = emailOwner;
+                        }
+                    }
+                }
+
                 if (!user) {
                     user = await User.create({
                         Email: userEmail,
@@ -685,15 +734,13 @@ export const importStudents = async (req: Request, res: Response) => {
                 }
 
                 // 4. Create/Update Student
-                const existingStudent = await Student.findOne({ where: { RegisterNumber: regNo }, transaction: t });
-
                 if (existingStudent) {
                     await existingStudent.update({
                         UserID: user.UserID,
                         DepartmentID: targetDept.DepartmentID,
                         ProgramID: targetProgram.ProgramID,
                         SemesterID: targetSemester.SemesterID,
-                        BatchYear: derivedBatchYear || existingStudent.BatchYear // derived takes precedence if valid?
+                        BatchYear: effectiveBatchYear
                     }, { transaction: t });
                 } else {
                     await Student.create({
@@ -702,7 +749,7 @@ export const importStudents = async (req: Request, res: Response) => {
                         DepartmentID: targetDept.DepartmentID,
                         ProgramID: targetProgram.ProgramID,
                         SemesterID: targetSemester.SemesterID,
-                        BatchYear: derivedBatchYear || new Date().getFullYear() // Fallback
+                        BatchYear: effectiveBatchYear
                     }, { transaction: t });
                 }
 
@@ -1363,8 +1410,12 @@ export const importSeatingBatch = async (req: Request, res: Response) => {
                     continue;
                 }
 
-                // Create email for auto-created user
-                const email = `${registerNumber.toLowerCase().replace(/\//g, '.')}@student.sjc.ac.in`;
+                const email = buildImportedStudentEmail(
+                    name || registerNumber,
+                    targetDept.DepartmentCode || targetDept.DepartmentName || '',
+                    batchYear,
+                    targetProgram.DurationYears
+                );
 
                 // Create user account
                 const hashedPassword = await bcrypt.hash(registerNumber, 10);
