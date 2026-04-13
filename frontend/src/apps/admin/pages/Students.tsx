@@ -210,18 +210,10 @@ const Students: React.FC = () => {
                     }
                     programData = programData || s.Program;
                     
-                    let programDurationYears = programData?.DurationYears || 0;
-                    let programTotalSemesters = programData?.TotalSemesters || 0;
+                    let programDurationYears = programData?.DurationYears || 3;
+                    let programTotalSemesters = programData?.TotalSemesters || 6;
 
-                    if (programDurationYears === 0 || programTotalSemesters === 0) {
-                        return {
-                            ...s,
-                            Status: 'Incomplete' as const,
-                            CalculatedSemester: 0,
-                            MaxSemesters: 0,
-                        };
-                    }
-
+                    // Remove the strict check forcing Incomplete if duration is 0
                     const maxSems = programTotalSemesters;
                     let calcSem = 1;
                     
@@ -241,9 +233,9 @@ const Students: React.FC = () => {
                     calcSem = Math.min(Math.max(calcSem, 1), maxSems);
                     
                     let calculatedStatus: 'Active' | 'Incomplete' | 'Disabled' | 'Pending' = 'Pending';
-                    if (s.User?.isActive === false) calculatedStatus = 'Disabled';
-                    else if (s.User?.isActive) {
-                        if (s.Department && s.Program && s.BatchYear && s.RegisterNumber) {
+if (s.User?.IsActive === false) calculatedStatus = 'Disabled';
+else if (s.User?.IsActive !== false) {
+    if (s.User?.FullName && s.RegisterNumber && s.ProgramID) {
                             calculatedStatus = 'Active';
                         } else {
                             calculatedStatus = 'Incomplete';
@@ -506,13 +498,31 @@ const Students: React.FC = () => {
                         Export
                     </Button>
                     <Button
-                        className="bg-blue-50 text-blue-700 font-medium border border-blue-100 hover:bg-blue-100"
-                        startContent={<FileSpreadsheet size={16} />}
-                        onPress={() => setIsImportOpen(true)}
-                        radius="lg"
-                    >
-                        Import Data
-                    </Button>
+    className="bg-blue-50 text-blue-700 font-medium border border-blue-100 hover:bg-blue-100"
+    startContent={<FileSpreadsheet size={16} />}
+    onPress={() => setIsImportOpen(true)}
+    radius="lg"
+>
+    Import Data
+</Button>
+<Button
+    className="bg-purple-50 text-purple-700 font-medium whitespace-nowrap border border-purple-100 hover:bg-purple-100"
+    startContent={<BookOpen size={16} />}
+    onPress={async () => {
+        toast.loading("Syncing semesters...", { id: "sync-sems" });
+        try {
+            await api.post('/students/sync-semesters');
+            toast.success("Semesters synced successfully", { id: "sync-sems" });
+            fetchStudents();
+        } catch (error) {
+            toast.error(error?.response?.data?.message || "Failed to sync", { id: "sync-sems" });
+        }
+    }}
+    radius="lg"
+    title="Ensure DB semesters match dynamic date calculations"
+>
+    Sync Semesters
+</Button>
                     <Button
                         className="bg-indigo-50 text-indigo-700 font-medium border border-indigo-100 hover:bg-indigo-100"
                         startContent={<FileSpreadsheet size={16} />}

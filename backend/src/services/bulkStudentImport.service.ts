@@ -52,8 +52,8 @@ export class BulkStudentImportService {
             throw new Error("CSV file is empty");
         }
 
-        // Validate Headers
-        const requiredHeaders = ['FullName', 'RegisterNumber', 'DepartmentCode', 'ProgramName'];
+// Validate Headers - Relaxed requirements for CSV
+        const requiredHeaders = ['FullName', 'DepartmentCode', 'ProgramName'];
         const headers = Object.keys(rows[0]);
         const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
         if (missingHeaders.length > 0) {
@@ -65,7 +65,7 @@ export class BulkStudentImportService {
         let usersCreated = 0;
         const failedRows: StudentImportResult['failedRows'] = [];
         const processedRegNumbers = new Set<string>();
-        
+
         // Track created students for email sending (after transaction commits)
         const createdStudentsForEmail: Array<{
             email: string;
@@ -81,11 +81,16 @@ export class BulkStudentImportService {
                 if (!row) continue;
 
                 const lineNum = i + 2; // +1 for 0-index, +1 for header
-                
+
                 try {
                     // Extract and validate row data
                     const fullName = row.FullName?.trim();
-                    const registerNumber = row.RegisterNumber?.trim();
+                    let registerNumber = row.RegisterNumber?.trim();
+                    
+                    if (!registerNumber) {
+                        registerNumber = "AUTO_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+                    }
+                    
                     const departmentCode = row.DepartmentCode?.trim();
                     const programName = row.ProgramName?.trim();
                     const semesterNumber = row.SemesterNumber?.trim();
@@ -94,9 +99,6 @@ export class BulkStudentImportService {
                     // Row Validation
                     if (!fullName) {
                         throw new Error("FullName is required");
-                    }
-                    if (!registerNumber) {
-                        throw new Error("RegisterNumber is required");
                     }
                     if (!departmentCode) {
                         throw new Error("DepartmentCode is required");

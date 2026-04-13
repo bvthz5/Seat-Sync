@@ -80,7 +80,7 @@ export const getAllStudents = async (req: Request, res: Response) => {
             include: [
                 {
                     model: User,
-                    attributes: ['Email', 'Role', 'FullName', 'isActive'],
+                    attributes: ['Email', 'Role', 'FullName', 'IsActive'],
                     required: true
                 },
                 {
@@ -133,12 +133,12 @@ export const getAllStudents = async (req: Request, res: Response) => {
                 where: {
                     ...studentWhere,
                     [Op.or]: [
-                        { DepartmentID: null },
-                        { ProgramID: null },
-                        { SemesterID: null }
+                        { '$User.FullName$': { [Op.or]: [null, ''] } },
+                        { RegisterNumber: { [Op.or]: [null, ''] } },
+                        { ProgramID: null }
                     ]
                 } as any,
-                include: commonInclude as any,
+                include: [{ model: User, attributes: [], required: true }] as any,
                 distinct: true,
                 col: 'StudentID'
             }),
@@ -279,7 +279,76 @@ export const importStudents = async (req: Request, res: Response) => {
             await t.rollback();
             return res.status(400).json({ message: "Invalid Excel file: Sheet data missing" });
         }
-        const data: any[] = XLSX.utils.sheet_to_json(sheet);
+
+        // Adaptive Parser: Read sheet as raw array to handle multi-section tables
+        const rawRows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        const data: any[] = [];
+        let currentHeaders: string[] = [];
+        let isCollecting = false;
+        let globalBatch = '';
+
+        for (let rowIdx = 0; rowIdx < rawRows.length; rowIdx++) {
+            const row = rawRows[rowIdx];
+            if (!row || row.length === 0) {
+                isCollecting = false; // Stop on empty row
+                continue;
+            }
+
+            // Look for section title rows
+            const firstCell = String(row[0] || '').trim();
+            if (firstCell.toLowerCase().includes('batch :') || firstCell.toLowerCase().includes('batch:')) {
+                globalBatch = firstCell.replace(/batch\s*:/i, '').trim();
+                continue;
+            }
+
+            // Detect headers (checking if it contains typical header keywords)
+            const rowStr = row.map(c => String(c || '').toLowerCase()).join('|');
+            if (rowStr.includes('name') && (rowStr.includes('batch') || rowStr.includes('reg') || rowStr.includes('sl no'))) {
+                currentHeaders = row.map(h => String(h || '').trim());
+                isCollecting = true;
+                console.log("Detected Header:", currentHeaders);
+                continue;
+            }
+
+            // Extract records based on detected headers
+            if (isCollecting && currentHeaders.length > 0) {
+                const record: any = {};
+                let hasData = false;
+                for (let colIdx = 0; colIdx < currentHeaders.length; colIdx++) {
+                    const header = currentHeaders[colIdx];
+                    if (!header) continue;
+                    const val = row[colIdx];
+                    if (val !== undefined && val !== null && String(val).trim() !== '') {
+                        hasData = true;
+                    }
+                    if (header.toLowerCase() === 'sl no') continue; // Ignore Sl No
+                    if (header.toLowerCase() === 'university regno' || header.toLowerCase().includes('regno')) {
+                        record['Register Number'] = val;
+                    } else if (header.toLowerCase() === 'name' || header.toLowerCase() === 'student name') {
+                        record['Name'] = val;
+                    } else if (header.toLowerCase() === 'batch') {
+                        record['Batch'] = val;
+                    } else {
+                        record[header] = val;
+                    }
+                }
+                
+                if (!record['Batch'] && globalBatch) {
+                     record['Batch'] = globalBatch;
+                }
+
+                if (hasData && record['Name']) { // Only Name is strictly required
+                    // Auto-generate missing register number
+                    if (!record['Register Number']) {
+                        record['Register Number'] = "AUTO_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+                    }
+                    console.log("Student Parsed:", record);
+                    data.push(record);
+                } else if (hasData) {
+                    console.warn("Skipped row (missing Name):", record);
+                }
+            }
+        }
 
         let successCount = 0;
         let errors: string[] = [];
@@ -306,41 +375,37 @@ export const importStudents = async (req: Request, res: Response) => {
             const text = String(batchValue).trim();
             if (!text) return {};
 
+            const info: any = {};
+            
+            // New explicit match from prompt: "BHM 2023 (S1)"
+            const customRegex = /([A-Z]+)\s(\d{4}).*(S(\d))/i;
+            const customMatch = text.match(customRegex);
+            if (customMatch) {
+                 if (customMatch[1]) info.leadingCode = customMatch[1].toUpperCase();
+                 if (customMatch[2]) info.startYear = parseInt(customMatch[2], 10);
+                 if (customMatch[4]) info.semesterNumber = parseInt(customMatch[4], 10);
+            }
+
             const yearMatch = text.match(/\b(20\d{2})\s*-\s*(20\d{2})\b/);
             const semesterMatch = text.match(/\(\s*S(?:EM)?\s*([0-9]+)\s*\)/i) || text.match(/\bS(?:EM)?\s*([0-9]+)\b/i);
             const leadingCodeMatch = text.match(/^\s*([A-Z]{2,10})\b/i);
+
+            if (!info.startYear && yearMatch?.[1]) info.startYear = parseInt(yearMatch[1], 10);
+            if (yearMatch?.[2]) info.endYear = parseInt(yearMatch[2], 10);
+            if (!info.semesterNumber && semesterMatch?.[1]) info.semesterNumber = parseInt(semesterMatch[1], 10);
+
             const prefixRaw = yearMatch?.index !== undefined ? text.slice(0, yearMatch.index).trim() : text;
             const normalizedPrefix = prefixRaw.toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
             const prefixTokens = normalizedPrefix ? normalizedPrefix.split(/\s+/).filter(Boolean) : [];
-            const info: {
-                startYear?: number;
-                endYear?: number;
-                semesterNumber?: number;
-                leadingCode?: string;
-                batchPrefix?: string;
-                prefixTokens?: string[];
-            } = {};
 
-            if (yearMatch?.[1]) {
-                info.startYear = parseInt(yearMatch[1], 10);
-            }
-            if (yearMatch?.[2]) {
-                info.endYear = parseInt(yearMatch[2], 10);
-            }
-            if (semesterMatch?.[1]) {
-                info.semesterNumber = parseInt(semesterMatch[1], 10);
-            }
-            if (leadingCodeMatch?.[1]) {
+            if (!info.leadingCode && leadingCodeMatch?.[1]) {
                 info.leadingCode = leadingCodeMatch[1].toUpperCase();
-            } else if (prefixTokens.length > 0) {
-                info.leadingCode = prefixTokens[0];
+            } else if (!info.leadingCode && prefixTokens.length > 0) {
+                info.leadingCode = prefixTokens[0] as string;
             }
-            if (normalizedPrefix) {
-                info.batchPrefix = normalizedPrefix;
-            }
-            if (prefixTokens.length > 0) {
-                info.prefixTokens = prefixTokens;
-            }
+            
+            if (normalizedPrefix) info.batchPrefix = normalizedPrefix;
+            if (prefixTokens.length > 0) info.prefixTokens = prefixTokens;
 
             return info;
         };
@@ -393,6 +458,50 @@ export const importStudents = async (req: Request, res: Response) => {
         const programsByDept = new Map<number, any[]>();
         const programsAll = await Program.findAll();
         const deptsAll = await Department.findAll();
+        const semestersAll = await Semester.findAll();
+        
+        // Hash default password once to avoid O(N) bcrypt delay
+        const bcrypt = await import('bcryptjs');
+        const defaultPasswordHash = await bcrypt.hash('12345678', 10);
+
+        // Normalize keys helper
+        const normalizeKey = (row: any, keys: string[]) => {
+            const rowKeys = Object.keys(row);
+            for (const key of keys) {
+                // Exact match
+                if (row[key] !== undefined) return row[key];
+                // Case insensitive match
+                const foundKey = rowKeys.find(k => k.toLowerCase().trim() === key.toLowerCase().trim());
+                if (foundKey) return row[foundKey];
+            }
+            return undefined;
+        };
+
+        // Precompute all password hashes to utilize libuv thread pool and avoid blocking inside DB transaction loop
+        const passwordsToHash = new Set<string>();
+        for (const row of data) {
+            const name = normalizeKey(row, ['Name', 'Student Name', 'Full Name', 'StudentName']);
+            if (name) {
+                const passwordStr = (String(name).trim().replace(/\s/g, '').substring(0, 4) + '@123');
+                passwordsToHash.add(passwordStr);
+            }
+        }
+        
+        const precomputedHashes = new Map<string, string>();
+        const passwordChunks = Array.from(passwordsToHash);
+        
+        // Batch hash in small parallel groups to avoid threadpool starvation
+        const BATCH_SIZE = 10;
+        for (let i = 0; i < passwordChunks.length; i += BATCH_SIZE) {
+            const batch = passwordChunks.slice(i, i + BATCH_SIZE);
+            const hashedBatch = await Promise.all(batch.map(pass => bcrypt.hash(pass, 10)));
+            batch.forEach((pass, index) => {
+                const hashValue = hashedBatch[index];
+                if (hashValue) {
+                    precomputedHashes.set(pass, hashValue);
+                }
+            });
+        }
 
         programsAll.forEach((p: any) => {
             const programKeys = [p.ProgramCode, p.ProgramName].filter(Boolean) as string[];
@@ -414,20 +523,6 @@ export const importStudents = async (req: Request, res: Response) => {
                 deptNormalizedCache.set(toNormalizedKey(key), d);
             }
         });
-
-
-        // Normalize keys helper
-        const normalizeKey = (row: any, keys: string[]) => {
-            const rowKeys = Object.keys(row);
-            for (const key of keys) {
-                // Exact match
-                if (row[key] !== undefined) return row[key];
-                // Case insensitive match
-                const foundKey = rowKeys.find(k => k.toLowerCase().trim() === key.toLowerCase().trim());
-                if (foundKey) return row[foundKey];
-            }
-            return undefined;
-        };
 
         // DEBUG: Log headers
         if (data.length > 0) {
@@ -490,10 +585,19 @@ export const importStudents = async (req: Request, res: Response) => {
                 let targetDept: any = null;
                 let derivedBatchYear: number | null = null;
 
+                // Extract Batch Year from Register Number (e.g. SJC24MCA001 -> 24 -> 2024)
+                // In my idRegex, group 1 is the 2-digit year!
                 const regCode = match?.[2] ? String(match[2]).toUpperCase() : undefined;
                 if (match?.[1]) {
                     derivedBatchYear = 2000 + parseInt(match[1], 10);
+                } else {
+                    // Fallback to purely numeric sequence search if it's not a generic SJC one
+                    const purelyNumericYearMatch = String(regNo).match(/(\d{2})/);
+                    if (purelyNumericYearMatch && purelyNumericYearMatch[1]) {
+                        derivedBatchYear = 2000 + parseInt(purelyNumericYearMatch[1], 10);
+                    }
                 }
+
                 if (!derivedBatchYear && batchInfo.startYear) {
                     derivedBatchYear = batchInfo.startYear;
                 }
@@ -546,7 +650,8 @@ export const importStudents = async (req: Request, res: Response) => {
 
                 if (!targetDept && batchInfo.leadingCode) {
                     const deptCode = batchInfo.leadingCode.slice(0, 20);
-                    const deptName = (batchInfo.batchPrefix || batchInfo.leadingCode).slice(0, 150);
+                    // Use just the leading code (BHM) instead of full "BHM 2023 S1" for dept name mapped
+                    const deptName = batchInfo.leadingCode.slice(0, 150);
                     const createdOrFoundDept = await Department.findOne({
                         where: { DepartmentCode: deptCode },
                         transaction: t
@@ -596,12 +701,12 @@ export const importStudents = async (req: Request, res: Response) => {
                         const inferredDuration =
                             batchInfo.startYear && batchInfo.endYear && batchInfo.endYear > batchInfo.startYear
                                 ? Math.min(Math.max(batchInfo.endYear - batchInfo.startYear, 1), 8)
-                                : undefined;
-                        const inferredSemesters = inferredDuration ? inferredDuration * 2 : undefined;
+                                : 3; // Default 3 years
+                        const inferredSemesters = inferredDuration * 2; // Default 6 total semesters
 
                         const newProgram = await Program.create({
                             ProgramCode: batchInfo.leadingCode.slice(0, 20),
-                            ProgramName: (batchInfo.batchPrefix || batchInfo.leadingCode).slice(0, 100),
+                            ProgramName: batchInfo.leadingCode.slice(0, 100),
                             DepartmentID: targetDept.DepartmentID,
                             DurationYears: inferredDuration,
                             TotalSemesters: inferredSemesters,
@@ -657,36 +762,42 @@ export const importStudents = async (req: Request, res: Response) => {
                 }
 
                 // Semester Logic
-                const parsedSemester = normalizeSemesterNumber(semesterInput) || batchInfo.semesterNumber || 1;
-                let targetSemester: any = null;
-                if (!targetSemester) {
-                    targetSemester = await Semester.findOne({
-                        where: { ProgramID: targetProgram.ProgramID, SemesterNumber: parsedSemester },
-                        transaction: t
-                    });
-                }
+                  const existingStudent = await Student.findOne({ where: { RegisterNumber: regNo }, transaction: t });
+                  const effectiveBatchYear = derivedBatchYear || existingStudent?.BatchYear || new Date().getFullYear();
 
-                if (!targetSemester) {
-                    targetSemester = await Semester.create({
-                        ProgramID: targetProgram.ProgramID,
-                        SemesterNumber: parsedSemester,
-                        SemesterName: `S${parsedSemester}`,
-                        IsActive: true
-                    }, { transaction: t });
-                }
+                  let parsedSemester = 1;
+                  const providedSem = normalizeSemesterNumber(semesterInput) || batchInfo.semesterNumber;
+                  
+                  if (providedSem) {
+                      parsedSemester = providedSem;
+                  } else {
+                      const currentYear = new Date().getFullYear();
+                      const yearsCompleted = currentYear - effectiveBatchYear;
+                      const calculatedSemRaw = Math.max((yearsCompleted * 2) + 1, 1);
+                      parsedSemester = Math.min(calculatedSemRaw, targetProgram?.TotalSemesters || 6);
+                  }
 
-                if (!targetSemester) {
-                    throw new Error(`Invalid Semester '${semesterInput || batchInput}' for Program '${targetProgram.ProgramName}'`);
-                }
+                  let targetSemester: any = null;
 
+                  targetSemester = semestersAll.find((s: any) => s.ProgramID === targetProgram.ProgramID && s.SemesterNumber === parsedSemester);
 
-                const existingStudent = await Student.findOne({ where: { RegisterNumber: regNo }, transaction: t });
-                const effectiveBatchYear = derivedBatchYear || existingStudent?.BatchYear || new Date().getFullYear();
+                  if (!targetSemester) {
+                      targetSemester = await Semester.create({
+                          ProgramID: targetProgram.ProgramID,
+                          SemesterNumber: parsedSemester,
+                          SemesterName: `S${parsedSemester}`,
+                          IsActive: true
+                      }, { transaction: t });
+                      semestersAll.push(targetSemester);
+                  }
 
+                  if (!targetSemester) {
+                      throw new Error(`Invalid Semester '${semesterInput || batchInput}' for Program '${targetProgram.ProgramName}'`);
+                  }
                 // 3. Find/Create User (Login)
                 // Default Password: First 4 chars of Name + @123
                 const passwordStr = (normalizedName.replace(/\s/g, '').substring(0, 4) + '@123'); // Simple logic
-                const defaultPassword = await bcrypt.hash(passwordStr, 10);
+                const defaultPassword = precomputedHashes.get(passwordStr) || await bcrypt.hash(passwordStr, 10);
 
                 const generatedEmail = buildImportedStudentEmail(
                     normalizedName,
@@ -799,6 +910,16 @@ export const importStudents = async (req: Request, res: Response) => {
             error: error.message,
             stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
+    }
+};
+
+export const syncSemesters = async (req: Request, res: Response) => {
+    try {
+        const { promoteStudents } = await import('../cron/academic.cron.js');
+        await promoteStudents();
+        res.json({ message: "Semester sync completed successfully" });
+    } catch (err: any) {
+        res.status(500).json({ message: "Failed to sync semesters", error: err.message });
     }
 };
 

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Upload, FileSpreadsheet, CheckCircle, AlertCircle, Info, Hash } from 'lucide-react';
 import academicService from '../../services/academicService';
@@ -28,6 +28,14 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
         }
     };
 
+    useEffect(() => {
+        if (!isOpen) {
+            setFile(null);
+            setUploadStats({ success: 0, errors: 0, active: false });
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    }, [isOpen]);
+
     const handleUpload = async () => {
         if (!file) return;
 
@@ -42,12 +50,16 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
 
             if (response.errorCount === 0) {
                 toast.success(`Successfully imported ${response.successCount} students!`);
+                setFile(null);
+                if (fileInputRef.current) fileInputRef.current.value = '';
                 setTimeout(() => {
                     onSuccess();
                     onClose();
                 }, 2000);
             } else {
                 toast.error(`Imported ${response.successCount} students with ${response.errorCount} errors.`);
+                setFile(null);
+                if (fileInputRef.current) fileInputRef.current.value = '';
             }
         } catch (error: any) {
             console.error(error);

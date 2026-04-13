@@ -46,8 +46,8 @@ router.post("/request", requestInvigilatorAccess);
 // ==========================================
 // PROTECTED ADMIN ROUTES
 // ==========================================
-// Protect all below routes - only accessible by Root Admin
-router.use((req, res, next) => AuthMiddleware.requireRootAuth(req, res, next));
+// Protect all below routes - accessible by Exam Admin
+router.use((req, res, next) => AuthMiddleware.requireAuth(req, res, next));
 
 
 /**

@@ -230,7 +230,7 @@ const InvigilatorLogin = () => {
     const [emailError, setEmailError] = useState('');
     const [passwordError, setPasswordError] = useState('');
 
-    const from = location.state?.from?.pathname || '/invigilator/dashboard';
+    const from = '/invigilator/dashboard';
 
     // Auto-redirect if already logged in securely
     useEffect(() => {

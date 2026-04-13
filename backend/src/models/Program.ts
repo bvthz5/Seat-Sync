@@ -8,10 +8,10 @@ interface ProgramAttributes {
   ProgramID: number;
   ProgramName: string;
   ProgramCode?: string;
-  DurationYears?: number;
-  TotalSemesters?: number;
-  DepartmentID?: number;
-  AcademicYearID?: number;
+  DurationYears?: number | null;
+  TotalSemesters?: number | null;
+  DepartmentID?: number | null;
+  AcademicYearID?: number | null;
   IsActive?: boolean;
 }
 
@@ -25,10 +25,10 @@ export class Program extends Model<ProgramAttributes, ProgramCreationAttributes>
   declare ProgramID: number;
   declare ProgramName: string;
   declare ProgramCode?: string;
-  declare DurationYears?: number;
-  declare TotalSemesters?: number;
-  declare DepartmentID?: number;
-  declare AcademicYearID?: number;
+  declare DurationYears?: number | null;
+  declare TotalSemesters?: number | null;
+  declare DepartmentID?: number | null;
+  declare AcademicYearID?: number | null;
   declare IsActive?: boolean;
 }
 

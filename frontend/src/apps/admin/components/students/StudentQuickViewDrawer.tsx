@@ -237,7 +237,7 @@ const StudentQuickViewDrawer: React.FC<StudentQuickViewDrawerProps> = ({
                                     <div className="mb-1 flex items-center justify-between">
                                         <p className="text-xs font-semibold uppercase text-gray-500">Semester</p>
                                         <span className="inline-flex items-center gap-0.5 rounded bg-blue-50 px-1.5 py-0.5 text-xs font-bold text-blue-700">
-                                            Sem {student.Semester?.SemesterNumber || '-'}
+                                              Sem {student.CalculatedSemester || student.Semester?.SemesterNumber || '-'}
                                         </span>
                                     </div>
                                     <div className="mb-2 flex items-center justify-between">

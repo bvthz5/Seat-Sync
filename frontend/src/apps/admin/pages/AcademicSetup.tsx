@@ -5,7 +5,6 @@ import {
     Building2, Layers, Plus, Upload, Download, RefreshCw, Trash2, Edit3,
     X, AlertTriangle, Search, ChevronDown, BookOpen, GraduationCap, FileSpreadsheet, Calendar
 } from 'lucide-react';
-import { AcademicYears } from '../components/academic/AcademicYears';
 
 /* ────────────────────────── types ────────────────────────── */
 interface Department {
@@ -28,7 +27,7 @@ interface Program {
    MAIN PAGE
 ═══════════════════════════════════════════════════════════ */
 const AcademicSetup: React.FC = () => {
-    const [tab, setTab] = useState<'years' | 'departments' | 'programs'>('years');
+    const [tab, setTab] = useState<'departments' | 'programs'>('departments');
 
     return (
         <div className="min-h-screen bg-[#f7f8fc]">
@@ -41,7 +40,7 @@ const AcademicSetup: React.FC = () => {
                         </div>
                         <div>
                             <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Academic Setup</h1>
-                            <p className="text-sm text-slate-500 mt-0.5">Manage Academic Years, Departments, and Programs</p>
+                            <p className="text-sm text-slate-500 mt-0.5">Manage Departments and Programs</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -56,7 +55,6 @@ const AcademicSetup: React.FC = () => {
             <div className="bg-white border-b border-slate-200 px-8">
                 <div className="max-w-6xl mx-auto flex gap-0">
                     {[
-                        { key: 'years', label: 'Academic Years', icon: Calendar },
                         { key: 'departments', label: 'Departments', icon: Building2 },
                         { key: 'programs', label: 'Programs', icon: Layers },
                     ].map(({ key, label, icon: Icon }) => (
@@ -77,7 +75,6 @@ const AcademicSetup: React.FC = () => {
 
             {/* ── Content ─────────────────────────────────────── */}
             <div className="max-w-6xl mx-auto px-8 py-8">
-                {tab === 'years' && <AcademicYears onYearChange={() => {}} />}
                 {tab === 'departments' && <DepartmentsTab />}
                 {tab === 'programs' && <ProgramsTab />}
             </div>
@@ -99,6 +96,8 @@ const DepartmentsTab: React.FC = () => {
     const [form, setForm] = useState({ DepartmentCode: '', DepartmentName: '' });
     const [saving, setSaving] = useState(false);
     const [importing, setImporting] = useState(false);
+    const [showImport, setShowImport] = useState(false);
+    const [importFile, setImportFile] = useState<File | null>(null);
     const [editTarget, setEditTarget] = useState<Department | null>(null);
     const [editForm, setEditForm] = useState({ DepartmentName: '' });
     const [editSaving, setEditSaving] = useState(false);
@@ -172,30 +171,38 @@ const DepartmentsTab: React.FC = () => {
         } finally { setEditSaving(false); }
     };
 
-    const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+    const handleImport = async () => {
+        if (!importFile) return;
         setImporting(true);
         const fd = new FormData();
-        fd.append('file', file);
+        fd.append('file', importFile);
         try {
-            const res = await api.post('/departments/import', fd);
-            toast.success(`Imported ${res.data.successCount} departments${res.data.errorCount > 0 ? `, ${res.data.errorCount} errors` : ''}`);
+            const res = await api.post('/departments/import-unified', fd);
+            toast.success(`Imported ${res.data.successCount} items${res.data.errorCount > 0 ? `, ${res.data.errorCount} errors` : ''}`);
             load();
+            setShowImport(false);
+            setImportFile(null);
         } catch (e: any) {
             toast.error(e.response?.data?.message || 'Import failed');
         } finally {
             setImporting(false);
-            e.target.value = '';
+            if (fileRef.current) fileRef.current.value = '';
         }
     };
 
-    const downloadTemplate = () => {
-        const csv = 'DepartmentCode,DepartmentName\ncsa001,Computer Science and Applications\nmec001,Mechanical Engineering\nece001,Electronics and Communication Engineering\n';
-        const a = document.createElement('a');
-        a.href = 'data:text/csv,' + encodeURIComponent(csv);
-        a.download = 'department_template.csv';
-        a.click();
+    const downloadTemplate = async () => {
+        try {
+            const response = await api.get('/departments/template-unified', { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'academic_setup_template.csv');
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode?.removeChild(link);
+        } catch (error) {
+            toast.error('Failed to download template');
+        }
     };
 
     return (
@@ -216,9 +223,8 @@ const DepartmentsTab: React.FC = () => {
                     <button onClick={downloadTemplate} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-medium hover:border-blue-300 shadow-sm transition-all">
                         <Download size={15} /> Template
                     </button>
-                    <input id="input-bryximc" name="input-bryximc" ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImport} />
-                    <button onClick={() => fileRef.current?.click()} disabled={importing} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-medium hover:border-blue-300 shadow-sm transition-all">
-                        <Upload size={15} /> {importing ? 'Importing…' : 'Import'}
+                    <button onClick={() => setShowImport(true)} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-medium hover:border-blue-300 shadow-sm transition-all">
+                        <Upload size={15} /> Import
                     </button>
                     <button onClick={() => setShowDelete({ mode: 'all' })} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white border border-red-200 text-red-500 text-sm font-medium hover:bg-red-50 shadow-sm transition-all">
                         <Trash2 size={15} /> Delete All
@@ -356,6 +362,45 @@ const DepartmentsTab: React.FC = () => {
                     onCancel={() => setShowDelete(null)}
                 />
             )}
+
+            {/* Import Modal */}
+            {showImport && (
+                <Modal title="Import Academic Data" onClose={() => { setShowImport(false); setImportFile(null); }}>
+                    <div className="space-y-4">
+                        <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:bg-slate-50 transition-colors relative">
+                            <input 
+                                id="import-dept-file"
+                                name="ImportDeptFile"
+                                type="file" 
+                                accept=".xlsx,.xls,.csv" 
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
+                                onChange={e => setImportFile(e.target.files?.[0] || null)} 
+                            />
+                            <div className="flex flex-col items-center justify-center gap-2 pointer-events-none">
+                                <FileSpreadsheet size={32} className={importFile ? "text-blue-500" : "text-slate-400"} />
+                                {importFile ? (
+                                    <div className="text-sm font-semibold text-slate-700">{importFile.name}</div>
+                                ) : (
+                                    <>
+                                        <div className="text-sm font-semibold text-slate-700">Click or drag file to this area to upload</div>
+                                        <div className="text-xs text-slate-500">Support for a single or bulk upload.</div>
+                                    </>
+                                )}
+                                <div className="text-xs text-slate-400 mt-1">Accepts .csv, .xls, .xlsx</div>
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between pt-2">
+                            <button onClick={downloadTemplate} className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+                                Download Template
+                            </button>
+                            <div className="flex justify-end gap-2">
+                                <button onClick={() => { setShowImport(false); setImportFile(null); }} className="btn-ghost">Cancel</button>
+                                <button onClick={handleImport} disabled={importing || !importFile} className="btn-primary">{importing ? 'Importing…' : 'Upload Data'}</button>
+                            </div>
+                        </div>
+                    </div>
+                </Modal>
+            )}
         </>
     );
 };
@@ -376,6 +421,8 @@ const ProgramsTab: React.FC = () => {
     const [form, setForm] = useState({ ProgramCode: '', ProgramName: '', DepartmentIDs: [] as number[], DurationYears: 4 });
     const [saving, setSaving] = useState(false);
     const [importing, setImporting] = useState(false);
+    const [showImport, setShowImport] = useState(false);
+    const [importFile, setImportFile] = useState<File | null>(null);
     const [editTarget, setEditTarget] = useState<Program | null>(null);
     const [editForm, setEditForm] = useState({ ProgramName: '', DepartmentIDs: [] as number[], DurationYears: 4 });
     const [editSaving, setEditSaving] = useState(false);
@@ -467,28 +514,29 @@ const ProgramsTab: React.FC = () => {
         }));
     };
 
-    const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+    const handleImport = async () => {
+        if (!importFile) return;
         setImporting(true);
         const fd = new FormData();
-        fd.append('file', file);
+        fd.append('file', importFile);
         try {
-            const res = await api.post('/programs/import', fd);
-            toast.success(`Imported ${res.data.successCount} programs${res.data.errorCount > 0 ? `, ${res.data.errorCount} errors` : ''}`);
+            const res = await api.post('/departments/import-unified', fd);
+            toast.success(`Imported ${res.data.successCount} items${res.data.errorCount > 0 ? `, ${res.data.errorCount} errors` : ''}`);
             if (res.data.errors?.length) console.warn('Import errors:', res.data.errors);
             load();
+            setShowImport(false);
+            setImportFile(null);
         } catch (e: any) {
             toast.error(e.response?.data?.message || 'Import failed');
-        } finally { setImporting(false); e.target.value = ''; }
+        } finally { setImporting(false); if (fileRef.current) fileRef.current.value = ''; }
     };
 
     const downloadTemplate = async () => {
         try {
-            const res = await api.get('/programs/template', { responseType: 'blob' });
+            const res = await api.get('/departments/template-unified', { responseType: 'blob' });
             const url = URL.createObjectURL(res.data);
             const a = document.createElement('a');
-            a.href = url; a.download = 'program_template.xlsx'; a.click();
+            a.href = url; a.download = 'academic_setup_template.csv'; a.click();
         } catch { toast.error('Failed to download template'); }
     };
 
@@ -513,6 +561,8 @@ const ProgramsTab: React.FC = () => {
                         />
                     </div>
                     <select
+                        id="filter-dept"
+                        name="FilterDepartment"
                         value={filterDept} onChange={e => setFilterDept(e.target.value)}
                         className="px-3 py-2.5 text-sm bg-white border border-slate-200 rounded-xl shadow-sm text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
                     >
@@ -527,9 +577,8 @@ const ProgramsTab: React.FC = () => {
                     <button onClick={downloadTemplate} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-medium hover:border-blue-300 shadow-sm">
                         <Download size={15} /> Template
                     </button>
-                    <input id="input-e81hh9h" name="input-e81hh9h" ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImport} />
-                    <button onClick={() => fileRef.current?.click()} disabled={importing} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-medium hover:border-blue-300 shadow-sm">
-                        <Upload size={15} /> {importing ? 'Importing…' : 'Import'}
+                    <button onClick={() => setShowImport(true)} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-medium hover:border-blue-300 shadow-sm">
+                        <Upload size={15} /> Import
                     </button>
                     <button onClick={() => setShowDelete({ mode: 'all' })} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white border border-red-200 text-red-500 text-sm font-medium hover:bg-red-50 shadow-sm">
                         <Trash2 size={15} /> Delete All
@@ -738,6 +787,45 @@ const ProgramsTab: React.FC = () => {
                         <div className="flex justify-end gap-2 pt-2">
                             <button onClick={() => setEditTarget(null)} className="btn-ghost">Cancel</button>
                             <button onClick={handleEditProg} disabled={editSaving} className="btn-primary">{editSaving ? 'Saving…' : 'Save Changes'}</button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
+            {/* Import Program Modal */}
+            {showImport && (
+                <Modal title="Import Academic Data" onClose={() => { setShowImport(false); setImportFile(null); }}>
+                    <div className="space-y-4">
+                        <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:bg-slate-50 transition-colors relative">
+                            <input 
+                                id="import-prog-file"
+                                name="ImportProgFile"
+                                type="file" 
+                                accept=".xlsx,.xls,.csv" 
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
+                                onChange={e => setImportFile(e.target.files?.[0] || null)} 
+                            />
+                            <div className="flex flex-col items-center justify-center gap-2 pointer-events-none">
+                                <FileSpreadsheet size={32} className={importFile ? "text-blue-500" : "text-slate-400"} />
+                                {importFile ? (
+                                    <div className="text-sm font-semibold text-slate-700">{importFile.name}</div>
+                                ) : (
+                                    <>
+                                        <div className="text-sm font-semibold text-slate-700">Click or drag file to this area to upload</div>
+                                        <div className="text-xs text-slate-500">Support for a single or bulk upload.</div>
+                                    </>
+                                )}
+                                <div className="text-xs text-slate-400 mt-1">Accepts .csv, .xls, .xlsx</div>
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between pt-2">
+                            <button onClick={downloadTemplate} className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+                                Download Template
+                            </button>
+                            <div className="flex justify-end gap-2">
+                                <button onClick={() => { setShowImport(false); setImportFile(null); }} className="btn-ghost">Cancel</button>
+                                <button onClick={handleImport} disabled={importing || !importFile} className="btn-primary">{importing ? 'Importing…' : 'Upload Data'}</button>
+                            </div>
                         </div>
                     </div>
                 </Modal>
