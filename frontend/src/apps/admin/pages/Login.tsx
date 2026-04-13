@@ -313,7 +313,7 @@ const AdminLogin: React.FC = () => {
     const { login, isAuthenticated, isLoading } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
-    const from = location.state?.from?.pathname || '/admin/dashboard';
+    const from = '/admin/dashboard';
 
     // If already authenticated, redirect to dashboard or the page they came from
     useEffect(() => {
@@ -355,7 +355,7 @@ const AdminLogin: React.FC = () => {
         try {
             await login(email, password);
             // Navigate to the "from" location
-            navigate('/admin/dashboard', { replace: true });
+            navigate(from, { replace: true });
         } catch (error: any) {
             setFormError("Authentication failed. Please verify your credentials.");
         } finally {

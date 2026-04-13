@@ -108,11 +108,11 @@ api.interceptors.response.use(
                 if (!window.location.pathname.includes('/login')) {
                     const currentPath = window.location.pathname.toLowerCase();
                     if (currentPath.startsWith('/invigilator')) {
-                        window.location.href = '/invigilator/login';
+                        window.location.replace('/invigilator/login');
                     } else if (currentPath.startsWith('/student')) {
-                        window.location.href = '/student/login';
+                        window.location.replace('/student/login');
                     } else {
-                        window.location.href = '/admin/login';
+                        window.location.replace('/admin/login');
                     }
                 }
 
@@ -127,11 +127,11 @@ api.interceptors.response.use(
             if (!window.location.pathname.includes('/login')) {
                 const currentPath = window.location.pathname.toLowerCase();
                 if (currentPath.startsWith('/invigilator')) {
-                    window.location.href = '/invigilator/login';
+                    window.location.replace('/invigilator/login');
                 } else if (currentPath.startsWith('/student')) {
-                    window.location.href = '/student/login';
+                    window.location.replace('/student/login');
                 } else {
-                    window.location.href = '/admin/login';
+                    window.location.replace('/admin/login');
                 }
             }
             return Promise.reject(error);
@@ -158,11 +158,11 @@ api.interceptors.response.use(
             if (!window.location.pathname.includes('/login')) {
                 const currentPath = window.location.pathname.toLowerCase();
                 if (currentPath.startsWith('/invigilator')) {
-                    window.location.href = '/invigilator/login';
+                    window.location.replace('/invigilator/login');
                 } else if (currentPath.startsWith('/student')) {
-                    window.location.href = '/student/login';
+                    window.location.replace('/student/login');
                 } else {
-                    window.location.href = '/admin/login';
+                    window.location.replace('/admin/login');
                 }
             }
         }
