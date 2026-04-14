@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, ModalContent, ModalHeader, ModalBody, Button, Input, Select, SelectItem } from "@heroui/react";
 import { ExamService } from '../../services/examService';
+import { academicService } from '../../services/academicService';
 import { toast } from 'react-hot-toast';
 import { Pencil } from 'lucide-react';
 
@@ -13,13 +14,15 @@ interface EditExamModalProps {
 
 const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps) => {
     const [loading, setLoading] = useState(false);
+    const [departments, setDepartments] = useState<any[]>([]);
 
     const [formData, setFormData] = useState({
         ExamName: '',
         ExamDate: '',
         Session: '',
         Duration: '',
-        SubjectID: ''
+        SubjectID: '',
+        DepartmentID: ''
     });
 
     useEffect(() => {
@@ -29,10 +32,28 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
                 ExamDate: exam.ExamDate ? exam.ExamDate.split('T')[0] : '',
                 Session: exam.Session,
                 Duration: String(exam.Duration),
-                SubjectID: String(exam.SubjectID)
+                SubjectID: String(exam.SubjectID),
+                DepartmentID: String(exam?.Subject?.Department?.DepartmentID || '')
             });
         }
     }, [isOpen, exam]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        (async () => {
+            try {
+                const response = await academicService.getDepartments();
+                const items = Array.isArray((response as any)?.data)
+                    ? (response as any).data
+                    : Array.isArray(response)
+                        ? response
+                        : [];
+                setDepartments(items);
+            } catch {
+                setDepartments([]);
+            }
+        })();
+    }, [isOpen]);
 
     const handleChange = (field: string, value: string) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -49,7 +70,8 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
             const payload = {
                 ...formData,
                 Duration: parseInt(formData.Duration),
-                SubjectID: parseInt(formData.SubjectID)
+                SubjectID: parseInt(formData.SubjectID),
+                DepartmentID: formData.DepartmentID ? parseInt(formData.DepartmentID) : undefined
             };
 
             await ExamService.update(exam.ExamID, payload);
@@ -103,6 +125,28 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
                                     </p>
                                     <p className="text-xs text-blue-500 mt-0.5">{exam?.Subject?.SubjectCode || 'N/A'}</p>
                                 </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Department</label>
+                                <Select
+                                    aria-label="Department"
+                                    placeholder="Select department"
+                                    selectedKeys={formData.DepartmentID ? [formData.DepartmentID] : []}
+                                    onSelectionChange={(k) => handleChange('DepartmentID', (Array.from(k)[0] as string) || '')}
+                                    variant="bordered"
+                                    classNames={{
+                                        trigger: "bg-white border-gray-200 h-11 rounded-lg",
+                                        value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-500",
+                                        popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
+                                    }}
+                                >
+                                    {departments.map((d: any) => (
+                                        <SelectItem key={String(d.DepartmentID)} textValue={`${d.DepartmentCode} - ${d.DepartmentName}`}>
+                                            {d.DepartmentCode} - {d.DepartmentName}
+                                        </SelectItem>
+                                    ))}
+                                </Select>
                             </div>
 
                             {/* Exam Name */}

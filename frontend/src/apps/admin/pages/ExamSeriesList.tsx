@@ -10,6 +10,12 @@ import ExamImportModal from '../components/exams/ExamImportModal';
 import EditExamModal from '../components/exams/EditExamModal';
 import ConfirmationModal from '../components/ConfirmationModal';
 
+const isMissingDepartment = (exam: any) => {
+    const code = String(exam?.Subject?.Department?.DepartmentCode || '').trim().toUpperCase();
+    const name = String(exam?.Subject?.Department?.DepartmentName || '').trim().toUpperCase();
+    return !code || code === 'GEN' || code === 'GENERAL' || name === 'GENERAL';
+};
+
 const ExamSeriesList: React.FC = () => {
     const navigate = useNavigate();
     const { seriesId } = useParams<{ seriesId: string }>();
@@ -226,9 +232,13 @@ const ExamSeriesList: React.FC = () => {
                         {exams.map((exam) => (
                             <Card
                                 key={exam.ExamID}
-                                className="bg-white border border-slate-200 hover:border-slate-300 hover:shadow-lg transition-all duration-300 group rounded-2xl overflow-hidden"
+                                className={`bg-white border hover:shadow-lg transition-all duration-300 group rounded-2xl overflow-hidden ${
+                                    isMissingDepartment(exam)
+                                        ? 'border-amber-300 hover:border-amber-400 ring-1 ring-amber-200'
+                                        : 'border-slate-200 hover:border-slate-300'
+                                }`}
                             >
-                                <div className="h-1.5 w-full bg-indigo-500"></div>
+                                <div className={`h-1.5 w-full ${isMissingDepartment(exam) ? 'bg-amber-500' : 'bg-indigo-500'}`}></div>
                                 <CardBody className="p-6 space-y-5">
                                     <div className="min-h-[4rem]">
                                         <h3 className="text-xl font-bold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-2">
@@ -241,9 +251,18 @@ const ExamSeriesList: React.FC = () => {
                                             </span>
                                         </div>
                                         <div className="mt-2">
-                                            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold border ${
+                                                isMissingDepartment(exam)
+                                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                    : 'bg-indigo-50 text-indigo-700 border-indigo-100'
+                                            }`}>
                                                 Dept: {exam.Subject?.Department?.DepartmentCode || exam.Subject?.Department?.DepartmentName || 'General'}
                                             </span>
+                                            {isMissingDepartment(exam) && (
+                                                <span className="ml-2 inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold bg-red-50 text-red-700 border border-red-200">
+                                                    Missing/Review Dept
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                     

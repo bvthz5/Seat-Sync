@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useTransition } from 'react';
+import React, { useEffect, useState, useCallback, useTransition, useMemo } from 'react';
 import {
     Card, CardBody, CardHeader, Button, Select, SelectItem,
     Chip, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter,
@@ -9,7 +9,7 @@ import {
     LayoutGrid, Zap, Save, Trash2, Printer,
     Building2, Users, CheckCircle2, AlertCircle, RefreshCw,
     Calendar, Sun, Moon, Armchair, ClipboardList, ChevronRight, Ban, Eye,
-    MoreVertical, Pencil, Power, XCircle, Shuffle, FileSpreadsheet, FileDown, Sheet
+    MoreVertical, Power, XCircle, Shuffle, FileSpreadsheet, FileDown, Sheet
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { SeatingService } from '../services/seatingService';
@@ -62,6 +62,20 @@ const fmtDate = (iso: string) => {
     catch { return iso; }
 };
 
+const normalizeDeptCode = (value?: string) => {
+    const raw = String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
+    if (!raw) return '';
+    if (raw === 'IMCA' || raw === 'INMCA' || raw === 'INTMCA') return 'INT_MCA';
+    return raw;
+};
+
+const formatDeptLabel = (dept: Dept) => {
+    const code = normalizeDeptCode(dept.DepartmentCode);
+    const name = String(dept.DepartmentName || '').trim();
+    if (code && name) return `${code} - ${name}`;
+    return code || name || 'Department';
+};
+
 /* ═══════════════════════════════════════════════════ */
 const SeatingPlans: React.FC = () => {
     const [, startTransition] = useTransition();
@@ -104,10 +118,6 @@ const SeatingPlans: React.FC = () => {
     const [seatingDownloading, setSeatingDownloading] = useState(false);
     const [assignmentFeedback, setAssignmentFeedback] = useState<AssignFeedback | null>(null);
 
-    /* edit capacity modal */
-    const [editHall, setEditHall] = useState<HallSummary | null>(null);
-    const [editCapacity, setEditCapacity] = useState<string>('');
-
     /* derived */
     const availableDates = [...new Set(examDates.filter(d => d.session === selectedSession).map(d => d.examDate))].sort();
     const currentSlot = examDates.find(d => d.examDate === selectedDate && d.session === selectedSession);
@@ -115,15 +125,26 @@ const SeatingPlans: React.FC = () => {
     const totalCapacity = hallSummary.reduce((s, h) => s + h.totalSeats, 0);
     const detailFilled = Object.keys(detailAssignments).length;
     const detailHallObj = halls.find(h => h.RoomID === detailHall?.hallId);
-    const activeDepartments = departments.filter(d => Number(d.studentCount) > 0);
-    const zeroDepartments = departments.filter(d => Number(d.studentCount) <= 0);
+    const detailBenchRows = useMemo(() => {
+        const rows: Record<string, Bench[]> = {};
+        for (const bench of detailBenches) {
+            if (!rows[bench.rowLabel]) rows[bench.rowLabel] = [];
+            rows[bench.rowLabel].push(bench);
+        }
+        return Object.keys(rows)
+            .sort()
+            .map((rowLabel) => ({
+                rowLabel,
+                benches: (rows[rowLabel] || []).sort((a, b) => a.benchNumber - b.benchNumber),
+            }));
+    }, [detailBenches]);
     const primaryDeptObj = departments.find(d => String(d.DepartmentID) === primaryDept);
     const secondaryDeptObj = departments.find(d => String(d.DepartmentID) === secondaryDept);
     const eligibleStudentCount = (() => {
         const primaryCount = Number(primaryDeptObj?.studentCount || 0);
         const secondaryCount = Number(secondaryDeptObj?.studentCount || 0);
         if (assignmentMode === 'auto-balanced') {
-            return activeDepartments.reduce((sum, d) => sum + Number(d.studentCount || 0), 0);
+            return departments.reduce((sum, d) => sum + Number(d.studentCount || 0), 0);
         }
         if (assignmentMode === 'single') return primaryCount;
         if (!primaryDept || !secondaryDept) return 0;
@@ -171,9 +192,9 @@ const SeatingPlans: React.FC = () => {
     };
 
     useEffect(() => {
-        if (primaryDept && !activeDepartments.some(d => String(d.DepartmentID) === primaryDept)) setPrimaryDept('');
-        if (secondaryDept && !activeDepartments.some(d => String(d.DepartmentID) === secondaryDept)) setSecondaryDept('');
-    }, [activeDepartments, primaryDept, secondaryDept]);
+        if (primaryDept && !departments.some(d => String(d.DepartmentID) === primaryDept)) setPrimaryDept('');
+        if (secondaryDept && !departments.some(d => String(d.DepartmentID) === secondaryDept)) setSecondaryDept('');
+    }, [departments, primaryDept, secondaryDept]);
 
     /* initial load */
     useEffect(() => {
@@ -402,19 +423,6 @@ const SeatingPlans: React.FC = () => {
             setHalls(prev => prev.filter(r => r.RoomID !== h.hallId));
             loadSummary();
         } catch { toast.error('Failed to disable hall'); }
-    };
-
-    const handleUpdateCapacity = async () => {
-        if (!editHall) return;
-        const cap = parseInt(editCapacity);
-        if (isNaN(cap) || cap < 1) { toast.error('Enter a valid capacity'); return; }
-        try {
-            await api.put(`/rooms/${editHall.hallId}`, { Capacity: cap });
-            toast.success(`${editHall.hallCode} capacity updated to ${cap}`);
-            setHalls(prev => prev.map(r => r.RoomID === editHall.hallId ? { ...r, Capacity: cap } : r));
-            setEditHall(null);
-            loadSummary();
-        } catch { toast.error('Failed to update capacity'); }
     };
 
     /* ── Build row data shared by both exporters ── */
@@ -1029,7 +1037,7 @@ const SeatingPlans: React.FC = () => {
                                                     selectorIcon: "text-slate-500 absolute w-5 right-3",
                                                     popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
                                                 }}>
-                                                {activeDepartments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={`${d.DepartmentName} (${d.studentCount})`} className="data-[hover=true]:bg-emerald-50 data-[hover=true]:text-emerald-700 font-semibold">{d.DepartmentName} ({d.studentCount})</SelectItem>)}
+                                                {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={formatDeptLabel(d)} className="data-[hover=true]:bg-emerald-50 data-[hover=true]:text-emerald-700 font-semibold">{formatDeptLabel(d)} ({d.studentCount})</SelectItem>)}
                                             </Select>
                                         </div>
                                     )}
@@ -1047,7 +1055,7 @@ const SeatingPlans: React.FC = () => {
                                                         value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-500", selectorIcon: "text-slate-500 absolute w-5 right-3", innerWrapper: "w-full text-slate-800",
                                                         popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
                                                     }}>
-                                                    {activeDepartments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={`${d.DepartmentName} (${d.studentCount})`} className="data-[hover=true]:bg-emerald-50 data-[hover=true]:text-emerald-700 font-semibold">{d.DepartmentName} ({d.studentCount})</SelectItem>)}
+                                                    {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={formatDeptLabel(d)} className="data-[hover=true]:bg-emerald-50 data-[hover=true]:text-emerald-700 font-semibold">{formatDeptLabel(d)} ({d.studentCount})</SelectItem>)}
                                                 </Select>
                                             </div>
                                             <div className="space-y-1.5">
@@ -1062,18 +1070,12 @@ const SeatingPlans: React.FC = () => {
                                                         value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-500", selectorIcon: "text-slate-500 absolute w-5 right-3", innerWrapper: "w-full text-slate-800",
                                                         popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
                                                     }}>
-                                                    {activeDepartments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={`${d.DepartmentName} (${d.studentCount})`} className="data-[hover=true]:bg-emerald-50 data-[hover=true]:text-emerald-700 font-semibold">{d.DepartmentName} ({d.studentCount})</SelectItem>)}
+                                                    {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={formatDeptLabel(d)} className="data-[hover=true]:bg-emerald-50 data-[hover=true]:text-emerald-700 font-semibold">{formatDeptLabel(d)} ({d.studentCount})</SelectItem>)}
                                                 </Select>
                                             </div>
                                         </div>
                                     )}
                                 </div>
-                                {zeroDepartments.length > 0 && (
-                                    <p className="text-[10px] text-slate-500">
-                                        Hidden departments with no eligible students: {zeroDepartments.slice(0, 3).map(d => d.DepartmentCode || d.DepartmentName).join(', ')}
-                                        {zeroDepartments.length > 3 ? ` +${zeroDepartments.length - 3} more` : ''}
-                                    </p>
-                                )}
                                 <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 border border-slate-200">
                                     <div className="text-[11px] text-slate-700 font-medium">Avoid same-department adjacency on a bench</div>
                                     <button
@@ -1353,14 +1355,9 @@ const SeatingPlans: React.FC = () => {
                                                             <DropdownMenu aria-label="Hall actions"
                                                                 classNames={{ base: 'bg-white border border-slate-200 rounded-xl shadow-2xl min-w-[180px]', list: 'gap-0' }}
                                                                 onAction={(key) => {
-                                                                    if (key === 'edit') { setEditHall(h); setEditCapacity(String(h.capacity)); }
-                                                                    else if (key === 'clear') { handleCardClearHall(h); }
+                                                                    if (key === 'clear') { handleCardClearHall(h); }
                                                                     else if (key === 'disable') { handleDisableHall(h); }
                                                                 }}>
-                                                                <DropdownItem key="edit" startContent={<Pencil size={15} className="text-blue-500" />}
-                                                                    className="text-slate-700 data-[hover=true]:bg-slate-100 data-[hover=true]:text-slate-900 rounded-lg" textValue="Edit Capacity">
-                                                                    <span className="text-[13px] font-semibold">Edit Capacity</span>
-                                                                </DropdownItem>
                                                                 <DropdownItem key="clear" startContent={<XCircle size={15} className="text-amber-500" />}
                                                                     className="text-slate-700 data-[hover=true]:bg-slate-100 data-[hover=true]:text-slate-900 rounded-lg" textValue="Clear Allocations"
                                                                     isDisabled={!hasData}>
@@ -1530,9 +1527,19 @@ const SeatingPlans: React.FC = () => {
                                         </div>
                                     )}
 
-                                    {/* ── Bench Grid — Desk-style ── */}
-                                    <div className="grid gap-5" style={{ gridTemplateColumns: `repeat(${detailHallObj?.BenchesPerRow || 6}, minmax(0, 1fr))` }}>
-                                        {detailBenches.map((bench) => {
+                                    {/* ── Bench Grid — Structure-style column layout ── */}
+                                    <div
+                                        className="grid gap-5 items-start"
+                                        style={{ gridTemplateColumns: `repeat(${Math.max(detailBenchRows.length, 1)}, minmax(220px, 1fr))` }}
+                                    >
+                                        {detailBenchRows.map((row) => (
+                                            <div key={row.rowLabel} className="space-y-4">
+                                                <div className="h-8 flex items-center justify-center">
+                                                    <span className="w-9 h-9 rounded-full bg-[#22314a] border border-[#2f4364] text-[12px] font-extrabold text-slate-500 flex items-center justify-center">
+                                                        {row.rowLabel}
+                                                    </span>
+                                                </div>
+                                                {row.benches.map((bench) => {
                                             const ls = bench.seats.find(s => s.SeatNumber === 1);
                                             const rs = bench.seats.find(s => s.SeatNumber === 2);
                                             const la = ls ? detailAssignments[ls.SeatID] : undefined;
@@ -1546,10 +1553,10 @@ const SeatingPlans: React.FC = () => {
                                                     {/* ─── DESK TOP (the shared desk/table) ─── */}
                                                     <div className="bg-gradient-to-r from-[#2a3245] to-[#252d40] rounded-t-xl px-3 py-1.5 flex items-center justify-between border border-b-0 border-slate-200 group-hover:from-[#303a50] group-hover:to-[#2a3348] transition-all">
                                                         <span className="text-[9px] font-extrabold text-slate-500 group-hover:text-slate-700 tracking-[0.2em] uppercase transition-colors">
-                                                            {bench.rowLabel}{bench.benchNumber}
+                                                            B{bench.benchNumber}
                                                         </span>
                                                         <span className="text-[8px] text-slate-500 font-mono">
-                                                            ROW {bench.rowLabel}
+                                                            BENCH {bench.benchNumber}
                                                         </span>
                                                     </div>
 
@@ -1615,7 +1622,9 @@ const SeatingPlans: React.FC = () => {
                                                     </div>
                                                 </div>
                                             );
-                                        })}
+                                                })}
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             )}
@@ -1623,46 +1632,6 @@ const SeatingPlans: React.FC = () => {
                     </>)}
                 </ModalContent>
             </Modal>
-            {/* ═══ Edit Capacity Modal ═══ */}
-            <Modal isOpen={!!editHall} onOpenChange={(open) => { if (!open) setEditHall(null); }} backdrop="blur" size="md">
-                <ModalContent className="bg-white border border-slate-200 rounded-[24px] shadow-2xl">
-                    <ModalHeader className="border-b border-slate-200/60 px-6 py-5">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 border border-blue-500/20">
-                                <Pencil size={18} />
-                            </div>
-                            <div>
-                                <h3 className="text-[17px] font-bold text-slate-800 tracking-wide">Edit Capacity</h3>
-                                <p className="text-[12px] text-slate-500 font-medium">{editHall?.hallCode}</p>
-                            </div>
-                        </div>
-                    </ModalHeader>
-                    <ModalBody className="p-6">
-                        <label className="text-[13px] font-semibold text-slate-600 mb-2 block">New Room Capacity</label>
-                        <Input
-                            type="number"
-                            value={editCapacity}
-                            onValueChange={setEditCapacity}
-                            placeholder="e.g. 60"
-                            classNames={{
-                                inputWrapper: "bg-white border-2 border-slate-200 hover:border-blue-500/50 focus-within:border-blue-500! rounded-xl h-14 shadow-inner",
-                                input: "text-slate-800 text-[15px] font-bold"
-                            }}
-                            startContent={<Users size={18} className="text-slate-500 mr-2" />}
-                            autoFocus
-                        />
-                        <p className="text-[12px] text-slate-500 mt-3 flex items-start gap-2 leading-relaxed">
-                            <AlertCircle size={14} className="mt-0.5 shrink-0 text-blue-400" />
-                            Updating the capacity will not affect the current physical bench layout. It only limits how many students can be auto-assigned.
-                        </p>
-                    </ModalBody>
-                    <ModalFooter className="border-t border-slate-200/60 px-6 py-4">
-                        <Button variant="light" onPress={() => setEditHall(null)} className="text-slate-500 hover:text-slate-800 font-medium text-[13px]">Cancel</Button>
-                        <Button onPress={handleUpdateCapacity} className="bg-blue-600 hover:bg-blue-500 text-slate-800 font-bold text-[13px] shadow-lg shadow-blue-600/20">Save Capacity</Button>
-                    </ModalFooter>
-                </ModalContent>
-            </Modal>
-
             {/* ═══ Print Modal (Professional Official Document Layout) ═══ */}
             <Modal isOpen={showPrintModal} onOpenChange={setShowPrintModal} backdrop="blur" size="4xl" scrollBehavior="outside"
                 classNames={{ base: 'bg-white shadow-2xl rounded-2xl my-8', header: 'hidden', footer: 'border-t border-slate-200 bg-slate-50/80 px-6 py-4 sticky bottom-0 z-10' }}>
