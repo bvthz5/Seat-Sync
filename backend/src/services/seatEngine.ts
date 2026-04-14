@@ -15,8 +15,11 @@ export async function generateSeats(room: Room | any, transaction?: any) {
     // 2. Generate expected seat structures based on precise RowLayout
     const expectedSeatKeys = new Set<string>();
     const expectedSeats: any[] = [];
+    const expectedSeatMap = new Map<string, { IsActive: boolean }>();
 
     const seatsPerBench = room.SeatsPerBench || 2;
+    const capacity = Number(room.Capacity || 0);
+    let seatSerial = 0;
 
     // Excel maps exactly to:
     // rowIndex = row index
@@ -25,19 +28,23 @@ export async function generateSeats(room: Room | any, transaction?: any) {
         const benches = layout[rowIndex] || 0;
         // If benches == 0 → skip
         if (benches === 0) continue;
+        const rowLabel = String.fromCharCode(65 + rowIndex);
 
         // For benchIndex:
         for (let benchIndex = 1; benchIndex <= benches; benchIndex++) {
             // For seatIndex:
             for (let seatIndex = 1; seatIndex <= seatsPerBench; seatIndex++) {
-                const key = `${rowIndex}-${benchIndex}-${seatIndex}`;
+                seatSerial++;
+                const isActive = capacity > 0 ? seatSerial <= capacity : true;
+                const key = `${rowLabel}-${benchIndex}-${seatIndex}`;
                 expectedSeatKeys.add(key);
+                expectedSeatMap.set(key, { IsActive: isActive });
                 expectedSeats.push({
                     RoomID: room.RoomID,
-                    RowIndex: rowIndex,
+                    RowIndex: rowLabel,
                     BenchIndex: benchIndex,
                     SeatIndex: seatIndex,
-                    IsActive: true,
+                    IsActive: isActive,
                     ZoneID: null // default null
                 });
             }
@@ -47,6 +54,7 @@ export async function generateSeats(room: Room | any, transaction?: any) {
     // 3. Diff old vs new explicitly
     const seatIdsToRemove: number[] = [];
     const existingSeatKeys = new Set<string>();
+    const seatsToUpdateActiveState: Array<{ seat: any; isActive: boolean }> = [];
 
     for (const seat of existingSeats) {
         // Assume seat has RowIndex, BenchIndex, SeatIndex as attributes
@@ -56,6 +64,11 @@ export async function generateSeats(room: Room | any, transaction?: any) {
         // If seat no longer exists physically in the new layout
         if (!expectedSeatKeys.has(key)) {
             seatIdsToRemove.push(seat.SeatID);
+        } else {
+            const expected = expectedSeatMap.get(key);
+            if (expected && Boolean(seat.IsActive) !== expected.IsActive) {
+                seatsToUpdateActiveState.push({ seat, isActive: expected.IsActive });
+            }
         }
     }
 
@@ -68,6 +81,14 @@ export async function generateSeats(room: Room | any, transaction?: any) {
         const destroyOptions: any = { where: { SeatID: seatIdsToRemove } };
         if (transaction) destroyOptions.transaction = transaction;
         await Seat.destroy(destroyOptions);
+    }
+
+    if (seatsToUpdateActiveState.length > 0) {
+        for (const item of seatsToUpdateActiveState) {
+            const updateOptions: any = {};
+            if (transaction) updateOptions.transaction = transaction;
+            await item.seat.update({ IsActive: item.isActive }, updateOptions);
+        }
     }
 
     if (seatsToAdd.length > 0) {

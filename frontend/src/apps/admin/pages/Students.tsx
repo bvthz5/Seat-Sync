@@ -34,6 +34,7 @@ interface Student {
     SemesterID?: number;
     // UI fields
     Status?: 'Active' | 'Incomplete' | 'Pending' | 'Disabled';
+    Source?: 'Self Registered' | 'Admin Added' | 'Imported';
     CalculatedSemester?: number;
     MaxSemesters?: number;
 }
@@ -403,6 +404,14 @@ const Students: React.FC = () => {
         setPage(1);
     };
 
+    const handleSelectChange = (key: keyof typeof filters) => (keys: "all" | Set<React.Key>) => {
+        if (keys === "all") {
+            return;
+        }
+        const selectedKey = Array.from(keys)[0];
+        handleFilterChange(key, selectedKey ? String(selectedKey) : "");
+    };
+
     // Calculate active filters
     const activeFiltersCount = Object.values(filters).filter(Boolean).length;
     const clearFilters = () => {
@@ -576,14 +585,14 @@ const Students: React.FC = () => {
                 </div>
 
                 {/* Filter Dropdowns Row */}
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                     <Select 
                         id="filter-dept"
                         name="filter-dept"
                         aria-label="Filter Department"
                         placeholder="Department" 
                         selectedKeys={filters.dept ? [filters.dept] : []} 
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleFilterChange('dept', e.target.value)}
+                        onSelectionChange={handleSelectChange('dept')}
                         variant="flat" 
                         classNames={{ 
                             trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10",
@@ -603,7 +612,7 @@ const Students: React.FC = () => {
                         aria-label="Filter Program"
                         placeholder="Program" 
                         selectedKeys={filters.program ? [filters.program] : []} 
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleFilterChange('program', e.target.value)}
+                        onSelectionChange={handleSelectChange('program')}
                         variant="flat" 
                         classNames={{ 
                             trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10",
@@ -623,7 +632,7 @@ const Students: React.FC = () => {
                         aria-label="Filter Batch Year"
                         placeholder="Batch Year" 
                         selectedKeys={filters.batch ? [filters.batch] : []} 
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleFilterChange('batch', e.target.value)}
+                        onSelectionChange={handleSelectChange('batch')}
                         variant="flat" 
                         classNames={{ 
                             trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10",
@@ -652,7 +661,7 @@ const Students: React.FC = () => {
                         aria-label="Filter Semester"
                         placeholder="Semester" 
                         selectedKeys={filters.semester ? [filters.semester] : []} 
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleFilterChange('semester', e.target.value)}
+                        onSelectionChange={handleSelectChange('semester')}
                         variant="flat" 
                         classNames={{ 
                             trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10",
@@ -676,7 +685,7 @@ const Students: React.FC = () => {
                         aria-label="Filter Status"
                         placeholder="Status" 
                         selectedKeys={filters.status ? [filters.status] : []} 
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleFilterChange('status', e.target.value)}
+                        onSelectionChange={handleSelectChange('status')}
                         variant="flat" 
                         classNames={{ 
                             trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10",
@@ -703,7 +712,7 @@ const Students: React.FC = () => {
                         aria-label="Filter Source"
                         placeholder="Source" 
                         selectedKeys={filters.source ? [filters.source] : []} 
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleFilterChange('source', e.target.value)}
+                        onSelectionChange={handleSelectChange('source')}
                         variant="flat" 
                         classNames={{ 
                             trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10",

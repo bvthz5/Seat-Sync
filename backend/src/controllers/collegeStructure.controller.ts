@@ -375,7 +375,7 @@ export const updateRoom = async (req: Request, res: Response) => {
 
         if (RoomCode) room.RoomCode = RoomCode;
         if (Status) room.Status = Status;
-        if (Capacity) room.Capacity = Capacity;
+        if (Capacity !== undefined) room.Capacity = Number(Capacity);
         if (ExamUsable !== undefined) room.ExamUsable = ExamUsable;
         if (RoomType) room.RoomType = RoomType;
 

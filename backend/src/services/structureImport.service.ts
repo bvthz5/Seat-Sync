@@ -148,9 +148,7 @@ export class StructureImportService {
 
             let rowLayout: number[] = [];
             let rCapacity = 0;
-            
             if (colMap.size > 0) {
-                // Execute precise map layout extraction based on detected column anchors
                 for (const char of ['a', 'b', 'c', 'd', 'e', 'f']) {
                     if (colMap.has(char)) {
                         const cIdx = colMap.get(char)!;
@@ -160,8 +158,12 @@ export class StructureImportService {
                         rCapacity += benches * 2;
                     }
                 }
+                const capVal = capColIdx !== -1 ? row[capColIdx] : null;
+                const explicitCapacity = parseInt(capVal) || 0;
+                if (explicitCapacity > 0) {
+                    rCapacity = explicitCapacity;
+                }
             } else {
-                // Fallback mechanism to split seats into roughly equal 3 matrices
                 const capVal = capColIdx !== -1 ? row[capColIdx] : null;
                 const cap = parseInt(capVal) || 0;
                 if (cap > 0) {

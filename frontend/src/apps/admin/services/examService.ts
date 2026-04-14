@@ -44,11 +44,7 @@ export const ExamService = {
         if (examTitle) {
             formData.append('title', examTitle);
         }
-        const response = await api.post(`${PREFIX}/import-timetable`, formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data'
-            }
-        });
+        const response = await api.post(`${PREFIX}/import-timetable`, formData);
         return response.data;
     },
 
