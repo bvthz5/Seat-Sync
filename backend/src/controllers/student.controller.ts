@@ -284,6 +284,7 @@ export const importStudents = async (req: Request, res: Response) => {
         // Adaptive Parser: Read sheet as raw array to handle multi-section tables
         const rawRows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
         const data: any[] = [];
+        let errors: any[] = [];
         let currentHeaders: string[] = [];
         let isCollecting = false;
         let globalBatch = '';
@@ -323,7 +324,7 @@ export const importStudents = async (req: Request, res: Response) => {
                         hasData = true;
                     }
                     if (header.toLowerCase() === 'sl no') continue; // Ignore Sl No
-                    if (header.toLowerCase() === 'university regno' || header.toLowerCase().includes('regno')) {
+                    if (header.toLowerCase() === 'university regno' || header.toLowerCase().includes('regno') || header.toLowerCase().includes('reg no') || header.toLowerCase().includes('register')) {
                         record['Register Number'] = val;
                     } else if (header.toLowerCase() === 'name' || header.toLowerCase() === 'student name') {
                         record['Name'] = val;
@@ -338,21 +339,30 @@ export const importStudents = async (req: Request, res: Response) => {
                      record['Batch'] = globalBatch;
                 }
 
+                const regNoVal = String(record['Register Number'] || '').toLowerCase();
+                const nameVal = String(record['Name'] || '').toLowerCase();
+                
+                // Skip duplicated header rows inside the data
+                if (nameVal.includes('name') && (regNoVal.includes('reg') || regNoVal === '')) {
+                    console.warn("Skipping duplicated header row inside data.");
+                    continue;
+                }
+
                 if (hasData && record['Name']) { // Only Name is strictly required
                     // Auto-generate missing register number
                     if (!record['Register Number']) {
-                        record['Register Number'] = "AUTO_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+                        record['Register Number'] = 'AUTO_' + Date.now() + '_' + Math.floor(Math.random() * 1000000) + '_' + rowIdx;
                     }
-                    console.log("Student Parsed:", record);
+                    record['_sourceRowIdx'] = rowIdx + 1; // Store original 1-indexed row
                     data.push(record);
                 } else if (hasData) {
                     console.warn("Skipped row (missing Name):", record);
+                    errors.push({ row: rowIdx + 1, reason: "Missing Name" });
                 }
             }
         }
 
         let successCount = 0;
-        let errors: string[] = [];
 
         const toKey = (value: string) => value.trim().toUpperCase();
         const toNormalizedKey = (value: string) => toKey(value).replace(/[^A-Z0-9]/g, '');
@@ -477,6 +487,12 @@ export const importStudents = async (req: Request, res: Response) => {
             existingUsersMap.set(u.UserID, u);
             if (u.Email) existingUsersMapByEmail.set(u.Email, u);
         });
+
+        // Semester lookup Map for O(1) speed
+        const semestersMap = new Map<string, any>();
+        semestersAll.forEach((s: any) => {
+            semestersMap.set(`${s.ProgramID}_${s.SemesterNumber}`, s);
+        });
         
         // Hash default password once to avoid O(N) bcrypt delay
         const bcrypt = await import('bcryptjs');
@@ -507,8 +523,8 @@ export const importStudents = async (req: Request, res: Response) => {
         const precomputedHashes = new Map<string, string>();
         const passwordChunks = Array.from(passwordsToHash);
         
-        // Batch hash in small parallel groups to avoid threadpool starvation
-        const BATCH_SIZE = 10;
+        // Batch hash in larger parallel groups (50) to fully utilize CPU
+        const BATCH_SIZE = 50;
         for (let i = 0; i < passwordChunks.length; i += BATCH_SIZE) {
             const batch = passwordChunks.slice(i, i + BATCH_SIZE);
             const hashedBatch = await Promise.all(batch.map(pass => bcrypt.hash(pass, 10)));
@@ -551,93 +567,70 @@ export const importStudents = async (req: Request, res: Response) => {
             } catch (e) { }
         }
 
+        // Collector arrays for bulk operations
+        const usersToCreate: any[] = [];
+        const studentsToCreate: any[] = [];
+        const rowManifests: any[] = [];
+        const fileProcessedRegNos = new Set<string>();
+
         for (const row of data) {
             // Flexible Key Matching
             const regNoRaw = normalizeKey(row, [
-                'Register Number',
-                'RegisterNumber',
-                'Reg No',
-                'RegNo',
-                'Register No',
-                'University RegNo',
-                'University Reg No',
-                'UniversityRegNo'
+                'Register Number', 'RegisterNumber', 'Reg No', 'RegNo', 'Register', 'Register', 
+                'Register No', 'University RegNo', 'University Reg No', 'UniversityRegNo'
             ]);
             const name = normalizeKey(row, ['Name', 'Student Name', 'Full Name', 'StudentName']);
             const email = normalizeKey(row, ['Email', 'E-mail', 'Mail']);
             const programInput = normalizeKey(row, ['Program', 'Program Name', 'Programme', 'Course', 'Branch', 'Stream']);
             const semesterInput = normalizeKey(row, ['Semester', 'Sem', 'Term']);
-            const departmentInput = normalizeKey(row, ['Department', 'Department Name', 'DepartmentCode', 'Dept']);
             const batchInput = normalizeKey(row, ['Batch', 'Batch Name', 'Class']);
-            const batchInfo = parseBatchInfo(batchInput);
+            
             const regNo = String(regNoRaw ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
             const normalizedName = String(name ?? '').trim();
 
+            if (!regNo || !normalizedName) {
+                if (regNo || normalizedName) errors.push({ row: row['_sourceRowIdx'] || 'Unknown', reason: `Missing critical data - RegNo: '${regNo}', Name: '${normalizedName}'` });
+                continue;
+            }
+
+            // Prevent duplicate records within the same file from crashing the batch insert
+            if (fileProcessedRegNos.has(regNo)) {
+                console.warn(`Duplicate RegNo in file: ${regNo}. Skipping subsequent row.`);
+                continue;
+            }
+            fileProcessedRegNos.add(regNo);
+
             try {
-                const looksLikeBlankSeparator = !regNo && !normalizedName && !String(batchInput ?? '').trim();
-                const looksLikeRepeatedHeader =
-                    regNo === 'UNIVERSITYREGNO' ||
-                    regNo === 'REGISTERNUMBER' ||
-                    regNo === 'REGNO' ||
-                    normalizedName.toUpperCase() === 'NAME';
-
-                if (looksLikeBlankSeparator || looksLikeRepeatedHeader) {
-                    continue;
-                }
-
-                // 1. Validation basics
-                if (!regNo || !normalizedName) {
-                    throw new Error(`Missing required fields (Register Number, Name) for row`);
-                }
-
-                // 2. Clean Academic Parsing Engine
-                // Always give priority to the explicit batch/program rows
+                // 1. Resolve Academic Context
                 const rawAcademicString = row['Batch'] || programInput || batchInput;
                 const parsed = parseBatchString(rawAcademicString);
                 const programCode = normalizeProgram(parsed.programCode);
-                const departmentName = mapProgramToDepartment(programCode);
-
-                // Fetch or Create Program & Department securely
-                // resolveOrCreateProgram cascades and resolves the department mapping!
+                
                 let targetProgram = programNormalizedCache.get(programCode);
                 if (!targetProgram) {
                     targetProgram = await resolveOrCreateProgram(programCode, t);
                     programNormalizedCache.set(programCode, targetProgram);
                 }
 
-                // For department we check if it is explicitly in cache or just fetch what the program resolved to
                 let targetDept = targetProgram.DepartmentID ? deptCache.get(targetProgram.DepartmentID) : null;
                 if (!targetDept && targetProgram.DepartmentID) {
                     targetDept = await Department.findByPk(targetProgram.DepartmentID, { transaction: t });
                     if (targetDept) deptCache.set(targetProgram.DepartmentID, targetDept);
                 }
 
-                if (!targetProgram || !targetDept) {
-                    throw new Error(`Failed to resolve precise Academic setup for Program: ${programCode}`);
-                }
+                if (!targetProgram || !targetDept) throw new Error(`Could not resolve Dept/Prog for ${programCode}`);
 
-                // Semester Logic
+                // 2. Resolve Semester
                 const existingStudent = existingStudentsMap.get(regNo);
+                const effectiveBatchYear = parsed.batchYear || existingStudent?.BatchYear || new Date().getFullYear();
                 
-                // 1. Try parsed batch string year, then Excel column, then fallback to current year
-                const effectiveBatchYear = parsed.batchYear 
-                                           || existingStudent?.BatchYear 
-                                           || new Date().getFullYear();
-
-                let parsedSemester = 1;
-                const providedSem = parsed.semester || normalizeSemesterNumber(semesterInput);
-                
-                if (providedSem) {
-                    parsedSemester = providedSem;
-                } else {
-                    const currentYear = new Date().getFullYear();
-                    const yearsCompleted = currentYear - effectiveBatchYear;
-                    const calculatedSemRaw = Math.max((yearsCompleted * 2) + 1, 1);
-                    parsedSemester = Math.min(calculatedSemRaw, targetProgram.TotalSemesters || 6);
+                let parsedSemester = parsed.semester || normalizeSemesterNumber(semesterInput) || 1;
+                if (!parsed.semester && !semesterInput) {
+                    const yearsComp = new Date().getFullYear() - effectiveBatchYear;
+                    parsedSemester = Math.min(Math.max((yearsComp * 2) + 1, 1), targetProgram.TotalSemesters || 6);
                 }
 
-                let targetSemester = semestersAll.find((s: any) => s.ProgramID === targetProgram.ProgramID && s.SemesterNumber === parsedSemester);
-
+                let targetSemester = semestersMap.get(`${targetProgram.ProgramID}_${parsedSemester}`);
                 if (!targetSemester) {
                     targetSemester = await Semester.create({
                         ProgramID: targetProgram.ProgramID,
@@ -645,16 +638,12 @@ export const importStudents = async (req: Request, res: Response) => {
                         SemesterName: `S${parsedSemester}`,
                         IsActive: true
                     }, { transaction: t });
-                    semestersAll.push(targetSemester);
+                    semestersMap.set(`${targetProgram.ProgramID}_${parsedSemester}`, targetSemester);
                 }
 
-                if (!targetSemester) {
-                    throw new Error(`Invalid Semester resolution for Program '${targetProgram.ProgramName}'`);
-                }
-                // 3. Find/Create User (Login)
-                // Default Password: First 4 chars of Name + @123
-                const passwordStr = (normalizedName.replace(/\s/g, '').substring(0, 4) + '@123'); // Simple logic
-                const defaultPassword = precomputedHashes.get(passwordStr) || await bcrypt.hash(passwordStr, 10);
+                // 3. Resolve User
+                const passwordStr = (normalizedName.replace(/\s/g, '').substring(0, 4) + '@123');
+                const defaultPassword = precomputedHashes.get(passwordStr) || defaultPasswordHash;
 
                 const generatedEmail = buildImportedStudentEmail(
                     normalizedName,
@@ -663,90 +652,93 @@ export const importStudents = async (req: Request, res: Response) => {
                     targetProgram.DurationYears
                 );
 
-                let userEmail = generatedEmail;
-                let user = existingStudent?.UserID
-                    ? existingUsersMap.get(existingStudent.UserID)
-                    : null;
+                let user = existingStudent?.UserID ? existingUsersMap.get(existingStudent.UserID) : existingUsersMapByEmail.get(generatedEmail);
+                
+                rowManifests.push({
+                    row,
+                    regNo,
+                    normalizedName,
+                    targetDept,
+                    targetProgram,
+                    targetSemester,
+                    batchYear: effectiveBatchYear,
+                    user,
+                    email: generatedEmail,
+                    password: defaultPassword,
+                    existingStudent
+                });
 
-                if (!user) {
-                    const emailOwner = existingUsersMapByEmail.get(generatedEmail) || await User.findOne({ where: { Email: generatedEmail }, transaction: t });
-                    if (emailOwner) {
-                        existingUsersMapByEmail.set(generatedEmail, emailOwner);
-                        
-                        const linkedStudent = existingStudentsMapByUserId.get(emailOwner.UserID) || await Student.findOne({
-                            where: { UserID: emailOwner.UserID },
-                            transaction: t
-                        });
-                        
-                        if (linkedStudent) existingStudentsMapByUserId.set(emailOwner.UserID, linkedStudent);
-
-                        // Handle rare collisions (same name + department + passout year) safely.
-                        if (linkedStudent && linkedStudent.RegisterNumber !== regNo) {
-                            const regSuffix = normalizeEmailToken(regNo).slice(-4) || '1';
-                            userEmail = generatedEmail.replace('@', `${regSuffix}@`);
-                        } else {
-                            user = emailOwner;
-                        }
-                    }
-                }
-
-                if (!user) {
-                    user = await User.create({
-                        Email: userEmail,
-                        FullName: normalizedName,
-                        PasswordHash: defaultPassword,
-                        Role: 'student',
-                        IsRootAdmin: false
-                    }, { transaction: t });
-                    existingUsersMap.set(user.UserID, user);
-                    existingUsersMapByEmail.set(userEmail, user);
-                } else {
-                    // Always update FullName from Excel import (fresh data takes precedence)
-                    if (normalizedName) {
-                        await user.update({ FullName: normalizedName }, { transaction: t });
-                    }
-                }
-
-                // 4. Create/Update Student
-                if (existingStudent) {
-                    await existingStudent.update({
-                        UserID: user.UserID,
-                        DepartmentID: targetDept.DepartmentID,
-                        ProgramID: targetProgram.ProgramID,
-                        SemesterID: targetSemester.SemesterID,
-                        BatchYear: effectiveBatchYear
-                    }, { transaction: t });
-                } else {
-                    const newStudent = await Student.create({
-                        UserID: user.UserID,
-                        RegisterNumber: regNo,
-                        DepartmentID: targetDept.DepartmentID,
-                        ProgramID: targetProgram.ProgramID,
-                        SemesterID: targetSemester.SemesterID,
-                        BatchYear: effectiveBatchYear
-                    }, { transaction: t });
-                    existingStudentsMap.set(regNo, newStudent);
-                    existingStudentsMapByUserId.set(user.UserID, newStudent);
-                }
-
-                successCount++;
             } catch (err: any) {
-                const errorDetail = err.message || JSON.stringify(err, null, 2);
-                const errorMsg = `Row error (${regNo || name}): ${errorDetail}`;
-                errors.push(errorMsg);
+                errors.push({ row: row['_sourceRowIdx'] || 'Unknown', reason: `Parsing error (${regNo}): ${err.message}` });
+            }
+        }
 
-                // DEBUG: Log first 5 errors to file
-                if (errors.length <= 5) {
-                    try {
-                        const fs = await import('fs');
-                        const path = await import('path');
-                        fs.appendFileSync(path.resolve('debug_error.log'), `Validation Error: ${errorMsg}\nStack: ${err.stack}\n`);
-                    } catch (e) { }
+        // Pass 2: Execute Batch Operations in chunks for maximum performance securely
+        // Using Promise.all within a single SQL transaction causes connection pool exhaustion in MSSQL.
+        // We must execute them sequentially within the transaction, or use true bulk operations.
+        const chunkSize = 100;
+        for (let i = 0; i < rowManifests.length; i += chunkSize) {
+            const chunk = rowManifests.slice(i, i + chunkSize);
+            for (const m of chunk) {
+                try {
+                    let currentUser = m.user;
+                    if (!currentUser) {
+                        currentUser = await User.create({
+                            Email: m.email,
+                            FullName: m.normalizedName,
+                            PasswordHash: m.password,
+                            Role: 'student'
+                        }, { transaction: t });
+                        existingUsersMapByEmail.set(m.email, currentUser);
+                    } else if (currentUser.FullName !== m.normalizedName) {
+                        await currentUser.update({ FullName: m.normalizedName }, { transaction: t });
+                    }
+
+                    if (m.existingStudent) {
+                        const hasChanged = 
+                            m.existingStudent.UserID !== currentUser.UserID ||
+                            m.existingStudent.DepartmentID !== m.targetDept.DepartmentID ||
+                            m.existingStudent.ProgramID !== m.targetProgram.ProgramID ||
+                            m.existingStudent.SemesterID !== m.targetSemester.SemesterID ||
+                            m.existingStudent.BatchYear !== m.batchYear;
+
+                        if (hasChanged) {
+                            await m.existingStudent.update({
+                                UserID: currentUser.UserID,
+                                DepartmentID: m.targetDept.DepartmentID,
+                                ProgramID: m.targetProgram.ProgramID,
+                                SemesterID: m.targetSemester.SemesterID,
+                                BatchYear: m.batchYear
+                            }, { transaction: t });
+                        }
+                    } else {
+                        await Student.create({
+                            UserID: currentUser.UserID,
+                            RegisterNumber: m.regNo,
+                            DepartmentID: m.targetDept.DepartmentID,
+                            ProgramID: m.targetProgram.ProgramID,
+                            SemesterID: m.targetSemester.SemesterID,
+                            BatchYear: m.batchYear
+                        }, { transaction: t });
+                        m.existingStudent = true; // prevent double insertion in rare cases within exact same chunk
+                    }
+                    successCount++;
+                } catch (err: any) {
+                    errors.push({ row: m.row['_sourceRowIdx'] || 'Unknown', reason: `Insertion error (${m.regNo}): ${err.message}` });   
                 }
             }
         }
 
         await t.commit();
+        
+        // Final background logging of errors
+        if (errors.length > 0) {
+            try {
+                const { appendFileSync } = await import('fs');
+                const { resolve } = await import('path');
+                appendFileSync(resolve('debug_error.log'), `Import on ${new Date().toISOString()}:\n${errors.map((e:any) => typeof e === 'string' ? e : `Row ${e.row}: ${e.reason}`).join('\n')}\n`);
+            } catch (e) {}
+        }
 
         res.status(200).json({
             message: "Import processing complete",
@@ -756,7 +748,7 @@ export const importStudents = async (req: Request, res: Response) => {
         });
 
     } catch (error: any) {
-        await t.rollback();
+        try { await t.rollback(); } catch (e) {}
         console.error("Bulk Import Error:", error);
 
         // DEBUG: Write error to file for AI Agent to read
