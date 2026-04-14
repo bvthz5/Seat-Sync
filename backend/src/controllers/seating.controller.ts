@@ -22,8 +22,8 @@ const ensureSeatsExist = async (room: Room): Promise<void> => {
     const existing = await Seat.count({ where: { RoomID: room.RoomID } });
     if (existing > 0) return;
 
-    const rows = room.TotalRows || 5;
-    const benchesPerRow = room.BenchesPerRow || 6;
+    const rows = (room as any).TotalRows || 5;
+    const benchesPerRow = (room as any).BenchesPerRow || 6;
     const seatsPerBench = room.SeatsPerBench || 2;
 
     const records: { RoomID: number; RowLabel: string; BenchNumber: number; SeatNumber: number; IsActive: boolean }[] = [];
@@ -183,10 +183,10 @@ export const getHallLayout = async (req: Request, res: Response) => {
 
         const benchMap: Record<string, Record<number, any[]>> = {};
         for (const seat of seats) {
-            if (!benchMap[seat.RowLabel]) benchMap[seat.RowLabel] = {};
-            const rowMap = benchMap[seat.RowLabel]!;
-            if (!rowMap[seat.BenchNumber]) rowMap[seat.BenchNumber] = [];
-            rowMap[seat.BenchNumber]!.push(seat);
+            if (!benchMap[(seat as any).RowLabel]) benchMap[(seat as any).RowLabel] = {};
+            const rowMap = benchMap[(seat as any).RowLabel]!;
+            if (!rowMap[(seat as any).BenchNumber]) rowMap[(seat as any).BenchNumber] = [];
+            rowMap[(seat as any).BenchNumber]!.push(seat);
         }
 
         const benches: any[] = [];
@@ -329,10 +329,10 @@ export const autoAssign = async (req: Request, res: Response) => {
         // Build bench map and assign
         const benchMap: Record<string, Record<number, any[]>> = {};
         for (const seat of seats) {
-            if (!benchMap[seat.RowLabel]) benchMap[seat.RowLabel] = {};
-            const rowMap = benchMap[seat.RowLabel]!;
-            if (!rowMap[seat.BenchNumber]) rowMap[seat.BenchNumber] = [];
-            rowMap[seat.BenchNumber]!.push(seat);
+            if (!benchMap[(seat as any).RowLabel]) benchMap[(seat as any).RowLabel] = {};
+            const rowMap = benchMap[(seat as any).RowLabel]!;
+            if (!rowMap[(seat as any).BenchNumber]) rowMap[(seat as any).BenchNumber] = [];
+            rowMap[(seat as any).BenchNumber]!.push(seat);
         }
 
         let leftIdx = 0, rightIdx = 0;
@@ -348,7 +348,7 @@ export const autoAssign = async (req: Request, res: Response) => {
             for (const row of allRows) {
                 const benchSeats = ((benchMap[row] ?? {})[benchNum] ?? []).sort((a: any, b: any) => a.SeatNumber - b.SeatNumber);
                 for (const seat of benchSeats) {
-                    if (seat.SeatNumber === 1 && leftIdx < leftStudents.length) {
+                    if ((seat as any).SeatNumber === 1 && leftIdx < leftStudents.length) {
                         const s = leftStudents[leftIdx++] as any;
                         assignments[seat.SeatID] = {
                             seatId: seat.SeatID, studentId: s.StudentID,
@@ -356,7 +356,7 @@ export const autoAssign = async (req: Request, res: Response) => {
                             registerNumber: s.RegisterNumber,
                             deptCode: s.Department?.DepartmentCode || "", side: "left",
                         };
-                    } else if (seat.SeatNumber !== 1 && rightIdx < rightStudents.length) {
+                    } else if ((seat as any).SeatNumber !== 1 && rightIdx < rightStudents.length) {
                         const s = rightStudents[rightIdx++] as any;
                         assignments[seat.SeatID] = {
                             seatId: seat.SeatID, studentId: s.StudentID,
@@ -417,7 +417,7 @@ export const getAllocationForHall = async (req: Request, res: Response) => {
                 studentName: s?.User?.FullName || "Unknown",
                 registerNumber: s?.RegisterNumber,
                 deptCode: s?.Department?.DepartmentCode || "",
-                side: seat?.SeatNumber === 1 ? "left" : "right",
+                side: (seat as any)?.SeatNumber === 1 ? "left" : "right",
             };
         }
 
@@ -659,10 +659,10 @@ export const bulkAssign = async (req: Request, res: Response) => {
 
             const benchMap: Record<string, Record<number, any[]>> = {};
             for (const seat of seats) {
-                if (!benchMap[seat.RowLabel]) benchMap[seat.RowLabel] = {};
-                const rowMap = benchMap[seat.RowLabel]!;
-                if (!rowMap[seat.BenchNumber]) rowMap[seat.BenchNumber] = [];
-                rowMap[seat.BenchNumber]!.push(seat);
+                if (!benchMap[(seat as any).RowLabel]) benchMap[(seat as any).RowLabel] = {};
+                const rowMap = benchMap[(seat as any).RowLabel]!;
+                if (!rowMap[(seat as any).BenchNumber]) rowMap[(seat as any).BenchNumber] = [];
+                rowMap[(seat as any).BenchNumber]!.push(seat);
             }
 
             const records: { ExamID: number; SeatID: number; StudentID: number }[] = [];
@@ -678,10 +678,10 @@ export const bulkAssign = async (req: Request, res: Response) => {
                 for (const row of allRows) {
                     const benchSeats = (benchMap[row]?.[benchNum] || []).sort((a: any, b: any) => a.SeatNumber - b.SeatNumber);
                     for (const seat of benchSeats) {
-                        if (seat.SeatNumber === 1 && leftIdx < leftStudents.length) {
+                        if ((seat as any).SeatNumber === 1 && leftIdx < leftStudents.length) {
                             records.push({ ExamID: primaryExamId, SeatID: seat.SeatID, StudentID: leftStudents[leftIdx++].StudentID as number });
                             hallLeft++;
-                        } else if (seat.SeatNumber !== 1 && rightIdx < rightStudents.length) {
+                        } else if ((seat as any).SeatNumber !== 1 && rightIdx < rightStudents.length) {
                             records.push({ ExamID: primaryExamId, SeatID: seat.SeatID, StudentID: rightStudents[rightIdx++].StudentID as number });
                             hallRight++;
                         }
@@ -750,7 +750,7 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
             transaction,
         });
         const seatNumMap = new Map<number, number>();
-        for (const s of allSeats) seatNumMap.set(s.SeatID, s.SeatNumber);
+        for (const s of allSeats) seatNumMap.set(s.SeatID, (s as any).SeatNumber);
 
         const leftAllocations = existingAllocations.filter(a => seatNumMap.get(a.SeatID) === 1);
         const rightAllocations = existingAllocations.filter(a => seatNumMap.get(a.SeatID) !== 1);
@@ -773,7 +773,7 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
         const columnSort = (seatId: number) => {
             const s = seatInfoMap.get(seatId);
             if (!s) return '';
-            return `${roomOrder.get(s.RoomID) ?? ''}_${String(s.BenchNumber).padStart(6, '0')}_${s.RowLabel}_${s.SeatNumber}`;
+            return `${roomOrder.get(s.RoomID) ?? ''}_${String(s.BenchNumber).padStart(6, '0')}_${s.RowLabel}_${(s as any).SeatNumber}`;
         };
 
         // Sort seats column-by-column
@@ -1079,10 +1079,10 @@ export const importSeatingFromExcel = async (req: Request, res: Response) => {
 
             const benchMap: Record<string, Record<number, any[]>> = {};
             for (const seat of seats) {
-                if (!benchMap[seat.RowLabel]) benchMap[seat.RowLabel] = {};
-                const rowMap = benchMap[seat.RowLabel]!;
-                if (!rowMap[seat.BenchNumber]) rowMap[seat.BenchNumber] = [];
-                rowMap[seat.BenchNumber]!.push(seat);
+                if (!benchMap[(seat as any).RowLabel]) benchMap[(seat as any).RowLabel] = {};
+                const rowMap = benchMap[(seat as any).RowLabel]!;
+                if (!rowMap[(seat as any).BenchNumber]) rowMap[(seat as any).BenchNumber] = [];
+                rowMap[(seat as any).BenchNumber]!.push(seat);
             }
 
             // Column-by-column order: A1, B1, C1... then A2, B2, C2...
@@ -1095,9 +1095,9 @@ export const importSeatingFromExcel = async (req: Request, res: Response) => {
                 for (const row of allRows) {
                     const benchSeats = (benchMap[row]?.[benchNum] || []).sort((a: any, b: any) => a.SeatNumber - b.SeatNumber);
                     for (const seat of benchSeats) {
-                        if (seat.SeatNumber === 1 && leftIdx < leftStudentIds.length) {
+                        if ((seat as any).SeatNumber === 1 && leftIdx < leftStudentIds.length) {
                             newRecords.push({ ExamID: primaryExamId, SeatID: seat.SeatID, StudentID: leftStudentIds[leftIdx++] as number });
-                        } else if (seat.SeatNumber !== 1 && rightIdx < rightStudentIds.length) {
+                        } else if ((seat as any).SeatNumber !== 1 && rightIdx < rightStudentIds.length) {
                             newRecords.push({ ExamID: primaryExamId, SeatID: seat.SeatID, StudentID: rightStudentIds[rightIdx++] as number });
                         }
                     }

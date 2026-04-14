@@ -46,6 +46,7 @@ Program.init(
     ProgramCode: {
       type: DataTypes.STRING(20),
       allowNull: true,
+      unique: true,
     },
     DurationYears: {
       type: DataTypes.INTEGER,

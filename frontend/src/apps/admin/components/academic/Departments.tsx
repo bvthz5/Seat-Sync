@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Button, Chip, Spinner, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure, Tooltip } from '@heroui/react';
+import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Button, Chip, Spinner, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure, Tooltip, Pagination } from '@heroui/react';
 import { Building2, Upload, Download, RefreshCw, FileSpreadsheet, AlertCircle, Info, Trash2, Edit, Trash } from 'lucide-react';
 import { academicService } from '../../services/academicService';
 import { toast } from '../../../../utils/toast';
@@ -17,6 +17,8 @@ interface DepartmentsProps {
 export const Departments: React.FC<DepartmentsProps> = ({ academicYearId }) => {
     const [departments, setDepartments] = useState<Department[]>([]);
     const [loading, setLoading] = useState(false);
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
     const [importing, setImporting] = useState(false);
     
     // Import Modal State
@@ -33,9 +35,17 @@ export const Departments: React.FC<DepartmentsProps> = ({ academicYearId }) => {
     const fetchDepartments = async () => {
         try {
             setLoading(true);
-            const res = await academicService.getDepartments();
-            // getDepartments returns a flat array directly
-            setDepartments(Array.isArray(res.data) ? res.data : (res.data?.data || []));
+            const res = await academicService.getDepartments({ page, limit: 10 });
+            if (res.data?.data) {
+                setDepartments(res.data.data);
+                setTotalPages(res.data.totalPages || 1);
+            } else if (Array.isArray(res.data)) {
+                setDepartments(res.data);
+                setTotalPages(1);
+            } else {
+                setDepartments([]);
+                setTotalPages(1);
+            }
         } catch (error) {
             console.error(error);
             toast.error("Failed to load departments");
@@ -46,7 +56,7 @@ export const Departments: React.FC<DepartmentsProps> = ({ academicYearId }) => {
 
     useEffect(() => {
         fetchDepartments();
-    }, []);
+    }, [page]);
 
     const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -199,6 +209,21 @@ export const Departments: React.FC<DepartmentsProps> = ({ academicYearId }) => {
                         wrapper: "shadow-none",
                         th: "bg-slate-50 text-slate-600 font-semibold",
                     }}
+                    bottomContent={
+                        totalPages > 1 ? (
+                            <div className="flex w-full justify-center">
+                                <Pagination
+                                    isCompact
+                                    showControls
+                                    showShadow
+                                    color="primary"
+                                    page={page}
+                                    total={totalPages}
+                                    onChange={(p) => setPage(p)}
+                                />
+                            </div>
+                        ) : null
+                    }
                 >
                     <TableHeader>
                         <TableColumn>CODE</TableColumn>

@@ -89,6 +89,8 @@ const DepartmentsTab: React.FC = () => {
     const [depts, setDepts] = useState<Department[]>([]);
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState('');
+    const [page, setPage] = useState(1);
+    const LIMIT = 10;
     const [showAdd, setShowAdd] = useState(false);
     const [showDelete, setShowDelete] = useState<{ mode: 'single' | 'all'; id?: number; name?: string } | null>(null);
     const fileRef = useRef<HTMLInputElement>(null);
@@ -113,10 +115,15 @@ const DepartmentsTab: React.FC = () => {
 
     useEffect(() => { load(); }, []);
 
+    useEffect(() => { setPage(1); }, [search]);
+
     const filtered = depts.filter(d =>
-        d.DepartmentCode.toLowerCase().includes(search.toLowerCase()) ||
+        d.DepartmentCode.toLowerCase().includes(search.toLowerCase()) ||        
         d.DepartmentName.toLowerCase().includes(search.toLowerCase())
     );
+
+    const totalPages = Math.ceil(filtered.length / LIMIT);
+    const paginated = filtered.slice((page - 1) * LIMIT, page * LIMIT);
 
     const handleAdd = async () => {
         if (!form.DepartmentCode || !form.DepartmentName) {
@@ -251,7 +258,7 @@ const DepartmentsTab: React.FC = () => {
                             <tr><td colSpan={4} className="text-center py-12 text-slate-400 text-sm">Loading…</td></tr>
                         ) : filtered.length === 0 ? (
                             <tr><td colSpan={4} className="text-center py-12 text-slate-400 text-sm">No departments found. Add one to get started.</td></tr>
-                        ) : filtered.map(dept => (
+                        ) : paginated.map(dept => (
                             <tr key={dept.DepartmentID} className="hover:bg-slate-50/60 transition-colors">
                                 <td className="px-5 py-3.5">
                                     <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 text-xs font-bold font-mono border border-blue-100">
@@ -283,8 +290,31 @@ const DepartmentsTab: React.FC = () => {
                     </tbody>
                 </table>
                 {!loading && filtered.length > 0 && (
-                    <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-400 font-medium">
-                        {filtered.length} of {depts.length} departments
+                    <div className="flex items-center justify-between px-5 py-3 bg-slate-50 border-t border-slate-200">
+                        <div className="text-xs text-slate-400 font-medium">
+                            Showing {(page - 1) * LIMIT + 1} to {Math.min(page * LIMIT, filtered.length)} of {filtered.length} departments {filtered.length !== depts.length ? `(filtered from ${depts.length})` : ''}
+                        </div>
+                        {totalPages > 1 && (
+                            <div className="flex items-center gap-1.5">
+                                <button
+                                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                                    disabled={page === 1}
+                                    className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100 transition-all shadow-sm"
+                                >
+                                    Previous
+                                </button>
+                                <span className="px-2 text-xs font-semibold text-slate-500">
+                                    Page {page} of {totalPages}
+                                </span>
+                                <button
+                                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={page === totalPages}
+                                    className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100 transition-all shadow-sm"
+                                >
+                                    Next
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -411,6 +441,8 @@ const DepartmentsTab: React.FC = () => {
 const ProgramsTab: React.FC = () => {
     const [programs, setPrograms] = useState<Program[]>([]);
     const [depts, setDepts] = useState<Department[]>([]);
+    const [page, setPage] = useState(1);
+    const LIMIT = 10;
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState('');
     const [filterDept, setFilterDept] = useState('');
@@ -439,11 +471,16 @@ const ProgramsTab: React.FC = () => {
 
     useEffect(() => { load(); }, []);
 
+    useEffect(() => { setPage(1); }, [search, filterDept]);
+
     const filtered = programs.filter(p => {
         const matchSearch = !search || p.ProgramCode.toLowerCase().includes(search.toLowerCase()) || p.ProgramName.toLowerCase().includes(search.toLowerCase());
         const matchDept = !filterDept || p.Departments?.some(d => d.DepartmentID.toString() === filterDept);
         return matchSearch && matchDept;
     });
+
+    const totalPages = Math.ceil(filtered.length / LIMIT);
+    const paginated = filtered.slice((page - 1) * LIMIT, page * LIMIT);
 
     const handleAdd = async () => {
         if (!form.ProgramCode || !form.ProgramName || form.DepartmentIDs.length === 0) {
@@ -608,7 +645,7 @@ const ProgramsTab: React.FC = () => {
                             <tr><td colSpan={6} className="text-center py-12 text-slate-400 text-sm">
                                 {programs.length === 0 ? 'No programs yet. Add one or import from Excel.' : 'No programs match your filters.'}
                             </td></tr>
-                        ) : filtered.map(prog => (
+                        ) : paginated.map(prog => (
                             <tr key={prog.ProgramID} className="hover:bg-slate-50/60 transition-colors group">
                                 <td className="px-5 py-3.5">
                                     <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold font-mono border border-indigo-100">
@@ -652,8 +689,31 @@ const ProgramsTab: React.FC = () => {
                     </tbody>
                 </table>
                 {!loading && filtered.length > 0 && (
-                    <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-400 font-medium">
-                        {filtered.length} of {programs.length} programs · Semesters are auto-generated
+                    <div className="flex items-center justify-between px-5 py-3 bg-slate-50 border-t border-slate-200">
+                        <div className="text-xs text-slate-400 font-medium">
+                            Showing {(page - 1) * LIMIT + 1} to {Math.min(page * LIMIT, filtered.length)} of {filtered.length} programs {filtered.length !== programs.length ? `(filtered from ${programs.length})` : ''} · Semesters are auto-generated
+                        </div>
+                        {totalPages > 1 && (
+                            <div className="flex items-center gap-1.5">
+                                <button
+                                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                                    disabled={page === 1}
+                                    className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100 transition-all shadow-sm"
+                                >
+                                    Previous
+                                </button>
+                                <span className="px-2 text-xs font-semibold text-slate-500">
+                                    Page {page} of {totalPages}
+                                </span>
+                                <button
+                                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={page === totalPages}
+                                    className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100 transition-all shadow-sm"
+                                >
+                                    Next
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

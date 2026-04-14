@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Button, Chip, Spinner, Select, SelectItem, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure, Tooltip } from '@heroui/react';
+import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Button, Chip, Spinner, Select, SelectItem, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure, Tooltip, Pagination } from '@heroui/react';
 import { Layers, Upload, Download, RefreshCw, Filter, FileSpreadsheet, AlertCircle, Info, Trash2, Edit, Trash } from 'lucide-react';
 import { academicService } from '../../services/academicService';
 import { toast } from '../../../../utils/toast';
@@ -29,6 +29,8 @@ export const Programs: React.FC<ProgramsProps> = ({ academicYearId }) => {
     const [programs, setPrograms] = useState<Program[]>([]);
     const [departments, setDepartments] = useState<Department[]>([]);
     const [loading, setLoading] = useState(false);
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
     const [importing, setImporting] = useState(false);
     const [filterDept, setFilterDept] = useState<string>('');
     
@@ -46,9 +48,18 @@ export const Programs: React.FC<ProgramsProps> = ({ academicYearId }) => {
     const fetchPrograms = async () => {
         try {
             setLoading(true);
-            const res = await academicService.getPrograms();
-            // getPrograms returns a flat array directly
-            setPrograms(Array.isArray(res.data) ? res.data : (res.data?.data || []));
+            // Pass page, limit, and optionally filterDept using standard params
+            const res = await academicService.getPrograms({ page, limit: 10, departmentId: filterDept || undefined });
+            if (res.data?.data) {
+                setPrograms(res.data.data);
+                setTotalPages(res.data.totalPages || 1);
+            } else if (Array.isArray(res.data)) {
+                setPrograms(res.data);
+                setTotalPages(1);
+            } else {
+                setPrograms([]);
+                setTotalPages(1);
+            }
         } catch (error) {
             console.error(error);
             toast.error("Failed to load programs");
@@ -69,6 +80,9 @@ export const Programs: React.FC<ProgramsProps> = ({ academicYearId }) => {
 
     useEffect(() => {
         fetchPrograms();
+    }, [page, filterDept]);
+
+    useEffect(() => {
         fetchDepartments();
     }, []);
 
@@ -249,6 +263,21 @@ export const Programs: React.FC<ProgramsProps> = ({ academicYearId }) => {
                         wrapper: "shadow-none",
                         th: "bg-slate-50 text-slate-600 font-semibold",
                     }}
+                    bottomContent={
+                        totalPages > 1 ? (
+                            <div className="flex w-full justify-center">
+                                <Pagination
+                                    isCompact
+                                    showControls
+                                    showShadow
+                                    color="primary"
+                                    page={page}
+                                    total={totalPages}
+                                    onChange={(p) => setPage(p)}
+                                />
+                            </div>
+                        ) : null
+                    }
                 >
                     <TableHeader>
                         <TableColumn>CODE</TableColumn>

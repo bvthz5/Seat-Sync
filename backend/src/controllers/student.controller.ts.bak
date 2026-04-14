@@ -10,7 +10,6 @@ import bcrypt from 'bcrypt';
 import * as XLSX from 'xlsx';
 import { BulkStudentImportService } from '../services/bulkStudentImport.service.js';
 import { emailService } from '../services/email.service.js';
-import { normalizeProgram, parseBatchString, mapProgramToDepartment, resolveOrCreateProgram, resolveOrCreateDepartment } from '../services/academicNormalizer.service.js';
 
 const STUDENT_EMAIL_DOMAIN = 'sjcetpalai.ac.in';
 
@@ -461,23 +460,6 @@ export const importStudents = async (req: Request, res: Response) => {
         const deptsAll = await Department.findAll();
         const semestersAll = await Semester.findAll();
         
-        const existingStudentsAll = await Student.findAll();
-        const existingUsersAll = await User.findAll();
-
-        const existingStudentsMap = new Map<string, any>();
-        const existingStudentsMapByUserId = new Map<number, any>();
-        existingStudentsAll.forEach((s: any) => {
-            existingStudentsMap.set(s.RegisterNumber, s);
-            existingStudentsMapByUserId.set(s.UserID, s);
-        });
-        
-        const existingUsersMap = new Map<number, any>();
-        const existingUsersMapByEmail = new Map<string, any>();
-        existingUsersAll.forEach((u: any) => {
-            existingUsersMap.set(u.UserID, u);
-            if (u.Email) existingUsersMapByEmail.set(u.Email, u);
-        });
-        
         // Hash default password once to avoid O(N) bcrypt delay
         const bcrypt = await import('bcryptjs');
         const defaultPasswordHash = await bcrypt.hash('12345678', 10);
@@ -486,14 +468,16 @@ export const importStudents = async (req: Request, res: Response) => {
         const normalizeKey = (row: any, keys: string[]) => {
             const rowKeys = Object.keys(row);
             for (const key of keys) {
+                // Exact match
                 if (row[key] !== undefined) return row[key];
+                // Case insensitive match
                 const foundKey = rowKeys.find(k => k.toLowerCase().trim() === key.toLowerCase().trim());
                 if (foundKey) return row[foundKey];
             }
             return undefined;
         };
 
-        // Precompute all password hashes
+        // Precompute all password hashes to utilize libuv thread pool and avoid blocking inside DB transaction loop
         const passwordsToHash = new Set<string>();
         for (const row of data) {
             const name = normalizeKey(row, ['Name', 'Student Name', 'Full Name', 'StudentName']);
@@ -502,7 +486,6 @@ export const importStudents = async (req: Request, res: Response) => {
                 passwordsToHash.add(passwordStr);
             }
         }
-
         
         const precomputedHashes = new Map<string, string>();
         const passwordChunks = Array.from(passwordsToHash);
@@ -539,7 +522,6 @@ export const importStudents = async (req: Request, res: Response) => {
                 deptCache.set(toKey(key), d);
                 deptNormalizedCache.set(toNormalizedKey(key), d);
             }
-            deptCache.set(d.DepartmentID, d);
         });
 
         // DEBUG: Log headers
@@ -590,67 +572,228 @@ export const importStudents = async (req: Request, res: Response) => {
                     throw new Error(`Missing required fields (Register Number, Name) for row`);
                 }
 
-                // 2. Clean Academic Parsing Engine
-                // Always give priority to the explicit batch/program rows
-                const rawAcademicString = row['Batch'] || programInput || batchInput;
-                const parsed = parseBatchString(rawAcademicString);
-                const programCode = normalizeProgram(parsed.programCode);
-                const departmentName = mapProgramToDepartment(programCode);
+                // 2. Smart Parsing Logic
+                // Regex: (L?SJC)(\d{2})([A-Z]+)(\d+)
+                // Group 1: Prefix (SJC/LSJC)
+                // Group 2: Year (24 -> 2024)
+                // Group 3: Code (MCA, CS, etc)
+                // Group 4: Number
+                const idRegex = /^(?:L?SJC|SJ)(\d{2})([A-Z]+)(\d+)$/i;
+                const match = String(regNo).trim().match(idRegex);
 
-                // Fetch or Create Program & Department securely
-                // resolveOrCreateProgram cascades and resolves the department mapping!
-                let targetProgram = programNormalizedCache.get(programCode);
+                let targetProgram: any = null;
+                let targetDept: any = null;
+                let derivedBatchYear: number | null = null;
+
+                // Extract Batch Year from Register Number (e.g. SJC24MCA001 -> 24 -> 2024)
+                // In my idRegex, group 1 is the 2-digit year!
+                const regCode = match?.[2] ? String(match[2]).toUpperCase() : undefined;
+                if (match?.[1]) {
+                    derivedBatchYear = 2000 + parseInt(match[1], 10);
+                } else {
+                    // Fallback to purely numeric sequence search if it's not a generic SJC one
+                    const purelyNumericYearMatch = String(regNo).match(/(\d{2})/);
+                    if (purelyNumericYearMatch && purelyNumericYearMatch[1]) {
+                        derivedBatchYear = 2000 + parseInt(purelyNumericYearMatch[1], 10);
+                    }
+                }
+
+                if (!derivedBatchYear && batchInfo.startYear) {
+                    derivedBatchYear = batchInfo.startYear;
+                }
+
+                targetDept =
+                    getFlexibleValue(deptCache, deptNormalizedCache, departmentInput) ||
+                    resolveByCodeVariants(deptCache, deptNormalizedCache, batchInfo.leadingCode) ||
+                    (batchInfo.prefixTokens || [])
+                        .map((token) => resolveByCodeVariants(deptCache, deptNormalizedCache, token))
+                        .find(Boolean) ||
+                    getFlexibleValue(deptCache, deptNormalizedCache, regCode) ||
+                    getFlexibleValue(deptCache, deptNormalizedCache, batchInfo.leadingCode);
+
+                targetProgram =
+                    getFlexibleValue(programCache, programNormalizedCache, programInput) ||
+                    resolveByCodeVariants(programCache, programNormalizedCache, batchInfo.leadingCode) ||
+                    (batchInfo.prefixTokens || [])
+                        .map((token) => resolveByCodeVariants(programCache, programNormalizedCache, token))
+                        .find(Boolean) ||
+                    getFlexibleValue(programCache, programNormalizedCache, regCode) ||
+                    getFlexibleValue(programCache, programNormalizedCache, batchInfo.leadingCode);
+
+                // If we found a program first, trust its department link.
+                if (targetProgram?.DepartmentID) {
+                    targetDept = deptsAll.find((d: any) => d.DepartmentID === targetProgram.DepartmentID) || targetDept;
+                }
+
+                // If only department is known, try to resolve an unambiguous program.
+                if (!targetProgram && targetDept) {
+                    const deptPrograms = programsByDept.get(targetDept.DepartmentID) || [];
+                    if (deptPrograms.length === 1) {
+                        targetProgram = deptPrograms[0];
+                    } else if (deptPrograms.length > 1) {
+                        const candidates = [programInput, regCode, batchInfo.leadingCode]
+                            .filter(Boolean)
+                            .map((v) => String(v).toUpperCase());
+                        for (const hint of candidates) {
+                            const matchedProgram = deptPrograms.find((p: any) => {
+                                const programCode = p.ProgramCode ? String(p.ProgramCode).toUpperCase() : '';
+                                const programName = p.ProgramName ? String(p.ProgramName).toUpperCase() : '';
+                                return programCode === hint || programName.includes(hint);
+                            });
+                            if (matchedProgram) {
+                                targetProgram = matchedProgram;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (!targetDept && batchInfo.leadingCode) {
+                    const deptCode = batchInfo.leadingCode.slice(0, 20);
+                    // Use just the leading code (BHM) instead of full "BHM 2023 S1" for dept name mapped
+                    const deptName = batchInfo.leadingCode.slice(0, 150);
+                    const createdOrFoundDept = await Department.findOne({
+                        where: { DepartmentCode: deptCode },
+                        transaction: t
+                    }) || await Department.create({
+                        DepartmentCode: deptCode,
+                        DepartmentName: deptName,
+                        IsActive: true
+                    }, { transaction: t });
+
+                    targetDept = createdOrFoundDept;
+                    deptCache.set(toKey(deptCode), createdOrFoundDept);
+                    deptNormalizedCache.set(toNormalizedKey(deptCode), createdOrFoundDept);
+                    if (deptName) {
+                        deptCache.set(toKey(deptName), createdOrFoundDept);
+                        deptNormalizedCache.set(toNormalizedKey(deptName), createdOrFoundDept);
+                    }
+                }
+
                 if (!targetProgram) {
-                    targetProgram = await resolveOrCreateProgram(programCode, t);
-                    programNormalizedCache.set(programCode, targetProgram);
+                    const hints = [programInput, departmentInput, regCode, batchInfo.leadingCode, ...(batchInfo.prefixTokens || [])]
+                        .filter(Boolean)
+                        .map((value) => String(value).toUpperCase());
+
+                    const hasMBAHint = hints.some((hint) => hint.includes('MBA'));
+                    const hasCAHint = hints.some((hint) => hint === 'CA' || hint.includes('MCA') || hint.includes('PGCS'));
+                    const hasBtechHint = hints.some((hint) => hint.includes('BTECH') || hint === 'EC' || hint === 'EE' || hint === 'ME' || hint === 'CE' || hint === 'CS' || hint === 'CSE');
+
+                    if (hasMBAHint) {
+                        targetProgram =
+                            getFlexibleValue(programCache, programNormalizedCache, 'MBA') ||
+                            getFlexibleValue(programCache, programNormalizedCache, 'Master of Business Administration');
+                    } else if (hasCAHint) {
+                        targetProgram =
+                            getFlexibleValue(programCache, programNormalizedCache, 'MCAI') ||
+                            getFlexibleValue(programCache, programNormalizedCache, 'IMCA-Short') ||
+                            getFlexibleValue(programCache, programNormalizedCache, 'MCA');
+                    } else if (hasBtechHint) {
+                        targetProgram =
+                            getFlexibleValue(programCache, programNormalizedCache, 'BTECH') ||
+                            getFlexibleValue(programCache, programNormalizedCache, 'Bachelor of Technology');
+                    }
                 }
 
-                // For department we check if it is explicitly in cache or just fetch what the program resolved to
-                let targetDept = targetProgram.DepartmentID ? deptCache.get(targetProgram.DepartmentID) : null;
-                if (!targetDept && targetProgram.DepartmentID) {
-                    targetDept = await Department.findByPk(targetProgram.DepartmentID, { transaction: t });
-                    if (targetDept) deptCache.set(targetProgram.DepartmentID, targetDept);
+                if (!targetProgram && targetDept && batchInfo.leadingCode) {
+                    const deptPrograms = programsByDept.get(targetDept.DepartmentID) || [];
+                    if (deptPrograms.length === 0) {
+                        const inferredDuration =
+                            batchInfo.startYear && batchInfo.endYear && batchInfo.endYear > batchInfo.startYear
+                                ? Math.min(Math.max(batchInfo.endYear - batchInfo.startYear, 1), 8)
+                                : 3; // Default 3 years
+                        const inferredSemesters = inferredDuration * 2; // Default 6 total semesters
+
+                        const newProgram = await Program.create({
+                            ProgramCode: batchInfo.leadingCode.slice(0, 20),
+                            ProgramName: batchInfo.leadingCode.slice(0, 100),
+                            DepartmentID: targetDept.DepartmentID,
+                            DurationYears: inferredDuration,
+                            TotalSemesters: inferredSemesters,
+                            IsActive: true
+                        }, { transaction: t });
+
+                        targetProgram = newProgram;
+                        programsByDept.set(targetDept.DepartmentID, [newProgram]);
+
+                        const programKeys = [newProgram.ProgramCode, newProgram.ProgramName].filter(Boolean) as string[];
+                        for (const key of programKeys) {
+                            programCache.set(toKey(key), newProgram);
+                            programNormalizedCache.set(toNormalizedKey(key), newProgram);
+                        }
+                    }
                 }
 
-                if (!targetProgram || !targetDept) {
-                    throw new Error(`Failed to resolve precise Academic setup for Program: ${programCode}`);
+                if (!targetProgram) {
+                    targetProgram =
+                        getFlexibleValue(programCache, programNormalizedCache, 'BTECH') ||
+                        getFlexibleValue(programCache, programNormalizedCache, 'Bachelor of Technology');
+                }
+
+                // Final Validations
+                if (!targetProgram) {
+                    throw new Error(`Could not identify Program/Course for '${regNo}'. Add Program column or ensure program code can be inferred.`);
+                }
+                if (!targetDept) {
+                    const hints = [departmentInput, regCode, batchInfo.leadingCode, ...(batchInfo.prefixTokens || [])]
+                        .filter(Boolean)
+                        .map((value) => String(value).toUpperCase());
+                    const hasCAHint = hints.some((hint) => hint === 'PGC' || hint === 'PGCS' || hint === 'PGR' || hint.includes('PGCS') || hint.includes('MCA'));
+                    const hasECHint = hints.some((hint) => hint.startsWith('EC'));
+                    const hasCEHint = hints.some((hint) => hint.startsWith('CE'));
+
+                    if (hasCAHint) {
+                        targetDept =
+                            getFlexibleValue(deptCache, deptNormalizedCache, 'CA') ||
+                            getFlexibleValue(deptCache, deptNormalizedCache, 'Computer Applications');
+                    } else if (hasECHint) {
+                        targetDept =
+                            getFlexibleValue(deptCache, deptNormalizedCache, 'EC') ||
+                            getFlexibleValue(deptCache, deptNormalizedCache, 'ECE');
+                    } else if (hasCEHint) {
+                        targetDept =
+                            getFlexibleValue(deptCache, deptNormalizedCache, 'CE') ||
+                            getFlexibleValue(deptCache, deptNormalizedCache, 'CIVIL');
+                    }
+                }
+
+                if (!targetDept) {
+                    throw new Error(`Could not identify Department. Ensure Program '${targetProgram.ProgramName}' is linked to a Department.`);
                 }
 
                 // Semester Logic
-                const existingStudent = existingStudentsMap.get(regNo);
-                
-                // 1. Try parsed batch string year, then Excel column, then fallback to current year
-                const effectiveBatchYear = parsed.batchYear 
-                                           || existingStudent?.BatchYear 
-                                           || new Date().getFullYear();
+                  const existingStudent = await Student.findOne({ where: { RegisterNumber: regNo }, transaction: t });
+                  const effectiveBatchYear = derivedBatchYear || existingStudent?.BatchYear || new Date().getFullYear();
 
-                let parsedSemester = 1;
-                const providedSem = parsed.semester || normalizeSemesterNumber(semesterInput);
-                
-                if (providedSem) {
-                    parsedSemester = providedSem;
-                } else {
-                    const currentYear = new Date().getFullYear();
-                    const yearsCompleted = currentYear - effectiveBatchYear;
-                    const calculatedSemRaw = Math.max((yearsCompleted * 2) + 1, 1);
-                    parsedSemester = Math.min(calculatedSemRaw, targetProgram.TotalSemesters || 6);
-                }
+                  let parsedSemester = 1;
+                  const providedSem = normalizeSemesterNumber(semesterInput) || batchInfo.semesterNumber;
+                  
+                  if (providedSem) {
+                      parsedSemester = providedSem;
+                  } else {
+                      const currentYear = new Date().getFullYear();
+                      const yearsCompleted = currentYear - effectiveBatchYear;
+                      const calculatedSemRaw = Math.max((yearsCompleted * 2) + 1, 1);
+                      parsedSemester = Math.min(calculatedSemRaw, targetProgram?.TotalSemesters || 6);
+                  }
 
-                let targetSemester = semestersAll.find((s: any) => s.ProgramID === targetProgram.ProgramID && s.SemesterNumber === parsedSemester);
+                  let targetSemester: any = null;
 
-                if (!targetSemester) {
-                    targetSemester = await Semester.create({
-                        ProgramID: targetProgram.ProgramID,
-                        SemesterNumber: parsedSemester,
-                        SemesterName: `S${parsedSemester}`,
-                        IsActive: true
-                    }, { transaction: t });
-                    semestersAll.push(targetSemester);
-                }
+                  targetSemester = semestersAll.find((s: any) => s.ProgramID === targetProgram.ProgramID && s.SemesterNumber === parsedSemester);
 
-                if (!targetSemester) {
-                    throw new Error(`Invalid Semester resolution for Program '${targetProgram.ProgramName}'`);
-                }
+                  if (!targetSemester) {
+                      targetSemester = await Semester.create({
+                          ProgramID: targetProgram.ProgramID,
+                          SemesterNumber: parsedSemester,
+                          SemesterName: `S${parsedSemester}`,
+                          IsActive: true
+                      }, { transaction: t });
+                      semestersAll.push(targetSemester);
+                  }
+
+                  if (!targetSemester) {
+                      throw new Error(`Invalid Semester '${semesterInput || batchInput}' for Program '${targetProgram.ProgramName}'`);
+                  }
                 // 3. Find/Create User (Login)
                 // Default Password: First 4 chars of Name + @123
                 const passwordStr = (normalizedName.replace(/\s/g, '').substring(0, 4) + '@123'); // Simple logic
@@ -665,20 +808,16 @@ export const importStudents = async (req: Request, res: Response) => {
 
                 let userEmail = generatedEmail;
                 let user = existingStudent?.UserID
-                    ? existingUsersMap.get(existingStudent.UserID)
+                    ? await User.findByPk(existingStudent.UserID, { transaction: t })
                     : null;
 
                 if (!user) {
-                    const emailOwner = existingUsersMapByEmail.get(generatedEmail) || await User.findOne({ where: { Email: generatedEmail }, transaction: t });
+                    const emailOwner = await User.findOne({ where: { Email: generatedEmail }, transaction: t });
                     if (emailOwner) {
-                        existingUsersMapByEmail.set(generatedEmail, emailOwner);
-                        
-                        const linkedStudent = existingStudentsMapByUserId.get(emailOwner.UserID) || await Student.findOne({
+                        const linkedStudent = await Student.findOne({
                             where: { UserID: emailOwner.UserID },
                             transaction: t
                         });
-                        
-                        if (linkedStudent) existingStudentsMapByUserId.set(emailOwner.UserID, linkedStudent);
 
                         // Handle rare collisions (same name + department + passout year) safely.
                         if (linkedStudent && linkedStudent.RegisterNumber !== regNo) {
@@ -698,8 +837,6 @@ export const importStudents = async (req: Request, res: Response) => {
                         Role: 'student',
                         IsRootAdmin: false
                     }, { transaction: t });
-                    existingUsersMap.set(user.UserID, user);
-                    existingUsersMapByEmail.set(userEmail, user);
                 } else {
                     // Always update FullName from Excel import (fresh data takes precedence)
                     if (normalizedName) {
@@ -717,7 +854,7 @@ export const importStudents = async (req: Request, res: Response) => {
                         BatchYear: effectiveBatchYear
                     }, { transaction: t });
                 } else {
-                    const newStudent = await Student.create({
+                    await Student.create({
                         UserID: user.UserID,
                         RegisterNumber: regNo,
                         DepartmentID: targetDept.DepartmentID,
@@ -725,8 +862,6 @@ export const importStudents = async (req: Request, res: Response) => {
                         SemesterID: targetSemester.SemesterID,
                         BatchYear: effectiveBatchYear
                     }, { transaction: t });
-                    existingStudentsMap.set(regNo, newStudent);
-                    existingStudentsMapByUserId.set(user.UserID, newStudent);
                 }
 
                 successCount++;

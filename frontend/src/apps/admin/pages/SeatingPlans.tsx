@@ -653,25 +653,30 @@ const SeatingPlans: React.FC = () => {
 
     /* ═══════════ RENDER ══════════════════════════════ */
     return (
-        <div className="pb-12 bg-[#05080f] min-h-[calc(100vh-3.5rem)] font-sans text-slate-300 antialiased selection:bg-indigo-500/30 selection:text-indigo-200" style={{ backgroundImage: 'radial-gradient(circle at top right, rgba(30,58,138,0.1), transparent 40%), radial-gradient(circle at bottom left, rgba(49,46,129,0.15), transparent 40%)' }}>
+        <div className="pb-12 bg-slate-50 min-h-[calc(100vh-3.5rem)] font-sans text-slate-700 antialiased selection:bg-indigo-100 selection:text-indigo-900 relative overflow-x-hidden">
+            {/* Ambient Background Orbs */}
+            <div className="absolute top-[-10%] right-[-5%] w-[40vw] h-[40vw] rounded-full bg-indigo-50 blur-[120px] pointer-events-none" />
+            <div className="absolute bottom-[-10%] left-[-5%] w-[30vw] h-[30vw] rounded-full bg-emerald-50 blur-[120px] pointer-events-none" />
+
             {/* Header */}
-            <div className="pt-6 px-8 max-w-[1920px] mx-auto">
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div className="pt-8 px-8 max-w-[1920px] mx-auto relative z-10">
+                <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6 pb-6 border-b border-slate-200">
                     <div>
-                        <h1 className="text-2xl font-semibold text-white tracking-tight flex items-center gap-3">
-                            <span className="w-2 h-6 bg-indigo-500 rounded-full shadow-[0_0_15px_rgba(99,102,241,0.5)]"></span>
+                        <h1 className="text-[28px] font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-slate-600 tracking-tight flex items-center gap-3">
+                            <span className="w-2.5 h-8 bg-gradient-to-b from-indigo-500 to-indigo-600 rounded-full shadow-sm"></span>
                             Seating Arrangement
                         </h1>
-                        <p className="text-slate-400 text-sm font-medium mt-2 max-w-2xl leading-relaxed">
-                            Select an exam slot and departments, then assign students across halls at once.
+                        <p className="text-slate-500 text-[14px] font-medium mt-2 max-w-2xl leading-relaxed">
+                            Select an exam slot and departments, then dynamically assign students across multiple halls.
                         </p>
                     </div>
 
                     {/* ── Student Search ── */}
-                    <div className="relative w-full sm:w-[320px] shrink-0">
+                    <div className="relative w-full sm:w-[360px] shrink-0 group">
+                        <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500/20 to-purple-500/20 rounded-2xl blur opacity-0 group-hover:opacity-100 transition duration-500 group-focus-within:opacity-100" />
                         <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none group-focus-within:text-indigo-600 transition-colors">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
                             </span>
                             <input
                                 id="student-search"
@@ -679,9 +684,9 @@ const SeatingPlans: React.FC = () => {
                                 type="text"
                                 value={searchQ}
                                 onChange={e => setSearchQ(e.target.value)}
-                                placeholder={selectedDate ? 'Search by reg no. or name…' : 'Select a date to search'}
+                                placeholder={selectedDate ? 'Search student by reg no. or name…' : 'Select a date to search students'}
                                 disabled={!selectedDate}
-                                className="w-full h-9 pl-9 pr-8 bg-[#0b1221]/90 border border-[#1e293b] rounded-xl text-slate-200 text-xs placeholder:text-slate-600 focus:outline-none focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                                className="w-full h-11 pl-11 pr-10 bg-white backdrop-blur-xl border-2 border-slate-200 rounded-2xl text-slate-800 text-[14px] font-semibold placeholder:text-slate-500 font-medium focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed transition-all shadow-sm"
                             />
                             {searching && (
                                 <span className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -689,7 +694,7 @@ const SeatingPlans: React.FC = () => {
                                 </span>
                             )}
                             {!searching && searchQ && (
-                                <button onClick={() => { setSearchQ(''); setSearchResults([]); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors">
+                                <button onClick={() => { setSearchQ(''); setSearchResults([]); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-600 transition-colors">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18M6 6l12 12" /></svg>
                                 </button>
                             )}
@@ -697,18 +702,18 @@ const SeatingPlans: React.FC = () => {
 
                         {/* Search results dropdown */}
                         {searchResults.length > 0 && (
-                            <div className="absolute top-[calc(100%+6px)] left-0 right-0 z-50 bg-[#0b1221] border border-[#1e293b] rounded-xl shadow-2xl shadow-black/50 overflow-hidden max-h-72 overflow-y-auto">
+                            <div className="absolute top-[calc(100%+6px)] left-0 right-0 z-50 bg-white border border-slate-200 rounded-xl shadow-2xl shadow-indigo-500/10 overflow-hidden max-h-72 overflow-y-auto">
                                 {searchResults.map((r, i) => (
-                                    <div key={r.studentId} className={`px-3 py-2.5 flex items-center justify-between gap-3 ${i > 0 ? 'border-t border-[#1e293b]' : ''} hover:bg-[#0f172a] transition-colors`}>
+                                    <div key={r.studentId} className={`px-3 py-2.5 flex items-center justify-between gap-3 ${i > 0 ? 'border-t border-slate-100' : ''} hover:bg-slate-50 transition-colors`}>
                                         <div className="min-w-0">
-                                            <p className="text-xs font-semibold text-white truncate">{r.registerNumber}</p>
-                                            <p className="text-[10px] text-slate-400 truncate">{r.name}</p>
+                                            <p className="text-xs font-semibold text-slate-800 truncate">{r.registerNumber}</p>
+                                            <p className="text-[10px] text-slate-500 truncate">{r.name}</p>
                                         </div>
                                         {r.allocated ? (
                                             <div className="flex items-center gap-1.5 shrink-0">
-                                                <span className="px-2 py-0.5 rounded-md bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-[10px] font-bold tracking-wide">{r.hallCode}</span>
-                                                <span className="px-2 py-0.5 rounded-md bg-slate-700/60 border border-slate-600/40 text-slate-300 text-[10px] font-semibold">{r.seatLabel}</span>
-                                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border ${r.side === 'Left' ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-300' : 'bg-violet-500/10 border-violet-500/30 text-violet-300'}`}>{r.side}</span>
+                                                <span className="px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-100 text-indigo-600 text-[10px] font-bold tracking-wide">{r.hallCode}</span>
+                                                <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-600 text-[10px] font-semibold">{r.seatLabel}</span>
+                                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border ${r.side === 'Left' ? 'bg-cyan-50 border-cyan-100 text-cyan-600' : 'bg-violet-50 border-violet-100 text-violet-600'}`}>{r.side}</span>
                                             </div>
                                         ) : (
                                             <span className="text-[10px] text-slate-500 italic shrink-0">Not assigned</span>
@@ -718,7 +723,7 @@ const SeatingPlans: React.FC = () => {
                             </div>
                         )}
                         {searchQ.trim().length >= 2 && !searching && searchResults.length === 0 && selectedDate && (
-                            <div className="absolute top-[calc(100%+6px)] left-0 right-0 z-50 bg-[#0b1221] border border-[#1e293b] rounded-xl shadow-2xl px-4 py-3 text-center text-[11px] text-slate-500">
+                            <div className="absolute top-[calc(100%+6px)] left-0 right-0 z-50 bg-white border border-slate-200 rounded-xl shadow-2xl shadow-indigo-500/10 px-4 py-3 text-center text-[11px] text-slate-500">
                                 No students found for "{searchQ}"
                             </div>
                         )}
@@ -730,97 +735,93 @@ const SeatingPlans: React.FC = () => {
                 <div className="flex flex-col xl:flex-row gap-8 items-start">
 
                     {/* ═══════ LEFT PANEL ═══════ */}
-                    <div className="w-full xl:w-[380px] shrink-0 xl:sticky xl:top-2 z-10 flex flex-col gap-3">
+                    <div className="w-full xl:w-[400px] shrink-0 xl:sticky xl:top-2 z-10 flex flex-col gap-4">
 
                         {/* ── Exam Slot Section ── */}
-                        <Card className="border border-[#1e293b] shadow-2xl bg-[#0b1221]/80 backdrop-blur-xl rounded-2xl overflow-hidden">
-                            <CardHeader className="flex gap-3 bg-[#0d1627]/90 border-b border-[#1e293b] px-4 py-3 relative overflow-hidden">
-                                <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-[30px] -translate-y-1/2 translate-x-1/2"></div>
-                                <div className="p-2 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-lg relative z-10">
-                                    <ClipboardList size={16} strokeWidth={2} />
+                        <Card className="border border-slate-200 shadow-xl bg-white/80 backdrop-blur-2xl rounded-[24px] overflow-hidden">
+                            <CardHeader className="flex gap-4 bg-slate-50 border-b border-slate-100 px-5 py-4 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-full blur-[40px] -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+                                <div className="p-2.5 bg-indigo-50 border border-indigo-100 text-indigo-500 rounded-xl relative z-10 shadow-sm">
+                                    <ClipboardList size={18} strokeWidth={2} />
                                 </div>
                                 <div className="relative z-10">
-                                    <h3 className="text-[13px] font-semibold text-white tracking-wide">Exam Slot</h3>
-                                    <p className="text-[10px] text-slate-400 font-medium tracking-wider uppercase">Series · Date · Session</p>
+                                    <h3 className="text-[14px] font-bold text-slate-800 tracking-wide">Exam Slot</h3>
+                                    <p className="text-[10px] text-slate-500 font-semibold tracking-widest uppercase mt-0.5">Series · Date · Session</p>
                                 </div>
                             </CardHeader>
-                            <CardBody className="px-4 py-3 flex flex-col gap-3">
+                            <CardBody className="px-5 py-4 flex flex-col gap-4">
                                 {/* Series */}
-                                <div className="space-y-1">
-                                    <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                                        <Building2 size={10} className="text-slate-500" /> Series
-                                        <span className="text-slate-500 normal-case font-normal">(opt)</span>
+                                <div className="space-y-1.5">
+                                    <span className="text-[11px] font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2">
+                                        <Building2 size={13} className="text-slate-500" /> Series
+                                        <span className="text-slate-500 normal-case font-medium">(opt)</span>
                                     </span>
                                     <Select aria-label="Exam Series" placeholder="— All Series —" variant="bordered"
                                         selectedKeys={selectedSeries ? [selectedSeries] : []}
                                         onSelectionChange={(k) => setSelectedSeries(Array.from(k)[0] as string || '')}
                                         classNames={{
-                                            trigger: "bg-[#0d1424] border border-[#1e293b] shadow-inner rounded-lg data-[hover=true]:border-indigo-500/50 data-[hover=true]:bg-[#0f172a] transition-all h-9 text-slate-200 text-xs",
-                                            popoverContent: "bg-[#0d1424] border border-[#1e293b] text-slate-200"
+                                            trigger: "relative pr-10 bg-white border-2 border-slate-200 shadow-sm rounded-xl data-[hover=true]:border-indigo-400 data-[hover=true]:bg-indigo-50 transition-all h-11 text-slate-800 text-[14px] font-semibold",
+                                            value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-500", selectorIcon: "text-slate-500 absolute w-5 right-3", innerWrapper: "w-full text-slate-800",
+                                            popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
                                         }}>
-                                        {seriesList.map(s => <SelectItem key={String(s.ExamSeriesID)} textValue={s.SeriesName} className="data-[hover=true]:bg-indigo-500/10 data-[hover=true]:text-indigo-300">{s.SeriesName}</SelectItem>)}
+                                        {seriesList.map(s => <SelectItem key={String(s.ExamSeriesID)} textValue={s.SeriesName} className="data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700 font-semibold">{s.SeriesName}</SelectItem>)}
                                     </Select>
                                 </div>
 
                                 {/* Session */}
-                                <div className="space-y-1">
-                                    <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                                        <Calendar size={10} className="text-slate-500" /> Session
+                                <div className="space-y-1.5">
+                                    <span className="text-[11px] font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2">
+                                        <Calendar size={13} className="text-slate-500" /> Session
                                     </span>
-                                    <div className="grid grid-cols-2 gap-2">
+                                    <div className="grid grid-cols-2 gap-3 mt-1">
                                         {(['FN', 'AN'] as const).map(s => (
                                             <button key={s} onClick={() => { setSelectedSession(s); setSelectedDate(''); }}
-                                                className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all border ${selectedSession === s
+                                                className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-[14px] font-bold transition-all border-2 shadow-sm ${selectedSession === s
                                                     ? s === 'FN'
-                                                        ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30 shadow-[inset_0_0_15px_rgba(99,102,241,0.1)]'
-                                                        : 'bg-orange-500/10 text-orange-400 border-orange-500/30 shadow-[inset_0_0_15px_rgba(249,115,22,0.1)]'
-                                                    : 'bg-[#0d1424] text-slate-400 border-[#1e293b] hover:bg-[#0f172a] hover:border-slate-700 hover:text-slate-300'
+                                                        ? 'bg-indigo-50 text-indigo-700 border-indigo-300'
+                                                        : 'bg-orange-50 text-orange-700 border-orange-300'
+                                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-800'
                                                     }`}
                                             >
-                                                {s === 'FN' ? <Sun size={12} className={selectedSession === s ? "text-indigo-400" : "text-slate-500"} /> : <Moon size={12} className={selectedSession === s ? "text-orange-400" : "text-slate-500"} />}
+                                                {s === 'FN' ? <Sun size={16} className={selectedSession === s ? "text-indigo-600" : "text-slate-500"} /> : <Moon size={16} className={selectedSession === s ? "text-orange-600" : "text-slate-500"} />}
                                                 {s === 'FN' ? 'Forenoon' : 'Afternoon'}
                                             </button>
                                         ))}
                                     </div>
                                 </div>
 
-                                <div className="space-y-1">
-                                    <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest flex items-center justify-between">
-                                        <span className="flex items-center gap-1.5"><Calendar size={10} className="text-slate-500" /> Date</span>
+                                <div className="space-y-1.5">
+                                    <span className="text-[11px] font-bold text-slate-600 uppercase tracking-widest flex items-center justify-between">
+                                        <span className="flex items-center gap-2"><Calendar size={13} className="text-slate-500" /> Date</span>
                                     </span>
-                                    <div className="flex gap-2">
+                                    <div className="flex gap-2 mt-1">
                                         <div className="flex-1">
-                                            <input
-                                                id="exam-date"
-                                                name="exam-date"
-                                                type="date"
-                                                value={selectedDate}
-                                                onChange={(e) => setSelectedDate(e.target.value)}
-                                                className="w-full bg-[#0d1424] border border-[#1e293b] shadow-inner rounded-lg px-3 hover:border-indigo-500/50 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all h-9 text-slate-200 text-xs"
-                                                style={{ colorScheme: 'dark' }}
-                                            />
+                                            <Select aria-label="Exam Date" placeholder={availableDates.length > 0 ? "— Select Date —" : "— No Dates Available —"} variant="bordered"
+                                                selectedKeys={selectedDate ? new Set([selectedDate]) : new Set([])}
+                                                onSelectionChange={(k) => setSelectedDate(Array.from(k)[0] as string || '')}
+                                                classNames={{
+                                                    trigger: "relative pr-10 bg-white border-2 border-slate-200 shadow-sm rounded-xl data-[hover=true]:border-indigo-400 data-[hover=true]:bg-indigo-50 transition-all h-11 text-slate-800 text-[14px] font-semibold",
+                                                    value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-500",
+                                                    selectorIcon: "text-slate-500 absolute w-5 right-3",
+                                                    popoverContent: "bg-white border text-slate-800 border-slate-200 shadow-xl font-medium"
+                                                }}
+                                                isDisabled={availableDates.length === 0}
+                                            >
+                                                {availableDates.map(d => (
+                                                    <SelectItem key={String(d)} textValue={fmtDate(d)} className="data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700 font-semibold text-slate-800">
+                                                        {fmtDate(d)}
+                                                    </SelectItem>
+                                                ))}
+                                            </Select>
                                         </div>
                                     </div>
-
-                                    {/* Quick Add missing slot button */}
-                                    {selectedDate && !currentSlot && (
-                                        <Button
-                                            size="sm"
-                                            className="w-full mt-2 bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-500/20 shadow-none font-medium text-xs h-8"
-                                            onPress={handleQuickAddSlot}
-                                            isLoading={addingSlot}
-                                            startContent={!addingSlot && <Zap size={12} />}
-                                        >
-                                            Quick Add Slot
-                                        </Button>
-                                    )}
                                 </div>
 
                                 {selectedDate && currentSlot && (
-                                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#0d1424] border border-[#1e293b] shadow-inner">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_6px_rgba(99,102,241,0.8)] animate-pulse" />
-                                        <span className="text-[10px] font-medium text-slate-300 tracking-wide">
-                                            {fmtDate(selectedDate)} · {selectedSession === 'FN' ? 'FN' : 'AN'} · <span className="text-white font-semibold">{currentSlot.examCount} exam{currentSlot.examCount !== 1 ? 's' : ''}</span>
+                                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 shadow-sm">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_6px_rgba(99,102,241,0.4)] animate-pulse" />
+                                        <span className="text-[10px] font-medium text-slate-500 tracking-wide">
+                                            {fmtDate(selectedDate)} · {selectedSession === 'FN' ? 'FN' : 'AN'} · <span className="text-slate-800 font-semibold">{currentSlot.examCount} exam{currentSlot.examCount !== 1 ? 's' : ''}</span>
                                         </span>
                                     </div>
                                 )}
@@ -828,46 +829,48 @@ const SeatingPlans: React.FC = () => {
                         </Card>
 
                         {/* ── Assignment Setup Section ── */}
-                        <Card className="border border-[#1e293b] shadow-2xl bg-[#0b1221]/80 backdrop-blur-xl rounded-2xl overflow-hidden">
-                            <CardHeader className="flex gap-3 bg-[#0d1627]/90 border-b border-[#1e293b] px-4 py-3 relative overflow-hidden">
-                                <div className="absolute top-0 left-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-[30px] -translate-y-1/2 -translate-x-1/2"></div>
-                                <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-lg relative z-10">
-                                    <Users size={16} strokeWidth={2} />
+                        <Card className="border border-slate-200 shadow-xl bg-white/80 backdrop-blur-2xl rounded-[24px] overflow-hidden">
+                            <CardHeader className="flex gap-4 bg-slate-50 border-b border-slate-100 px-5 py-4 relative overflow-hidden">
+                                <div className="absolute top-0 left-0 w-32 h-32 bg-emerald-50 rounded-full blur-[40px] -translate-y-1/2 -translate-x-1/2 pointer-events-none"></div>
+                                <div className="p-2.5 bg-emerald-50 border border-emerald-100 text-emerald-500 rounded-xl relative z-10 shadow-sm">
+                                    <Users size={18} strokeWidth={2} />
                                 </div>
                                 <div className="relative z-10">
-                                    <h3 className="text-[13px] font-semibold text-white tracking-wide">Assignment Setup</h3>
-                                    <p className="text-[10px] text-slate-400 font-medium tracking-wider uppercase">Departments · Halls · Auto-Assign</p>
+                                    <h3 className="text-[14px] font-bold text-slate-800 tracking-wide">Assignment Setup</h3>
+                                    <p className="text-[10px] text-slate-500 font-semibold tracking-widest uppercase mt-0.5">Departments · Halls · Auto-Assign</p>
                                 </div>
                             </CardHeader>
-                            <CardBody className="px-4 py-3 flex flex-col gap-3">
+                            <CardBody className="px-5 py-4 flex flex-col gap-4">
                                 {/* Departments side-by-side */}
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="space-y-1">
-                                        <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                                            <ChevronRight size={10} className="text-slate-500" /> Left Dept
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <span className="text-[11px] font-bold text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
+                                            <ChevronRight size={13} className="text-slate-500" /> Left Dept
                                         </span>
                                         <Select aria-label="Left Department" placeholder="— None —" variant="bordered"
                                             selectedKeys={leftDept ? [leftDept] : []}
                                             onSelectionChange={(k) => setLeftDept(Array.from(k)[0] as string || '')}
                                             classNames={{
-                                                trigger: "bg-[#0d1424] border border-[#1e293b] shadow-inner rounded-lg data-[hover=true]:border-emerald-500/50 data-[hover=true]:bg-[#0f172a] transition-all h-9 text-slate-200 text-xs",
-                                                popoverContent: "bg-[#0d1424] border border-[#1e293b] text-slate-200"
+                                                trigger: "relative pr-10 bg-white border-2 border-slate-200 shadow-sm rounded-xl data-[hover=true]:border-emerald-400 data-[hover=true]:bg-emerald-50 transition-all h-11 text-slate-800 text-[14px] font-semibold",
+                                                value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-500", selectorIcon: "text-slate-500 absolute w-5 right-3", innerWrapper: "w-full text-slate-800",
+                                                popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
                                             }}>
-                                            {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={`${d.DepartmentName} (${d.studentCount})`} className="data-[hover=true]:bg-emerald-500/10 data-[hover=true]:text-emerald-300">{d.DepartmentName} ({d.studentCount})</SelectItem>)}
+                                            {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={`${d.DepartmentName} (${d.studentCount})`} className="data-[hover=true]:bg-emerald-50 data-[hover=true]:text-emerald-700 font-semibold">{d.DepartmentName} ({d.studentCount})</SelectItem>)}
                                         </Select>
                                     </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                                            <ChevronRight size={10} className="rotate-180 text-slate-500" /> Right Dept
+                                    <div className="space-y-1.5">
+                                        <span className="text-[11px] font-bold text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
+                                            <ChevronRight size={13} className="rotate-180 text-slate-500" /> Right Dept
                                         </span>
                                         <Select aria-label="Right Department" placeholder="— None —" variant="bordered"
                                             selectedKeys={rightDept ? [rightDept] : []}
                                             onSelectionChange={(k) => setRightDept(Array.from(k)[0] as string || '')}
                                             classNames={{
-                                                trigger: "bg-[#0d1424] border border-[#1e293b] shadow-inner rounded-lg data-[hover=true]:border-emerald-500/50 data-[hover=true]:bg-[#0f172a] transition-all h-9 text-slate-200 text-xs",
-                                                popoverContent: "bg-[#0d1424] border border-[#1e293b] text-slate-200"
+                                                trigger: "relative pr-10 bg-white border-2 border-slate-200 shadow-sm rounded-xl data-[hover=true]:border-emerald-400 data-[hover=true]:bg-emerald-50 transition-all h-11 text-slate-800 text-[14px] font-semibold",
+                                                value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-500", selectorIcon: "text-slate-500 absolute w-5 right-3", innerWrapper: "w-full text-slate-800",
+                                                popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
                                             }}>
-                                            {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={`${d.DepartmentName} (${d.studentCount})`} className="data-[hover=true]:bg-emerald-500/10 data-[hover=true]:text-emerald-300">{d.DepartmentName} ({d.studentCount})</SelectItem>)}
+                                            {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={`${d.DepartmentName} (${d.studentCount})`} className="data-[hover=true]:bg-emerald-50 data-[hover=true]:text-emerald-700 font-semibold">{d.DepartmentName} ({d.studentCount})</SelectItem>)}
                                         </Select>
                                     </div>
                                 </div>
@@ -876,17 +879,17 @@ const SeatingPlans: React.FC = () => {
                                 {hallSummary.length > 0 && (
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between">
-                                            <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                            <span className="text-[9px] font-semibold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
                                                 <Armchair size={10} className="text-slate-500" /> Halls
                                                 <span className="text-slate-500 normal-case font-normal tracking-normal">(empty = all)</span>
                                             </span>
-                                            <div className="flex items-center gap-0.5 bg-[#0d1424] border border-[#1e293b] rounded-md p-0.5">
-                                                <button onClick={selectAllHalls} className="text-[9px] font-medium text-slate-300 hover:text-white px-2 py-0.5 rounded hover:bg-[#1e293b] transition-colors">All</button>
-                                                <span className="text-[#1e293b]">|</span>
-                                                <button onClick={clearHallSelection} className="text-[9px] font-medium text-slate-400 hover:text-white px-2 py-0.5 rounded hover:bg-[#1e293b] transition-colors">None</button>
+                                            <div className="flex items-center gap-0.5 bg-slate-50 border border-slate-200 rounded-md p-0.5">
+                                                <button onClick={selectAllHalls} className="text-[9px] font-medium text-slate-600 hover:text-slate-800 px-2 py-0.5 rounded hover:bg-slate-200 transition-colors">All</button>
+                                                <span className="text-slate-600">|</span>
+                                                <button onClick={clearHallSelection} className="text-[9px] font-medium text-slate-500 hover:text-slate-700 px-2 py-0.5 rounded hover:bg-slate-200 transition-colors">None</button>
                                             </div>
                                         </div>
-                                        <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto dark-scrollbar pr-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#64748b #1e293b' }}>
+                                        <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto dark-scrollbar pr-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#94a3b8 #f1f5f9' }}>
                                             {hallSummary.map(h => {
                                                 const isSelected = selectedHallIds.has(h.hallId);
                                                 const pct = h.totalSeats > 0 ? Math.round((h.filledSeats / h.totalSeats) * 100) : 0;
@@ -895,51 +898,51 @@ const SeatingPlans: React.FC = () => {
                                                         className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all duration-200 border ${isSelected
                                                             ? 'bg-indigo-500 text-white border-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.3)] scale-[1.02]'
                                                             : pct >= 100
-                                                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:border-emerald-500/40 hover:bg-emerald-500/15'
+                                                                ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:border-emerald-300 hover:bg-emerald-100'
                                                                 : pct > 0
-                                                                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:border-amber-500/40 hover:bg-amber-500/15'
-                                                                    : 'bg-[#0d1424] text-slate-400 border-[#1e293b] hover:border-slate-600 hover:text-slate-300'
+                                                                    ? 'bg-amber-50 text-amber-600 border-amber-200 hover:border-amber-300 hover:bg-amber-100'
+                                                                    : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:text-slate-700'
                                                             }`}
                                                     >
                                                         {h.hallCode}
                                                         {pct > 0 && !isSelected && (
-                                                            <span className="text-[8px] font-mono opacity-80 bg-black/20 px-1 py-0.5 rounded">{pct}%</span>
+                                                            <span className="text-[8px] font-mono opacity-80 bg-slate-100 px-1 py-0.5 rounded">{pct}%</span>
                                                         )}
                                                     </button>
                                                 );
                                             })}
                                         </div>
                                         {selectedHallIds.size > 0 && (
-                                            <p className="text-[9px] text-indigo-400 font-medium tracking-wide">{selectedHallIds.size} hall{selectedHallIds.size > 1 ? 's' : ''} selected</p>
+                                            <p className="text-[9px] text-indigo-500 font-medium tracking-wide">{selectedHallIds.size} hall{selectedHallIds.size > 1 ? 's' : ''} selected</p>
                                         )}
                                     </div>
                                 )}
 
                                 {/* Assign & Shuffle Buttons */}
-                                <div className="flex flex-col gap-2 mt-2">
+                                <div className="flex flex-col gap-3 mt-3">
                                     <Button onPress={() => setShowImportModal(true)}
                                         isDisabled={!selectedDate || !currentSlot}
-                                        className="w-full font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-xl h-9 border border-emerald-500/30 transition-all data-[disabled=true]:opacity-50 text-xs shadow-none"
-                                        startContent={<FileSpreadsheet size={14} />} size="sm"
+                                        className="w-full font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-xl h-11 border-2 border-emerald-200 transition-all data-[disabled=true]:opacity-50 text-sm shadow-sm"
+                                        startContent={<FileSpreadsheet size={16} />} size="md"
                                     >
                                         Import Seating from Excel
                                     </Button>
 
-                                    <div className="flex gap-2">
+                                    <div className="flex gap-3">
                                         <Button onPress={handleBulkAssign} isLoading={assigning}
                                             isDisabled={!selectedDate || (!leftDept && !rightDept)}
-                                            className="flex-1 font-bold text-white shadow-[0_0_20px_rgba(79,70,229,0.2)] bg-indigo-600 hover:bg-indigo-500 rounded-xl h-10 border border-indigo-500/50 hover:shadow-[0_0_30px_rgba(79,70,229,0.4)] transition-all data-[disabled=true]:opacity-50 text-sm"
-                                            startContent={!assigning ? <Zap size={16} fill="currentColor" /> : undefined} size="md"
+                                            className="flex-1 font-bold text-white shadow-md bg-indigo-600 shadow-md shadow-indigo-200 hover:bg-indigo-700 rounded-xl h-11 border border-indigo-700 transition-all data-[disabled=true]:opacity-50 text-[15px]"
+                                            startContent={!assigning ? <Zap size={18} fill="currentColor" /> : undefined} size="lg"
                                         >
                                             {assigning ? 'Assigning…' : `Assign${selectedHallIds.size > 0 ? '' : ' All'}`}
                                         </Button>
 
                                         <Button onPress={handleShuffleGlobal} isLoading={shuffling}
                                             isDisabled={!selectedDate || totalFilled === 0}
-                                            className="font-bold text-white shadow-[0_0_20px_rgba(236,72,153,0.2)] bg-pink-600 hover:bg-pink-500 rounded-xl h-10 w-10 min-w-10 px-0 border border-pink-500/50 hover:shadow-[0_0_30px_rgba(236,72,153,0.4)] transition-all data-[disabled=true]:opacity-50 text-sm"
+                                            className="font-bold text-white shadow-md bg-pink-600 shadow-md shadow-pink-200 hover:bg-pink-700 rounded-xl h-11 w-11 min-w-11 px-0 border border-pink-700 transition-all data-[disabled=true]:opacity-50 text-[15px]"
                                             title="Shuffle All Assigned Students"
                                         >
-                                            {!shuffling && <Shuffle size={16} />}
+                                            {!shuffling && <Shuffle size={18} />}
                                         </Button>
                                     </div>
                                 </div>
@@ -948,82 +951,86 @@ const SeatingPlans: React.FC = () => {
 
                         {/* ── Stats Row (compact) ── */}
                         {selectedDate && hallSummary.length > 0 && (
-                            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#0b1221]/80 border border-[#1e293b] backdrop-blur-xl">
+                            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-slate-200 shadow-sm backdrop-blur-xl">
                                 <Progress aria-label="Overall seating capacity" value={totalCapacity > 0 ? (totalFilled / totalCapacity) * 100 : 0} size="sm" className="flex-1"
-                                    classNames={{ indicator: `rounded-full transition-all duration-500 ${totalFilled >= totalCapacity ? 'bg-emerald-500' : 'bg-indigo-500'} shadow-[0_0_8px_currentColor]`, track: "rounded-full bg-[#0d1424] border border-[#1e293b]" }}
+                                    classNames={{ indicator: `rounded-full transition-all duration-500 ${totalFilled >= totalCapacity ? 'bg-emerald-500' : 'bg-indigo-500'} shadow-sm`, track: "rounded-full bg-slate-100 border border-slate-200" }}
                                 />
                                 <div className="flex items-center gap-3 shrink-0">
                                     <div className="flex items-center gap-1">
-                                        <LayoutGrid size={11} className="text-slate-400" />
-                                        <span className="text-[10px] font-bold text-white">{hallSummary.length}</span>
+                                        <LayoutGrid size={11} className="text-slate-500" />
+                                        <span className="text-[10px] font-bold text-slate-700">{hallSummary.length}</span>
                                     </div>
                                     <div className="flex items-center gap-1">
-                                        <CheckCircle2 size={11} className="text-emerald-400" />
-                                        <span className="text-[10px] font-bold text-emerald-400">{totalFilled}</span>
+                                        <CheckCircle2 size={11} className="text-emerald-500" />
+                                        <span className="text-[10px] font-bold text-emerald-600">{totalFilled}</span>
                                     </div>
                                     <div className="flex items-center gap-1">
-                                        <AlertCircle size={11} className="text-amber-400" />
-                                        <span className="text-[10px] font-bold text-amber-400">{totalCapacity - totalFilled}</span>
+                                        <AlertCircle size={11} className="text-amber-500" />
+                                        <span className="text-[10px] font-bold text-amber-600">{totalCapacity - totalFilled}</span>
                                     </div>
-                                    <span className="text-[10px] font-mono font-bold text-slate-300">{totalFilled}<span className="text-slate-500">/{totalCapacity}</span></span>
+                                    <span className="text-[10px] font-mono font-bold text-slate-600">{totalFilled}<span className="text-slate-500">/{totalCapacity}</span></span>
                                 </div>
                             </div>
                         )}
                     </div>
 
                     {/* ═══════ RIGHT: HALL CARDS ═══════ */}
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 z-10">
                         {selectedDate ? (
                             loadingSummary ? (
-                                <Card className="border border-[#1e293b] shadow-2xl bg-[#0b1221]/80 backdrop-blur-xl rounded-[20px] min-h-[400px]">
+                                <Card className="border border-slate-200 shadow-xl bg-white/80 backdrop-blur-2xl rounded-[24px] min-h-[500px]">
                                     <CardBody className="py-20 text-center flex flex-col justify-center items-center">
-                                        <RefreshCw size={28} className="text-indigo-400 animate-spin mb-5 drop-shadow-[0_0_15px_rgba(99,102,241,0.5)]" />
-                                        <p className="text-slate-300 font-medium tracking-wide">Loading hall status…</p>
+                                        <div className="p-5 bg-indigo-50 border border-indigo-100 rounded-2xl mb-6 relative">
+                                            <div className="absolute inset-0 bg-indigo-100 blur-2xl rounded-full" />
+                                            <RefreshCw size={36} className="text-indigo-500 animate-[spin_2s_linear_infinite] drop-shadow-sm relative z-10" />
+                                        </div>
+                                        <p className="text-slate-800 font-extrabold text-[20px] tracking-wide mb-2 opacity-90">Loading hall status</p>
+                                        <p className="text-slate-500 font-medium text-sm">Gathering layout data from the server…</p>
                                     </CardBody>
                                 </Card>
                             ) : hallSummary.length > 0 ? (
                                 <div className="space-y-6">
-                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 border-b border-[#1e293b] pb-4 px-2">
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 border-b border-slate-200 pb-4 px-2">
                                         <div>
-                                            <h2 className="text-[17px] font-semibold text-white tracking-wide flex items-center gap-3">
-                                                <span className="w-8 h-8 rounded-lg bg-[#0d1424] border border-[#1e293b] flex items-center justify-center text-indigo-400">
+                                            <h2 className="text-[17px] font-semibold text-slate-800 tracking-wide flex items-center gap-3">
+                                                <span className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-indigo-500">
                                                     <LayoutGrid size={16} />
                                                 </span>
                                                 {fmtDate(selectedDate)} · {selectedSession === 'FN' ? 'Forenoon' : 'Afternoon'}
                                             </h2>
-                                            <p className="text-[12px] text-slate-400 font-medium mt-2 pl-[44px]">{hallSummary.length} halls · {totalFilled}/{totalCapacity} seats filled</p>
+                                            <p className="text-[12px] text-slate-500 font-medium mt-2 pl-[44px]">{hallSummary.length} halls · {totalFilled}/{totalCapacity} seats filled</p>
                                         </div>
                                         <div className="flex items-center gap-3">
                                             {/* Per-hall seating download */}
                                             <Button size="sm" isDisabled={seatingDownloading || totalFilled === 0}
                                                 onPress={downloadSeatingExcel}
-                                                className="font-semibold text-[11px] bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl h-9 px-4 transition-all"
-                                                startContent={seatingDownloading ? <RefreshCw size={13} className="animate-spin" /> : <FileSpreadsheet size={13} />}>
+                                                className="font-semibold text-[12px] bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border-2 border-emerald-200 rounded-xl h-10 px-4 transition-all"
+                                                startContent={seatingDownloading ? <RefreshCw size={14} className="animate-spin" /> : <FileSpreadsheet size={15} />}>
                                                 {seatingDownloading ? 'Generating…' : 'Download Seating'}
                                             </Button>
 
                                             {/* Global download dropdown */}
-                                            <Dropdown placement="bottom-end">
+                                            <Dropdown placement="bottom-end" classNames={{ content: "bg-white border text-slate-800 border-slate-200 shadow-2xl rounded-xl p-1" }}>
                                                 <DropdownTrigger>
                                                     <Button size="sm" isDisabled={globalDownloading || totalFilled === 0}
-                                                        className="font-semibold text-[11px] bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl h-9 px-4 transition-all"
-                                                        startContent={globalDownloading ? <RefreshCw size={13} className="animate-spin" /> : <FileDown size={13} />}>
+                                                        className="font-semibold text-[12px] bg-indigo-100 hover:bg-indigo-200 text-indigo-800 border-2 border-indigo-200 rounded-xl h-10 px-4 transition-all"
+                                                        startContent={globalDownloading ? <RefreshCw size={14} className="animate-spin" /> : <FileDown size={15} />}>
                                                         {globalDownloading ? 'Generating…' : 'Download Report'}
                                                     </Button>
                                                 </DropdownTrigger>
                                                 <DropdownMenu aria-label="Download format"
-                                                    classNames={{ base: 'bg-[#0f1729] border border-[#1e293b] rounded-xl shadow-2xl min-w-[180px]', list: 'gap-1 p-1' }}
+                                                    classNames={{ base: 'bg-white border border-slate-200 rounded-xl shadow-2xl min-w-[180px]', list: 'gap-1 p-1' }}
                                                     onAction={(key) => { if (key === 'pdf') downloadGlobalPDF(); else if (key === 'excel') downloadGlobalExcel(); }}>
                                                     <DropdownItem key="pdf"
-                                                        startContent={<FileDown size={14} className="text-rose-400" />}
-                                                        className="text-slate-300 data-[hover]:bg-[#1e293b] data-[hover]:text-white rounded-lg"
+                                                        startContent={<FileDown size={14} className="text-rose-500" />}
+                                                        className="text-slate-700 data-[hover=true]:bg-slate-100 data-[hover=true]:text-slate-900 rounded-lg"
                                                         textValue="Download PDF">
                                                         <span className="text-[12px] font-semibold">Download PDF</span>
                                                         <p className="text-[10px] text-slate-500">Consolidated A4 document</p>
                                                     </DropdownItem>
                                                     <DropdownItem key="excel"
-                                                        startContent={<FileSpreadsheet size={14} className="text-emerald-400" />}
-                                                        className="text-slate-300 data-[hover]:bg-[#1e293b] data-[hover]:text-white rounded-lg"
+                                                        startContent={<FileSpreadsheet size={14} className="text-emerald-600" />}
+                                                        className="text-slate-700 data-[hover=true]:bg-slate-100 data-[hover=true]:text-slate-900 rounded-lg"
                                                         textValue="Download Excel">
                                                         <span className="text-[12px] font-semibold">Download Excel</span>
                                                         <p className="text-[10px] text-slate-500">Spreadsheet format</p>
@@ -1031,15 +1038,15 @@ const SeatingPlans: React.FC = () => {
                                                 </DropdownMenu>
                                             </Dropdown>
 
-                                            <div className="flex items-center gap-3 px-4 py-2 rounded-xl bg-[#0d1424] border border-[#1e293b]">
+                                            <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 shadow-sm">
                                                 <div className="text-right">
-                                                    <span className={`text-[15px] font-bold block ${totalFilled >= totalCapacity && totalCapacity > 0 ? 'text-emerald-400' : totalFilled > 0 ? 'text-amber-400' : 'text-slate-300'}`}>
+                                                    <span className={`text-[15px] font-bold block ${totalFilled >= totalCapacity && totalCapacity > 0 ? 'text-emerald-600' : totalFilled > 0 ? 'text-amber-600' : 'text-slate-600'}`}>
                                                         {totalCapacity > 0 ? Math.round((totalFilled / totalCapacity) * 100) : 0}%
                                                     </span>
                                                     <span className="text-[9px] font-semibold text-slate-500 uppercase tracking-widest">filled</span>
                                                 </div>
                                                 <Progress aria-label="Hall seating fill level" value={totalCapacity > 0 ? (totalFilled / totalCapacity) * 100 : 0} size="sm" className="w-20"
-                                                    classNames={{ indicator: `rounded-full transition-all duration-500 ${totalFilled >= totalCapacity ? 'bg-emerald-500' : totalFilled > 0 ? 'bg-amber-400' : 'bg-slate-400'}`, track: "bg-[#1e293b]" }}
+                                                    classNames={{ indicator: `rounded-full transition-all duration-500 ${totalFilled >= totalCapacity ? 'bg-emerald-500' : totalFilled > 0 ? 'bg-amber-400' : 'bg-slate-400'}`, track: "bg-slate-200" }}
                                                 />
                                             </div>
                                         </div>
@@ -1052,51 +1059,51 @@ const SeatingPlans: React.FC = () => {
                                             const hasData = pct > 0;
                                             return (
                                                 <div key={h.hallId}
-                                                    className={`relative rounded-[20px] border p-6 group transition-all duration-300 hover:-translate-y-1 ${isFull ? 'bg-[#0d1424]/80 border-emerald-500/30 hover:border-emerald-400/80 shadow-[0_4px_20px_rgba(16,185,129,0.05)] hover:shadow-[0_8px_30px_rgba(16,185,129,0.15)]'
-                                                        : hasData ? 'bg-[#0d1424]/80 border-amber-500/30 hover:border-amber-400/80 shadow-[0_4px_20px_rgba(245,158,11,0.05)] hover:shadow-[0_8px_30px_rgba(245,158,11,0.15)]'
-                                                            : 'bg-[#0b1221]/80 border-[#1e293b] hover:border-indigo-500/50 hover:bg-[#0d1424] hover:shadow-[0_8px_30px_rgba(99,102,241,0.1)]'}`}
+                                                    className={`relative rounded-[20px] border p-6 group transition-all duration-300 hover:-translate-y-1 ${isFull ? 'bg-white/80 border-emerald-200 hover:border-emerald-300 shadow-sm hover:shadow-[0_8px_30px_rgba(16,185,129,0.15)]'
+                                                        : hasData ? 'bg-white/80 border-amber-200 hover:border-amber-300 shadow-sm hover:shadow-[0_8px_30px_rgba(245,158,11,0.15)]'
+                                                            : 'bg-white border-slate-200 hover:border-indigo-300 hover:bg-slate-50 shadow-sm hover:shadow-lg hover:shadow-indigo-500/10'}`}
                                                 >
                                                     {/* Glowing top lip */}
-                                                    <div className={`absolute top-0 left-0 right-0 h-[2px] opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-t-[20px] ${isFull ? 'bg-emerald-400 shadow-[0_0_10px_#34d399]' : hasData ? 'bg-amber-400 shadow-[0_0_10px_#fbbf24]' : 'bg-indigo-400 shadow-[0_0_10px_#818cf8]'}`}></div>
+                                                    <div className={`absolute top-0 left-0 right-0 h-[3px] opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-t-[20px] ${isFull ? 'bg-emerald-400' : hasData ? 'bg-amber-400' : 'bg-indigo-400'}`}></div>
 
                                                     {/* Three-dot menu */}
                                                     <div className="absolute top-4 right-4 z-10">
-                                                        <Dropdown placement="bottom-end">
+                                                        <Dropdown placement="bottom-end" classNames={{ content: "bg-white border text-slate-800 border-slate-200 shadow-2xl rounded-xl p-1" }}>
                                                             <DropdownTrigger>
-                                                                <button onClick={(e) => e.stopPropagation()} className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:text-white hover:bg-[#1e293b] transition-all opacity-0 group-hover:opacity-100">
-                                                                    <MoreVertical size={16} />
+                                                                <button onClick={(e) => e.stopPropagation()} className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-all opacity-0 group-hover:opacity-100">
+                                                                    <MoreVertical size={18} />
                                                                 </button>
                                                             </DropdownTrigger>
                                                             <DropdownMenu aria-label="Hall actions"
-                                                                classNames={{ base: 'bg-[#0f1729] border border-[#1e293b] rounded-xl shadow-2xl min-w-[180px]', list: 'gap-0' }}
+                                                                classNames={{ base: 'bg-white border border-slate-200 rounded-xl shadow-2xl min-w-[180px]', list: 'gap-0' }}
                                                                 onAction={(key) => {
                                                                     if (key === 'edit') { setEditHall(h); setEditCapacity(String(h.capacity)); }
                                                                     else if (key === 'clear') { handleCardClearHall(h); }
                                                                     else if (key === 'disable') { handleDisableHall(h); }
                                                                 }}>
-                                                                <DropdownItem key="edit" startContent={<Pencil size={14} className="text-blue-400" />}
-                                                                    className="text-slate-300 data-[hover]:bg-[#1e293b] data-[hover]:text-white rounded-lg" textValue="Edit Capacity">
-                                                                    <span className="text-[12px] font-medium">Edit Capacity</span>
+                                                                <DropdownItem key="edit" startContent={<Pencil size={15} className="text-blue-500" />}
+                                                                    className="text-slate-700 data-[hover=true]:bg-slate-100 data-[hover=true]:text-slate-900 rounded-lg" textValue="Edit Capacity">
+                                                                    <span className="text-[13px] font-semibold">Edit Capacity</span>
                                                                 </DropdownItem>
-                                                                <DropdownItem key="clear" startContent={<XCircle size={14} className="text-amber-400" />}
-                                                                    className="text-slate-300 data-[hover]:bg-[#1e293b] data-[hover]:text-white rounded-lg" textValue="Clear Allocations"
+                                                                <DropdownItem key="clear" startContent={<XCircle size={15} className="text-amber-500" />}
+                                                                    className="text-slate-700 data-[hover=true]:bg-slate-100 data-[hover=true]:text-slate-900 rounded-lg" textValue="Clear Allocations"
                                                                     isDisabled={!hasData}>
-                                                                    <span className="text-[12px] font-medium">Clear Allocations</span>
+                                                                    <span className="text-[13px] font-semibold">Clear Allocations</span>
                                                                 </DropdownItem>
-                                                                <DropdownItem key="disable" startContent={<Power size={14} className="text-rose-400" />}
-                                                                    className="text-rose-400 data-[hover]:bg-rose-500/10 data-[hover]:text-rose-300 rounded-lg" textValue="Disable Hall">
-                                                                    <span className="text-[12px] font-medium">Disable Hall</span>
+                                                                <DropdownItem key="disable" startContent={<Power size={15} className="text-rose-500" />}
+                                                                    className="text-rose-600 data-[hover=true]:bg-rose-50 data-[hover=true]:text-rose-700 rounded-lg py-2 mt-1 border-t border-slate-100" textValue="Disable Hall">
+                                                                    <span className="text-[13px] font-semibold">Disable Hall</span>
                                                                 </DropdownItem>
                                                             </DropdownMenu>
                                                         </Dropdown>
                                                     </div>
 
                                                     <div className="flex items-center gap-4 mb-5 cursor-pointer" onClick={() => openHallDetail(h)}>
-                                                        <div className={`w-12 h-12 rounded-[14px] flex items-center justify-center transition-colors border ${isFull ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : hasData ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-[#1e293b]/50 border-transparent text-slate-500 group-hover:bg-indigo-500/10 group-hover:text-indigo-400 group-hover:border-indigo-500/20'}`}>
+                                                        <div className={`w-12 h-12 rounded-[14px] flex items-center justify-center transition-colors border ${isFull ? 'bg-emerald-50 border-emerald-500/20 text-emerald-600' : hasData ? 'bg-amber-50 border-amber-500/20 text-amber-600' : 'bg-slate-100 border-transparent text-slate-500 group-hover:bg-indigo-50 group-hover:text-indigo-600 group-hover:border-indigo-200'}`}>
                                                             <Armchair size={22} strokeWidth={2} />
                                                         </div>
                                                         <div>
-                                                            <h4 className="text-[17px] font-bold text-white tracking-wide">{h.hallCode}</h4>
+                                                            <h4 className="text-[17px] font-bold text-slate-800 tracking-wide">{h.hallCode}</h4>
                                                             <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wider mt-0.5">Capacity {h.capacity}</p>
                                                         </div>
                                                     </div>
@@ -1104,16 +1111,16 @@ const SeatingPlans: React.FC = () => {
                                                     <div className="cursor-pointer" onClick={() => openHallDetail(h)}>
                                                         <Progress aria-label="Room occupancy percentage" value={pct} size="sm"
                                                             color={isFull ? 'success' : hasData ? 'warning' : 'default'}
-                                                            classNames={{ indicator: "rounded-full transition-all duration-500", track: "rounded-full bg-[#1e293b]" }}
+                                                            classNames={{ indicator: "rounded-full transition-all duration-500", track: "rounded-full bg-slate-200" }}
                                                             className="mb-4"
                                                         />
 
                                                         <div className="flex items-center justify-between">
                                                             <div>
-                                                                <span className={`text-[15px] font-bold ${isFull ? 'text-emerald-400' : hasData ? 'text-amber-400' : 'text-slate-300'}`}>{h.filledSeats}</span>
+                                                                <span className={`text-[15px] font-bold ${isFull ? 'text-emerald-600' : hasData ? 'text-amber-600' : 'text-slate-600'}`}>{h.filledSeats}</span>
                                                                 <span className="text-[11px] text-slate-500 font-medium"> / {h.totalSeats} seats</span>
                                                             </div>
-                                                            <span className="text-[10px] font-bold text-slate-600 group-hover:text-white transition-colors flex items-center gap-1.5 uppercase tracking-widest bg-[#1e293b]/50 group-hover:bg-indigo-500/20 px-2.5 py-1.5 rounded-lg border border-transparent group-hover:border-indigo-500/30">
+                                                            <span className="text-[10px] font-bold text-slate-600 group-hover:text-slate-800 transition-colors flex items-center gap-1.5 uppercase tracking-widest bg-slate-100 group-hover:bg-indigo-100 px-2.5 py-1.5 rounded-lg border border-transparent group-hover:border-indigo-200">
                                                                 <Eye size={12} /> View
                                                             </span>
                                                         </div>
@@ -1124,25 +1131,44 @@ const SeatingPlans: React.FC = () => {
                                     </div>
                                 </div>
                             ) : (
-                                <Card className="border border-[#1e293b] shadow-2xl bg-[#0b1221]/80 backdrop-blur-xl rounded-[20px] min-h-[400px]">
-                                    <CardBody className="py-24 text-center flex flex-col items-center justify-center">
-                                        <div className="p-5 bg-amber-500/10 border border-amber-500/20 rounded-2xl mb-6">
-                                            <AlertCircle size={36} className="text-amber-400 drop-shadow-[0_0_15px_rgba(251,191,36,0.5)]" />
+                                <Card className="border border-slate-200 shadow-[0_24px_80px_rgba(0,0,0,0.05)] bg-white/50 backdrop-blur-2xl rounded-[24px] min-h-[500px] overflow-hidden relative group">
+                                    <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdHRoIGQ9Ik0gNDAgMCBMIDAgMCAwIDQwIiBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoMjU1LDI1NSwyNTUsMC4wNCkiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-60" />
+                                    <div className="absolute top-[20%] left-[20%] w-72 h-72 bg-amber-50 blur-[100px] rounded-full point-events-none group-hover:bg-amber-500/20 transition-colors duration-1000" />
+                                    <div className="absolute bottom-[20%] right-[20%] w-72 h-72 bg-red-50 blur-[100px] rounded-full point-events-none group-hover:bg-red-500/20 transition-colors duration-1000" />
+
+                                    <CardBody className="py-24 text-center flex flex-col items-center justify-center relative z-10">
+                                        <div className="relative mb-6">
+                                            <div className="absolute inset-0 bg-amber-500/20 blur-xl rounded-full" />
+                                            <div className="p-6 bg-white border border-slate-200 rounded-[28px] shadow-2xl backdrop-blur-xl relative z-10 transform group-hover:scale-105 transition-transform duration-500">
+                                                <AlertCircle size={48} className="text-amber-600 drop-shadow-sm" strokeWidth={1.5} />
+                                            </div>
                                         </div>
-                                        <p className="text-white font-semibold text-[17px] tracking-wide">No Halls Found</p>
-                                        <p className="text-slate-400 text-sm mt-2 font-medium">No active halls are available.</p>
+                                        <h3 className="text-slate-800 font-extrabold text-[24px] tracking-tight mb-3">No Halls Configured</h3>
+                                        <p className="text-slate-500 text-[15px] font-medium max-w-[400px]">There are currently no active halls available for assignments. Add or enable halls in the system first.</p>
                                     </CardBody>
                                 </Card>
                             )
                         ) : (
-                            <Card className="border border-[#1e293b] shadow-2xl bg-[#0b1221]/80 backdrop-blur-xl rounded-[20px] min-h-[500px]">
-                                <CardBody className="py-24 text-center flex flex-col items-center justify-center">
-                                    <div className="p-6 bg-[#0d1424] border border-[#1e293b] rounded-3xl mb-8 group hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all">
-                                        <Calendar size={48} className="text-slate-600 group-hover:text-indigo-400 transition-colors" strokeWidth={1.5} />
+                            <Card className="border border-slate-200 shadow-[0_24px_80px_rgba(0,0,0,0.05)] bg-white/50 backdrop-blur-2xl rounded-[24px] min-h-[600px] overflow-hidden relative group">
+                                {/* Decorative background grid */}
+                                <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdHRoIGQ9Ik0gNDAgMCBMIDAgMCAwIDQwIiBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoMjU1LDI1NSwyNTUsMC4wNCkiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-60" />
+                                
+                                {/* Ambient interactive glowing orbs */}
+                                <div className="absolute top-[20%] left-[20%] w-72 h-72 bg-indigo-50 blur-[100px] rounded-full pointer-events-none group-hover:bg-indigo-100 transition-colors duration-1000" />
+                                <div className="absolute bottom-[20%] right-[20%] w-72 h-72 bg-emerald-50 blur-[100px] rounded-full pointer-events-none group-hover:bg-emerald-100 transition-colors duration-1000" />
+
+                                <CardBody className="py-24 text-center flex flex-col items-center justify-center relative z-10 w-full h-full">
+                                    <div className="relative mb-8">
+                                        <div className="absolute inset-0 bg-indigo-100 blur-2xl rounded-full" />
+                                        <div className="p-7 bg-white border border-slate-200 rounded-[32px] shadow-sm backdrop-blur-xl relative z-10 transform group-hover:scale-105 transition-transform duration-500 hover:border-indigo-300">
+                                            <Calendar size={64} className="text-indigo-600/90 hover:text-indigo-500 drop-shadow-sm transition-colors" strokeWidth={1.2} />
+                                        </div>
                                     </div>
-                                    <p className="text-[19px] font-bold text-slate-200 tracking-wide">Select an Exam Date</p>
-                                    <p className="text-slate-400 text-[13px] mt-3 max-w-[320px] mx-auto leading-relaxed font-medium">
-                                        Choose a series, session, and date from the panel to see hall availability and assign students.
+                                    <h2 className="text-[32px] font-extrabold text-slate-800 tracking-tight mb-5">
+                                        Ready to Build Layouts?
+                                    </h2>
+                                    <p className="text-slate-600 text-[16px] max-w-[440px] mx-auto leading-relaxed font-medium mt-4">
+                                        Select a specific <span className="text-indigo-600 font-semibold px-1">exam date</span> and <span className="text-indigo-600 font-semibold px-1">session</span> from the side panel to view available halls and begin student assignments.
                                     </p>
                                 </CardBody>
                             </Card>
@@ -1155,28 +1181,28 @@ const SeatingPlans: React.FC = () => {
             <Modal isOpen={!!detailHall} onOpenChange={(open) => { if (!open) { setDetailHall(null); loadSummary(); } }} backdrop="blur" size="full" scrollBehavior="inside"
                 classNames={{
                     backdrop: "bg-black/60 backdrop-blur-xl",
-                    base: "max-w-[96vw] max-h-[94vh] m-auto rounded-2xl bg-[#171c28] border border-[#253040] shadow-[0_24px_80px_rgba(0,0,0,0.6)] overflow-hidden flex flex-col",
+                    base: "max-w-[96vw] max-h-[94vh] m-auto rounded-2xl bg-white border border-slate-200 shadow-[0_24px_80px_rgba(0,0,0,0.6)] overflow-hidden flex flex-col",
                     body: "p-0 overflow-y-auto flex-1"
                 }}>
                 <ModalContent>
                     {() => (<>
                         {/* ── Refined Header ── */}
-                        <ModalHeader className="shrink-0 flex justify-between items-center px-8 py-4 border-b border-[#253040] sticky top-0 z-50" style={{ background: 'linear-gradient(180deg, #1d2335 0%, #171c28 100%)' }}>
+                        <ModalHeader className="shrink-0 flex justify-between items-center px-8 py-4 border-b border-slate-200 sticky top-0 z-50" style={{ background: 'linear-gradient(180deg, #1d2335 0%, #171c28 100%)' }}>
                             <div className="flex items-center gap-5">
                                 <div className="relative w-12 h-12 flex items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg shadow-amber-900/25">
-                                    <Armchair size={20} className="text-white" />
-                                    <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-[#171c28] border border-[#253040] rounded-md text-[8px] font-extrabold text-amber-400 tracking-widest whitespace-nowrap">
+                                    <Armchair size={20} className="text-slate-800" />
+                                    <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-white border border-slate-200 rounded-md text-[8px] font-extrabold text-amber-600 tracking-widest whitespace-nowrap">
                                         {detailHall?.hallCode}
                                     </div>
                                 </div>
                                 <div className="ml-1">
-                                    <h2 className="text-[17px] font-bold text-white tracking-tight">Seating Layout</h2>
+                                    <h2 className="text-[17px] font-bold text-slate-800 tracking-tight">Seating Layout</h2>
                                     <div className="flex items-center gap-2 mt-1.5">
-                                        <span className="text-[10px] font-medium text-slate-400">{selectedDate && fmtDate(selectedDate)}</span>
+                                        <span className="text-[10px] font-medium text-slate-500">{selectedDate && fmtDate(selectedDate)}</span>
                                         <span className="w-1 h-1 rounded-full bg-slate-600"></span>
-                                        <span className="text-[10px] font-medium text-slate-400">{selectedSession === 'FN' ? 'Forenoon' : 'Afternoon'}</span>
+                                        <span className="text-[10px] font-medium text-slate-500">{selectedSession === 'FN' ? 'Forenoon' : 'Afternoon'}</span>
                                         <span className="w-1 h-1 rounded-full bg-slate-600"></span>
-                                        <span className="text-[10px] font-bold text-emerald-400">{detailFilled}<span className="text-slate-500 font-normal"> / {detailTotalSeats}</span></span>
+                                        <span className="text-[10px] font-bold text-emerald-600">{detailFilled}<span className="text-slate-500 font-normal"> / {detailTotalSeats}</span></span>
                                     </div>
                                 </div>
                             </div>
@@ -1185,7 +1211,7 @@ const SeatingPlans: React.FC = () => {
                                     <Button size="sm" variant="flat" onPress={handleSaveHall}
                                         className="font-semibold text-[11px] text-teal-300 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/25 rounded-lg h-8 px-4 transition-all" startContent={<Save size={13} />}>Save</Button>
                                     <Button size="sm" variant="flat" onPress={() => setShowPrintModal(true)}
-                                        className="font-semibold text-[11px] text-slate-300 bg-slate-500/10 hover:bg-slate-500/15 border border-slate-500/20 rounded-lg h-8 px-4 transition-all" startContent={<Printer size={13} />}>Print</Button>
+                                        className="font-semibold text-[11px] text-slate-600 bg-slate-500/10 hover:bg-slate-500/15 border border-slate-500/20 rounded-lg h-8 px-4 transition-all" startContent={<Printer size={13} />}>Print</Button>
                                     <Button size="sm" variant="flat" onPress={handleClearHall}
                                         className="font-semibold text-[11px] text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-lg h-8 px-4 transition-all" startContent={<Trash2 size={13} />}>Clear</Button>
                                 </>)}
@@ -1203,7 +1229,7 @@ const SeatingPlans: React.FC = () => {
                         }}>
                             {detailLoading ? (
                                 <div className="py-32 text-center">
-                                    <RefreshCw size={28} className="text-amber-400 animate-spin mx-auto mb-4" />
+                                    <RefreshCw size={28} className="text-amber-600 animate-spin mx-auto mb-4" />
                                     <p className="text-slate-500 font-medium text-sm">Loading layout…</p>
                                 </div>
                             ) : (
@@ -1217,7 +1243,7 @@ const SeatingPlans: React.FC = () => {
                                                 return [...depts].map(d => {
                                                     const st = getDeptStyle(d);
                                                     return (
-                                                        <div key={d} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-bold tracking-wide bg-[#1d2335] border border-[#253040]"
+                                                        <div key={d} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-bold tracking-wide bg-white border border-slate-200"
                                                             style={{ color: st.text }}>
                                                             <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: st.text, boxShadow: `0 0 8px ${st.text}50` }} />
                                                             {d}
@@ -1242,8 +1268,8 @@ const SeatingPlans: React.FC = () => {
                                             return (
                                                 <div key={`${bench.rowLabel}-${bench.benchNumber}`} className="group">
                                                     {/* ─── DESK TOP (the shared desk/table) ─── */}
-                                                    <div className="bg-gradient-to-r from-[#2a3245] to-[#252d40] rounded-t-xl px-3 py-1.5 flex items-center justify-between border border-b-0 border-[#344058] group-hover:from-[#303a50] group-hover:to-[#2a3348] transition-all">
-                                                        <span className="text-[9px] font-extrabold text-slate-400 group-hover:text-slate-200 tracking-[0.2em] uppercase transition-colors">
+                                                    <div className="bg-gradient-to-r from-[#2a3245] to-[#252d40] rounded-t-xl px-3 py-1.5 flex items-center justify-between border border-b-0 border-slate-200 group-hover:from-[#303a50] group-hover:to-[#2a3348] transition-all">
+                                                        <span className="text-[9px] font-extrabold text-slate-500 group-hover:text-slate-700 tracking-[0.2em] uppercase transition-colors">
                                                             {bench.rowLabel}{bench.benchNumber}
                                                         </span>
                                                         <span className="text-[8px] text-slate-500 font-mono">
@@ -1254,7 +1280,7 @@ const SeatingPlans: React.FC = () => {
                                                     {/* ─── TWO SEATS (chairs at the desk) ─── */}
                                                     <div className="grid grid-cols-2 gap-[2px]">
                                                         {/* Left Seat */}
-                                                        <Tooltip content={ld ? 'Disabled' : la ? `${la.registerNumber} — ${la.studentName}` : 'Empty'} delay={200} classNames={{ content: 'bg-[#1d2335] text-white text-[11px] font-medium rounded-lg border border-[#344058] shadow-2xl' }}>
+                                                        <Tooltip content={ld ? 'Disabled' : la ? `${la.registerNumber} — ${la.studentName}` : 'Empty'} delay={200} classNames={{ content: 'bg-white text-slate-800 text-[11px] font-medium rounded-lg border border-slate-200 shadow-2xl' }}>
                                                             <div className={`relative rounded-bl-xl overflow-hidden cursor-default transition-all duration-200 ${ld ? '' : 'hover:brightness-110'}`}
                                                                 style={{
                                                                     background: ld
@@ -1269,7 +1295,7 @@ const SeatingPlans: React.FC = () => {
                                                                         : la ? (
                                                                             <div className="flex flex-col items-center w-full gap-1.5">
                                                                                 <span className="text-[13px] font-bold font-mono tracking-wide w-full leading-none" style={{ color: lSt!.text }}>{la.registerNumber}</span>
-                                                                                <span className="text-[9px] text-slate-400 font-medium w-full truncate leading-none">{la.studentName}</span>
+                                                                                <span className="text-[9px] text-slate-500 font-medium w-full truncate leading-none">{la.studentName}</span>
                                                                             </div>
                                                                         )
                                                                             : (
@@ -1283,7 +1309,7 @@ const SeatingPlans: React.FC = () => {
                                                         </Tooltip>
 
                                                         {/* Right Seat */}
-                                                        <Tooltip content={rd ? 'Disabled' : ra ? `${ra.registerNumber} — ${ra.studentName}` : 'Empty'} delay={200} classNames={{ content: 'bg-[#1d2335] text-white text-[11px] font-medium rounded-lg border border-[#344058] shadow-2xl' }}>
+                                                        <Tooltip content={rd ? 'Disabled' : ra ? `${ra.registerNumber} — ${ra.studentName}` : 'Empty'} delay={200} classNames={{ content: 'bg-white text-slate-800 text-[11px] font-medium rounded-lg border border-slate-200 shadow-2xl' }}>
                                                             <div className={`relative rounded-br-xl overflow-hidden cursor-default transition-all duration-200 ${rd ? '' : 'hover:brightness-110'}`}
                                                                 style={{
                                                                     background: rd
@@ -1298,7 +1324,7 @@ const SeatingPlans: React.FC = () => {
                                                                         : ra ? (
                                                                             <div className="flex flex-col items-center w-full gap-1.5">
                                                                                 <span className="text-[13px] font-bold font-mono tracking-wide w-full leading-none" style={{ color: rSt!.text }}>{ra.registerNumber}</span>
-                                                                                <span className="text-[9px] text-slate-400 font-medium w-full truncate leading-none">{ra.studentName}</span>
+                                                                                <span className="text-[9px] text-slate-500 font-medium w-full truncate leading-none">{ra.studentName}</span>
                                                                             </div>
                                                                         )
                                                                             : (
@@ -1323,28 +1349,28 @@ const SeatingPlans: React.FC = () => {
             </Modal>
             {/* ═══ Edit Capacity Modal ═══ */}
             <Modal isOpen={!!editHall} onOpenChange={(open) => { if (!open) setEditHall(null); }} backdrop="blur" size="md">
-                <ModalContent className="bg-[#151923] border border-[#2d3348] rounded-[24px] shadow-2xl">
-                    <ModalHeader className="border-b border-[#2d3348]/60 px-6 py-5">
+                <ModalContent className="bg-white border border-slate-200 rounded-[24px] shadow-2xl">
+                    <ModalHeader className="border-b border-slate-200/60 px-6 py-5">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 border border-blue-500/20">
                                 <Pencil size={18} />
                             </div>
                             <div>
-                                <h3 className="text-[17px] font-bold text-white tracking-wide">Edit Capacity</h3>
-                                <p className="text-[12px] text-slate-400 font-medium">{editHall?.hallCode}</p>
+                                <h3 className="text-[17px] font-bold text-slate-800 tracking-wide">Edit Capacity</h3>
+                                <p className="text-[12px] text-slate-500 font-medium">{editHall?.hallCode}</p>
                             </div>
                         </div>
                     </ModalHeader>
                     <ModalBody className="p-6">
-                        <label className="text-[13px] font-semibold text-slate-300 mb-2 block">New Room Capacity</label>
+                        <label className="text-[13px] font-semibold text-slate-600 mb-2 block">New Room Capacity</label>
                         <Input
                             type="number"
                             value={editCapacity}
                             onValueChange={setEditCapacity}
                             placeholder="e.g. 60"
                             classNames={{
-                                inputWrapper: "bg-[#1a1f2e] border-2 border-[#2d3348] hover:border-blue-500/50 focus-within:border-blue-500! rounded-xl h-14 shadow-inner",
-                                input: "text-white text-[15px] font-bold"
+                                inputWrapper: "bg-white border-2 border-slate-200 hover:border-blue-500/50 focus-within:border-blue-500! rounded-xl h-14 shadow-inner",
+                                input: "text-slate-800 text-[15px] font-bold"
                             }}
                             startContent={<Users size={18} className="text-slate-500 mr-2" />}
                             autoFocus
@@ -1354,9 +1380,9 @@ const SeatingPlans: React.FC = () => {
                             Updating the capacity will not affect the current physical bench layout. It only limits how many students can be auto-assigned.
                         </p>
                     </ModalBody>
-                    <ModalFooter className="border-t border-[#2d3348]/60 px-6 py-4">
-                        <Button variant="light" onPress={() => setEditHall(null)} className="text-slate-400 hover:text-white font-medium text-[13px]">Cancel</Button>
-                        <Button onPress={handleUpdateCapacity} className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-[13px] shadow-lg shadow-blue-600/20">Save Capacity</Button>
+                    <ModalFooter className="border-t border-slate-200/60 px-6 py-4">
+                        <Button variant="light" onPress={() => setEditHall(null)} className="text-slate-500 hover:text-slate-800 font-medium text-[13px]">Cancel</Button>
+                        <Button onPress={handleUpdateCapacity} className="bg-blue-600 hover:bg-blue-500 text-slate-800 font-bold text-[13px] shadow-lg shadow-blue-600/20">Save Capacity</Button>
                     </ModalFooter>
                 </ModalContent>
             </Modal>
@@ -1372,19 +1398,19 @@ const SeatingPlans: React.FC = () => {
                                 <div id="seat-sync-print-area" style={{ fontFamily: "'Georgia', 'Times New Roman', serif", background: '#fff', color: '#111' }}>
 
                                     {/* Letterhead */}
-                                    <div style={{ borderBottom: '3px double #1e293b', padding: '28px 40px 20px', display: 'flex', alignItems: 'center', gap: '20px' }}>
-                                        <div style={{ width: 56, height: 56, borderRadius: 12, background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <div style={{ borderBottom: '3px double #e2e8f0', padding: '28px 40px 20px', display: 'flex', alignItems: 'center', gap: '20px' }}>
+                                        <div style={{ width: 56, height: 56, borderRadius: 12, background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                 <rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
                                             </svg>
                                         </div>
                                         <div style={{ flex: 1 }}>
-                                            <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.04em', color: '#0f172a', lineHeight: 1.2 }}>SEAT-SYNC EXAMINATION CONTROL</div>
+                                            <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.04em', color: '#ffffff', lineHeight: 1.2 }}>SEAT-SYNC EXAMINATION CONTROL</div>
                                             <div style={{ fontSize: 11, color: '#64748b', marginTop: 3, letterSpacing: '0.12em', textTransform: 'uppercase', fontFamily: "'Arial', sans-serif" }}>Official Seating Arrangement Document</div>
                                         </div>
                                         <div style={{ textAlign: 'right', fontFamily: "'Arial', sans-serif" }}>
                                             <div style={{ fontSize: 10, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Document No.</div>
-                                            <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', letterSpacing: '0.06em' }}>{detailHall?.hallCode}-{selectedDate?.replace(/-/g, '')}-{selectedSession}</div>
+                                            <div style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0', letterSpacing: '0.06em' }}>{detailHall?.hallCode}-{selectedDate?.replace(/-/g, '')}-{selectedSession}</div>
                                         </div>
                                     </div>
 
@@ -1398,7 +1424,7 @@ const SeatingPlans: React.FC = () => {
                                         ].map(item => (
                                             <div key={item.label} style={{ padding: '0 12px', borderRight: '1px solid #e2e8f0' }}>
                                                 <div style={{ fontSize: 9, fontFamily: "'Arial', sans-serif", fontWeight: 700, color: '#94a3b8', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 }}>{item.label}</div>
-                                                <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', fontFamily: "'Arial', sans-serif" }}>{item.value}</div>
+                                                <div style={{ fontSize: 13, fontWeight: 700, color: '#ffffff', fontFamily: "'Arial', sans-serif" }}>{item.value}</div>
                                             </div>
                                         ))}
                                     </div>
@@ -1407,7 +1433,7 @@ const SeatingPlans: React.FC = () => {
                                     <div style={{ padding: '24px 40px' }}>
                                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: "'Arial', sans-serif" }}>
                                             <thead>
-                                                <tr style={{ background: '#0f172a' }}>
+                                                <tr style={{ background: '#ffffff' }}>
                                                     {[
                                                         { label: 'BENCH', w: '7%' },
                                                         { label: 'LEFT — REG. NO.', w: '14%' },
@@ -1434,13 +1460,13 @@ const SeatingPlans: React.FC = () => {
                                                             <td style={{ ...cellStyle, fontWeight: 700, color: '#475569', letterSpacing: '0.05em', textAlign: 'center', background: idx % 2 === 0 ? '#f1f5f9' : '#e9eef5' }}>
                                                                 {b.rowLabel}{b.benchNumber}
                                                             </td>
-                                                            <td style={{ ...cellStyle, fontFamily: "'Courier New', monospace", fontWeight: 600, color: la ? '#0f172a' : '#cbd5e1', fontSize: 11 }}>{la?.registerNumber ?? '—'}</td>
-                                                            <td style={{ ...cellStyle, color: la ? '#1e293b' : '#cbd5e1' }}>{la?.studentName ?? '—'}</td>
+                                                            <td style={{ ...cellStyle, fontFamily: "'Courier New', monospace", fontWeight: 600, color: la ? '#ffffff' : '#cbd5e1', fontSize: 11 }}>{la?.registerNumber ?? '—'}</td>
+                                                            <td style={{ ...cellStyle, color: la ? '#e2e8f0' : '#cbd5e1' }}>{la?.studentName ?? '—'}</td>
                                                             <td style={{ ...cellStyle, textAlign: 'center' }}>
                                                                 {la ? <span style={{ background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 4, padding: '2px 6px', fontSize: 10, fontWeight: 700 }}>{la.deptCode}</span> : <span style={{ color: '#cbd5e1' }}>—</span>}
                                                             </td>
-                                                            <td style={{ ...cellStyle, fontFamily: "'Courier New', monospace", fontWeight: 600, color: ra ? '#0f172a' : '#cbd5e1', fontSize: 11 }}>{ra?.registerNumber ?? '—'}</td>
-                                                            <td style={{ ...cellStyle, color: ra ? '#1e293b' : '#cbd5e1' }}>{ra?.studentName ?? '—'}</td>
+                                                            <td style={{ ...cellStyle, fontFamily: "'Courier New', monospace", fontWeight: 600, color: ra ? '#ffffff' : '#cbd5e1', fontSize: 11 }}>{ra?.registerNumber ?? '—'}</td>
+                                                            <td style={{ ...cellStyle, color: ra ? '#e2e8f0' : '#cbd5e1' }}>{ra?.studentName ?? '—'}</td>
                                                             <td style={{ ...cellStyle, textAlign: 'center' }}>
                                                                 {ra ? <span style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: 4, padding: '2px 6px', fontSize: 10, fontWeight: 700 }}>{ra.deptCode}</span> : <span style={{ color: '#cbd5e1' }}>—</span>}
                                                             </td>
@@ -1472,12 +1498,12 @@ const SeatingPlans: React.FC = () => {
                                 <Button variant="light" className="font-semibold text-slate-500" onPress={onClose}>Close</Button>
                                 <div className="flex gap-3">
                                     <Button onPress={downloadExcel}
-                                        className="font-bold bg-emerald-600 hover:bg-emerald-500 text-white px-5 rounded-xl shadow-lg border border-emerald-500/40"
+                                        className="font-bold bg-emerald-600 hover:bg-emerald-500 text-slate-800 px-5 rounded-xl shadow-lg border border-emerald-500/40"
                                         startContent={<FileDown size={14} />}>
                                         Download Excel
                                     </Button>
                                     <Button onPress={downloadPDF}
-                                        className="font-bold bg-[#0f172a] hover:bg-[#1e293b] text-white px-5 rounded-xl shadow-lg border border-slate-600/40"
+                                        className="font-bold bg-white hover:bg-slate-200 text-slate-800 px-5 rounded-xl shadow-lg border border-slate-200"
                                         startContent={<Printer size={14} />}>
                                         Download PDF
                                     </Button>
@@ -1489,49 +1515,49 @@ const SeatingPlans: React.FC = () => {
             </Modal>
 
             {/* ═══ Global Shuffle Confirmation Modal ═══ */}
-            <Modal isOpen={showShuffleConfirm} onOpenChange={setShowShuffleConfirm} placement="center" backdrop="blur" classNames={{ base: "bg-[#0b1221] border border-[#1e293b] shadow-2xl overflow-hidden", backdrop: "bg-[#05080f]/80 backdrop-blur-md" }}>
+            <Modal isOpen={showShuffleConfirm} onOpenChange={setShowShuffleConfirm} placement="center" backdrop="blur" classNames={{ base: "bg-white border border-[#e2e8f0] shadow-2xl overflow-hidden", backdrop: "bg-slate-800/20 backdrop-blur-md" }}>
                 <ModalContent>
                     {(onClose) => (
                         <>
                             <div className="absolute top-0 right-0 w-32 h-32 bg-pink-500/10 rounded-full blur-[40px] -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-                            <ModalHeader className="flex flex-col gap-1 border-b border-[#1e293b] px-6 py-5 relative z-10">
+                            <ModalHeader className="flex flex-col gap-1 border-b border-[#e2e8f0] px-6 py-5 relative z-10">
                                 <div className="p-3 bg-pink-500/10 border border-pink-500/20 text-pink-400 rounded-xl inline-flex w-fit mb-3">
                                     <Shuffle size={20} strokeWidth={2.5} />
                                 </div>
-                                <h3 className="text-xl font-bold text-white tracking-tight">
+                                <h3 className="text-xl font-bold text-slate-800 tracking-tight">
                                     Global Reshuffle
                                 </h3>
                             </ModalHeader>
                             <ModalBody className="px-6 py-6 pb-8">
                                 <div className="space-y-4">
-                                    <p className="text-[14px] text-slate-300 leading-relaxed font-medium">
-                                        You are about to randomly scramble all currently assigned students across the entire campus for <br /><span className="text-white font-bold bg-[#1e293b] px-2 py-0.5 rounded shadow-inner inline-block mt-1">Date: {selectedDate ? fmtDate(selectedDate) : ''} · Session: {selectedSession}</span>
+                                    <p className="text-[14px] text-slate-600 leading-relaxed font-medium">
+                                        You are about to randomly scramble all currently assigned students across the entire campus for <br /><span className="text-slate-800 font-bold bg-slate-200 px-2 py-0.5 rounded shadow-inner inline-block mt-1">Date: {selectedDate ? fmtDate(selectedDate) : ''} · Session: {selectedSession}</span>
                                     </p>
 
-                                    <div className="bg-[#0f172a] border border-[#1e293b] rounded-xl p-4 space-y-3 shadow-inner">
-                                        <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest border-b border-[#1e293b] pb-2">What happens next:</h4>
-                                        <ul className="text-[13px] text-slate-300 space-y-3 font-medium">
+                                    <div className="bg-white border border-[#e2e8f0] rounded-xl p-4 space-y-3 shadow-inner">
+                                        <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest border-b border-[#e2e8f0] pb-2">What happens next:</h4>
+                                        <ul className="text-[13px] text-slate-600 space-y-3 font-medium">
                                             <li className="flex items-start gap-2.5">
-                                                <CheckCircle2 size={16} className="text-emerald-400 shrink-0 mt-0.5 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
+                                                <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5 " />
                                                 Left-side students will be completely randomized across all available Left seats.
                                             </li>
                                             <li className="flex items-start gap-2.5">
-                                                <CheckCircle2 size={16} className="text-emerald-400 shrink-0 mt-0.5 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
+                                                <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5 " />
                                                 Right-side students will be completely randomized across all available Right seats.
                                             </li>
                                             <li className="flex items-start gap-2.5">
-                                                <AlertCircle size={16} className="text-amber-400 shrink-0 mt-0.5 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]" />
+                                                <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5 " />
                                                 <span className="text-amber-200/90">This action cannot be undone.</span>
                                             </li>
                                         </ul>
                                     </div>
                                 </div>
                             </ModalBody>
-                            <ModalFooter className="border-t border-[#1e293b] px-6 py-4 bg-[#0d1627]/50 relative z-10 flex justify-end gap-3">
-                                <Button className="font-semibold text-slate-300 hover:text-white" variant="light" onPress={onClose}>
+                            <ModalFooter className="border-t border-[#e2e8f0] px-6 py-4 bg-slate-50 relative z-10 flex justify-end gap-3">
+                                <Button className="font-semibold text-slate-600 hover:text-slate-800" variant="light" onPress={onClose}>
                                     Cancel
                                 </Button>
-                                <Button className="font-bold text-white shadow-[0_0_20px_rgba(236,72,153,0.2)] bg-pink-600 hover:bg-pink-500 border border-pink-500/50" onPress={executeShuffleGlobal} startContent={<Shuffle size={16} />}>
+                                <Button className="font-bold text-slate-800 shadow-[0_0_20px_rgba(236,72,153,0.2)] bg-pink-600 hover:bg-pink-500 border border-pink-500/50" onPress={executeShuffleGlobal} startContent={<Shuffle size={16} />}>
                                     Yes, Shuffle All
                                 </Button>
                             </ModalFooter>

@@ -5,6 +5,7 @@ import { Student } from '../models/Student.js';
 import { User } from '../models/User.js';
 import { Department } from '../models/Department.js';
 import { Program } from '../models/Program.js';
+import { normalizeProgram, parseBatchString, mapProgramToDepartment, resolveOrCreateProgram, resolveOrCreateDepartment } from './academicNormalizer.service.js';
 import { Semester } from '../models/Semester.js';
 import bcrypt from 'bcrypt';
 import { emailService } from './email.service.js';
@@ -92,7 +93,11 @@ export class BulkStudentImportService {
                     }
                     
                     const departmentCode = row.DepartmentCode?.trim();
-                    const programName = row.ProgramName?.trim();
+                    const rowProgramRaw = row.ProgramName?.trim() || '';
+                    const parsed = parseBatchString(rowProgramRaw);
+                    const programName = normalizeProgram(parsed.programCode);
+                    const departmentName = mapProgramToDepartment(programName);
+  
                     const semesterNumber = row.SemesterNumber?.trim();
                     const email = row.Email?.trim();
 
@@ -138,6 +143,19 @@ export class BulkStudentImportService {
 
                     // Get Program
                     let progId = this.programCache.get(programName.toLowerCase());
+                    if (!progId) {
+                        const program = await resolveOrCreateProgram(programName, transaction);
+                        progId = program.ProgramID;
+                        this.programCache.set(programName.toLowerCase(), progId);
+                    }
+
+                    deptId = this.departmentCache.get(programName.toLowerCase());
+                    if (!deptId) {
+                        const department = await resolveOrCreateDepartment(programName, departmentName, transaction);
+                        deptId = department.DepartmentID;
+                        this.departmentCache.set(programName.toLowerCase(), deptId);
+                    }
+  
                     if (!progId) {
                         const program = await Program.findOne({
                             where: { ProgramName: programName },

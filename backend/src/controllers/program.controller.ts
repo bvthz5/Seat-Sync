@@ -9,26 +9,46 @@ import * as XLSX from 'xlsx';
 // ──────────────────────────────────────────────────────────────
 export const getPrograms = async (req: Request, res: Response) => {
     try {
-        const { departmentId } = req.query;
+        const { departmentId, page, limit } = req.query;
+        const pageNum = parseInt(page as string) || 1;
+        const limitNum = parseInt(limit as string) || 10;
+        const isPaginated = page !== undefined && limit !== undefined;
+
+        let includeCondition: any = {
+            model: Department,
+            as: "Departments",
+            attributes: ["DepartmentID", "DepartmentCode", "DepartmentName"],
+            through: { attributes: [] }
+        };
+
+        if (departmentId) {
+            includeCondition.where = { DepartmentID: parseInt(departmentId as string) };
+            includeCondition.required = true;
+        }
+
+        if (isPaginated && limitNum > 0) {
+            const offset = (pageNum - 1) * limitNum;
+            const { count, rows: programs } = await Program.findAndCountAll({
+                include: [includeCondition],
+                order: [["ProgramName", "ASC"]],
+                limit: limitNum,
+                offset,
+                distinct: true
+            });
+
+            return res.json({
+                data: programs,
+                total: count,
+                page: pageNum,
+                limit: limitNum,
+                totalPages: Math.ceil(count / limitNum)
+            });
+        }
 
         let programs = await Program.findAll({
-            include: [
-                {
-                    model: Department,
-                    as: "Departments",
-                    attributes: ["DepartmentID", "DepartmentCode", "DepartmentName"],
-                    through: { attributes: [] } // exclude bridge columns
-                }
-            ],
+            include: [includeCondition],
             order: [["ProgramName", "ASC"]]
         });
-
-        // Filter by departmentId if requested
-        if (departmentId) {
-            programs = programs.filter((p: any) =>
-                p.Departments?.some((d: any) => d.DepartmentID === parseInt(departmentId as string))
-            );
-        }
 
         res.json(programs);
     } catch (error: any) {

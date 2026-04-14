@@ -15,7 +15,7 @@ import {
 import { toast } from 'react-hot-toast';
 import api from '../../../services/api';
 import StudentImportModal from '../components/students/StudentImportModal';
-import SeatingBatchImportModal from '../components/students/SeatingBatchImportModal';
+
 import { AddStudentModal } from '../components/students/AddStudentModal';
 import { EditStudentModal } from '../components/students/EditStudentModal';
 import StudentQuickViewDrawer from '../components/students/StudentQuickViewDrawer';
@@ -87,7 +87,7 @@ const Students: React.FC = () => {
 
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [isImportOpen, setIsImportOpen] = useState(false);
-    const [isSeatingImportOpen, setIsSeatingImportOpen] = useState(false);
+
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
     const [isDeleteAllOpen, setIsDeleteAllOpen] = useState(false);
@@ -233,9 +233,9 @@ const Students: React.FC = () => {
                     calcSem = Math.min(Math.max(calcSem, 1), maxSems);
                     
                     let calculatedStatus: 'Active' | 'Incomplete' | 'Disabled' | 'Pending' = 'Pending';
-if (s.User?.IsActive === false) calculatedStatus = 'Disabled';
-else if (s.User?.IsActive !== false) {
-    if (s.User?.FullName && s.RegisterNumber && s.ProgramID) {
+                    if ((s.User?.isActive as any) === false) calculatedStatus = 'Disabled';
+                    else if ((s.User?.isActive as any) !== false) {
+                        if (s.User?.FullName && s.RegisterNumber && s.ProgramID) {
                             calculatedStatus = 'Active';
                         } else {
                             calculatedStatus = 'Incomplete';
@@ -514,7 +514,7 @@ else if (s.User?.IsActive !== false) {
             await api.post('/students/sync-semesters');
             toast.success("Semesters synced successfully", { id: "sync-sems" });
             fetchStudents();
-        } catch (error) {
+        } catch (error: any) {
             toast.error(error?.response?.data?.message || "Failed to sync", { id: "sync-sems" });
         }
     }}
@@ -523,15 +523,7 @@ else if (s.User?.IsActive !== false) {
 >
     Sync Semesters
 </Button>
-                    <Button
-                        className="bg-indigo-50 text-indigo-700 font-medium border border-indigo-100 hover:bg-indigo-100"
-                        startContent={<FileSpreadsheet size={16} />}
-                        onPress={() => setIsSeatingImportOpen(true)}
-                        radius="lg"
-                        title="Import student seating assignments for exam dates"
-                    >
-                        Seating Batch Import
-                    </Button>
+
                     <Button 
                         className="bg-blue-600 text-white font-semibold shadow-lg shadow-blue-600/20 hover:shadow-xl hover:scale-[1.02] transition-all"
                         startContent={<Plus size={16} />}
@@ -782,9 +774,11 @@ else if (s.User?.IsActive !== false) {
                 >
                     <TableHeader>
                         <TableColumn>STUDENT</TableColumn>
-                        <TableColumn>ACADEMIC</TableColumn>
-                        <TableColumn>STATUS</TableColumn>
+                        <TableColumn>PROGRAM</TableColumn>
+                        <TableColumn>DEPARTMENT</TableColumn>
                         <TableColumn>BATCH</TableColumn>
+                        <TableColumn>SEMESTER</TableColumn>
+                        <TableColumn>STATUS</TableColumn>
                         <TableColumn align="center">ACTIONS</TableColumn>
                     </TableHeader>
                     <TableBody
@@ -825,39 +819,40 @@ else if (s.User?.IsActive !== false) {
                                     </div>
                                 </TableCell>
                                 
-                                {/* Academic */}
+                                {/* Program */}
                                 <TableCell>
                                     <div className="flex flex-col gap-2 w-full h-full py-2" onClick={(e) => { e.stopPropagation(); viewStudent(item); }}>
                                         <p className="text-sm text-slate-800 font-semibold truncate max-w-[200px] leading-none" title={item.Program?.ProgramName}>{item.Program?.ProgramName || 'Unknown Program'}</p>
-                                        <div className="flex items-center gap-2">
-                                            <Chip size="sm" variant="flat" className="bg-slate-100 text-slate-600 text-[10px] h-5 px-1.5 font-bold border border-slate-200 rounded-md">
-                                                {item.Department?.DepartmentCode || 'N/A'}
-                                            </Chip>
-                                        </div>
                                     </div>
                                 </TableCell>
 
-                                {/* Status */}
+                                {/* Department */}
                                 <TableCell>
-                                    <div className="w-full h-full py-2" onClick={(e) => { e.stopPropagation(); viewStudent(item); }}>
-                                        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-semibold w-fit ${getStatusColor(item.Status)}`}>
-                                            <div className={`w-1.5 h-1.5 rounded-full ${getStatusDot(item.Status)}`}></div>
-                                            {item.Status}
-                                        </div>
+                                    <div className="flex w-full h-full py-2" onClick={(e) => { e.stopPropagation(); viewStudent(item); }}>
+                                        <Chip size="sm" variant="flat" className="bg-slate-100 text-slate-600 text-[10px] h-5 px-1.5 font-bold border border-slate-200 rounded-md" title={item.Department?.DepartmentName}>
+                                            {item.Department?.DepartmentCode || item.Department?.DepartmentName || 'N/A'}
+                                        </Chip>
                                     </div>
                                 </TableCell>
 
-                                {/* Batch & Progress */}
+                                {/* Batch */}
                                 <TableCell>
-                                    <div className="flex flex-col gap-2 min-w-[140px] w-full h-full py-2" onClick={(e) => { e.stopPropagation(); viewStudent(item); }}>
+                                    <div className="flex flex-col gap-2 min-w-[100px] w-full h-full py-2" onClick={(e) => { e.stopPropagation(); viewStudent(item); }}>
                                         <div className="space-y-1">
-                                            <p className="text-sm font-bold text-slate-800">Batch {item.BatchYear || 'N/A'}</p>
+                                            <p className="text-sm font-bold text-slate-800">{item.BatchYear ? `Batch ${item.BatchYear}` : 'N/A'}</p>
                                             {item.Program?.DurationYears && item.BatchYear && (
                                                 <p className="text-xs text-slate-500">
                                                     Passout: <span className="font-semibold text-green-600">{item.BatchYear + item.Program.DurationYears}</span>
                                                 </p>
                                             )}
                                         </div>
+                                    </div>
+                                </TableCell>
+
+                                {/* Semester */}
+                                <TableCell>
+                                    <div className="flex flex-col gap-2 min-w-[100px] w-full h-full py-2" onClick={(e) => { e.stopPropagation(); viewStudent(item); }}>
+                                        <p className="text-sm font-bold text-slate-800">Sem {item.CalculatedSemester || 'N/A'}</p>
                                         <div className="flex items-center gap-2">
                                             <Progress 
                                                 size="sm" 
@@ -873,6 +868,16 @@ else if (s.User?.IsActive !== false) {
                                             <span className="text-[10px] font-semibold text-slate-600 min-w-[28px] text-right">
                                                 {Math.round(((item.CalculatedSemester || 0) / (item.MaxSemesters || 1)) * 100)}%
                                             </span>
+                                        </div>
+                                    </div>
+                                </TableCell>
+
+                                {/* Status */}
+                                <TableCell>
+                                    <div className="w-full h-full py-2" onClick={(e) => { e.stopPropagation(); viewStudent(item); }}>
+                                        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-semibold w-fit ${getStatusColor(item.Status)}`}>
+                                            <div className={`w-1.5 h-1.5 rounded-full ${getStatusDot(item.Status)}`}></div>
+                                            {item.Status}
                                         </div>
                                     </div>
                                 </TableCell>
@@ -940,7 +945,7 @@ else if (s.User?.IsActive !== false) {
             {/* Original Modals */}
             <AddStudentModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onSuccess={() => fetchStudents()} />
             <StudentImportModal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} onSuccess={() => fetchStudents()} />
-            <SeatingBatchImportModal isOpen={isSeatingImportOpen} onClose={() => setIsSeatingImportOpen(false)} onSuccess={() => fetchStudents()} />
+
             {selectedStudent && (
                 <EditStudentModal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} onSuccess={() => fetchStudents()} student={selectedStudent} />
             )}

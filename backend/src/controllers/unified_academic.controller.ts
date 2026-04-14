@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import * as XLSX from 'xlsx';
 import { Department, Program, Subject, Semester } from "../models/index.js";
+import { normalizeProgram, parseBatchString, mapProgramToDepartment, resolveOrCreateProgram, resolveOrCreateDepartment } from "../services/academicNormalizer.service.js";
 import { sequelize } from "../config/database.js";
 
 interface UnifiedRow {
@@ -48,7 +49,10 @@ export const importUnifiedAcademic = async (req: Request, res: Response) => {
             // Step 1: Extract and create unique departments
             const departmentMap = new Map<string, { code: string, name: string }>();
             data.forEach(row => {
-                const deptCode = row.DepartmentCode || row['Department Code'] || row['Department'] || row['Dept Code'] || row['Branch'];
+                const progCodeRaw = row.ProgramCode || row['Program Code'] || row['Program'] || row['PCode'];
+                const parsed = parseBatchString(progCodeRaw || '');
+                const progCode = normalizeProgram(parsed.programCode);
+                const deptCode = progCode; // Guaranteed synced
                 const deptName = row.DepartmentName || row['Department Name'] || row['Dept Name'];
 
                 if (deptCode && deptName) {
@@ -75,9 +79,11 @@ export const importUnifiedAcademic = async (req: Request, res: Response) => {
             // Step 2: Extract and create unique programs
             const programMap = new Map<string, { code: string, name: string, deptCode: string }>();
             data.forEach(row => {
-                const progCode = row.ProgramCode || row['Program Code'] || row['Program'] || row['PCode'];
+                const progCodeRaw = row.ProgramCode || row['Program Code'] || row['Program'] || row['PCode'];
+                const parsed = parseBatchString(progCodeRaw || '');
+                const progCode = normalizeProgram(parsed.programCode);
                 const progName = row.ProgramName || row['Program Name'] || row['Degree'];
-                const deptCode = row.DepartmentCode || row['Department Code'] || row['Department'] || row['Dept Code'] || row['Branch'];
+                const deptCode = progCode; // Guaranteed synced
 
                 if (progCode && progName && deptCode) {
                     programMap.set(String(progCode).trim(), {
@@ -128,11 +134,14 @@ export const importUnifiedAcademic = async (req: Request, res: Response) => {
 
             // Step 3: Create subjects
             const subjectMap = new Map<string, { code: string, name: string, programCode: string, deptCode: string }>();
+            let createdSubjectsCount = 0;
             data.forEach(row => {
                 const subjCode = row.SubjectCode || row['Subject Code'] || row['Course Code'] || row['Code'] || row['Subject'];
                 const subjName = row.SubjectName || row['Subject Name'] || row['Course Name'] || row['Name'];
-                const progCode = row.ProgramCode || row['Program Code'] || row['Program'] || row['PCode'];
-                const deptCode = row.DepartmentCode || row['Department Code'] || row['Department'] || row['Dept Code'] || row['Branch'];
+                const progCodeRaw = row.ProgramCode || row['Program Code'] || row['Program'] || row['PCode'];
+                const parsed = parseBatchString(progCodeRaw || '');
+                const progCode = normalizeProgram(parsed.programCode);
+                const deptCode = progCode; // Guaranteed synced
 
                 if (subjCode && subjName && progCode && deptCode) {
                     const key = `${String(subjCode).trim()}_${String(progCode).trim()}`;
@@ -144,8 +153,6 @@ export const importUnifiedAcademic = async (req: Request, res: Response) => {
                     });
                 }
             });
-
-            let createdSubjectsCount = 0;
             for (const [key, subj] of subjectMap) {
                 const departmentID = createdDepartments.get(subj.deptCode);
 

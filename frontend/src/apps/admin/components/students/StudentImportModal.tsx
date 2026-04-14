@@ -14,6 +14,7 @@ interface StudentImportModalProps {
 const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose, onSuccess }) => {
     const [file, setFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
+    const [progress, setProgress] = useState(0);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [uploadStats, setUploadStats] = useState<{ success: number; errors: number; active: boolean }>({
         success: 0,
@@ -25,6 +26,7 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
         if (e.target.files && e.target.files[0]) {
             setFile(e.target.files[0]);
             setUploadStats({ ...uploadStats, active: false });
+            setProgress(0);
         }
     };
 
@@ -32,6 +34,7 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
         if (!isOpen) {
             setFile(null);
             setUploadStats({ success: 0, errors: 0, active: false });
+            setProgress(0);
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
     }, [isOpen]);
@@ -40,8 +43,20 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
         if (!file) return;
 
         setIsUploading(true);
+        setProgress(10);
+        
+        // Progress bar simulation
+        const progressInterval = setInterval(() => {
+            setProgress(prev => {
+                const step = Math.random() * 15;
+                return prev + step < 90 ? prev + step : prev;
+            });
+        }, 500);
+
         try {
             const response = await academicService.importStudents(file);
+            clearInterval(progressInterval);
+            setProgress(100);
             setUploadStats({
                 success: response.successCount,
                 errors: response.errorCount,
@@ -62,6 +77,8 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
                 if (fileInputRef.current) fileInputRef.current.value = '';
             }
         } catch (error: any) {
+            clearInterval(progressInterval);
+            setProgress(0);
             console.error(error);
             const errorMessage = error.response?.data?.message || "Failed to upload file. Please check the format.";
             toast.error(errorMessage);
@@ -158,6 +175,24 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
                                 </div>
                             )}
                         </div>
+
+                        {/* Progress Bar */}
+                        {isUploading && (
+                            <div className="mt-4 p-4 bg-white rounded-xl shadow-sm border border-gray-100">
+                                <div className="flex justify-between mb-2">
+                                    <span className="text-sm font-semibold text-gray-700">Uploading and Parsing...</span>
+                                    <span className="text-sm font-bold text-blue-600">{Math.round(progress)}%</span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-2.5">
+                                    <motion.div 
+                                        className="bg-blue-600 h-2.5 rounded-full" 
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${progress}%` }}
+                                        transition={{ ease: "easeOut", duration: 0.5 }}
+                                    ></motion.div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Formatting Guide */}
                         <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">

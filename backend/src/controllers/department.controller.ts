@@ -10,6 +10,35 @@ import * as XLSX from 'xlsx';
 
 export const getDepartments = async (req: Request, res: Response) => {
     try {
+        const { page, limit } = req.query;
+        const pageNum = parseInt(page as string) || 1;
+        const limitNum = parseInt(limit as string) || 10;
+        const isPaginated = page !== undefined && limit !== undefined;
+
+        if (isPaginated && limitNum > 0) {
+            const offset = (pageNum - 1) * limitNum;
+            const { count, rows: departments } = await Department.findAndCountAll({
+                order: [["DepartmentName", "ASC"]],
+                limit: limitNum,
+                offset
+            });
+
+            const progCounts = await ProgramDepartment.findAll({
+                attributes: ["DepartmentID", [sequelize.fn("COUNT", sequelize.col("ProgramID")), "programCount"]],
+                group: ["DepartmentID"],
+                raw: true
+            }) as any[];
+            const countMap = new Map(progCounts.map((r: any) => [r.DepartmentID, parseInt(r.programCount || "0")]));
+            const result = departments.map((d: any) => ({ ...d.toJSON(), programCount: countMap.get(d.DepartmentID) || 0 }));
+            return res.json({
+                data: result,
+                total: count,
+                page: pageNum,
+                limit: limitNum,
+                totalPages: Math.ceil(count / limitNum)
+            });
+        }
+
         const departments = await Department.findAll({ order: [["DepartmentName", "ASC"]] });
         // Attach program count via bridge table
         const progCounts = await ProgramDepartment.findAll({
