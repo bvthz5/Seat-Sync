@@ -14,7 +14,6 @@ import {
 import { toast } from 'react-hot-toast';
 import { SeatingService } from '../services/seatingService';
 import api from '../../../services/api';
-import SeatingImportModal from '../components/seating/SeatingImportModal';
 
 
 /* ─── Types ───────────────────────────────────────── */
@@ -26,6 +25,12 @@ interface Assignment { seatId: number; studentId: number; studentName: string; r
 interface Series { ExamSeriesID: number; SeriesName: string; IsActive: boolean; }
 interface ExamDateSlot { examDate: string; session: string; examCount: number; }
 interface HallSummary { hallId: number; hallCode: string; capacity: number; totalSeats: number; filledSeats: number; }
+interface AssignFeedback {
+    assigned: number;
+    unassigned: number;
+    hallsUsed: number;
+    hallIds: number[];
+}
 
 /* ─── High-End Dark NASA Theme Colors ───────────────────────────── */
 const DARK_DEPT_COLORS: Record<string, { bg: string; text: string; border: string }> = {
@@ -69,15 +74,18 @@ const SeatingPlans: React.FC = () => {
     const [selectedSeries, setSelectedSeries] = useState<string>('');
     const [selectedDate, setSelectedDate] = useState<string>('');
     const [selectedSession, setSelectedSession] = useState<'FN' | 'AN'>('FN');
-    const [leftDept, setLeftDept] = useState<string>('');
-    const [rightDept, setRightDept] = useState<string>('');
+    const [assignmentMode, setAssignmentMode] = useState<'single' | 'two-alternate' | 'auto-balanced'>('auto-balanced');
+    const [primaryDept, setPrimaryDept] = useState<string>('');
+    const [secondaryDept, setSecondaryDept] = useState<string>('');
+    const [avoidSameDeptBench, setAvoidSameDeptBench] = useState(true);
     const [selectedHallIds, setSelectedHallIds] = useState<Set<number>>(new Set());
+    const [hallSearch, setHallSearch] = useState('');
+    const [hallFilter, setHallFilter] = useState<'all' | 'empty' | 'partial' | 'full'>('all');
 
     const [assigning, setAssigning] = useState(false);
     const [shuffling, setShuffling] = useState(false);
     const [loadingSummary, setLoadingSummary] = useState(false);
     const [addingSlot, setAddingSlot] = useState(false);
-    const [showImportModal, setShowImportModal] = useState(false);
 
     /* student search */
     const [searchQ, setSearchQ] = useState('');
@@ -94,6 +102,7 @@ const SeatingPlans: React.FC = () => {
     const [showShuffleConfirm, setShowShuffleConfirm] = useState(false);
     const [globalDownloading, setGlobalDownloading] = useState(false);
     const [seatingDownloading, setSeatingDownloading] = useState(false);
+    const [assignmentFeedback, setAssignmentFeedback] = useState<AssignFeedback | null>(null);
 
     /* edit capacity modal */
     const [editHall, setEditHall] = useState<HallSummary | null>(null);
@@ -106,6 +115,37 @@ const SeatingPlans: React.FC = () => {
     const totalCapacity = hallSummary.reduce((s, h) => s + h.totalSeats, 0);
     const detailFilled = Object.keys(detailAssignments).length;
     const detailHallObj = halls.find(h => h.RoomID === detailHall?.hallId);
+    const activeDepartments = departments.filter(d => Number(d.studentCount) > 0);
+    const zeroDepartments = departments.filter(d => Number(d.studentCount) <= 0);
+    const primaryDeptObj = departments.find(d => String(d.DepartmentID) === primaryDept);
+    const secondaryDeptObj = departments.find(d => String(d.DepartmentID) === secondaryDept);
+    const eligibleStudentCount = (() => {
+        const primaryCount = Number(primaryDeptObj?.studentCount || 0);
+        const secondaryCount = Number(secondaryDeptObj?.studentCount || 0);
+        if (assignmentMode === 'auto-balanced') {
+            return activeDepartments.reduce((sum, d) => sum + Number(d.studentCount || 0), 0);
+        }
+        if (assignmentMode === 'single') return primaryCount;
+        if (!primaryDept || !secondaryDept) return 0;
+        if (primaryDept === secondaryDept) return primaryCount;
+        return primaryCount + secondaryCount;
+    })();
+    const visibleHalls = hallSummary.filter(h => {
+        const q = hallSearch.trim().toLowerCase();
+        const pct = h.totalSeats > 0 ? Math.round((h.filledSeats / h.totalSeats) * 100) : 0;
+        const searchOk = q.length === 0 || h.hallCode.toLowerCase().includes(q);
+        const filterOk = hallFilter === 'all'
+            || (hallFilter === 'empty' && pct === 0)
+            || (hallFilter === 'partial' && pct > 0 && pct < 100)
+            || (hallFilter === 'full' && pct >= 100);
+        return searchOk && filterOk;
+    });
+    const selectedHallList = selectedHallIds.size > 0
+        ? hallSummary.filter(h => selectedHallIds.has(h.hallId))
+        : hallSummary;
+    const selectedSeatCount = selectedHallList.reduce((sum, h) => sum + h.totalSeats, 0);
+    const projectedUnassigned = Math.max(eligibleStudentCount - selectedSeatCount, 0);
+    const hasPreviewInputs = eligibleStudentCount > 0 || selectedSeatCount > 0;
 
     const toggleHall = (id: number) => {
         setSelectedHallIds(prev => {
@@ -114,8 +154,26 @@ const SeatingPlans: React.FC = () => {
             return next;
         });
     };
-    const selectAllHalls = () => setSelectedHallIds(new Set(hallSummary.map(h => h.hallId)));
+    const selectAllHalls = () => setSelectedHallIds(new Set(visibleHalls.map(h => h.hallId)));
     const clearHallSelection = () => setSelectedHallIds(new Set());
+    const canAssignByMode = assignmentMode === 'auto-balanced'
+        || (assignmentMode === 'single' && !!primaryDept)
+        || (assignmentMode === 'two-alternate' && !!primaryDept && !!secondaryDept);
+
+    const onAssignmentModeChange = (value: 'single' | 'two-alternate' | 'auto-balanced') => {
+        setAssignmentMode(value);
+        if (value === 'auto-balanced') {
+            setPrimaryDept('');
+            setSecondaryDept('');
+        } else if (value === 'single') {
+            setSecondaryDept('');
+        }
+    };
+
+    useEffect(() => {
+        if (primaryDept && !activeDepartments.some(d => String(d.DepartmentID) === primaryDept)) setPrimaryDept('');
+        if (secondaryDept && !activeDepartments.some(d => String(d.DepartmentID) === secondaryDept)) setSecondaryDept('');
+    }, [activeDepartments, primaryDept, secondaryDept]);
 
     /* initial load */
     useEffect(() => {
@@ -126,6 +184,23 @@ const SeatingPlans: React.FC = () => {
             try { setDepartments(await SeatingService.getDepartments().then(r => Array.isArray(r) ? r : [])); } catch { toast.error('Failed to load departments'); }
         })();
     }, []);
+
+    useEffect(() => {
+        if (!selectedDate) {
+            SeatingService.getDepartments()
+                .then(r => setDepartments(Array.isArray(r) ? r : []))
+                .catch(() => { });
+            return;
+        }
+
+        SeatingService.getExamDepartments(
+            selectedDate,
+            selectedSession,
+            selectedSeries ? Number(selectedSeries) : undefined
+        )
+            .then(r => setDepartments(Array.isArray(r) ? r : []))
+            .catch(() => toast.error('Failed to load exam departments'));
+    }, [selectedDate, selectedSession, selectedSeries]);
 
     useEffect(() => {
         SeatingService.getExamDates(selectedSeries ? Number(selectedSeries) : undefined)
@@ -172,19 +247,95 @@ const SeatingPlans: React.FC = () => {
     /* bulk assign */
     const handleBulkAssign = async () => {
         if (!selectedDate) { toast.error('Select an exam date first'); return; }
-        const ids = selectedHallIds.size > 0 ? [...selectedHallIds] : hallSummary.map(h => h.hallId);
+        let ids = selectedHallIds.size > 0 ? [...selectedHallIds] : hallSummary.map(h => h.hallId);
         if (ids.length === 0) { toast.error('No halls available'); return; }
-        if (!leftDept && !rightDept) { toast.error('Select at least one department'); return; }
+        if (!canAssignByMode) {
+            toast.error(assignmentMode === 'single' ? 'Select a department' : assignmentMode === 'two-alternate' ? 'Select primary and secondary departments' : 'No eligible departments');
+            return;
+        }
+
+        const seatCount = hallSummary
+            .filter(h => ids.includes(h.hallId))
+            .reduce((sum, h) => sum + h.totalSeats, 0);
+        if (eligibleStudentCount > 0 && seatCount < eligibleStudentCount) {
+            const shortBy = eligibleStudentCount - seatCount;
+            const autoCandidates = hallSummary.filter(h => !ids.includes(h.hallId));
+            let autoIds: number[] = [];
+            let autoSeats = seatCount;
+            for (const h of autoCandidates) {
+                autoIds.push(h.hallId);
+                autoSeats += h.totalSeats;
+                if (autoSeats >= eligibleStudentCount) break;
+            }
+
+            let proceed = false;
+            if (autoSeats >= eligibleStudentCount && autoIds.length > 0) {
+                const autoPick = window.confirm(
+                    `Selected halls are short by ${shortBy} seats. Auto-select ${autoIds.length} more hall(s) to fit all eligible students?`
+                );
+                if (autoPick) {
+                    ids = [...ids, ...autoIds];
+                    setSelectedHallIds(new Set(ids));
+                    toast.success(`Added ${autoIds.length} hall(s) automatically`);
+                    proceed = true;
+                }
+            }
+            if (!proceed) {
+                const continueWithShortage = window.confirm(
+                    `Capacity is short by ${shortBy} seats. Continue anyway and allow partial assignment?`
+                );
+                if (!continueWithShortage) return;
+            }
+        }
+
         startTransition(() => setAssigning(true));
         try {
+            console.log("=== ASSIGN CLICKED ===");
+            console.log("Assignment mode:", assignmentMode);
+            console.log("Selected halls:", ids);
+            console.log("Selected halls length:", ids?.length);
+            console.log("Eligible students (preview):", eligibleStudentCount);
+            console.log("Payload going to API:", {
+                examDate: selectedDate,
+                session: selectedSession,
+                hallIds: ids,
+                mode: assignmentMode,
+                primaryDeptId: primaryDept ? Number(primaryDept) : null,
+                secondaryDeptId: secondaryDept ? Number(secondaryDept) : null,
+                avoidSameDeptBench,
+            });
             const r = await SeatingService.bulkAssign({
                 examDate: selectedDate, session: selectedSession, hallIds: ids,
-                leftDeptId: leftDept ? Number(leftDept) : null, rightDeptId: rightDept ? Number(rightDept) : null,
+                mode: assignmentMode,
+                primaryDeptId: primaryDept ? Number(primaryDept) : null,
+                secondaryDeptId: secondaryDept ? Number(secondaryDept) : null,
+                avoidSameDeptBench,
             });
-            toast.success(`Assigned ${r.totalLeftAssigned + r.totalRightAssigned} students across ${r.hallResults.length} halls`);
+            const assigned = Number(r.totalLeftAssigned || 0) + Number(r.totalRightAssigned || 0);
+            const totalEligible = Number(r.totalLeftAvailable || 0) + Number(r.totalRightAvailable || 0);
+            const unassigned = Math.max(totalEligible - assigned, 0);
+            const usedHallIds = (Array.isArray(r.hallResults) ? r.hallResults : [])
+                .filter((h: any) => Number(h.filled || 0) > 0)
+                .map((h: any) => Number(h.hallId))
+                .filter((id: number) => Number.isFinite(id));
+            setAssignmentFeedback({
+                assigned,
+                unassigned,
+                hallsUsed: usedHallIds.length,
+                hallIds: usedHallIds,
+            });
+            toast.success(`Assigned ${assigned} student${assigned !== 1 ? 's' : ''}${unassigned > 0 ? ` · ${unassigned} unassigned` : ''}`);
             startTransition(() => loadSummary());
         } catch (e: any) { toast.error(e?.response?.data?.message || 'Bulk assign failed'); }
         finally { startTransition(() => setAssigning(false)); }
+    };
+
+    const handleViewAffectedHalls = async () => {
+        if (!assignmentFeedback || assignmentFeedback.hallIds.length === 0) return;
+        const nextSet = new Set(assignmentFeedback.hallIds);
+        setSelectedHallIds(nextSet);
+        const first = hallSummary.find(h => nextSet.has(h.hallId));
+        if (first) await openHallDetail(first);
     };
 
     /* global shuffle */
@@ -841,39 +992,123 @@ const SeatingPlans: React.FC = () => {
                                 </div>
                             </CardHeader>
                             <CardBody className="px-5 py-4 flex flex-col gap-4">
-                                {/* Departments side-by-side */}
-                                <div className="grid grid-cols-2 gap-4">
+                                {/* Mode-based assignment controls */}
+                                <div className="space-y-3">
                                     <div className="space-y-1.5">
                                         <span className="text-[11px] font-bold text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
-                                            <ChevronRight size={13} className="text-slate-500" /> Left Dept
+                                            <ChevronRight size={13} className="text-slate-500" /> Allocation Strategy
                                         </span>
-                                        <Select aria-label="Left Department" placeholder="— None —" variant="bordered"
-                                            selectedKeys={leftDept ? [leftDept] : []}
-                                            onSelectionChange={(k) => setLeftDept(Array.from(k)[0] as string || '')}
+                                        <Select
+                                            aria-label="Allocation strategy"
+                                            selectedKeys={[assignmentMode]}
+                                            onSelectionChange={(k) => onAssignmentModeChange((Array.from(k)[0] as 'single' | 'two-alternate' | 'auto-balanced') || 'auto-balanced')}
+                                            variant="bordered"
                                             classNames={{
                                                 trigger: "relative pr-10 bg-white border-2 border-slate-200 shadow-sm rounded-xl data-[hover=true]:border-emerald-400 data-[hover=true]:bg-emerald-50 transition-all h-11 text-slate-800 text-[14px] font-semibold",
-                                                value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-500", selectorIcon: "text-slate-500 absolute w-5 right-3", innerWrapper: "w-full text-slate-800",
+                                                value: "text-slate-800 font-semibold",
+                                                selectorIcon: "text-slate-500 absolute w-5 right-3",
                                                 popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
-                                            }}>
-                                            {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={`${d.DepartmentName} (${d.studentCount})`} className="data-[hover=true]:bg-emerald-50 data-[hover=true]:text-emerald-700 font-semibold">{d.DepartmentName} ({d.studentCount})</SelectItem>)}
+                                            }}
+                                        >
+                                            <SelectItem key="auto-balanced">Auto Balanced (Recommended)</SelectItem>
+                                            <SelectItem key="single">Single Department</SelectItem>
+                                            <SelectItem key="two-alternate">Two-Department Alternate</SelectItem>
                                         </Select>
                                     </div>
-                                    <div className="space-y-1.5">
-                                        <span className="text-[11px] font-bold text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
-                                            <ChevronRight size={13} className="rotate-180 text-slate-500" /> Right Dept
-                                        </span>
-                                        <Select aria-label="Right Department" placeholder="— None —" variant="bordered"
-                                            selectedKeys={rightDept ? [rightDept] : []}
-                                            onSelectionChange={(k) => setRightDept(Array.from(k)[0] as string || '')}
-                                            classNames={{
-                                                trigger: "relative pr-10 bg-white border-2 border-slate-200 shadow-sm rounded-xl data-[hover=true]:border-emerald-400 data-[hover=true]:bg-emerald-50 transition-all h-11 text-slate-800 text-[14px] font-semibold",
-                                                value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-500", selectorIcon: "text-slate-500 absolute w-5 right-3", innerWrapper: "w-full text-slate-800",
-                                                popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
-                                            }}>
-                                            {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={`${d.DepartmentName} (${d.studentCount})`} className="data-[hover=true]:bg-emerald-50 data-[hover=true]:text-emerald-700 font-semibold">{d.DepartmentName} ({d.studentCount})</SelectItem>)}
-                                        </Select>
-                                    </div>
+                                    {assignmentMode === 'single' && (
+                                        <div className="space-y-1.5">
+                                            <span className="text-[11px] font-bold text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
+                                                <ChevronRight size={13} className="text-slate-500" /> Department
+                                            </span>
+                                            <Select aria-label="Primary Department" placeholder="— Select Department —" variant="bordered"
+                                                selectedKeys={primaryDept ? [primaryDept] : []}
+                                                onSelectionChange={(k) => setPrimaryDept(Array.from(k)[0] as string || '')}
+                                                classNames={{
+                                                    trigger: "relative pr-10 bg-white border-2 border-slate-200 shadow-sm rounded-xl data-[hover=true]:border-emerald-400 data-[hover=true]:bg-emerald-50 transition-all h-11 text-slate-800 text-[14px] font-semibold",
+                                                    value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-500",
+                                                    selectorIcon: "text-slate-500 absolute w-5 right-3",
+                                                    popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
+                                                }}>
+                                                {activeDepartments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={`${d.DepartmentName} (${d.studentCount})`} className="data-[hover=true]:bg-emerald-50 data-[hover=true]:text-emerald-700 font-semibold">{d.DepartmentName} ({d.studentCount})</SelectItem>)}
+                                            </Select>
+                                        </div>
+                                    )}
+                                    {assignmentMode === 'two-alternate' && (
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-1.5">
+                                                <span className="text-[11px] font-bold text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
+                                                    <ChevronRight size={13} className="text-slate-500" /> Primary Dept
+                                                </span>
+                                                <Select aria-label="Primary Department" placeholder="— None —" variant="bordered"
+                                                    selectedKeys={primaryDept ? [primaryDept] : []}
+                                                    onSelectionChange={(k) => setPrimaryDept(Array.from(k)[0] as string || '')}
+                                                    classNames={{
+                                                        trigger: "relative pr-10 bg-white border-2 border-slate-200 shadow-sm rounded-xl data-[hover=true]:border-emerald-400 data-[hover=true]:bg-emerald-50 transition-all h-11 text-slate-800 text-[14px] font-semibold",
+                                                        value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-500", selectorIcon: "text-slate-500 absolute w-5 right-3", innerWrapper: "w-full text-slate-800",
+                                                        popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
+                                                    }}>
+                                                    {activeDepartments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={`${d.DepartmentName} (${d.studentCount})`} className="data-[hover=true]:bg-emerald-50 data-[hover=true]:text-emerald-700 font-semibold">{d.DepartmentName} ({d.studentCount})</SelectItem>)}
+                                                </Select>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <span className="text-[11px] font-bold text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
+                                                    <ChevronRight size={13} className="rotate-180 text-slate-500" /> Secondary Dept
+                                                </span>
+                                                <Select aria-label="Secondary Department" placeholder="— None —" variant="bordered"
+                                                    selectedKeys={secondaryDept ? [secondaryDept] : []}
+                                                    onSelectionChange={(k) => setSecondaryDept(Array.from(k)[0] as string || '')}
+                                                    classNames={{
+                                                        trigger: "relative pr-10 bg-white border-2 border-slate-200 shadow-sm rounded-xl data-[hover=true]:border-emerald-400 data-[hover=true]:bg-emerald-50 transition-all h-11 text-slate-800 text-[14px] font-semibold",
+                                                        value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-500", selectorIcon: "text-slate-500 absolute w-5 right-3", innerWrapper: "w-full text-slate-800",
+                                                        popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
+                                                    }}>
+                                                    {activeDepartments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={`${d.DepartmentName} (${d.studentCount})`} className="data-[hover=true]:bg-emerald-50 data-[hover=true]:text-emerald-700 font-semibold">{d.DepartmentName} ({d.studentCount})</SelectItem>)}
+                                                </Select>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
+                                {zeroDepartments.length > 0 && (
+                                    <p className="text-[10px] text-slate-500">
+                                        Hidden departments with no eligible students: {zeroDepartments.slice(0, 3).map(d => d.DepartmentCode || d.DepartmentName).join(', ')}
+                                        {zeroDepartments.length > 3 ? ` +${zeroDepartments.length - 3} more` : ''}
+                                    </p>
+                                )}
+                                <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 border border-slate-200">
+                                    <div className="text-[11px] text-slate-700 font-medium">Avoid same-department adjacency on a bench</div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAvoidSameDeptBench(v => !v)}
+                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${avoidSameDeptBench ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                        aria-pressed={avoidSameDeptBench}
+                                        title="Avoid same-department neighbors on each bench"
+                                    >
+                                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${avoidSameDeptBench ? 'translate-x-6' : 'translate-x-1'}`} />
+                                    </button>
+                                </div>
+                                {assignmentMode === 'two-alternate' && primaryDept && secondaryDept && primaryDept === secondaryDept && (
+                                    <div className="px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-100 text-[10px] text-indigo-700 font-medium">
+                                        Same primary/secondary department selected. Students will still be split alternately.
+                                    </div>
+                                )}
+
+                                {/* Assignment preview */}
+                                {selectedDate && (
+                                    <div className={`px-3 py-2.5 rounded-xl border text-[11px] font-medium ${!hasPreviewInputs
+                                        ? 'bg-slate-50 border-slate-200 text-slate-600'
+                                        : projectedUnassigned === 0
+                                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                            : selectedSeatCount === 0
+                                                ? 'bg-slate-50 border-slate-200 text-slate-600'
+                                                : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+                                        <span className="font-bold">Assignment Preview:</span>{' '}
+                                        Eligible students: <span className="font-bold">{eligibleStudentCount}</span> · Selected seats: <span className="font-bold">{selectedSeatCount}</span> ·
+                                        Unassigned after run: <span className="font-bold">{projectedUnassigned}</span>
+                                        {!hasPreviewInputs && (
+                                            <span className="ml-1">· Select strategy/departments to preview a real assignment.</span>
+                                        )}
+                                    </div>
+                                )}
 
                                 {/* Hall selector — compact chip grid */}
                                 {hallSummary.length > 0 && (
@@ -889,8 +1124,36 @@ const SeatingPlans: React.FC = () => {
                                                 <button onClick={clearHallSelection} className="text-[9px] font-medium text-slate-500 hover:text-slate-700 px-2 py-0.5 rounded hover:bg-slate-200 transition-colors">None</button>
                                             </div>
                                         </div>
+                                        <div className="flex items-center gap-2">
+                                            <Input
+                                                value={hallSearch}
+                                                onChange={(e) => setHallSearch(e.target.value)}
+                                                placeholder="Search hall code..."
+                                                size="sm"
+                                                variant="bordered"
+                                                className="flex-1"
+                                                classNames={{
+                                                    inputWrapper: "h-8 min-h-8 border border-slate-200 bg-white",
+                                                    input: "text-[11px] text-slate-700",
+                                                }}
+                                            />
+                                            <Select
+                                                aria-label="Hall fill filter"
+                                                selectedKeys={[hallFilter]}
+                                                onSelectionChange={(k) => setHallFilter((Array.from(k)[0] as 'all' | 'empty' | 'partial' | 'full') || 'all')}
+                                                size="sm"
+                                                variant="bordered"
+                                                className="max-w-[128px]"
+                                                classNames={{ trigger: "h-8 min-h-8 border border-slate-200 bg-white", value: "text-[10px] font-semibold" }}
+                                            >
+                                                <SelectItem key="all">All</SelectItem>
+                                                <SelectItem key="empty">Empty</SelectItem>
+                                                <SelectItem key="partial">Partial</SelectItem>
+                                                <SelectItem key="full">Full</SelectItem>
+                                            </Select>
+                                        </div>
                                         <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto dark-scrollbar pr-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#94a3b8 #f1f5f9' }}>
-                                            {hallSummary.map(h => {
+                                            {visibleHalls.map(h => {
                                                 const isSelected = selectedHallIds.has(h.hallId);
                                                 const pct = h.totalSeats > 0 ? Math.round((h.filledSeats / h.totalSeats) * 100) : 0;
                                                 return (
@@ -912,39 +1175,52 @@ const SeatingPlans: React.FC = () => {
                                                 );
                                             })}
                                         </div>
-                                        {selectedHallIds.size > 0 && (
-                                            <p className="text-[9px] text-indigo-500 font-medium tracking-wide">{selectedHallIds.size} hall{selectedHallIds.size > 1 ? 's' : ''} selected</p>
-                                        )}
+                                        <div className="text-[9px] text-indigo-600 font-semibold tracking-wide">
+                                            {selectedHallIds.size > 0
+                                                ? `${selectedHallIds.size} halls selected · ${selectedSeatCount} seats`
+                                                : `All halls · ${selectedSeatCount} seats`}
+                                        </div>
                                     </div>
                                 )}
 
                                 {/* Assign & Shuffle Buttons */}
                                 <div className="flex flex-col gap-3 mt-3">
-                                    <Button onPress={() => setShowImportModal(true)}
-                                        isDisabled={!selectedDate || !currentSlot}
-                                        className="w-full font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-xl h-11 border-2 border-emerald-200 transition-all data-[disabled=true]:opacity-50 text-sm shadow-sm"
-                                        startContent={<FileSpreadsheet size={16} />} size="md"
-                                    >
-                                        Import Seating from Excel
-                                    </Button>
-
                                     <div className="flex gap-3">
                                         <Button onPress={handleBulkAssign} isLoading={assigning}
-                                            isDisabled={!selectedDate || (!leftDept && !rightDept)}
+                                            isDisabled={!selectedDate || !canAssignByMode}
                                             className="flex-1 font-bold text-white shadow-md bg-indigo-600 shadow-md shadow-indigo-200 hover:bg-indigo-700 rounded-xl h-11 border border-indigo-700 transition-all data-[disabled=true]:opacity-50 text-[15px]"
                                             startContent={!assigning ? <Zap size={18} fill="currentColor" /> : undefined} size="lg"
                                         >
-                                            {assigning ? 'Assigning…' : `Assign${selectedHallIds.size > 0 ? '' : ' All'}`}
+                                            {assigning ? 'Generating…' : `Generate Seating${selectedHallIds.size > 0 ? '' : ' (All Halls)'}`}
                                         </Button>
 
                                         <Button onPress={handleShuffleGlobal} isLoading={shuffling}
                                             isDisabled={!selectedDate || totalFilled === 0}
                                             className="font-bold text-white shadow-md bg-pink-600 shadow-md shadow-pink-200 hover:bg-pink-700 rounded-xl h-11 w-11 min-w-11 px-0 border border-pink-700 transition-all data-[disabled=true]:opacity-50 text-[15px]"
-                                            title="Shuffle All Assigned Students"
+                                            title="Shuffle Existing"
                                         >
                                             {!shuffling && <Shuffle size={18} />}
                                         </Button>
                                     </div>
+                                    {assignmentFeedback && (
+                                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                                            <p className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Last run</p>
+                                            <p className="text-[11px] text-slate-600">
+                                                Assigned <span className="font-bold text-emerald-700">{assignmentFeedback.assigned}</span> ·
+                                                Unassigned <span className="font-bold text-amber-700">{assignmentFeedback.unassigned}</span> ·
+                                                Halls used <span className="font-bold text-indigo-700">{assignmentFeedback.hallsUsed}</span>
+                                            </p>
+                                            {assignmentFeedback.hallIds.length > 0 && (
+                                                <Button
+                                                    size="sm"
+                                                    onPress={handleViewAffectedHalls}
+                                                    className="h-8 text-[11px] font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200"
+                                                >
+                                                    View affected halls
+                                                </Button>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             </CardBody>
                         </Card>
@@ -1565,17 +1841,6 @@ const SeatingPlans: React.FC = () => {
                     )}
                 </ModalContent>
             </Modal>
-
-            {/* Import Seating Modal */}
-            <SeatingImportModal
-                isOpen={showImportModal}
-                onClose={() => setShowImportModal(false)}
-                onSuccess={() => loadSummary()}
-                examDate={selectedDate}
-                session={selectedSession}
-                selectedHalls={selectedHallIds.size > 0 ? Array.from(selectedHallIds) : undefined}
-            />
-
         </div>
     );
 };

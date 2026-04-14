@@ -8,7 +8,7 @@ import { Room } from "./Room.js";
 interface SeatAttributes {
   SeatID: number;
   RoomID: number;
-  RowIndex: number;
+  RowIndex: string;
   BenchIndex: number;
   SeatIndex: number;
   IsActive: boolean;
@@ -24,7 +24,7 @@ export class Seat extends Model<SeatAttributes, SeatCreationAttributes>
   implements SeatAttributes {
   declare SeatID: number;
   declare RoomID: number;
-  declare RowIndex: number;
+  declare RowIndex: string;
   declare BenchIndex: number;
   declare SeatIndex: number;
   declare IsActive: boolean;
@@ -47,16 +47,19 @@ Seat.init(
       },
     },
     RowIndex: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.CHAR(1),
       allowNull: false,
+      field: "RowLabel",
     },
     BenchIndex: {
       type: DataTypes.INTEGER,
       allowNull: false,
+      field: "BenchNumber",
     },
     SeatIndex: {
       type: DataTypes.INTEGER,
       allowNull: false,
+      field: "SeatNumber",
     },
     IsActive: {
       type: DataTypes.BOOLEAN,

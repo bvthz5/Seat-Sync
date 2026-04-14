@@ -108,7 +108,7 @@ export class RoomService {
                 for (let seatIndex = 1; seatIndex <= seatsPerBench; seatIndex++) {
                     seatsToCreate.push({
                         RoomID: roomId,
-                        RowIndex: rowIndex,
+                        RowIndex: String.fromCharCode(65 + rowIndex),
                         BenchIndex: benchIndex,
                         SeatIndex: seatIndex,
                         IsActive: true
@@ -241,7 +241,7 @@ export class RoomService {
                         for (let seatIndex = 1; seatIndex <= spb; seatIndex++) {
                             allSeatsToCreate.push({
                                 RoomID: room.RoomID,
-                                RowIndex: rowIndex,
+                                RowIndex: String.fromCharCode(65 + rowIndex),
                                 BenchIndex: benchIndex,
                                 SeatIndex: seatIndex,
                                 IsActive: true

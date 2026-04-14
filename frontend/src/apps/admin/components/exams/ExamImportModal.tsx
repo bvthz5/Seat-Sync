@@ -121,6 +121,8 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
             let totalUpdated = 0;
             let totalRowErrors = 0;
             let fileFailures = 0;
+            const fileFailureMessages: string[] = [];
+            const rowIssueMessages: string[] = [];
 
             for (const file of selectedFiles) {
                 try {
@@ -133,9 +135,18 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                     totalCreated += result.successCount || 0;
                     totalUpdated += result.updatedCount || 0;
                     totalRowErrors += result.errorCount || 0;
+                    if (Array.isArray(result.errors) && result.errors.length > 0) {
+                        rowIssueMessages.push(`${file.name}: ${result.errors[0]}`);
+                    }
                 } catch (error: any) {
                     fileFailures++;
                     console.error(`Import failed for ${file.name}:`, error);
+                    const serverMessage =
+                        error?.response?.data?.message ||
+                        error?.response?.data?.error ||
+                        error?.message ||
+                        'Unknown import error';
+                    fileFailureMessages.push(`${file.name}: ${serverMessage}`);
                 }
             }
 
@@ -146,6 +157,11 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
             }
             if (totalRowErrors > 0 || fileFailures > 0) {
                 toast.error(`Completed with issues: ${totalRowErrors} row errors, ${fileFailures} file failures`);
+                if (fileFailureMessages.length > 0) {
+                    toast.error(fileFailureMessages[0] as string);
+                } else if (rowIssueMessages.length > 0) {
+                    toast.error(rowIssueMessages[0] as string);
+                }
             }
 
             setSelectedFiles([]);
@@ -292,7 +308,6 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                     />
                                     <label
                                         htmlFor="file-upload"
-                                        onClick={() => fileInputRef.current?.click()}
                                         className={`
                                             flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer transition-all
                                             ${selectedFiles.length > 0
