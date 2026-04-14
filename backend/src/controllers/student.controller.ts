@@ -864,7 +864,7 @@ export const createStudent = async (req: Request, res: Response) => {
                 // Infer department from program if possible
                 targetDept = deptsAll.find((d: any) => d.DepartmentID === targetProgram.DepartmentID);
                 if (!targetDept && (targetProgram.ProgramName.includes('Computer') || targetProgram.ProgramName.includes('MCA'))) {
-                    targetDept = deptsAll.find((d: any) => d.DepartmentCode === 'MCA' || d.DepartmentCode === 'CSE');
+                    targetDept = deptsAll.find((d: any) => d.DepartmentCode === 'CA' || d.DepartmentCode === 'CSE');
                 }
             }
         }
@@ -954,7 +954,7 @@ export const createStudent = async (req: Request, res: Response) => {
 export const getCreateOptions = async (req: Request, res: Response) => {
     try {
         const departments = await Department.findAll({ attributes: ['DepartmentID', 'DepartmentCode', 'DepartmentName'] });
-        const programs = await Program.findAll({ attributes: ['ProgramID', 'ProgramName'] });
+        const programs = await Program.findAll({ attributes: ['ProgramID', 'ProgramName', 'DepartmentID'] });
         const semesters = await Semester.findAll({ attributes: ['SemesterID', 'SemesterNumber', 'ProgramID'] });
 
         res.json({

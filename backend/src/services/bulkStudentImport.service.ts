@@ -137,11 +137,17 @@ const rowProgramRaw = row.ProgramName?.trim() || '';
                         "ECE": "Electronics & Communication Engineering",
                         "EEE": "Electrical & Electronics Engineering",
                         "MCA": "Computer Applications",
+                        "INT_MCA": "Computer Applications",
                         "MBA": "Management Studies",
                         "BHM": "Hotel Management"
                     };
+                    const PROGRAM_DEPT_CODE_MAP: Record<string, string> = {
+                        "MCA": "CA",
+                        "INT_MCA": "CA"
+                    };
+                    
                     const departmentName = PROGRAM_DEPARTMENT_MAP[programName] || programName;
-                    const departmentCode = programName;
+                    const departmentCode = PROGRAM_DEPT_CODE_MAP[programName] || programName;
 
                     const semesterNumber = row.SemesterNumber?.trim() || semNum.toString();
                     const email = row.Email?.trim();

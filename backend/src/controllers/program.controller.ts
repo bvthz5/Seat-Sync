@@ -341,8 +341,8 @@ export const exportProgramTemplate = async (_req: Request, res: Response) => {
     try {
         const sample = [
             { ProgramCode: "BTECH", ProgramName: "Bachelor of Technology", DurationYears: 4, Departments: "cse001|mec001|ece001" },
-            { ProgramCode: "MCA", ProgramName: "Master of Computer Applications", DurationYears: 2, Departments: "csa001" },
-            { ProgramCode: "MCAI", ProgramName: "Integrated MCA", DurationYears: 5, Departments: "csa001" },
+            { ProgramCode: "MCA", ProgramName: "Master of Computer Applications", DurationYears: 2, Departments: "ca001" },
+            { ProgramCode: "MCAI", ProgramName: "Integrated MCA", DurationYears: 5, Departments: "ca001" },
         ];
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.json_to_sheet(sample);

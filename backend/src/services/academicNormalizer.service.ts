@@ -40,6 +40,15 @@ export const mapProgramToDepartment = (programCode: string): string => {
     return PROGRAM_DEPARTMENT_MAP[normalized] || normalized; // Fallback to code if not found
 };
 
+export const getDepartmentCodeFromProgram = (programCode: string): string => {
+    const normalized = normalizeProgram(programCode);
+    const map: Record<string, string> = {
+        "MCA": "CA",
+        "INT_MCA": "CA"
+    };
+    return map[normalized] || normalized;
+};
+
 export const parseBatchString = (batchText: unknown): NormalizedAcademicInfo => {
     const text = String(batchText || '').trim();
     if (!text) {
@@ -121,14 +130,15 @@ export const resolveOrCreateProgram = async (programCode: string, t?: Transactio
 };
 
 export const resolveOrCreateDepartment = async (programCode: string, departmentName: string, t?: Transaction) => {
-  const code = normalizeProgram(programCode);
-  
+  const programNorm = normalizeProgram(programCode);
+  const deptCode = getDepartmentCodeFromProgram(programNorm);
+
   // 1. Try to find by Code first (fastest)
-  let department = await Department.findOne({ 
-    where: { DepartmentCode: code },
+  let department = await Department.findOne({
+    where: { DepartmentCode: deptCode },
     transaction: t || null
   });
-  
+
   // 2. If not found by code, try finding by Name (to prevent "Computer Applications" duplicates)
   if (!department) {
     department = await Department.findOne({
@@ -136,11 +146,11 @@ export const resolveOrCreateDepartment = async (programCode: string, departmentN
       transaction: t || null
     });
   }
-  
+
   // 3. If still not found, create it
   if (!department) {
     department = await Department.create({
-      DepartmentCode: code,
+      DepartmentCode: deptCode,
       DepartmentName: departmentName,
       IsActive: true
     }, { transaction: t || null });
