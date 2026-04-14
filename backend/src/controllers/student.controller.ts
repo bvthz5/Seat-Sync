@@ -572,6 +572,7 @@ export const importStudents = async (req: Request, res: Response) => {
         const studentsToCreate: any[] = [];
         const rowManifests: any[] = [];
         const fileProcessedRegNos = new Set<string>();
+        const processedBatchEmails = new Set<string>();
 
         for (const row of data) {
             // Flexible Key Matching
@@ -645,12 +646,26 @@ export const importStudents = async (req: Request, res: Response) => {
                 const passwordStr = (normalizedName.replace(/\s/g, '').substring(0, 4) + '@123');
                 const defaultPassword = precomputedHashes.get(passwordStr) || defaultPasswordHash;
 
-                const generatedEmail = buildImportedStudentEmail(
+                const baseEmail = buildImportedStudentEmail(
                     normalizedName,
                     targetDept.DepartmentCode || targetDept.DepartmentName || '',
                     effectiveBatchYear,
                     targetProgram.DurationYears
                 );
+
+                let generatedEmail = baseEmail;
+                let suffixCounter = 1;
+
+                while (
+                    (existingUsersMapByEmail.has(generatedEmail) && existingUsersMapByEmail.get(generatedEmail)!.UserID !== existingStudent?.UserID) || 
+                    processedBatchEmails.has(generatedEmail)
+                ) {
+                    let [namePart, domainPart] = baseEmail.split('@');
+                    generatedEmail = `${namePart}${suffixCounter}@${domainPart}`;
+                    suffixCounter++;
+                }
+
+                processedBatchEmails.add(generatedEmail);
 
                 let user = existingStudent?.UserID ? existingUsersMap.get(existingStudent.UserID) : existingUsersMapByEmail.get(generatedEmail);
                 
@@ -724,7 +739,8 @@ export const importStudents = async (req: Request, res: Response) => {
                     }
                     successCount++;
                 } catch (err: any) {
-                    errors.push({ row: m.row['_sourceRowIdx'] || 'Unknown', reason: `Insertion error (${m.regNo}): ${err.message}` });   
+                    const errorDetail = err.errors ? err.errors.map((e: any) => e.message).join(', ') : err.message;
+                    errors.push({ row: m.row['_sourceRowIdx'] || 'Unknown', reason: `Insertion error (${m.normalizedName} | ${m.regNo}): ${errorDetail}` });   
                 }
             }
         }
