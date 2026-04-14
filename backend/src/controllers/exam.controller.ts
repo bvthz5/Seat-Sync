@@ -95,9 +95,54 @@ const parseDepartmentCodes = (raw: unknown): string[] => {
     return [...new Set(
         text
             .split(/[,&/;|]+/)
-            .map((s) => s.trim())
+            .map((s) => normalizeDepartmentCode(s))
             .filter(Boolean)
     )];
+};
+
+const DEPARTMENT_CODE_ALIASES: Record<string, string> = {
+    INMCA: 'IMCA',
+    ITCS: 'CSE',
+    ITCE: 'CE',
+    ITEC: 'ECE',
+    ITEE: 'EEE',
+};
+
+const DEPARTMENT_CODE_DISPLAY_NAMES: Record<string, string> = {
+    IMCA: 'Integrated MCA',
+};
+
+const normalizeDepartmentCode = (value: unknown): string => {
+    const raw = String(value ?? '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '')
+        .trim();
+    if (!raw) return '';
+    return DEPARTMENT_CODE_ALIASES[raw] || raw;
+};
+
+const getDepartmentCodeCandidates = (value: unknown): string[] => {
+    const normalized = normalizeDepartmentCode(value);
+    if (!normalized) return [];
+
+    const candidates: string[] = [normalized];
+    if (normalized.startsWith('IT') && normalized.length > 2) {
+        candidates.push(normalizeDepartmentCode(normalized.slice(2)));
+    }
+    return [...new Set(candidates.filter(Boolean))];
+};
+
+const inferDepartmentCodeFromCourseCode = (courseCodeRaw: unknown): string | null => {
+    const courseCode = String(courseCodeRaw ?? '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '')
+        .trim();
+    if (!courseCode) return null;
+
+    // Example: 24SJINMCA107 -> INMCA (between SJ and trailing numeric paper code)
+    const matched = courseCode.match(/SJ([A-Z]+)\d{2,4}$/);
+    if (!matched || !matched[1]) return null;
+    return normalizeDepartmentCode(matched[1]);
 };
 
 const flattenRtfText = (node: any): string => {
@@ -480,23 +525,22 @@ export class ExamController {
                 return res.status(404).json({ message: 'Exam not found' });
             }
 
-            // 1. Delete associated registrations derived from this exam
-            try {
-                // We need to import ExamRegistration model if not present, or use raw query if easier
-                // But let's assume we can use the model if imported. 
-                // Since I can't guarantee import is up top in this single replacement, I will use sequelize.query or ExamRegistration if I add import.
-                // BEST PRACTICE: Use the model. I will add the import in a separate tool call or use fully qualified if possible? No.
-                // I'll assume I can add the import in a previous step or here.
-                // Actually, I can use a raw query to be safe given the context limits:
-                // "DELETE FROM ExamRegistrations WHERE ExamID = :id"
-                await sequelize.query('DELETE FROM ExamRegistrations WHERE ExamID = :id', {
-                    replacements: { id: exam.ExamID },
-                    type: QueryTypes.DELETE
-                });
-            } catch (err) {
-                console.error("Error cleaning up registrations:", err);
-                // Continue? If this fails, exam.destroy might fail too if FK exists.
-            }
+            await sequelize.query('DELETE FROM Attendance WHERE ExamID = :id', {
+                replacements: { id: exam.ExamID },
+                type: QueryTypes.DELETE
+            });
+            await sequelize.query('DELETE FROM InvigilatorAssignments WHERE ExamID = :id', {
+                replacements: { id: exam.ExamID },
+                type: QueryTypes.DELETE
+            });
+            await sequelize.query('DELETE FROM SeatAllocations WHERE ExamID = :id', {
+                replacements: { id: exam.ExamID },
+                type: QueryTypes.DELETE
+            });
+            await sequelize.query('DELETE FROM ExamRegistrations WHERE ExamID = :id', {
+                replacements: { id: exam.ExamID },
+                type: QueryTypes.DELETE
+            });
 
             await exam.destroy();
             res.json({ message: 'Exam deleted successfully' });
@@ -517,6 +561,27 @@ export class ExamController {
 
             if (parsedSeriesId) {
                 await sequelize.query(
+                    'DELETE FROM Attendance WHERE ExamID IN (SELECT ExamID FROM Exams WHERE ExamSeriesID = :seriesId)',
+                    {
+                        replacements: { seriesId: parsedSeriesId },
+                        type: QueryTypes.DELETE
+                    }
+                );
+                await sequelize.query(
+                    'DELETE FROM InvigilatorAssignments WHERE ExamID IN (SELECT ExamID FROM Exams WHERE ExamSeriesID = :seriesId)',
+                    {
+                        replacements: { seriesId: parsedSeriesId },
+                        type: QueryTypes.DELETE
+                    }
+                );
+                await sequelize.query(
+                    'DELETE FROM SeatAllocations WHERE ExamID IN (SELECT ExamID FROM Exams WHERE ExamSeriesID = :seriesId)',
+                    {
+                        replacements: { seriesId: parsedSeriesId },
+                        type: QueryTypes.DELETE
+                    }
+                );
+                await sequelize.query(
                     'DELETE FROM ExamRegistrations WHERE ExamID IN (SELECT ExamID FROM Exams WHERE ExamSeriesID = :seriesId)',
                     {
                         replacements: { seriesId: parsedSeriesId },
@@ -531,6 +596,9 @@ export class ExamController {
                 });
             }
 
+            await sequelize.query('DELETE FROM Attendance', { type: QueryTypes.DELETE });
+            await sequelize.query('DELETE FROM InvigilatorAssignments', { type: QueryTypes.DELETE });
+            await sequelize.query('DELETE FROM SeatAllocations', { type: QueryTypes.DELETE });
             await sequelize.query('DELETE FROM ExamRegistrations', { type: QueryTypes.DELETE });
             const deletedCount = await Exam.destroy({ where: {} });
 
@@ -679,12 +747,24 @@ export class ExamController {
                 }
             }
 
-            // Ensure at least one Academic Year exists
+            // Ensure at least one Academic Year exists; create a sensible default if missing.
             const ayCount = await AcademicYear.count();
             if (ayCount === 0) {
-                return res.status(400).json({
-                    message: "Setup Error: No Academic Years found. Please create at least one Academic Year."
-                });
+                const now = new Date();
+                const currentYear = now.getFullYear();
+                const startYear = now.getMonth() >= 5 ? currentYear : currentYear - 1; // Academic year starts in June
+                const endYear = startYear + 1;
+                const yearName = `${startYear}-${endYear}`;
+                const startDate = `${startYear}-06-01`;
+                const endDate = `${endYear}-05-31`;
+
+                await AcademicYear.create({
+                    YearName: yearName,
+                    StartDate: startDate as any,
+                    EndDate: endDate as any,
+                    IsActive: true,
+                    IsCurrent: true
+                } as any);
             }
 
             // Get or create default semester for subject assignment during import
@@ -726,7 +806,19 @@ export class ExamController {
 
             // Pre-load existing data to avoid redundant queries
             const existingDepts = await Department.findAll();
-            existingDepts.forEach(d => deptCache.set(d.DepartmentCode, d.DepartmentID));
+            existingDepts.forEach(d => deptCache.set(normalizeDepartmentCode(d.DepartmentCode), d.DepartmentID));
+            let fallbackDepartmentID: number | null = existingDepts[0]?.DepartmentID ?? null;
+            if (!fallbackDepartmentID) {
+                const [fallbackDept] = await Department.findOrCreate({
+                    where: { DepartmentCode: 'GEN' },
+                    defaults: {
+                        DepartmentCode: 'GEN',
+                        DepartmentName: 'General'
+                    }
+                });
+                fallbackDepartmentID = fallbackDept.DepartmentID;
+                deptCache.set(normalizeDepartmentCode(fallbackDept.DepartmentCode), fallbackDepartmentID);
+            }
 
             const existingSubjects = await Subject.findAll();
             existingSubjects.forEach(s => subjectCache.set(`${s.SubjectCode}::${s.DepartmentID}`, s.SubjectID));
@@ -796,26 +888,45 @@ export class ExamController {
                         }
                     }
 
-                    const deptCodes = parseDepartmentCodes(deptRaw);
+                    const deptCodesFromRow = parseDepartmentCodes(deptRaw);
+                    const deptCodeFromCourse = inferDepartmentCodeFromCourseCode(cleanCode);
+                    const deptCodes = deptCodeFromCourse
+                        ? [deptCodeFromCourse, ...deptCodesFromRow.filter((d) => d !== deptCodeFromCourse)]
+                        : deptCodesFromRow;
                     const targetDeptCodes = deptCodes.length > 0 ? deptCodes : [null];
 
                     for (const deptCode of targetDeptCodes) {
                         // 1. Resolve Department (Find or Create)
-                        let departmentID: number = 1; // Default if department column is missing
+                        let departmentID: number = fallbackDepartmentID as number;
                         if (deptCode) {
-                            const cachedID = deptCache.get(deptCode);
-                            if (cachedID !== undefined) {
-                                departmentID = cachedID;
-                            } else {
+                            const candidates = getDepartmentCodeCandidates(deptCode);
+                            const initialResolvedCode = candidates[0];
+                            if (!initialResolvedCode) {
+                                continue;
+                            }
+                            let resolvedCode = initialResolvedCode;
+                            let resolvedFromCache = false;
+
+                            for (const candidate of candidates) {
+                                const cachedID = deptCache.get(candidate);
+                                if (cachedID !== undefined) {
+                                    departmentID = cachedID;
+                                    resolvedCode = candidate;
+                                    resolvedFromCache = true;
+                                    break;
+                                }
+                            }
+
+                            if (!resolvedFromCache) {
                                 const [dept] = await Department.findOrCreate({
-                                    where: { DepartmentCode: deptCode },
+                                    where: { DepartmentCode: resolvedCode },
                                     defaults: {
-                                        DepartmentCode: deptCode,
-                                        DepartmentName: deptCode
+                                        DepartmentCode: resolvedCode,
+                                        DepartmentName: DEPARTMENT_CODE_DISPLAY_NAMES[resolvedCode] || resolvedCode
                                     }
                                 });
                                 departmentID = dept.DepartmentID;
-                                deptCache.set(deptCode, departmentID);
+                                deptCache.set(resolvedCode, departmentID);
                             }
                         }
 

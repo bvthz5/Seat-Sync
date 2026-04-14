@@ -240,6 +240,11 @@ const ExamSeriesList: React.FC = () => {
                                                 {exam.Subject?.SubjectName ? ` - ${exam.Subject?.SubjectName}` : ''}
                                             </span>
                                         </div>
+                                        <div className="mt-2">
+                                            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                                Dept: {exam.Subject?.Department?.DepartmentCode || exam.Subject?.Department?.DepartmentName || 'General'}
+                                            </span>
+                                        </div>
                                     </div>
                                     
                                     <div className="flex flex-wrap gap-2">

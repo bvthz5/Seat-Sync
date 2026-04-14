@@ -21,6 +21,14 @@ export const SeatingService = {
     /** Get departments with student counts */
     getDepartments: async () => { const r = await api.get(`${PREFIX}/departments`); return r.data; },
 
+    /** Get departments participating on selected day (all sessions) with student totals */
+    getExamDepartments: async (examDate: string, _session: string, seriesId?: number) => {
+        const params: Record<string, string | number> = { examDate };
+        if (seriesId) params.seriesId = seriesId;
+        const r = await api.get(`${PREFIX}/exam-departments`, { params });
+        return r.data;
+    },
+
     /** Get students by department */
     getStudentsByDept: async (deptId: number) => { const r = await api.get(`${PREFIX}/students/${deptId}`); return r.data; },
 
@@ -37,7 +45,17 @@ export const SeatingService = {
     },
 
     /** Bulk-assign students across multiple halls */
-    bulkAssign: async (payload: { examDate: string; session: string; hallIds: number[]; leftDeptId?: number | null; rightDeptId?: number | null }) => {
+    bulkAssign: async (payload: {
+        examDate: string;
+        session: string;
+        hallIds: number[];
+        mode?: 'single' | 'two-alternate' | 'auto-balanced';
+        primaryDeptId?: number | null;
+        secondaryDeptId?: number | null;
+        avoidSameDeptBench?: boolean;
+        leftDeptId?: number | null; // backward compatibility
+        rightDeptId?: number | null; // backward compatibility
+    }) => {
         const r = await api.post(`${PREFIX}/bulk-assign`, payload);
         return r.data;
     },
