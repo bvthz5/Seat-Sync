@@ -16,10 +16,11 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
     const [isUploading, setIsUploading] = useState(false);
     const [progress, setProgress] = useState(0);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
-    const [uploadStats, setUploadStats] = useState<{ success: number; errors: number; active: boolean }>({
+    const [uploadStats, setUploadStats] = useState<{ success: number; errors: number; active: boolean; errorList?: Array<any> }>({
         success: 0,
         errors: 0,
-        active: false
+        active: false,
+        errorList: []
     });
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -33,7 +34,7 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
     useEffect(() => {
         if (!isOpen) {
             setFile(null);
-            setUploadStats({ success: 0, errors: 0, active: false });
+            setUploadStats({ success: 0, errors: 0, active: false, errorList: [] });
             setProgress(0);
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
@@ -57,13 +58,17 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
             const response = await academicService.importStudents(file);
             clearInterval(progressInterval);
             setProgress(100);
+            
+            const errorCount = response.failedCount || response.errorCount || 0;
+            
             setUploadStats({
-                success: response.successCount,
-                errors: response.errorCount,
-                active: true
+                success: response.successCount || 0,
+                errors: errorCount,
+                active: true,
+                errorList: response.errors || []
             });
 
-            if (response.errorCount === 0) {
+            if (errorCount === 0) {
                 toast.success(`Successfully imported ${response.successCount} students!`);
                 setFile(null);
                 if (fileInputRef.current) fileInputRef.current.value = '';
@@ -72,7 +77,7 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
                     onClose();
                 }, 2000);
             } else {
-                toast.error(`Imported ${response.successCount} students with ${response.errorCount} errors.`);
+                toast.error(`Imported ${response.successCount} students with ${errorCount} errors.`);
                 setFile(null);
                 if (fileInputRef.current) fileInputRef.current.value = '';
             }
@@ -113,6 +118,32 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
                     </div>
 
                     <div className="p-8 space-y-8 overflow-y-auto">
+                        
+                    {uploadStats.active && (
+                        <div className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100">
+                            <h3 className="text-lg font-bold mb-4">Import Results</h3>
+                            <div className="flex gap-4 mb-4">
+                                <div className="bg-green-50 p-4 rounded-lg flex-1">
+                                    <p className="text-sm text-green-600 font-semibold">✔ Imported</p>
+                                    <p className="text-2xl font-bold text-green-700">{uploadStats.success}</p>
+                                </div>
+                                <div className="bg-red-50 p-4 rounded-lg flex-1">
+                                    <p className="text-sm text-red-600 font-semibold">✖ Failed</p>
+                                    <p className="text-2xl font-bold text-red-700">{uploadStats.errors}</p>
+                                </div>
+                            </div>
+                            {uploadStats.errors > 0 && uploadStats.errorList && uploadStats.errorList.length > 0 && (
+                                <div className="bg-red-50 p-4 rounded-lg">
+                                    <p className="text-sm text-red-800 font-bold mb-2">Error List:</p>
+                                    <ul className="list-disc list-inside text-xs text-red-700 space-y-1 max-h-32 overflow-y-auto">
+                                        {uploadStats.errorList.map((e: any, i: number) => (
+                                            <li key={i}>Row {e.row}: {e.reason}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                         {/* Smart Features Info */}
                         <div className="bg-blue-50 border border-blue-100 rounded-xl p-5 relative overflow-hidden">
@@ -144,7 +175,6 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
             `}
                             onClick={() => {
                                 if (fileInputRef.current) {
-                                    fileInputRef.current.value = '';
                                     fileInputRef.current.click();
                                 }
                             }}

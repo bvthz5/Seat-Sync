@@ -40,10 +40,26 @@ export class BulkStudentImportService {
         const rows: StudentCSVRow[] = [];
 
         // 1. Parse CSV
+        const HEADER_MAP: Record<string, string> = {
+            "university regno": "RegisterNumber",
+            "reg no": "RegisterNumber",
+            "register number": "RegisterNumber",
+            "name": "FullName",
+            "student name": "FullName",
+            "batch": "ProgramName",
+            "program": "ProgramName",
+            "department": "DepartmentCode"
+        };
+        
         await new Promise<void>((resolve, reject) => {
             const stream = Readable.from(fileBuffer);
             stream
-                .pipe(csv())
+                .pipe(csv({
+                    mapHeaders: ({ header }) => {
+                        const clean = (header || '').trim().toLowerCase();
+                        return HEADER_MAP[clean] || (header || '').trim();
+                    }
+                }))
                 .on('data', (data) => rows.push(data))
                 .on('end', () => resolve())
                 .on('error', (err) => reject(err));
@@ -54,7 +70,7 @@ export class BulkStudentImportService {
         }
 
 // Validate Headers - Relaxed requirements for CSV
-        const requiredHeaders = ['FullName', 'DepartmentCode', 'ProgramName'];
+        const requiredHeaders = ['FullName', 'ProgramName'];
         const headers = Object.keys(rows[0]);
         const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
         if (missingHeaders.length > 0) {
@@ -92,21 +108,47 @@ export class BulkStudentImportService {
                         registerNumber = "AUTO_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
                     }
                     
-                    const departmentCode = row.DepartmentCode?.trim();
-                    const rowProgramRaw = row.ProgramName?.trim() || '';
-                    const parsed = parseBatchString(rowProgramRaw);
-                    const programName = normalizeProgram(parsed.programCode);
-                    const departmentName = mapProgramToDepartment(programName);
-  
-                    const semesterNumber = row.SemesterNumber?.trim();
+const rowProgramRaw = row.ProgramName?.trim() || '';        
+                    const parseBatch = (batchText: string) => {
+                        if (!batchText) return null;
+                        const text = batchText.replace(/batch\s*:/i, '').trim();
+                        const match = text.match(/^([A-Z]+)\s+(\d{4})(?:.*S(\d))?/i);
+                        if (match && match[1] && match[2]) {
+                            return {
+                                programCode: match[1].toUpperCase(),
+                                batchYear: parseInt(match[2], 10),
+                                semester: match[3] ? parseInt(match[3], 10) : 1
+                            };
+                        }
+                        return null;
+                    };
+                    const parsedBatch = parseBatch(rowProgramRaw);
+                    if (!parsedBatch) {
+                        throw new Error(`Invalid Batch Format: ${rowProgramRaw}`);
+                    }
+                    const { programCode: programName, batchYear, semester: semNum } = parsedBatch;
+                    if (/\d/.test(programName)) {
+                        throw new Error(`Invalid Program Code - Contains Numbers: ${programName}`);
+                    }
+                    
+                    const PROGRAM_DEPARTMENT_MAP: Record<string, string> = {
+                        "CSE": "Computer Science & Engineering",
+                        "AI&DS": "Artificial Intelligence & Data Science",
+                        "ECE": "Electronics & Communication Engineering",
+                        "EEE": "Electrical & Electronics Engineering",
+                        "MCA": "Computer Applications",
+                        "MBA": "Management Studies",
+                        "BHM": "Hotel Management"
+                    };
+                    const departmentName = PROGRAM_DEPARTMENT_MAP[programName] || programName;
+                    const departmentCode = programName;
+
+                    const semesterNumber = row.SemesterNumber?.trim() || semNum.toString();
                     const email = row.Email?.trim();
 
                     // Row Validation
                     if (!fullName) {
                         throw new Error("FullName is required");
-                    }
-                    if (!departmentCode) {
-                        throw new Error("DepartmentCode is required");
                     }
                     if (!programName) {
                         throw new Error("ProgramName is required");
