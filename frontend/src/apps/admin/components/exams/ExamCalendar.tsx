@@ -14,6 +14,7 @@ import {
 } from 'date-fns';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock } from 'lucide-react';
 import { Button, Tooltip, Chip } from '@heroui/react';
+import { normalizeExamDepartmentCode } from './departmentCode';
 
 interface Exam {
     ExamID: number;
@@ -141,7 +142,7 @@ const ExamCalendar: React.FC<ExamCalendarProps> = ({ exams, onExamClick }) => {
                                             <div className="flex items-center gap-1.5 min-w-0">
                                                 {exam.Subject?.Department?.DepartmentCode && (
                                                     <span className="text-[9px] font-bold opacity-80 bg-black/5 px-1 rounded flex-shrink-0">
-                                                        {exam.Subject.Department.DepartmentCode}
+                                                        {normalizeExamDepartmentCode(exam.Subject.Department.DepartmentCode)}
                                                     </span>
                                                 )}
                                                 <span className="font-semibold truncate">

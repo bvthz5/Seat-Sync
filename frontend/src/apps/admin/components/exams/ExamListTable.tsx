@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Chip, Tooltip, Pagination, Button } from "@heroui/react";
 import { Edit2, Trash2, CheckCircle, AlertTriangle, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
+import { normalizeExamDepartmentCode } from './departmentCode';
 
 interface Exam {
     ExamID: number;
@@ -91,7 +92,7 @@ const ExamListTable: React.FC<ExamListTableProps> = ({ exams, loading, onEdit, o
                             const audit = exam.AuditStatus || 'Pending';
                             const displayStatus = exam.Status;
                             const deptName = exam.Subject?.Department?.DepartmentName || 'General';
-                            const deptCode = exam.Subject?.Department?.DepartmentCode || 'GEN';
+                            const deptCode = normalizeExamDepartmentCode(exam.Subject?.Department?.DepartmentCode || 'GEN');
 
                             return (
                                 <tr

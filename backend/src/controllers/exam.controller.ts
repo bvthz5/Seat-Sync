@@ -415,7 +415,7 @@ export class ExamController {
                         attributes: ['SubjectName', 'SubjectCode', 'DepartmentID'],
                         include: [{
                             model: Department,
-                            attributes: ['DepartmentName', 'DepartmentCode']
+                            attributes: ['DepartmentID', 'DepartmentName', 'DepartmentCode']
                         }]
                     },
                     {
@@ -501,11 +501,46 @@ export class ExamController {
     static async updateExam(req: Request, res: Response) {
         try {
             const { id } = req.params;
-            const updates = req.body;
+            const updates = { ...req.body };
 
             const exam = await Exam.findByPk(id as string);
             if (!exam) {
                 return res.status(404).json({ message: 'Exam not found' });
+            }
+
+            const departmentIdRaw = updates.DepartmentID;
+            delete updates.DepartmentID;
+
+            if (departmentIdRaw !== undefined && departmentIdRaw !== null && String(departmentIdRaw).trim() !== '') {
+                const departmentId = Number(departmentIdRaw);
+                if (!Number.isFinite(departmentId)) {
+                    return res.status(400).json({ message: 'Invalid DepartmentID' });
+                }
+
+                const department = await Department.findByPk(departmentId);
+                if (!department) {
+                    return res.status(404).json({ message: 'Department not found' });
+                }
+
+                const currentSubject = await Subject.findByPk(exam.SubjectID);
+                if (!currentSubject) {
+                    return res.status(404).json({ message: 'Current subject not found for exam' });
+                }
+
+                const [targetSubject] = await Subject.findOrCreate({
+                    where: {
+                        SubjectCode: currentSubject.SubjectCode,
+                        DepartmentID: departmentId
+                    },
+                    defaults: {
+                        SubjectCode: currentSubject.SubjectCode,
+                        SubjectName: currentSubject.SubjectName,
+                        DepartmentID: departmentId,
+                        SemesterID: currentSubject.SemesterID
+                    }
+                });
+
+                updates.SubjectID = targetSubject.SubjectID;
             }
 
             await exam.update(updates);
@@ -890,9 +925,9 @@ export class ExamController {
 
                     const deptCodesFromRow = parseDepartmentCodes(deptRaw);
                     const deptCodeFromCourse = inferDepartmentCodeFromCourseCode(cleanCode);
-                    const deptCodes = deptCodeFromCourse
-                        ? [deptCodeFromCourse, ...deptCodesFromRow.filter((d) => d !== deptCodeFromCourse)]
-                        : deptCodesFromRow;
+                    const deptCodes = deptCodesFromRow.length > 0
+                        ? deptCodesFromRow
+                        : (deptCodeFromCourse ? [deptCodeFromCourse] : []);
                     const targetDeptCodes = deptCodes.length > 0 ? deptCodes : [null];
 
                     for (const deptCode of targetDeptCodes) {

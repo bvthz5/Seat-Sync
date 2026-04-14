@@ -7,6 +7,8 @@ export { default as Student } from "./Student.js";
 export { default as Subject } from "./Subject.js";
 export { default as StudentSubject } from "./StudentSubject.js";
 export { default as Exam } from "./Exam.js";
+export { default as ExamSubject } from "./ExamSubject.js";
+export { default as ExamSchedule } from "./ExamSchedule.js";
 export { default as ExamRegistration } from "./ExamRegistration.js";
 export { default as Block } from "./Block.js";
 export { default as Floor } from "./Floor.js";
