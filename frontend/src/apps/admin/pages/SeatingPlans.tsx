@@ -569,7 +569,7 @@ const SeatingPlans: React.FC = () => {
         return ranges;
     };
 
-    /* ── Fetch all hall allocations and return consolidated rows ── */
+    /* ── Fetch allocated hall allocations only and return consolidated rows ── */
     const buildGlobalRows = async () => {
         const active = [...hallSummary].sort((a, b) => a.hallCode.localeCompare(b.hallCode));
         const rows: { slNo: number; hallCode: string; regRanges: string; count: number; total: number; isFirstRow: boolean; rowSpan: number }[] = [];
@@ -585,15 +585,12 @@ const SeatingPlans: React.FC = () => {
             (hall as any).__deptMap = deptMap;
             (hall as any).__total = Object.keys(assignments).length;
         }));
+        const allocatedOnly = active.filter(hall => (((hall as any).__total ?? 0) > 0));
         let slNo = 1;
-        active.forEach(hall => {
+        allocatedOnly.forEach(hall => {
             const deptMap: Record<string, string[]> = (hall as any).__deptMap ?? {};
             const total: number = (hall as any).__total ?? 0;
             const depts = Object.entries(deptMap).sort(([a], [b]) => a.localeCompare(b));
-            if (!depts.length) {
-                rows.push({ slNo: slNo++, hallCode: hall.hallCode, regRanges: '—', count: 0, total, isFirstRow: true, rowSpan: 1 });
-                return;
-            }
             depts.forEach(([, regs], idx) => {
                 const ranges = buildRegRanges(regs);
                 const rangeStr = ranges.join(', ');
@@ -690,15 +687,6 @@ const SeatingPlans: React.FC = () => {
                     );
                 },
             });
-
-            // ── Summary total row ──
-            const finalY = (doc as any).lastAutoTable.finalY;
-            doc.setFillColor(241, 245, 249);
-            doc.rect(14, finalY, pageW - 28, 8, 'F');
-            doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.3);
-            doc.rect(14, finalY, pageW - 28, 8);
-            doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
-            doc.text(`Total Students Assigned: ${totalFilled}   /   Total Capacity: ${totalCapacity}`, pageW / 2, finalY + 5.5, { align: 'center' });
 
             doc.save(`Consolidated_Seating_${selectedDate}_${selectedSession}.pdf`);
             toast.success('PDF downloaded');
