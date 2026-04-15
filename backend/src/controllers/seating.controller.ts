@@ -966,7 +966,8 @@ export const bulkAssign = async (req: Request, res: Response) => {
             mode: resolvedMode,
         });
 
-        let leftIdx = 0, rightIdx = 0;
+        let studentIdx = 0;  // Single consecutive index
+        const allStudentsPool = leftStudents.concat(rightStudents);  // Merge into single pool
         const targetHalls = await Room.findAll({ 
             where: { RoomID: { [Op.in]: hallIds } }, 
             transaction 
@@ -1005,12 +1006,12 @@ export const bulkAssign = async (req: Request, res: Response) => {
         const hallResults: any[] = [];
         const allNewAllocations: { ExamID: number; SeatID: number; StudentID: number }[] = [];
 
-        // Build benchMaps for all halls
-        const hallBenchMaps: Record<number, Record<string, Record<number, any[]>>> = {};
-        const hallSeatsMap: Record<number, any[]> = {};
+        // Hall-by-hall assignment: fill each hall completely before moving to next
         for (const hallIdNum of hallIds.map(Number)) {
+            const hall = targetHalls.find(h => h.RoomID === hallIdNum);
+            if (!hall) continue;
+
             const seats = roomSeatsMap.get(hallIdNum) || [];
-            hallSeatsMap[hallIdNum] = seats;
 
             const benchMap: Record<string, Record<number, any[]>> = {};
             for (const seat of seats) {
@@ -1021,70 +1022,45 @@ export const bulkAssign = async (req: Request, res: Response) => {
                 if (!rowMap[benchNumber]) rowMap[benchNumber] = [];
                 rowMap[benchNumber]!.push(seat);
             }
-            hallBenchMaps[hallIdNum] = benchMap;
-        }
 
-        // Get all unique rows and benches
-        const allRows = [...new Set(
-            Object.values(hallBenchMaps).flatMap(bm => Object.keys(bm))
-        )].sort();
-        const allBenchNums = [...new Set(
-            Object.values(hallBenchMaps).flatMap(bm =>
-                Object.keys(bm).flatMap(r => Object.keys(bm[r]!).map(Number))
-            )
-        )].sort((a, b) => a - b);
+            // Get all rows and benches for this hall
+            const allRows = Object.keys(benchMap).sort();
+            const allBenchNums = [...new Set(
+                allRows.flatMap(r => Object.keys(benchMap[r]!).map(Number))
+            )].sort((a, b) => a - b);
 
-        const findCandidateIndex = (arr: any[], startIdx: number, avoidDeptCode?: string): number => {
-            if (startIdx >= arr.length) return -1;
-            if (!avoidDeptCode) return startIdx;
-            for (let i = startIdx; i < arr.length; i++) {
-                const code = String(arr[i]?.Department?.DepartmentCode || "");
-                if (code !== avoidDeptCode) return i;
-            }
-            return -1;
-        };
+            const findCandidateIndex = (arr: any[], startIdx: number, avoidDeptCode?: string): number => {
+                if (startIdx >= arr.length) return -1;
+                if (!avoidDeptCode) return startIdx;
+                for (let i = startIdx; i < arr.length; i++) {
+                    const code = String(arr[i]?.Department?.DepartmentCode || "");
+                    if (code !== avoidDeptCode) return i;
+                }
+                return -1;
+            };
 
-        // Column-wise filling: iterate through rows, benches, then halls
-        for (const row of allRows) {
-            for (const benchNum of allBenchNums) {
-                for (const hallIdNum of hallIds.map(Number)) {
-                    const benchMap = hallBenchMaps[hallIdNum];
-                    const benchSeats = (benchMap?.[row]?.[benchNum] || []).sort(sortSeatsByPosition);
-                    let currentBenchLeftDept = "";
+            let hallLeft = 0, hallRight = 0;
+
+            // Within each hall: row → bench → seats (consecutive fill)
+            for (const row of allRows) {
+                for (const benchNum of allBenchNums) {
+                    const benchSeats = (benchMap[row]?.[benchNum] || []).sort(sortSeatsByPosition);
 
                     for (const seat of benchSeats) {
-                        if (getSeatNumber(seat) === 1 && leftIdx < leftStudents.length) {
-                            const li = findCandidateIndex(leftStudents, leftIdx);
-                            if (li !== -1) {
-                                if (li !== leftIdx) [leftStudents[leftIdx], leftStudents[li]] = [leftStudents[li], leftStudents[leftIdx]];
-                                const stu = leftStudents[leftIdx++] as any;
-                                currentBenchLeftDept = String(stu?.Department?.DepartmentCode || "");
-                                allNewAllocations.push({ ExamID: primaryExamId, SeatID: seat.SeatID !, StudentID: stu.StudentID as number });
-                            }
-                        } else if (getSeatNumber(seat) !== 1 && rightIdx < rightStudents.length) {
-                            const ri = findCandidateIndex(rightStudents, rightIdx, currentBenchLeftDept);
-                            if (ri !== -1) {
-                                if (ri !== rightIdx) [rightStudents[rightIdx], rightStudents[ri]] = [rightStudents[ri], rightStudents[rightIdx]];
-                                const stu = rightStudents[rightIdx++] as any;
-                                allNewAllocations.push({ ExamID: primaryExamId, SeatID: seat.SeatID !, StudentID: stu.StudentID as number });
-                            }
+                        if (studentIdx < allStudentsPool.length) {
+                            const stu = allStudentsPool[studentIdx++] as any;
+                            allNewAllocations.push({ ExamID: primaryExamId, SeatID: seat.SeatID !, StudentID: stu.StudentID as number });
+                            if (getSeatNumber(seat) === 1) hallLeft++;
+                            else hallRight++;
                         }
                     }
                 }
             }
-        }
 
-        // Build hall results
-        for (const hallIdNum of hallIds.map(Number)) {
-            const hall = targetHalls.find(h => h.RoomID === hallIdNum);
-            if (!hall) continue;
-            const hallAllocs = allNewAllocations.filter(a =>
-                hallSeatsMap[hallIdNum]?.some(s => s.SeatID === a.SeatID)
-            );
             hallResults.push({
                 hallId: hallIdNum, hallCode: hall.RoomCode,
-                totalSeats: hallSeatsMap[hallIdNum]?.length || 0,
-                filled: hallAllocs.length,
+                totalSeats: seats.length, filled: hallLeft + hallRight,
+                leftUsed: hallLeft, rightUsed: hallRight,
             });
         }
 
@@ -1093,14 +1069,14 @@ export const bulkAssign = async (req: Request, res: Response) => {
         }
 
         await transaction.commit();
-        console.log("FINAL assigned count:", leftIdx + rightIdx);
+        console.log("FINAL assigned count:", studentIdx);
         console.log("DEBUG: Sending students to frontend:", students.length);
         res.json({
             success: true,
             studentCount: students.length,
             hallResults,
-            totalLeftAssigned: leftIdx, totalRightAssigned: rightIdx,
-            totalLeftAvailable: leftStudents.length, totalRightAvailable: rightStudents.length,
+            totalLeftAssigned: studentIdx, totalRightAssigned: 0,
+            totalLeftAvailable: allStudentsPool.length, totalRightAvailable: 0,
             mode: resolvedMode,
             avoidSameDeptBench: applyAdjacencyGuard,
         });
