@@ -315,7 +315,7 @@ export const getExamDates = async (req: Request, res: Response) => {
         res.json([...slotMap.values()]);
     } catch (error: any) {
         console.error("GET EXAM DATES ERROR:", error);
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: (error instanceof Error ? error.message : String(error)) });
     }
 };
 
@@ -378,7 +378,7 @@ export const getExamDepartments = async (req: Request, res: Response) => {
         })));
     } catch (error: any) {
         console.error("GET EXAM DEPARTMENTS ERROR:", error);
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: (error instanceof Error ? error.message : String(error)) });
     }
 };
 
@@ -394,7 +394,7 @@ export const getHalls = async (_req: Request, res: Response) => {
         res.json(halls);
     } catch (error: any) {
         console.error("GET HALLS ERROR:", error);
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: (error instanceof Error ? error.message : String(error)) });
     }
 };
 
@@ -447,7 +447,7 @@ export const getHallLayout = async (req: Request, res: Response) => {
         res.json({ hall, totalSeats: Number((hall as any).Capacity || activeSeats), benches });
     } catch (error: any) {
         console.error("GET HALL LAYOUT ERROR:", error);
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: (error instanceof Error ? error.message : String(error)) });
     }
 };
 
@@ -474,7 +474,7 @@ export const getDepartments = async (_req: Request, res: Response) => {
         })));
     } catch (error: any) {
         console.error("GET DEPARTMENTS ERROR:", error);
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: (error instanceof Error ? error.message : String(error)) });
     }
 };
 
@@ -620,7 +620,7 @@ export const autoAssign = async (req: Request, res: Response) => {
         });
     } catch (error: any) {
         console.error("AUTO-ASSIGN ERROR:", error);
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: (error instanceof Error ? error.message : String(error)) });
     }
 };
 
@@ -668,7 +668,7 @@ export const getAllocationForHall = async (req: Request, res: Response) => {
         res.json({ assignments });
     } catch (error: any) {
         console.error("GET ALLOCATION ERROR:", error);
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: (error instanceof Error ? error.message : String(error)) });
     }
 };
 
@@ -728,7 +728,7 @@ export const saveAllocation = async (req: Request, res: Response) => {
     } catch (error: any) {
         await transaction.rollback();
         console.error("SAVE ALLOCATION ERROR:", error);
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: (error instanceof Error ? error.message : String(error)) });
     }
 };
 
@@ -755,7 +755,7 @@ export const clearAllocation = async (req: Request, res: Response) => {
         res.json({ message: "Hall allocation cleared successfully" });
     } catch (error: any) {
         console.error("CLEAR ALLOCATION ERROR:", error);
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: (error instanceof Error ? error.message : String(error)) });
     }
 };
 
@@ -782,7 +782,7 @@ export const getStudentsByDept = async (req: Request, res: Response) => {
         })));
     } catch (error: any) {
         console.error("GET STUDENTS BY DEPT ERROR:", error);
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: (error instanceof Error ? error.message : String(error)) });
     }
 };
 
@@ -842,7 +842,7 @@ export const getAllocationSummary = async (req: Request, res: Response) => {
         res.json(summary);
     } catch (error: any) {
         console.error("ALLOCATION SUMMARY ERROR:", error);
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: (error instanceof Error ? error.message : String(error)) });
     }
 };
 
@@ -1052,7 +1052,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
                                 const stu = leftStudents[leftIdx++] as any;
                                 console.log("Assigning student:", stu?.StudentID, stu?.RegisterNumber);
                                 currentBenchLeftDept = String(stu?.Department?.DepartmentCode || "");
-                                records.push({ ExamID: primaryExamId, SeatID: seat.SeatID, StudentID: stu.StudentID as number });
+                                records.push({ ExamID: primaryExamId, SeatID: seat.SeatID !, StudentID: stu.StudentID as number });
                                 hallLeft++;
                             }
                         } else if (getSeatNumber(seat) !== 1 && rightIdx < rightStudents.length) {
@@ -1065,7 +1065,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
                                 if (ri !== rightIdx) [rightStudents[rightIdx], rightStudents[ri]] = [rightStudents[ri], rightStudents[rightIdx]];
                                 const stu = rightStudents[rightIdx++] as any;
                                 console.log("Assigning student:", stu?.StudentID, stu?.RegisterNumber);
-                                records.push({ ExamID: primaryExamId, SeatID: seat.SeatID, StudentID: stu.StudentID as number });
+                                records.push({ ExamID: primaryExamId, SeatID: seat.SeatID !, StudentID: stu.StudentID as number });
                                 hallRight++;
                             }
                         }
@@ -1124,12 +1124,9 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
             await transaction.rollback();
             return res.status(400).json({ message: "No exams found for this date + session" });
         }
-        const primaryExamId = examIds[0] as number;
 
-        // Get all existing allocations
         const existingAllocations = await SeatAllocation.findAll({
-            where: { ExamID: { [Op.in]: examIds } },
-            transaction,
+            where: { ExamID: { [Op.in]: examIds } }, transaction
         });
 
         if (existingAllocations.length === 0) {
@@ -1137,73 +1134,89 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "No students are currently allocated to shuffle" });
         }
 
-        // Fetch all seats to determine left/right
+        const studentIds = [...new Set(existingAllocations.map(a => a.StudentID))];
+        const students = await Student.findAll({ where: { StudentID: { [Op.in]: studentIds } }, transaction });
+        const stuDeptMap = new Map();
+        for (const s of students) stuDeptMap.set(s.StudentID, s.DepartmentID);
+
+        const studentExamMap = new Map();
+        const deptMap = new Map();
+
+        // STEP 1: GROUP STUDENTS BY DEPARTMENT
+        for (const alloc of existingAllocations) {
+            const sId = alloc.StudentID;
+            const dId = stuDeptMap.get(sId) || 0;
+            studentExamMap.set(sId, alloc.ExamID);
+            if (!deptMap.has(dId)) deptMap.set(dId, []);
+            deptMap.get(dId).push(sId);
+        }
+
         const seatIds = [...new Set(existingAllocations.map(a => a.SeatID))];
-        const allSeats = await Seat.findAll({
-            where: { SeatID: { [Op.in]: seatIds } },
-            attributes: ["SeatID", "RowIndex", "BenchIndex", "SeatIndex"],
-            transaction,
-        });
-        const seatNumMap = new Map<number, number>();
-        for (const s of allSeats) seatNumMap.set(s.SeatID, getSeatNumber(s as any));
-
-        const leftAllocations = existingAllocations.filter(a => seatNumMap.get(a.SeatID) === 1);
-        const rightAllocations = existingAllocations.filter(a => seatNumMap.get(a.SeatID) !== 1);
-
-        // Fetch full seat info so we can sort column-by-column per hall
         const allSeatInfo = await Seat.findAll({
             where: { SeatID: { [Op.in]: seatIds } },
             attributes: ["SeatID", "RoomID", "RowIndex", "BenchIndex", "SeatIndex"],
-            transaction,
+            transaction
         });
-        const seatInfoMap = new Map<number, any>();
+        const seatInfoMap = new Map();
         for (const s of allSeatInfo) seatInfoMap.set(s.SeatID, s);
 
-        // Determine hall order (by RoomCode) so multi-hall is consistent
-        const roomIds = [...new Set(allSeatInfo.map((s: any) => s.RoomID))];
+        const roomIds = [...new Set(allSeatInfo.map((s) => s.RoomID))];
         const rooms = await Room.findAll({ where: { RoomID: { [Op.in]: roomIds } }, transaction });
-        const roomOrder = new Map<number, string>();
-        for (const r of rooms) roomOrder.set(r.RoomID, r.RoomCode);
+        const roomOrderMap = new Map();
+        for (const r of rooms) roomOrderMap.set(r.RoomID, r.RoomCode);
 
-        // Column-by-column sort: roomCode → rowLabel → benchNumber → seatNumber
-        const columnSort = (seatId: number) => {
-            const s = seatInfoMap.get(seatId);
-            if (!s) return '';
-            return `${roomOrder.get(s.RoomID) ?? ''}_${getRowLabel(s)}_${String(getBenchNumber(s)).padStart(6, '0')}_${getSeatNumber(s)}`;
-        };
-
-        // Sort seats column-by-column
-        const leftSeats = leftAllocations.map(a => a.SeatID).sort((a, b) => columnSort(a as number).localeCompare(columnSort(b as number)));
-        const rightSeats = rightAllocations.map(a => a.SeatID).sort((a, b) => columnSort(a as number).localeCompare(columnSort(b as number)));
-
-        // Sort students by their CURRENT seat order (preserves the original sequence)
-        const leftStudents = leftAllocations
-            .sort((a, b) => columnSort(a.SeatID as number).localeCompare(columnSort(b.SeatID as number)))
-            .map(a => a.StudentID);
-        const rightStudents = rightAllocations
-            .sort((a, b) => columnSort(a.SeatID as number).localeCompare(columnSort(b.SeatID as number)))
-            .map(a => a.StudentID);
-
-        // Rotate the group by a random offset — order is preserved but they start at a different room/position
-        const rotate = (arr: any[], offset: number) => [...arr.slice(offset), ...arr.slice(0, offset)];
-        const leftOffset = leftStudents.length > 1 ? Math.floor(Math.random() * leftStudents.length) : 0;
-        const rightOffset = rightStudents.length > 1 ? Math.floor(Math.random() * rightStudents.length) : 0;
-        const rotatedLeft = rotate(leftStudents, leftOffset);
-        const rotatedRight = rotate(rightStudents, rightOffset);
-
-        const newRecords: { ExamID: number; SeatID: number; StudentID: number }[] = [];
-        for (let i = 0; i < leftSeats.length; i++) {
-            newRecords.push({ ExamID: primaryExamId, SeatID: leftSeats[i] as number, StudentID: rotatedLeft[i] as number });
-        }
-        for (let i = 0; i < rightSeats.length; i++) {
-            newRecords.push({ ExamID: primaryExamId, SeatID: rightSeats[i] as number, StudentID: rotatedRight[i] as number });
-        }
-
-        // Remove old existing ones and insert new ones
-        await SeatAllocation.destroy({
-            where: { ExamID: { [Op.in]: examIds } },
-            transaction,
+        // STEP 3: FIXED SEAT ORDER (Room -> RowIndex -> BenchIndex -> SeatIndex)
+        const orderedSeats = seatIds.sort((a, b) => {
+            const sa = seatInfoMap.get(a);
+            const sb = seatInfoMap.get(b);
+            const rmA = roomOrderMap.get(sa.RoomID) || '';
+            const rmB = roomOrderMap.get(sb.RoomID) || '';
+            if (rmA !== rmB) return rmA.localeCompare(rmB);
+            if (sa.RowIndex !== sb.RowIndex) return sa.RowIndex - sb.RowIndex;
+            if (sa.BenchIndex !== sb.BenchIndex) return sa.BenchIndex - sb.BenchIndex;
+            return sa.SeatIndex - sb.SeatIndex;
         });
+
+        // STEP 6: SHUFFLE ONLY WITHIN DEPARTMENT GROUPS
+        const orderedDeptKeys = [...deptMap.keys()];
+        for (const dId of orderedDeptKeys) {
+            const arr = deptMap.get(dId);
+            arr.sort(() => Math.random() - 0.5);
+        }
+
+        // STEP 2: BUILD ORDERED INTERLEAVED LIST
+        let finalStudents = [];
+        let hasMore = true;
+        let i = 0;
+        while (hasMore) {
+            hasMore = false;
+            for (const dId of orderedDeptKeys) {
+                const arr = deptMap.get(dId);
+                if (i < arr.length) {
+                    finalStudents.push(arr[i]);
+                    hasMore = true;
+                }
+            }
+            i++;
+        }
+
+        await SeatAllocation.destroy({
+            where: { ExamID: { [Op.in]: examIds } }, transaction
+        });
+
+        // STEP 4: ASSIGN STUDENTS SEQUENTIALLY
+        const newRecords = [];
+        for (let j = 0; j < orderedSeats.length; j++) {
+            const sId = finalStudents[j];
+            const eId = studentExamMap.get(sId);
+            if (eId && orderedSeats[j] !== undefined) {
+                newRecords.push({
+                    ExamID: eId, // STEP 7: PRESERVE STUDENT -> EXAM
+                    SeatID: orderedSeats[j] as number,
+                    StudentID: sId
+                });
+            }
+        }
 
         if (newRecords.length > 0) {
             await SeatAllocation.bulkCreate(newRecords, { transaction });
@@ -1212,17 +1225,16 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
         await transaction.commit();
         res.json({ message: "Seating scrambled successfully!", shuffledCount: newRecords.length });
 
-    } catch (error: any) {
+    } catch (error) {
         await transaction.rollback();
         console.error("SHUFFLE GLOBAL ERROR:", error);
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: (error instanceof Error ? error.message : String(error)) });
     }
 };
 
-/* ════════════════════════════════════════════════════════════
- *  POST /api/seating/quick-add-slot
- *  Body: { examDate, session, seriesId? }
- *  Creates a placeholder Exam record so SeatingPlans can use the slot
+/* ------------------------------------------------------------
+ *
+Exam record so SeatingPlans can use the slot
  * ════════════════════════════════════════════════════════════ */
 export const quickAddExamSlot = async (req: Request, res: Response) => {
     try {
@@ -1495,9 +1507,9 @@ export const importSeatingFromExcel = async (req: Request, res: Response) => {
                     const benchSeats = (benchMap[row]?.[benchNum] || []).sort(sortSeatsByPosition);
                     for (const seat of benchSeats) {
                         if (getSeatNumber(seat) === 1 && leftIdx < leftStudentIds.length) {
-                            newRecords.push({ ExamID: primaryExamId, SeatID: seat.SeatID, StudentID: leftStudentIds[leftIdx++] as number });
+                            newRecords.push({ ExamID: primaryExamId, SeatID: seat.SeatID !, StudentID: leftStudentIds[leftIdx++] as number });
                         } else if (getSeatNumber(seat) !== 1 && rightIdx < rightStudentIds.length) {
-                            newRecords.push({ ExamID: primaryExamId, SeatID: seat.SeatID, StudentID: rightStudentIds[rightIdx++] as number });
+                            newRecords.push({ ExamID: primaryExamId, SeatID: seat.SeatID !, StudentID: rightStudentIds[rightIdx++] as number });
                         }
                     }
                 }
@@ -1522,7 +1534,7 @@ export const importSeatingFromExcel = async (req: Request, res: Response) => {
         await transaction.rollback();
         console.error("IMPORT SEATING ERROR:", error);
 
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: (error instanceof Error ? error.message : String(error)) });
     }
 };
 
@@ -1598,6 +1610,6 @@ export const searchStudent = async (req: Request, res: Response) => {
         res.json({ results });
     } catch (error: any) {
         console.error("SEARCH STUDENT ERROR:", error);
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: (error instanceof Error ? error.message : String(error)) });
     }
 };
