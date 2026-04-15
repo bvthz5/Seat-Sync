@@ -569,7 +569,7 @@ const SeatingPlans: React.FC = () => {
         return ranges;
     };
 
-    /* ── Fetch all hall allocations and return consolidated rows ── */
+    /* ── Fetch allocated hall allocations only and return consolidated rows ── */
     const buildGlobalRows = async () => {
         const active = [...hallSummary].sort((a, b) => a.hallCode.localeCompare(b.hallCode));
         const rows: { slNo: number; hallCode: string; regRanges: string; count: number; total: number; isFirstRow: boolean; rowSpan: number }[] = [];
@@ -585,15 +585,12 @@ const SeatingPlans: React.FC = () => {
             (hall as any).__deptMap = deptMap;
             (hall as any).__total = Object.keys(assignments).length;
         }));
+        const allocatedOnly = active.filter(hall => (((hall as any).__total ?? 0) > 0));
         let slNo = 1;
-        active.forEach(hall => {
+        allocatedOnly.forEach(hall => {
             const deptMap: Record<string, string[]> = (hall as any).__deptMap ?? {};
             const total: number = (hall as any).__total ?? 0;
             const depts = Object.entries(deptMap).sort(([a], [b]) => a.localeCompare(b));
-            if (!depts.length) {
-                rows.push({ slNo: slNo++, hallCode: hall.hallCode, regRanges: '—', count: 0, total, isFirstRow: true, rowSpan: 1 });
-                return;
-            }
             depts.forEach(([, regs], idx) => {
                 const ranges = buildRegRanges(regs);
                 const rangeStr = ranges.join(', ');
@@ -691,15 +688,6 @@ const SeatingPlans: React.FC = () => {
                 },
             });
 
-            // ── Summary total row ──
-            const finalY = (doc as any).lastAutoTable.finalY;
-            doc.setFillColor(241, 245, 249);
-            doc.rect(14, finalY, pageW - 28, 8, 'F');
-            doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.3);
-            doc.rect(14, finalY, pageW - 28, 8);
-            doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
-            doc.text(`Total Students Assigned: ${totalFilled}   /   Total Capacity: ${totalCapacity}`, pageW / 2, finalY + 5.5, { align: 'center' });
-
             doc.save(`Consolidated_Seating_${selectedDate}_${selectedSession}.pdf`);
             toast.success('PDF downloaded');
         } catch { toast.error('Failed to generate PDF'); }
@@ -733,6 +721,130 @@ const SeatingPlans: React.FC = () => {
         } catch (err: any) {
             console.error('downloadSeatingExcel error:', err);
             toast.error('Failed to generate Excel: ' + (err?.message || 'Unknown error'));
+        } finally {
+            setSeatingDownloading(false);
+        }
+    };
+
+    const downloadSeatingPDF = async () => {
+        if (!selectedDate) return;
+        setSeatingDownloading(true);
+        try {
+            const allocatedHalls = [...hallSummary]
+                .filter(h => h.filledSeats > 0)
+                .sort((a, b) => a.hallCode.localeCompare(b.hallCode));
+
+            if (allocatedHalls.length === 0) {
+                toast.error('No halls have assigned seats');
+                return;
+            }
+
+            const { default: jsPDF } = await import('jspdf');
+            const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+            const pageW = doc.internal.pageSize.getWidth();
+            const pageH = doc.internal.pageSize.getHeight();
+            const sessionLabel = selectedSession === 'FN' ? 'Forenoon' : 'Afternoon';
+
+            for (let i = 0; i < allocatedHalls.length; i++) {
+                const hall = allocatedHalls[i];
+                if (i > 0) doc.addPage();
+
+                const [layout, alloc] = await Promise.all([
+                    SeatingService.getHallLayout(hall.hallId),
+                    SeatingService.getAllocationForHall(selectedDate, selectedSession, hall.hallId),
+                ]);
+                const benches: Bench[] = layout?.benches || [];
+                const assignments: Record<number, Assignment> = alloc?.assignments || {};
+                const rowLabels = [...new Set(benches.map(b => b.rowLabel))].sort();
+                const benchesByRow = new Map<string, Bench[]>();
+                rowLabels.forEach((rowLabel) => {
+                    benchesByRow.set(
+                        rowLabel,
+                        benches
+                            .filter(b => b.rowLabel === rowLabel)
+                            .sort((a, b) => a.benchNumber - b.benchNumber)
+                    );
+                });
+
+                const drawHeader = () => {
+                    doc.setFillColor(255, 255, 255);
+                    doc.rect(0, 0, pageW, pageH, 'F');
+                    doc.setFillColor(248, 250, 252);
+                    doc.rect(0, 0, pageW, 18, 'F');
+                    doc.setDrawColor(226, 232, 240);
+                    doc.line(0, 18, pageW, 18);
+
+                    doc.setTextColor(71, 85, 105);
+                    doc.setFontSize(8);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('SEATING LAYOUT', 9, 6.5);
+                    doc.setTextColor(15, 23, 42);
+                    doc.setFontSize(11);
+                    doc.text(`Hall ${hall.hallCode}`, 9, 11.5);
+                    doc.setFontSize(7.5);
+                    doc.setTextColor(100, 116, 139);
+                    doc.text(`${fmtDate(selectedDate)}  ·  ${sessionLabel}  ·  ${hall.filledSeats}/${hall.totalSeats}`, 9, 16);
+                };
+
+                const marginX = 8;
+                const gapX = 2.5;
+                const gapY = 2.5;
+                const startY = 21;
+                const bottomMargin = 6;
+                const availableW = pageW - marginX * 2;
+                const availableH = pageH - startY - bottomMargin;
+                const cols = Math.max(rowLabels.length, 1);
+                const rowsNeeded = Math.max(
+                    rowLabels.reduce((max, rowLabel) => Math.max(max, benchesByRow.get(rowLabel)?.length ?? 0), 0),
+                    1
+                );
+                const cardW = (availableW - (cols - 1) * gapX) / cols;
+                const cardH = (availableH - (rowsNeeded - 1) * gapY) / rowsNeeded;
+                const labelFont = Math.max(5.2, Math.min(7, cardH * 0.28));
+                const regFont = Math.max(5.8, Math.min(10, cardH * 0.45));
+
+                drawHeader();
+
+                rowLabels.forEach((rowLabel, colIdx) => {
+                    const rowBenches = benchesByRow.get(rowLabel) ?? [];
+                    rowBenches.forEach((bench, benchIdx) => {
+                        const x = marginX + colIdx * (cardW + gapX);
+                        const y = startY + benchIdx * (cardH + gapY);
+
+                        const leftSeat = bench.seats.find(s => s.SeatNumber === 1);
+                        const rightSeat = bench.seats.find(s => s.SeatNumber === 2);
+                        const leftReg = leftSeat ? (assignments[leftSeat.SeatID]?.registerNumber ?? '—') : '—';
+                        const rightReg = rightSeat ? (assignments[rightSeat.SeatID]?.registerNumber ?? '—') : '—';
+
+                        doc.setFillColor(255, 255, 255);
+                        doc.setDrawColor(203, 213, 225);
+                        doc.setLineWidth(0.65);
+                        doc.roundedRect(x, y, cardW, cardH, 2.5, 2.5, 'FD');
+                        doc.setFillColor(241, 245, 249);
+                        doc.rect(x, y, cardW, Math.min(4, cardH * 0.34), 'F');
+                        doc.setDrawColor(148, 163, 184);
+                        doc.setLineWidth(0.45);
+                        doc.line(x + cardW / 2, y + Math.min(4, cardH * 0.34), x + cardW / 2, y + cardH);
+
+                        doc.setFont('helvetica', 'bold');
+                        doc.setFontSize(labelFont);
+                        doc.setTextColor(71, 85, 105);
+                        doc.text(`${rowLabel}${bench.benchNumber}`, x + 1.8, y + Math.min(2.8, cardH * 0.25));
+
+                        doc.setFont('courier', 'bold');
+                        doc.setFontSize(regFont);
+                        doc.setTextColor(15, 23, 42);
+                        doc.text(leftReg, x + cardW * 0.25, y + cardH * 0.67, { align: 'center' });
+                        doc.text(rightReg, x + cardW * 0.75, y + cardH * 0.67, { align: 'center' });
+                    });
+                });
+            }
+
+            doc.save(`Seating_${selectedDate}_${selectedSession}.pdf`);
+            toast.success('Seating PDF downloaded');
+        } catch (err: any) {
+            console.error('downloadSeatingPDF error:', err);
+            toast.error('Failed to generate PDF: ' + (err?.message || 'Unknown error'));
         } finally {
             setSeatingDownloading(false);
         }
@@ -1248,12 +1360,33 @@ const SeatingPlans: React.FC = () => {
                                         </div>
                                         <div className="flex items-center gap-3">
                                             {/* Per-hall seating download */}
-                                            <Button size="sm" isDisabled={seatingDownloading || totalFilled === 0}
-                                                onPress={downloadSeatingExcel}
-                                                className="font-semibold text-[12px] bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border-2 border-emerald-200 rounded-xl h-10 px-4 transition-all"
-                                                startContent={seatingDownloading ? <RefreshCw size={14} className="animate-spin" /> : <FileSpreadsheet size={15} />}>
-                                                {seatingDownloading ? 'Generating…' : 'Download Seating'}
-                                            </Button>
+                                            <Dropdown placement="bottom-end" classNames={{ content: "bg-white border text-slate-800 border-slate-200 shadow-2xl rounded-xl p-1" }}>
+                                                <DropdownTrigger>
+                                                    <Button size="sm" isDisabled={seatingDownloading || totalFilled === 0}
+                                                        className="font-semibold text-[12px] bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border-2 border-emerald-200 rounded-xl h-10 px-4 transition-all"
+                                                        startContent={seatingDownloading ? <RefreshCw size={14} className="animate-spin" /> : <FileSpreadsheet size={15} />}>
+                                                        {seatingDownloading ? 'Generating…' : 'Download Seating'}
+                                                    </Button>
+                                                </DropdownTrigger>
+                                                <DropdownMenu aria-label="Seating download format"
+                                                    classNames={{ base: 'bg-white border border-slate-200 rounded-xl shadow-2xl min-w-[180px]', list: 'gap-1 p-1' }}
+                                                    onAction={(key) => { if (key === 'pdf') downloadSeatingPDF(); else if (key === 'excel') downloadSeatingExcel(); }}>
+                                                    <DropdownItem key="pdf"
+                                                        startContent={<FileDown size={14} className="text-rose-500" />}
+                                                        className="text-slate-700 data-[hover=true]:bg-slate-100 data-[hover=true]:text-slate-900 rounded-lg"
+                                                        textValue="Download PDF">
+                                                        <span className="text-[12px] font-semibold">Download PDF</span>
+                                                        <p className="text-[10px] text-slate-500">One hall per page</p>
+                                                    </DropdownItem>
+                                                    <DropdownItem key="excel"
+                                                        startContent={<FileSpreadsheet size={14} className="text-emerald-600" />}
+                                                        className="text-slate-700 data-[hover=true]:bg-slate-100 data-[hover=true]:text-slate-900 rounded-lg"
+                                                        textValue="Download Excel">
+                                                        <span className="text-[12px] font-semibold">Download Excel</span>
+                                                        <p className="text-[10px] text-slate-500">Spreadsheet format</p>
+                                                    </DropdownItem>
+                                                </DropdownMenu>
+                                            </Dropdown>
 
                                             {/* Global download dropdown */}
                                             <Dropdown placement="bottom-end" classNames={{ content: "bg-white border text-slate-800 border-slate-200 shadow-2xl rounded-xl p-1" }}>
