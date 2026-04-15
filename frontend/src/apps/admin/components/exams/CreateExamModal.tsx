@@ -166,7 +166,7 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
 
                                 {/* 1. Subject Search */}
                                 <div className="relative">
-                                    <label htmlFor="subjectSearch" id="subject-search-label" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Subject Name or Code</label>
+                                    <div  id="subject-search-label" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Subject Name or Code</div>
                                     <Input
                                         id="subjectSearch"
                                         name="subjectSearch"
@@ -225,7 +225,7 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
 
                                 {/* Department */}
                                 <div>
-                                    <label htmlFor="department-select" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Department</label>
+                                    <div className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Department</div>
                                     <Select
                                         id="department-select"
                                         name="DepartmentID"
@@ -250,7 +250,7 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
 
                                 {/* Exam Name */}
                                 <div>
-                                    <label htmlFor="exam-name-input" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Exam Name</label>
+                                    <div className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Exam Name</div>
                                     <Input
                                         id="exam-name-input"
                                         name="ExamName"
@@ -273,7 +273,7 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
                                 {/* 3. Date & Session */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
-                                        <label htmlFor="ExamDate" id="exam-date-label" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Date</label>
+                                        <div  id="exam-date-label" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Date</div>
                                         <Input
                                             id="ExamDate"
                                             type="date"
@@ -295,7 +295,7 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
                                     <div>
                                         <span className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-3">Session</span>
                                         <div className="flex gap-6 h-[48px] items-center">
-                                            <label className="flex items-center gap-2 cursor-pointer group">
+                                            <div className="flex items-center gap-2 cursor-pointer group">
                                                 <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${formData.Session === 'FN' ? 'border-blue-600 bg-white' : 'border-gray-300 bg-white group-hover:border-gray-400'}`}>
                                                     {formData.Session === 'FN' && <div className="w-2.5 h-2.5 bg-blue-600 rounded-full" />}
                                                 </div>
@@ -304,9 +304,9 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
                                                     <span className="font-bold text-gray-700 block">Forenoon</span>
                                                     <span className="text-xs text-gray-400 font-medium">(FN)</span>
                                                 </div>
-                                            </label>
+                                            </div>
 
-                                            <label className="flex items-center gap-2 cursor-pointer group">
+                                            <div className="flex items-center gap-2 cursor-pointer group">
                                                 <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${formData.Session === 'AN' ? 'border-blue-600 bg-white' : 'border-gray-300 bg-white group-hover:border-gray-400'}`}>
                                                     {formData.Session === 'AN' && <div className="w-2.5 h-2.5 bg-blue-600 rounded-full" />}
                                                 </div>
@@ -315,14 +315,14 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
                                                     <span className="font-bold text-gray-700 block">Afternoon</span>
                                                     <span className="text-xs text-gray-400 font-medium">(AN)</span>
                                                 </div>
-                                            </label>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* 4. Duration - Fixed Overlap */}
                                 <div>
-                                    <label htmlFor="Duration" id="duration-label" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Duration (Minutes)</label>
+                                    <div  id="duration-label" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Duration (Minutes)</div>
                                     <Input
                                         id="Duration"
                                         type="number"

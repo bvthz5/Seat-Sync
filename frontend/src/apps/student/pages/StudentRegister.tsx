@@ -37,9 +37,9 @@ const InputField: React.FC<InputFieldProps> = ({ label, icon: Icon, type, name, 
     const hasError = !!error;
     return (
     <div className="relative group col-span-1">
-        <label htmlFor={name} className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ml-1 ${hasError ? 'text-red-600' : 'text-slate-500'}`}>
+        <div className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ml-1 ${hasError ? 'text-red-600' : 'text-slate-500'}`}>
             {label}
-        </label>
+        </div>
         <div className="relative flex items-center transition-all duration-300">
             <div className={`absolute left-4 group-focus-within:text-blue-600 transition-colors ${hasError ? 'text-red-500' : 'text-slate-400'}`}>
                 <Icon className="w-5 h-5" />
@@ -380,9 +380,9 @@ const StudentRegister: React.FC = () => {
                                 />
                                 
                                 <div className="relative group col-span-1">
-                                    <label className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ml-1 ${errors.BatchYear && touchedFields.has('BatchYear') ? 'text-red-600' : 'text-slate-500'}`}>
+                                    <div className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ml-1 ${errors.BatchYear && touchedFields.has('BatchYear') ? 'text-red-600' : 'text-slate-500'}`}>
                                         Batch Year (Year Joined)
-                                    </label>
+                                    </div>
                                     <div className="relative flex items-center transition-all duration-300">
                                         <div className={`absolute left-4 group-focus-within:text-blue-600 transition-colors ${errors.BatchYear && touchedFields.has('BatchYear') ? 'text-red-500' : 'text-slate-400'}`}>
                                             <Calendar className="w-5 h-5" />
@@ -415,9 +415,9 @@ const StudentRegister: React.FC = () => {
                                 </div>
 
                                 <div className="relative group col-span-1">
-                                    <label className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ml-1 ${errors.DepartmentID && touchedFields.has('DepartmentID') ? 'text-red-600' : 'text-slate-500'}`}>
+                                    <div className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ml-1 ${errors.DepartmentID && touchedFields.has('DepartmentID') ? 'text-red-600' : 'text-slate-500'}`}>
                                         Department
-                                    </label>
+                                    </div>
                                     <div className="relative flex items-center transition-all duration-300">
                                         <div className={`absolute left-4 group-focus-within:text-blue-600 transition-colors ${errors.DepartmentID && touchedFields.has('DepartmentID') ? 'text-red-500' : 'text-slate-400'}`}>
                                             <Briefcase className="w-5 h-5" />
@@ -450,9 +450,9 @@ const StudentRegister: React.FC = () => {
                                 </div>
 
                                 <div className="relative group col-span-1">
-                                    <label className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ml-1 ${errors.ProgramID && touchedFields.has('ProgramID') ? 'text-red-600' : 'text-slate-500'}`}>
+                                    <div className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ml-1 ${errors.ProgramID && touchedFields.has('ProgramID') ? 'text-red-600' : 'text-slate-500'}`}>
                                         Program
-                                    </label>
+                                    </div>
                                     <div className="relative flex items-center transition-all duration-300">
                                         <div className={`absolute left-4 group-focus-within:text-blue-600 transition-colors ${errors.ProgramID && touchedFields.has('ProgramID') ? 'text-red-500' : 'text-slate-400'}`}>
                                             <GraduationCap className="w-5 h-5" />

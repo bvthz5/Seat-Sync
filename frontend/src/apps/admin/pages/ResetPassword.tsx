@@ -51,7 +51,7 @@ const CustomInput = ({
 
     return (
         <div className="group flex flex-col gap-2 w-full">
-            <label htmlFor={id} className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">{label}</label>
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">{label}</div>
             <div className={`relative flex items-center w-full h-14 rounded-xl overflow-hidden bg-slate-50 border-none transition-all duration-300 ${error ? 'bg-red-50' : 'hover:bg-slate-100 focus-within:!bg-white focus-within:shadow-xl focus-within:shadow-blue-100'}`}>
                 <div className={`w-14 h-full flex items-center justify-center border-r border-transparent transition-colors ${error ? 'text-red-400' : 'text-slate-400 group-focus-within:text-blue-600'}`}>{icon}</div>
                 <input id={id} name={name} autoComplete={autoComplete} type={inputType} value={value} onChange={onChange} placeholder={placeholder} className={`flex-1 h-full px-4 outline-none bg-transparent font-medium text-lg placeholder:text-slate-300 !border-none !ring-0 !shadow-none focus:!ring-0 ${error ? 'text-red-900' : 'text-slate-800'}`} />

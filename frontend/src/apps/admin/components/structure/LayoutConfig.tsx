@@ -10,7 +10,6 @@ interface LayoutConfigProps {
 }
 
 type RoomType = 'ROOM' | 'HALL';
-type BenchMode = 'PAIRED' | 'ALTERNATING';
 type ViewMode = 'PHYSICAL' | 'LOGICAL' | 'DISABLE';
 
 interface SeatConfig {
@@ -38,8 +37,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
     const [config, setConfig] = useState({
         rowLayout: [] as number[],
         seatsPerBench: 2,
-        roomType: 'ROOM' as RoomType,
-        benchMode: 'PAIRED' as BenchMode
+        roomType: 'ROOM' as RoomType
     });
 
     const [viewMode, setViewMode] = useState<ViewMode>('PHYSICAL');
@@ -133,8 +131,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                     const newConfig = {
                         rowLayout: parsedRowLayout,
                         seatsPerBench: room.SeatsPerBench || 2,
-                        roomType: (room.RoomType || 'ROOM') as RoomType,
-                        benchMode: (room.BenchMode || 'PAIRED') as BenchMode
+                        roomType: (room.RoomType || 'ROOM') as RoomType
                     };
                     setConfig(newConfig);
                     setInitialConfig(newConfig);
@@ -167,7 +164,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                     setLoading(false);
                 }
             } else {
-                setConfig({ rowLayout: [], seatsPerBench: 2, roomType: 'ROOM', benchMode: 'PAIRED' });
+                setConfig({ rowLayout: [], seatsPerBench: 2, roomType: 'ROOM' });
                 setInitialConfig(null);
                 setInitialSeatZoneMap(null);
                 setDisabledSeatIds(new Set());
@@ -219,12 +216,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                     const isActive = !disabledSeatIds.has(seatId);
                     const zoneId = seatZoneMap.get(seatId);
 
-                    let logicalRow = (b * 2) + 1; 
-                    if (config.benchMode === 'ALTERNATING') {
-                        logicalRow = (b * 2) + (s % 2 === 0 ? 2 : 1);
-                    } else {
-                        logicalRow = b + 1;
-                    }
+                    const logicalRow = b + 1;
 
                     seats.push({
                         id: seatId,
@@ -322,8 +314,9 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
         const room = rooms.find(r => r.RoomID === Number(selectedRoomId));
         if (!room) return;
 
-        if (capacityCount > room.Capacity) {
-            toast.error(`Configuration exceeds room capacity (${room.Capacity} seats). Please increase room capacity.`);
+        const calculatedCapacity = config.rowLayout.reduce((acc, curr) => acc + curr, 0) * config.seatsPerBench;
+        if (capacityCount !== calculatedCapacity) {
+            toast.error("Invalid layout");
             return;
         }
 
@@ -336,9 +329,8 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                 SeatsPerBench: config.seatsPerBench,
                 TotalRows: config.rowLayout.length, // Include this to prevent breaking backend logic if it needs it temporarily
                 BenchesPerRow: config.rowLayout.length > 0 ? config.rowLayout[0] : 0,
-                RoomType: config.roomType,
-                BenchMode: config.benchMode
-            } as any);
+                RoomType: config.roomType
+              } as any);
 
             // 2. Sent Seat Updates
             if (isLayoutSame) {
@@ -372,6 +364,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
             }
 
             toast.success("Seating layout updated successfully");
+              setIsSaved(true);
             setInitialConfig(config);
 
             const data = await structureService.getRoomLayout(Number(selectedRoomId));
@@ -417,7 +410,6 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
         if (JSON.stringify(config.rowLayout) !== JSON.stringify(initialConfig.rowLayout) ||
             config.seatsPerBench !== initialConfig.seatsPerBench ||
             config.roomType !== initialConfig.roomType ||
-            config.benchMode !== initialConfig.benchMode ||
             disabledSeatIds.size > 0) return true;
 
         if (!initialSeatZoneMap) return seatZoneMap.size > 0;
@@ -436,7 +428,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                     <ModalHeader className="flex flex-col gap-1 text-slate-800">Auto-Zone Room</ModalHeader>
                     <ModalBody>
                         <p className="text-sm text-slate-500 mb-2">Evenly divide the room into zones column-by-column.</p>
-                        <Input type="number" label="Number of Zones" labelPlacement="outside" min={2} max={6} value={selectedZoneCount.toString()} onValueChange={(val) => setSelectedZoneCount(Number(val))} classNames={{ inputWrapper: "bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors shadow-sm" }} />
+                        <Input name="custom-input"  type="number" label="Number of Zones" labelPlacement="outside" min={2} max={6} value={selectedZoneCount.toString()} onValueChange={(val) => setSelectedZoneCount(Number(val))} classNames={{ inputWrapper: "bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors shadow-sm" }} />
                     </ModalBody>
                     <ModalFooter>
                         <Button color="danger" variant="light" onPress={() => setShowZoneModal(false)}>Cancel</Button>
@@ -472,26 +464,26 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                         <CardBody className="p-6 flex flex-col gap-8">
                             <div className="space-y-5">
                                 <div className="flex flex-col gap-2">
-                                    <label htmlFor="select-block" className="text-sm font-semibold text-slate-700 flex items-center gap-2 px-1">
+                                    <div className="text-sm font-semibold text-slate-700 flex items-center gap-2 px-1">
                                         <Building size={16} className="text-indigo-500" /> Building Block
-                                    </label>
+                                    </div>
                                     <Autocomplete id="select-block" aria-label="Building Block" placeholder="Select a block..." size="md" variant="bordered" selectedKey={selectedBlockId} onSelectionChange={(k) => setSelectedBlockId(k as string)} popoverProps={{ classNames: { content: "bg-white border border-slate-200 shadow-xl rounded-xl z-50 p-1" } }} inputProps={{ classNames: { inputWrapper: "bg-white hover:bg-slate-50 transition-colors shadow-sm" } }}>
                                         {blocks.map(b => <AutocompleteItem key={b.BlockID} textValue={b.BlockName} className="text-slate-700 data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700">{b.BlockName}</AutocompleteItem>)}
                                     </Autocomplete>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="flex flex-col gap-4">
                                     <div className="flex flex-col gap-2">
-                                        <label htmlFor="select-floor" className="text-sm font-semibold text-slate-700 flex items-center gap-2 px-1">
+                                        <div className="text-sm font-semibold text-slate-700 flex items-center gap-2 px-1">
                                             <Layers size={16} className="text-indigo-500" /> Floor
-                                        </label>
+                                        </div>
                                         <Autocomplete id="select-floor" aria-label="Floor" placeholder="Select floor..." isDisabled={!selectedBlockId} size="md" variant="bordered" selectedKey={selectedFloorId} onSelectionChange={(k) => setSelectedFloorId(k as string)} popoverProps={{ classNames: { content: "bg-white border border-slate-200 shadow-xl rounded-xl z-50 p-1" } }} inputProps={{ classNames: { inputWrapper: "bg-white hover:bg-slate-50 transition-colors shadow-sm" } }}>
                                             {floors.map(f => <AutocompleteItem key={f.FloorID} textValue={`Floor ${f.FloorNumber}`} className="text-slate-700 data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700">{`Floor ${f.FloorNumber}`}</AutocompleteItem>)}
                                         </Autocomplete>
                                     </div>
                                     <div className="flex flex-col gap-2">
-                                        <label htmlFor="select-room" className="text-sm font-semibold text-slate-700 flex items-center gap-2 px-1">
+                                        <div className="text-sm font-semibold text-slate-700 flex items-center gap-2 px-1">
                                             <DoorOpen size={16} className="text-indigo-500" /> Room
-                                        </label>
+                                        </div>
                                         <Autocomplete id="select-room" aria-label="Room" placeholder="Select room..." isDisabled={!selectedFloorId} size="md" variant="bordered" selectedKey={selectedRoomId} onSelectionChange={(k) => setSelectedRoomId(k as string)} popoverProps={{ classNames: { content: "bg-white border border-slate-200 shadow-xl rounded-xl z-50 p-1" } }} inputProps={{ classNames: { inputWrapper: "bg-white hover:bg-slate-50 transition-colors shadow-sm" } }}>
                                             {rooms.map(r => <AutocompleteItem key={r.RoomID} textValue={r.RoomCode || r.RoomName || 'Room'} className="text-slate-700 data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700">{r.RoomCode || r.RoomName}</AutocompleteItem>)}
                                         </Autocomplete>
@@ -507,23 +499,15 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                         <div className="space-y-6">
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div className="flex flex-col gap-2">
-                                                    <label htmlFor="select-room-type" className="text-sm font-semibold text-slate-700 flex items-center gap-2 px-1">
+                                                    <div className="text-sm font-semibold text-slate-700 flex items-center gap-2 px-1">
                                                         <Box size={16} className="text-indigo-500" /> Room Type
-                                                    </label>
+                                                    </div>
                                                     <Select id="select-room-type" aria-label="Room Type" placeholder="Select Type..." size="md" variant="bordered" selectedKeys={[config.roomType]} onChange={(e) => setConfig({ ...config, roomType: e.target.value as RoomType })} classNames={{ trigger: "bg-white hover:bg-slate-50 transition-colors shadow-sm", popoverContent: "bg-white border border-slate-200 shadow-xl rounded-xl z-50 p-1" }}>
                                                         <SelectItem key="ROOM" className="text-slate-700 data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700">Classroom</SelectItem>
                                                         <SelectItem key="HALL" className="text-slate-700 data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700">Exam Hall</SelectItem>
                                                     </Select>
                                                 </div>
-                                                <div className="flex flex-col gap-2">
-                                                    <label htmlFor="select-bench-mode" className="text-sm font-semibold text-slate-700 flex items-center gap-2 px-1">
-                                                        <Grid size={16} className="text-indigo-500" /> Bench Mode
-                                                    </label>
-                                                    <Select id="select-bench-mode" aria-label="Bench Mode" placeholder="Select Mode..." size="md" variant="bordered" selectedKeys={[config.benchMode]} onChange={(e) => setConfig({ ...config, benchMode: e.target.value as BenchMode })} classNames={{ trigger: "bg-white hover:bg-slate-50 transition-colors shadow-sm", popoverContent: "bg-white border border-slate-200 shadow-xl rounded-xl z-50 p-1" }}>
-                                                        <SelectItem key="PAIRED" className="text-slate-700 data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700">Standard</SelectItem>
-                                                        <SelectItem key="ALTERNATING" className="text-slate-700 data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700">Split Logic</SelectItem>
-                                                    </Select>
-                                                </div>
+                                                
                                             </div>
                                             
                                             <div className="flex flex-col gap-3">
@@ -539,14 +523,14 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                                             </div>
                                                             <div className="flex-1 flex gap-2 items-center">
                                                                 <span id={`bench-label-${i}`} className="text-[10px] uppercase font-bold text-slate-500">Benches:</span>
-                                                                <Input aria-labelledby={`bench-label-${i}`} size="sm" type="number" min={1} value={benches.toString()} onValueChange={(val) => handleBenchCountChange(i, Number(val))} classNames={{ inputWrapper: "bg-slate-50 hover:bg-slate-100 transition-colors shadow-none border border-slate-200" }} className="w-20" />
+                                                                <Input name="custom-input"  aria-labelledby={`bench-label-${i}`} size="sm" type="number" min={1} value={benches.toString()} onValueChange={(val) => handleBenchCountChange(i, Number(val))} classNames={{ inputWrapper: "bg-slate-50 hover:bg-slate-100 transition-colors shadow-none border border-slate-200" }} className="w-20" />
                                                             </div>
                                                             <Button isIconOnly size="sm" variant="light" color="danger" onPress={() => handleRemoveRow(i)}><Minus size={14}/></Button>
                                                         </div>
                                                     ))}
                                                     {config.rowLayout.length === 0 && <p className="text-xs text-slate-400 text-center py-4">No rows defined</p>}
                                                 </div>
-                                                <Input label="Seats Per Bench" labelPlacement="outside" size="sm" variant="bordered" type="number" min={1} value={config.seatsPerBench.toString()} onValueChange={(v) => setConfig({...config, seatsPerBench: Number(v)})} classNames={{ inputWrapper: "bg-white hover:bg-slate-50 transition-colors" }} />
+                                                <Input name="custom-input"  label="Seats Per Bench" labelPlacement="outside" size="sm" variant="bordered" type="number" min={1} value={config.seatsPerBench.toString()} onValueChange={(v) => setConfig({...config, seatsPerBench: Number(v)})} classNames={{ inputWrapper: "bg-white hover:bg-slate-50 transition-colors" }} />
                                             </div>
 
                                             <div className={`p-4 rounded-xl border flex justify-between items-center bg-gradient-to-br from-slate-50 to-indigo-50/50`}>

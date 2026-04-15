@@ -141,9 +141,9 @@ export const CreateNotification: React.FC = () => {
 
                         <div className="grid grid-cols-1 gap-6">
                             <div className="space-y-3">
-                                <label className="block text-sm font-bold text-slate-700 ml-1">
+                                <div className="block text-sm font-bold text-slate-700 ml-1">
                                     Subject Line <span className="text-red-500">*</span>
-                                </label>
+                                </div>
                                 <Input aria-label="e.g., Final Exam Schedule Update" id="title"
                                     placeholder="e.g., Final Exam Schedule Update"
                                     variant="flat"
@@ -161,9 +161,9 @@ export const CreateNotification: React.FC = () => {
                             </div>
 
                             <div className="space-y-3">
-                                <label className="block text-sm font-bold text-slate-700 ml-1">
+                                <div className="block text-sm font-bold text-slate-700 ml-1">
                                     Message Body <span className="text-red-500">*</span>
-                                </label>
+                                </div>
                                 <Textarea aria-label="Enter the main content of your notification..." id="message"
                                     placeholder="Enter the main content of your notification..."
                                     variant="flat"

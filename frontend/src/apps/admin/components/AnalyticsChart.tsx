@@ -67,14 +67,12 @@ export const AnalyticsChart: React.FC = () => {
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Seat Utilization</p>
                 <div className="flex items-center gap-5 w-full">
                     <div className="relative w-[110px] h-[110px] shrink-0">
-                        <ResponsiveContainer width={110} height={110} minWidth={0}>
-                            <PieChart>
+                            <PieChart width={110} height={110}>
                                 <Pie data={pieData} cx="50%" cy="50%" innerRadius={35} outerRadius={50} paddingAngle={3} dataKey="value" stroke="none">
                                     <Cell fill="#6366f1" />
                                     <Cell fill="#f1f5f9" />
                                 </Pie>
                             </PieChart>
-                        </ResponsiveContainer>
                         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                             <span className="text-xl font-black text-slate-900 leading-none">68%</span>
                             <span className="text-[9px] text-slate-400 font-semibold mt-0.5">Used</span>

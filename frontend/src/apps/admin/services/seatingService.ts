@@ -53,6 +53,7 @@ export const SeatingService = {
         primaryDeptId?: number | null;
         secondaryDeptId?: number | null;
         avoidSameDeptBench?: boolean;
+        shuffleRooms?: boolean;
         leftDeptId?: number | null; // backward compatibility
         rightDeptId?: number | null; // backward compatibility
     }) => {

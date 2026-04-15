@@ -171,7 +171,7 @@ const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesMan
 
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
                                             <div className="space-y-2">
-                                                <label id="series-name-label" className="text-xs font-semibold text-gray-500 uppercase tracking-wider ml-1">Series Name</label>
+                                                <div id="series-name-label" className="text-xs font-semibold text-gray-500 uppercase tracking-wider ml-1">Series Name</div>
                                                 <Input
                                                     id="series-name"
                                                     name="seriesName"
@@ -191,7 +191,7 @@ const ExamSeriesManagementModal = ({ isOpen, onClose, onSuccess }: ExamSeriesMan
 
                                             {/* Exam Type Selector */}
                                             <div className="space-y-2">
-                                                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider ml-1">Exam Type</label>
+                                                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider ml-1">Exam Type</div>
                                                 <div className="flex gap-3">
                                                     <button
                                                         type="button"

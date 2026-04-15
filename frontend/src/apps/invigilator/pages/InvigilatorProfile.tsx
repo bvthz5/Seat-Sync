@@ -179,11 +179,11 @@ export default function InvigilatorProfile() {
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                             {/* Read-only Fields */}
                                             <div className="space-y-2">
-                                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Full Name</label>
+                                                <div className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Full Name</div>
                                                 <input id="input-sh2ds83" name="input-sh2ds83" type="text" disabled value={MOCK_USER.name} className="w-full bg-slate-50 border border-slate-200 text-slate-600 px-4 py-3 rounded-xl font-semibold opacity-70 cursor-not-allowed" />
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Email Address</label>
+                                                <div className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Email Address</div>
                                                 <input id="input-zxxqlzq" name="input-zxxqlzq" type="email" disabled value={MOCK_USER.email} className="w-full bg-slate-50 border border-slate-200 text-slate-600 px-4 py-3 rounded-xl font-semibold opacity-70 cursor-not-allowed" />
                                             </div>
 
@@ -191,15 +191,15 @@ export default function InvigilatorProfile() {
 
                                             {/* Editable Fields */}
                                             <div className="space-y-2 relative">
-                                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1 flex items-center gap-1.5"><Phone size={14} /> Phone Number</label>
+                                                <div className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1 flex items-center gap-1.5"><Phone size={14} /> Phone Number</div>
                                                 <input id="input-vykbdot" name="input-vykbdot" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full bg-white border border-slate-300 text-slate-800 px-4 py-3 rounded-xl font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none" />
                                             </div>
                                             <div className="space-y-2 relative">
-                                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1 flex items-center gap-1.5"><AlertTriangle size={14} className="text-amber-500" /> Emergency Contact</label>
+                                                <div className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1 flex items-center gap-1.5"><AlertTriangle size={14} className="text-amber-500" /> Emergency Contact</div>
                                                 <input id="input-ol9rd52" name="input-ol9rd52" type="tel" value={emergency} onChange={(e) => setEmergency(e.target.value)} className="w-full bg-white border border-slate-300 text-slate-800 px-4 py-3 rounded-xl font-bold focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all outline-none" />
                                             </div>
                                             <div className="space-y-2 md:col-span-2">
-                                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1 flex items-center gap-1.5"><Globe size={14} /> Preferred Language</label>
+                                                <div className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1 flex items-center gap-1.5"><Globe size={14} /> Preferred Language</div>
                                                 <select id="pref-lang" value={language} onChange={(e) => setLanguage(e.target.value)} className="w-full md:w-1/2 bg-white border border-slate-300 text-slate-800 px-4 py-3 rounded-xl font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none appearance-none cursor-pointer">
                                                     <option value="English">English</option>
                                                     <option value="Spanish">Spanish</option>
@@ -239,7 +239,7 @@ export default function InvigilatorProfile() {
 
                                         <div className="max-w-md space-y-6">
                                             <div className="space-y-2 relative">
-                                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Current Password</label>
+                                                <div className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Current Password</div>
                                                 <div className="relative">
                                                     <input id="input-ixfkmlt" name="input-ixfkmlt" type={showPassword ? "text" : "password"} className="w-full bg-white border border-slate-300 text-slate-800 px-4 py-3 rounded-xl font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none pr-12" placeholder="••••••••" />
                                                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
@@ -251,7 +251,7 @@ export default function InvigilatorProfile() {
                                             <div className="my-4 border-t border-slate-100"></div>
 
                                             <div className="space-y-2">
-                                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">New Password</label>
+                                                <div className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">New Password</div>
                                                 <input id="input-0inzx43" name="input-0inzx43" type={showPassword ? "text" : "password"} className="w-full bg-white border border-slate-300 text-slate-800 px-4 py-3 rounded-xl font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none" placeholder="Enter new password" />
                                             </div>
 
@@ -267,7 +267,7 @@ export default function InvigilatorProfile() {
                                             </div>
 
                                             <div className="space-y-2">
-                                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Confirm New Password</label>
+                                                <div className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Confirm New Password</div>
                                                 <input id="input-7py787e" name="input-7py787e" type={showPassword ? "text" : "password"} className="w-full bg-white border border-slate-300 text-slate-800 px-4 py-3 rounded-xl font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none" placeholder="Confirm password" />
                                             </div>
                                         </div>
@@ -351,12 +351,12 @@ export default function InvigilatorProfile() {
                                                         <p className={`font-extrabold ${item.disabled ? 'text-slate-600' : 'text-slate-800'}`}>{item.title}</p>
                                                         <p className="text-xs font-medium text-slate-500 mt-1">{item.desc}</p>
                                                     </div>
-                                                    <label htmlFor={`pref-${item.id}`} className={`relative inline-flex items-center ${item.disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                                                    <div className={`relative inline-flex items-center ${item.disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                                         <input id={`pref-${item.id}`} type="checkbox" className="sr-only peer" checked={item.val} onChange={() => {
                                                             if (!item.disabled) setNotifs({ ...notifs, [item.id]: !item.val })
                                                         }} disabled={item.disabled} />
                                                         <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2F3FA5]"></div>
-                                                    </label>
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>

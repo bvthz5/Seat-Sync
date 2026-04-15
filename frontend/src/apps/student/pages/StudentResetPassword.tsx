@@ -97,9 +97,9 @@ const StudentResetPassword: React.FC = () => {
 
                 <form onSubmit={handleReset} className="space-y-5">
                     <div className="relative group">
-                        <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 ml-1">
+                        <div className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 ml-1">
                                 Reset Token
-                            </label>
+                            </div>
                         <div className="relative flex items-center transition-all duration-300">
                             <div className="absolute left-4 text-gray-400 group-focus-within:text-indigo-600">
                                 <RectangleEllipsis className="w-5 h-5" />
@@ -116,9 +116,9 @@ const StudentResetPassword: React.FC = () => {
                     </div>
 
                     <div className="relative group">
-                        <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 ml-1">
+                        <div className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 ml-1">
                                 New Password
-                            </label>
+                            </div>
                         <div className="relative flex items-center transition-all duration-300">
                             <div className="absolute left-4 text-gray-400 group-focus-within:text-indigo-600">
                                 <KeyRound className="w-5 h-5" />
@@ -135,9 +135,9 @@ const StudentResetPassword: React.FC = () => {
                     </div>
 
                     <div className="relative group">
-                        <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 ml-1">
+                        <div className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 ml-1">
                                 Confirm Password
-                            </label>
+                            </div>
                         <div className="relative flex items-center transition-all duration-300">
                             <div className="absolute left-4 text-gray-400 group-focus-within:text-indigo-600">
                                 <Lock className="w-5 h-5" />

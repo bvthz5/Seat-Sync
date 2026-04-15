@@ -151,7 +151,7 @@ const SeriesSelection: React.FC = () => {
                     <div className="flex-1 w-full sm:w-auto">
                         <div className="relative max-w-md">
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                            <Input
+                            <Input name="custom-input" 
                                 aria-label="Search series"
                                 placeholder="Search series..."
                                 value={searchQuery}
@@ -352,9 +352,9 @@ const SeriesSelection: React.FC = () => {
                         <div className="space-y-6">
                             {/* Series Name */}
                             <div>
-                                <label htmlFor="newSeriesName" className="block text-sm font-bold text-slate-700 mb-2">
+                                <div className="block text-sm font-bold text-slate-700 mb-2">
                                     Series Name
-                                </label>
+                                </div>
                                 <Input
                                     id="newSeriesName"
                                     aria-label="New Series Name"
@@ -447,7 +447,7 @@ const SeriesSelection: React.FC = () => {
                     </ModalHeader>
                     <ModalBody>
                         <div>
-                            <label htmlFor="editSeriesName" className="block text-sm font-bold text-slate-700 mb-2">Series Name</label>
+                            <div className="block text-sm font-bold text-slate-700 mb-2">Series Name</div>
                             <Input
                                 id="editSeriesName"
                                 aria-label="Edit Series Name"

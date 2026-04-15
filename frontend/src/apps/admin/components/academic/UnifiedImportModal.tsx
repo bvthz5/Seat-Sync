@@ -126,7 +126,7 @@ export const UnifiedImportModal = ({ isOpen, onOpenChange, onSuccess }: UnifiedI
                                             className="hidden"
                                             id="file-upload"
                                         />
-                                        <label className="cursor-pointer">
+                                        <div className="cursor-pointer">
                                             <Upload className="mx-auto text-slate-400 mb-2" size={40} />
                                             {selectedFile ? (
                                                 <div>
@@ -141,7 +141,7 @@ export const UnifiedImportModal = ({ isOpen, onOpenChange, onSuccess }: UnifiedI
                                                     <p className="text-xs text-slate-500 mt-1">Excel files only (.xlsx, .xls)</p>
                                                 </div>
                                             )}
-                                        </label>
+                                        </div>
                                     </div>
                                 </div>
 

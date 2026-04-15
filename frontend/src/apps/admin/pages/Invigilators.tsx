@@ -562,7 +562,7 @@ const Invigilators: React.FC = () => {
                         )}
                     </div>
                     <div className="w-px h-5 bg-slate-200 shrink-0" />
-                    <label className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Dept</span>
                         <div className="relative">
                             <select id="deptFilter" name="deptFilter"
@@ -573,9 +573,9 @@ const Invigilators: React.FC = () => {
                             </select>
                             <ChevronDown size={11} className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                         </div>
-                    </label>
+                    </div>
                     <div className="w-px h-5 bg-slate-200 shrink-0" />
-                    <label className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</span>
                         <div className="relative">
                             <select id="statusFilter" name="statusFilter"
@@ -588,7 +588,7 @@ const Invigilators: React.FC = () => {
                             </select>
                             <ChevronDown size={11} className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                         </div>
-                    </label>
+                    </div>
                     {hasFilters && (
                         <>
                             <div className="w-px h-5 bg-slate-200 shrink-0" />

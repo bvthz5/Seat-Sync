@@ -54,7 +54,7 @@ export const structureService = {
         const response = await api.post<Room>(`/rooms`, data);
         return response.data;
     },
-    bulkCreateRooms: async (data: { blockId: number, floorId: number, rooms: { roomCode: string, capacity: number }[] }) => {
+    bulkCreateRooms: async (data: { blockId: number, floorId: number, rooms: { roomCode: string, TotalCapacity: number }[] }) => {
         const response = await api.post<Room[]>(`/rooms/bulk`, data);
         return response.data;
     },
@@ -114,11 +114,7 @@ export const structureService = {
         formData.append('file', file);
         if (options?.autoZone) formData.append('autoZone', 'true');
         if (options?.zoneCount) formData.append('zoneCount', options.zoneCount.toString());
-        const response = await api.post<{ blocksCreated: number, floorsCreated: number, roomsCreated: number, roomsUpdated?: number }>(`/college-structure/import/csv`, formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data',
-            },
-        });
+        const response = await api.post<{ blocksCreated: number, floorsCreated: number, roomsCreated: number, roomsUpdated?: number }>(`/college-structure/import/csv`, formData);
         return response.data;
     }
 };

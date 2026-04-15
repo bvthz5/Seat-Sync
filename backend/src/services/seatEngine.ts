@@ -20,7 +20,7 @@ export async function generateSeats(room: Room | any, transaction?: any) {
     const expectedSeats: any[] = [];
     const expectedSeatMap = new Map<string, { IsActive: boolean }>();
 
-    const seatsPerBench = room.SeatsPerBench || 2;
+    const seatsPerBench = 2; // Enforce rule: always 2
     let seatSerial = 0;
 
     // Excel maps exactly to:

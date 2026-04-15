@@ -826,14 +826,14 @@ export const getAllocationSummary = async (req: Request, res: Response) => {
 
         const summary: any[] = [];
         for (const hall of activeHalls) {
-            const totalSeats = Number(hall.Capacity || 0);
+            const totalSeats = Number(hall.TotalCapacity || 0);
             const activeSeats = seatCountMap.get(hall.RoomID) || 0;
             const filledSeats = allocationCountMap.get(hall.RoomID) || 0;
-            
+
             summary.push({
                 hallId: hall.RoomID,
                 hallCode: hall.RoomCode,
-                capacity: hall.Capacity,
+                capacity: hall.TotalCapacity,
                 totalSeats: totalSeats,
                 filledSeats,
             });

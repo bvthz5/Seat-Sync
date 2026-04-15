@@ -11,7 +11,7 @@ interface RoomAttributes {
   BlockID: number;
   FloorID: number;
   RoomCode: string; // Renamed from RoomName
-  Capacity: number; // New field
+  TotalCapacity: number; // New field
   RoomType: "ROOM" | "HALL";
   LayoutType: "CUSTOM";
   RowLayout: number[];
@@ -32,7 +32,7 @@ export class Room extends Model<RoomAttributes, RoomCreationAttributes>
   declare BlockID: number;
   declare FloorID: number;
   declare RoomCode: string;
-  declare Capacity: number;
+  declare TotalCapacity: number;
   declare RoomType: "ROOM" | "HALL";
   declare LayoutType: "CUSTOM";
   declare RowLayout: number[];
@@ -70,10 +70,11 @@ Room.init(
       allowNull: false,
       field: 'RoomName'
     },
-    Capacity: {
+    TotalCapacity: {
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 0,
+      field: 'Capacity',
       validate: {
         min: 0
       }

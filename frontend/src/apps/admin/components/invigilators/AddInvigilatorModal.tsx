@@ -125,9 +125,9 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
 
                     {/* Faculty ID */}
                     <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                             <Hash size={10} /> Staff / Faculty ID <span className="text-rose-400">*</span>
-                        </label>
+                        </div>
                         <input
                             id="facultyId"
                             name="facultyId"
@@ -143,9 +143,9 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
 
                     {/* Email */}
                     <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                             <Hash size={10} /> Email Address <span className="text-rose-400">*</span>
-                        </label>
+                        </div>
                         <input
                             id="email"
                             name="email"
@@ -161,9 +161,9 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
 
                     {/* Name */}
                     <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                             <User size={10} /> Full Name <span className="text-rose-400">*</span>
-                        </label>
+                        </div>
                         <input
                             id="fullName"
                             name="fullName"
@@ -179,9 +179,9 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
 
                     {/* Department */}
                     <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                             <Building2 size={10} /> Department <span className="text-rose-400">*</span>
-                        </label>
+                        </div>
                         <select
                             id="department"
                             name="department"
@@ -201,9 +201,9 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
 
                     {/* Phone */}
                     <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                             <Briefcase size={10} /> Phone <span className="text-slate-300 font-normal normal-case tracking-normal">optional</span>
-                        </label>
+                        </div>
                         <input
                             id="phone"
                             name="phone"
@@ -218,9 +218,9 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
 
                     {/* Designation */}
                     <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                             <Briefcase size={10} /> Designation <span className="text-slate-300 font-normal normal-case tracking-normal">optional</span>
-                        </label>
+                        </div>
                         <input
                             id="designation"
                             name="designation"

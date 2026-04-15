@@ -9,7 +9,7 @@ async function testLayout() {
         await Zone.findAll();
         console.log('ALL OK');
     } catch(e) {
-        console.error('CRASH:', e.message);
+        console.error('CRASH:', (e as any).message);
     }
     process.exit(0);
 }

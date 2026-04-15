@@ -21,7 +21,7 @@ export interface Room {
     FloorID: number;
     RoomCode: string; // New: replaces RoomName
     RoomName?: string; // Legacy support (optional)
-    Capacity: number; // New
+    TotalCapacity: number; // New
     TotalRows: number;
     BenchesPerRow: number;
     SeatsPerBench: number;

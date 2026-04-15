@@ -178,7 +178,7 @@ const ActivateAccountPage: React.FC = () => {
                             </div>
 
                             <div className="space-y-2">
-                                <label className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">Password</label>
+                                <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">Password</div>
                                 <div className="relative">
                                     <KeyRound size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                                     <input
@@ -211,7 +211,7 @@ const ActivateAccountPage: React.FC = () => {
                             </div>
 
                             <div className="space-y-2">
-                                <label className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">Confirm password</label>
+                                <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">Confirm password</div>
                                 <input
                                     id="activation-confirm-password"
                                     name="confirmPassword"
@@ -251,7 +251,7 @@ const ActivateAccountPage: React.FC = () => {
                             </div>
 
                             <form onSubmit={handleResend} className="space-y-3 text-left">
-                                <label className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">Resend activation link</label>
+                                <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">Resend activation link</div>
                                 <input
                                     id="activation-email"
                                     name="email"

@@ -27,54 +27,32 @@ export class StructureImportService {
             return { block: "MAIN", roomNumber: null, floor: 1 };
         }
 
-        const trimmed = roomName.trim();
-        // Match leading letters (Block) and optional digits (Room Number)
-        const match = trimmed.match(/^([A-Za-z]+)\s*[-_#]*\s*(\d+)?/);
+        const cleanName = roomName.trim();
 
-        let block = "MAIN";
-        let roomNumber: number | null = null;
+        // Extract block (first word), remove any digits to fix "EH1" -> "EH"
+        let blockCode = cleanName.split(" ")[0] || "MAIN";
+        blockCode = blockCode.replace(/\d+/g, "");
+        if (!blockCode) blockCode = "MAIN";
 
-        if (match && match[1]) {
-            block = match[1].toUpperCase();
-            if (match[2]) {
-                roomNumber = parseInt(match[2], 10);
-            }
-        }
-
-        // Special handling for edge cases without a direct prefix letter
-        if (!match || /^(ROOM|BLOCK)$/i.test(block)) {
-            const alphaMatch = trimmed.match(/([a-zA-Z]+)/g);
-            if (alphaMatch) {
-                const validAlpha = alphaMatch.find(i => !/^(room|block)$/i.test(i));
-                if (validAlpha) block = validAlpha.toUpperCase();
-            }
-            const numMatch = trimmed.match(/(\d+)/);
-            if (numMatch && numMatch[1]) roomNumber = parseInt(numMatch[1], 10);
-        }
-
-        let floor = 1; // Default
+        // Extract first number in string
+        const roomNumberMatch = cleanName.match(/\d+/);
+        const roomNumber = roomNumberMatch ? parseInt(roomNumberMatch[0], 10) : null;
+        
+        let floor = 1;
         if (roomNumber !== null) {
-            const calcFloor = Math.floor(roomNumber / 100);
-            if (calcFloor > 0) {
-                floor = calcFloor;
-            }
+            floor = Math.floor(roomNumber / 100);
+            if (floor <= 0) floor = 1;
         }
 
-        console.log("Parsed Room:", {
-            original: roomName,
-            block,
-            roomNumber,
-            floor
-        });
-
-        return { block, roomNumber, floor };
+        console.log("Parsed Room:", { original: roomName, block: blockCode, roomNumber, floor });
+        return { block: blockCode, roomNumber, floor };
     }
 
     /**
      * Helper: Identify if headers contain the detailed Excel format
      * with "Room Number with block" or similar merged header format
      */
-    private parseUnifiedFile(fileBuffer: Buffer): { roomName: string; block?: string; floor?: number; rowLayout: number[]; capacity: number }[] {
+    private parseUnifiedFile(fileBuffer: Buffer): { roomName: string; block?: string; floor?: number; rowLayout: number[]; totalCapacity: number }[] {
         const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
         const sheetName = workbook.SheetNames[0];
         if (!sheetName) throw new Error("No sheets found in file");
@@ -85,7 +63,7 @@ export class StructureImportService {
         const rawRows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
         if (!rawRows || rawRows.length === 0) throw new Error("File is empty or invalid format.");
 
-        const results: { roomName: string; block?: string; floor?: number; rowLayout: number[]; capacity: number }[] = [];
+        const results: { roomName: string; block?: string; floor?: number; rowLayout: number[]; totalCapacity: number }[] = [];
         const seenRooms = new Set<string>();
 
         let roomColIdx = -1;
@@ -111,10 +89,15 @@ export class StructureImportService {
                 } else if (val.includes('floor') || val === 'level') {
                     if (floorColIdx === -1) floorColIdx = c;
                 } else {
-                    const m = val.match(/^(?:row\s*)?([a-f])$/i);
-                    if (m && m[1]) {
-                        colMap.set(m[1].toLowerCase(), c);
-                    }
+                    // Match headers like "Row A", "A", "row a"
+                    const normalize = (key: string) => key.toLowerCase().trim();
+                    const normHeader = normalize(val);
+                    if (normHeader === 'a' || normHeader === 'row a') colMap.set('row a', c);
+                    else if (normHeader === 'b' || normHeader === 'row b') colMap.set('row b', c);
+                    else if (normHeader === 'c' || normHeader === 'row c') colMap.set('row c', c);
+                    else if (normHeader === 'd' || normHeader === 'row d') colMap.set('row d', c);
+                    else if (normHeader === 'e' || normHeader === 'row e') colMap.set('row e', c);
+                    else if (normHeader === 'f' || normHeader === 'row f') colMap.set('row f', c);
                 }
             }
         }
@@ -147,41 +130,49 @@ export class StructureImportService {
             seenRooms.add(roomName.toLowerCase());
 
             let rowLayout: number[] = [];
-            let rCapacity = 0;
+            let rTotalCapacity = 0;
+
+            const safeNumber = (v: any) => {
+                const n = Number(v);
+                return isNaN(n) ? 0 : n;
+            };
+
             if (colMap.size > 0) {
-                for (const char of ['a', 'b', 'c', 'd', 'e', 'f']) {
-                    if (colMap.has(char)) {
-                        const cIdx = colMap.get(char)!;
-                        const val = row[cIdx];
-                        const benches = (val === null || val === undefined || String(val).trim() === '') ? 0 : Number(val) || 0;
-                        rowLayout.push(benches);
-                        rCapacity += benches * 2;
-                    }
+                const rowKeys = ["row a","row b","row c","row d","row e","row f"];
+                
+                rowLayout = rowKeys.map(k => {
+                    const cIdx = colMap.get(k);
+                    if (cIdx === undefined) return 0;
+                    return safeNumber(row[cIdx]);
+                });
+
+                // Trim trailing zeros from rowLayout to keep it clean, but keep internal zeros for irregular layouts
+                let lastValidIndex = -1;
+                for (let i = 0; i < rowLayout.length; i++) {
+                    if ((rowLayout[i] ?? 0) > 0) lastValidIndex = i;
                 }
-                const capVal = capColIdx !== -1 ? row[capColIdx] : null;
-                const explicitCapacity = parseInt(capVal) || 0;
-                if (explicitCapacity > 0) {
-                    rCapacity = explicitCapacity;
+
+                if (lastValidIndex !== -1) {
+                    rowLayout = rowLayout.slice(0, lastValidIndex + 1);
+                } else {
+                    rowLayout = [];
                 }
-            } else {
-                const capVal = capColIdx !== -1 ? row[capColIdx] : null;
-                const cap = parseInt(capVal) || 0;
-                if (cap > 0) {
-                    const benches = Math.ceil(cap / 2);
-                    const cols = Math.min(benches, 3);
-                    if (cols > 0) {
-                        const rowSize = Math.floor(benches / cols);
-                        for (let c = 0; c < cols; c++) rowLayout.push(rowSize);
-                        const rem = benches % cols;
-                        if (rem > 0 && rowLayout.length > 0) rowLayout[0] = (rowLayout[0] || 0) + rem;
-                    }
-                    rCapacity = cap;
-                }
+                
+                const totalBenches = rowLayout.reduce((a,b) => a+b, 0);
+                rTotalCapacity = totalBenches * 2;
             }
 
             if (rowLayout.length > 6) rowLayout = rowLayout.slice(0, 6);
 
-            const res:any = { roomName, rowLayout, capacity: rCapacity };
+            if (rTotalCapacity === 0) {
+                console.warn("Invalid layout detected", roomName, rowLayout);
+            }
+
+            console.log("ROOM:", roomName);
+            console.log("ROWS:", rowLayout);
+            console.log("CAPACITY:", rTotalCapacity);
+
+            const res:any = { roomName, rowLayout, totalCapacity: rTotalCapacity };
             if (blockStr !== undefined) res.block = blockStr;
             if (floorNum !== undefined) res.floor = floorNum;
             results.push(res);
@@ -273,7 +264,7 @@ export class StructureImportService {
                             RoomCode: roomCode,
                             BlockID: blockId,
                             FloorID: floorId,
-                            Capacity: totalSeats,
+                            TotalCapacity: totalSeats,
                             ExamUsable: isExamUsable,
                             Status: 'Active',
                             RoomType: roomType,
@@ -292,15 +283,18 @@ export class StructureImportService {
                     if (options?.autoZone) roomsToZone.push(newRoom.RoomID);  
                 } else {
                     console.warn("Room already exists:", roomCode);
-                    // Update existing room if capacity or layout changed     
+                    // Update existing room if totalCapacity or layout changed     
                     let needsUpdate = false;
 
-                    if (existingRoom.Capacity !== totalSeats) {
-                        existingRoom.Capacity = totalSeats;
+                    if (existingRoom.TotalCapacity !== totalSeats) {
+                        existingRoom.TotalCapacity = totalSeats;
                         needsUpdate = true;
                     }
                     if (existingRoom.RoomType !== roomType) {
                         existingRoom.RoomType = roomType;
+                        needsUpdate = true;
+                    }
+
                     const currentLayout = existingRoom.RowLayout || [];
                     const newLayout = item.rowLayout || [];
                     let layoutChanged = currentLayout.length !== newLayout.length;

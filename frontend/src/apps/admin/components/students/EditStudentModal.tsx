@@ -236,9 +236,9 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Personal Information</h3>
                             <div className="grid grid-cols-2 gap-5">
                                 <div className="space-y-1.5">
-                                    <label className="text-sm font-semibold text-gray-700 ml-1">
+                                    <div className="text-sm font-semibold text-gray-700 ml-1">
                                         Full Name <span className="text-red-500">*</span>
-                                    </label>
+                                    </div>
                                     <Input aria-label="Input" id="full-name"
                                         autoComplete="name"
                                         startContent={<User className="text-gray-400" size={15} />}
@@ -256,9 +256,9 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                                     />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-sm font-semibold text-gray-700 ml-1">
+                                    <div className="text-sm font-semibold text-gray-700 ml-1">
                                         College Email <span className="text-red-500">*</span>
-                                    </label>
+                                    </div>
                                     <Input aria-label="Input" id="college-email"
                                         autoComplete="email"
                                         type="email"
@@ -285,9 +285,9 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                             <div className="space-y-5">
                                 <div className="grid grid-cols-2 gap-5">
                                     <div className="space-y-1.5">
-                                        <label className="text-sm font-semibold text-gray-700 ml-1">
+                                        <div className="text-sm font-semibold text-gray-700 ml-1">
                                             Register Number <span className="text-red-500">*</span>
-                                        </label>
+                                        </div>
                                         <Input aria-label="Input" id="register-number"
                                             autoComplete="off"
                                             startContent={<Hash className="text-gray-400" size={15} />}
@@ -305,9 +305,9 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                                         />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label className="text-sm font-semibold text-gray-700 ml-1">
+                                        <div className="text-sm font-semibold text-gray-700 ml-1">
                                             Batch Year <span className="text-red-500">*</span>
-                                        </label>
+                                        </div>
                                         <Input aria-label="2026" id="batch-year"
                                             type="number"
                                             placeholder="2026"
@@ -328,9 +328,9 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
 
                                 <div className="grid grid-cols-2 gap-5">
                                     <div className="space-y-1.5">
-                                        <label className="text-sm font-semibold text-gray-700 ml-1">
+                                        <div className="text-sm font-semibold text-gray-700 ml-1">
                                             Department <span className="text-red-500">*</span>
-                                        </label>
+                                        </div>
                                         <select
                                             id="department"
                                             value={formData.DepartmentID}
@@ -347,9 +347,9 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                                         {errors.DepartmentID && <p className="text-red-500 text-xs font-medium mt-1">{errors.DepartmentID}</p>}
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label className="text-sm font-semibold text-gray-700 ml-1">
+                                        <div className="text-sm font-semibold text-gray-700 ml-1">
                                             Program <span className="text-red-500">*</span>
-                                        </label>
+                                        </div>
                                         <select
                                             id="program"
                                             value={formData.ProgramID}

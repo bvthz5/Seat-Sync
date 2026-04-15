@@ -1147,7 +1147,7 @@ const SeatingPlans: React.FC = () => {
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <Input
+                                            <Input name="custom-input" 
                                                 value={hallSearch}
                                                 onChange={(e) => setHallSearch(e.target.value)}
                                                 placeholder="Search hall code..."

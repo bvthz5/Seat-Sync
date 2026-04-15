@@ -90,7 +90,7 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ onClose }) =>
                     <form onSubmit={handleSubmit} className="p-6 space-y-5">
                         {/* Current Password */}
                         <div className="space-y-1">
-                            <label className="block text-sm font-medium text-gray-700">Current Password</label>
+                            <div className="block text-sm font-medium text-gray-700">Current Password</div>
                             <div className="relative">
                                 <input
                                     id="cp-current-password"
@@ -116,7 +116,7 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ onClose }) =>
                         {/* New Password */}
                         <div className="space-y-3">
                             <div className="space-y-1">
-                                <label className="block text-sm font-medium text-gray-700">New Password</label>
+                                <div className="block text-sm font-medium text-gray-700">New Password</div>
                                 <div className="relative">
                                     <input
                                         id="cp-new-password"
@@ -151,7 +151,7 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ onClose }) =>
 
                         {/* Confirm Password */}
                         <div className="space-y-1">
-                            <label className="block text-sm font-medium text-gray-700">Confirm Password</label>
+                            <div className="block text-sm font-medium text-gray-700">Confirm Password</div>
                             <div className="relative">
                                 <input
                                     id="cp-confirm-password"

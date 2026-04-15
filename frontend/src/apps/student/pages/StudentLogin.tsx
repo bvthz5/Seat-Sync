@@ -218,9 +218,9 @@ const StudentLogin: React.FC = () => {
 
                         <div className="space-y-5">
                             <div className="group">
-                                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                                <div className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
                                     {loginMethod === 'email' ? 'Official Student Email' : 'Register Number'}
-                                </label>
+                                </div>
                                 <div className="relative flex items-center transition-all duration-300">
                                     <div className="absolute left-4 text-slate-400 group-focus-within:text-blue-600 transition-colors">
                                         {loginMethod === 'email' ? <Mail className="w-5 h-5" /> : <User className="w-5 h-5" />}
@@ -240,9 +240,9 @@ const StudentLogin: React.FC = () => {
                             </div>
 
                             <div className="group">
-                                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                                <div className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
                                     Access Password
-                                </label>
+                                </div>
                                 <div className="relative flex items-center transition-all duration-300">
                                     <div className="absolute left-4 text-slate-400 group-focus-within:text-blue-600 transition-colors">
                                         <Lock className="w-5 h-5" />

@@ -15,8 +15,7 @@ export const importStructureMetrics = async (req: Request, res: Response) => {
         const result = await importService.importFromCSV(req.file.buffer, { autoZone, zoneCount });
         res.status(200).json(result);
 
-    } catch (error: any) {
-        // If it's a validation error, we send 400
+    } catch (error: any) {        console.error("IMPORT ERROR:", error);        // If it's a validation error, we send 400
         // If it's an internal error, 500
         // For simplicity, we assume validation errors are thrown with messages
         res.status(400).json({ message: error.message });

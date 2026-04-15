@@ -60,9 +60,9 @@ const CustomInput = ({
 
     return (
         <div className="group flex flex-col gap-2 w-full">
-            <label htmlFor={id} className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">
                 {label}
-            </label>
+            </div>
             <div className={`
                 relative flex items-center w-full h-14 rounded-xl overflow-hidden bg-slate-50 border-none transition-all duration-300
                 ${error ? 'bg-red-50' : 'hover:bg-slate-100 focus-within:!bg-white focus-within:shadow-xl focus-within:shadow-blue-100'}

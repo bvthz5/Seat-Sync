@@ -289,9 +289,9 @@ const InvigilatorRequest: React.FC = () => {
                             
                             <div className="grid grid-cols-1 gap-6">
                                 <div>
-                                    <label className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.FacultyID && touchedFields.has('FacultyID') ? 'text-red-600' : 'text-slate-400'}`}>
+                                    <div className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.FacultyID && touchedFields.has('FacultyID') ? 'text-red-600' : 'text-slate-400'}`}>
                                         Staff / Faculty ID <span className="text-rose-400">*</span>
-                                    </label>
+                                    </div>
                                     <div className="relative h-14">
                                         <div className={`absolute left-4 top-1/2 -translate-y-1/2 w-8 border-r ${errors.FacultyID && touchedFields.has('FacultyID') ? 'border-red-300' : 'border-slate-200'}`}>
                                             <Briefcase size={18} className={errors.FacultyID && touchedFields.has('FacultyID') ? 'text-red-500' : 'text-slate-400'} />
@@ -318,9 +318,9 @@ const InvigilatorRequest: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Name && touchedFields.has('Name') ? 'text-red-600' : 'text-slate-400'}`}>
+                                    <div className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Name && touchedFields.has('Name') ? 'text-red-600' : 'text-slate-400'}`}>
                                         Full Name <span className="text-rose-400">*</span>
-                                    </label>
+                                    </div>
                                     <div className="relative h-14">
                                         <div className={`absolute left-4 top-1/2 -translate-y-1/2 w-8 border-r ${errors.Name && touchedFields.has('Name') ? 'border-red-300' : 'border-slate-200'}`}>
                                             <UserPlus size={18} className={errors.Name && touchedFields.has('Name') ? 'text-red-500' : 'text-slate-400'} />
@@ -347,9 +347,9 @@ const InvigilatorRequest: React.FC = () => {
                                 </div>
                                 
                                 <div>
-                                    <label className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Email && touchedFields.has('Email') ? 'text-red-600' : 'text-slate-400'}`}>
+                                    <div className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Email && touchedFields.has('Email') ? 'text-red-600' : 'text-slate-400'}`}>
                                         Official Email <span className="text-rose-400">*</span>
-                                    </label>
+                                    </div>
                                     <div className="relative h-14">
                                         <div className={`absolute left-4 top-1/2 -translate-y-1/2 w-8 border-r ${errors.Email && touchedFields.has('Email') ? 'border-red-300' : 'border-slate-200'}`}>
                                             <Mail size={18} className={errors.Email && touchedFields.has('Email') ? 'text-red-500' : 'text-slate-400'} />
@@ -376,9 +376,9 @@ const InvigilatorRequest: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Department && touchedFields.has('Department') ? 'text-red-600' : 'text-slate-400'}`}>
+                                    <div className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Department && touchedFields.has('Department') ? 'text-red-600' : 'text-slate-400'}`}>
                                         Department <span className="text-rose-400">*</span>
-                                    </label>
+                                    </div>
                                     <input type="hidden" id="department" name="department" value={formData.Department} />
                                     <div className="relative h-14" ref={deptDropdownRef}>
                                         <div className={`absolute left-4 top-1/2 -translate-y-1/2 w-8 border-r pointer-events-none ${errors.Department && touchedFields.has('Department') ? 'border-red-300' : 'border-slate-200'}`}>
@@ -459,9 +459,9 @@ const InvigilatorRequest: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Phone && touchedFields.has('Phone') ? 'text-red-600' : 'text-slate-400'}`}>
+                                    <div className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Phone && touchedFields.has('Phone') ? 'text-red-600' : 'text-slate-400'}`}>
                                         Phone
-                                    </label>
+                                    </div>
                                     <div className="relative h-14">
                                         <div className={`absolute left-4 top-1/2 -translate-y-1/2 w-8 border-r pointer-events-none ${errors.Phone && touchedFields.has('Phone') ? 'border-red-300' : 'border-slate-200'}`}>
                                             <Phone size={18} className={errors.Phone && touchedFields.has('Phone') ? 'text-red-500' : 'text-slate-400'} />
@@ -486,9 +486,9 @@ const InvigilatorRequest: React.FC = () => {
                                 </div>
 
                                 <div>
-                                    <label className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Reason && touchedFields.has('Reason') ? 'text-red-600' : 'text-slate-400'}`}>
+                                    <div className={`text-xs font-bold block uppercase tracking-widest px-1 mb-2 ${errors.Reason && touchedFields.has('Reason') ? 'text-red-600' : 'text-slate-400'}`}>
                                         Reason for joining
-                                    </label>
+                                    </div>
                                     <div className={`relative border rounded-xl transition-all overflow-hidden ${errors.Reason && touchedFields.has('Reason') ? 'border-red-500' : 'border-slate-200'}`}>
                                         <MessageSquare size={18} className={`absolute left-4 top-4 pointer-events-none ${errors.Reason && touchedFields.has('Reason') ? 'text-red-500' : 'text-slate-400'}`} />
                                         <textarea

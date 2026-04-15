@@ -99,13 +99,31 @@ export const updateBlock = async (req: Request, res: Response) => {
 export const deleteBlock = async (req: Request, res: Response) => {
     try {
         const id = Number(req.params.id);
-        const floorCount = await Floor.count({ where: { BlockID: id } });
+        
+        // Find all rooms in this block
+        const rooms = await Room.findAll({ where: { BlockID: id }, attributes: ['RoomID'] });
+        const roomIds = rooms.map((r: any) => r.RoomID);
 
-        if (floorCount > 0) {
-            return res.status(400).json({ message: "Cannot delete block with existing floors." });
+        if (roomIds.length > 0) {
+            const allocations = await SeatAllocation.count({
+                include: [{ model: Seat, where: { RoomID: { [Op.in]: roomIds } } }]
+            });
+
+            if (allocations > 0) {
+                return res.status(400).json({ message: "Cannot delete block. It has rooms with examination history." });
+            }
         }
 
-        await Block.destroy({ where: { BlockID: id } });
+        await sequelize.transaction(async (t) => {
+            if (roomIds.length > 0) {
+                await Seat.destroy({ where: { RoomID: { [Op.in]: roomIds } }, transaction: t });
+                await Zone.destroy({ where: { RoomID: { [Op.in]: roomIds } }, transaction: t });
+            }
+            await Room.destroy({ where: { BlockID: id }, transaction: t });
+            await Floor.destroy({ where: { BlockID: id }, transaction: t });
+            await Block.destroy({ where: { BlockID: id }, transaction: t });
+        });
+
         res.json({ message: "Block deleted successfully" });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
@@ -203,13 +221,30 @@ export const updateFloor = async (req: Request, res: Response) => {
 export const deleteFloor = async (req: Request, res: Response) => {
     try {
         const id = Number(req.params.id);
-        const roomCount = await Room.count({ where: { FloorID: id } });
+        
+        // Find all rooms in this floor
+        const rooms = await Room.findAll({ where: { FloorID: id }, attributes: ['RoomID'] });
+        const roomIds = rooms.map((r: any) => r.RoomID);
 
-        if (roomCount > 0) {
-            return res.status(400).json({ message: "Cannot delete floor with existing rooms." });
+        if (roomIds.length > 0) {
+            const allocations = await SeatAllocation.count({
+                include: [{ model: Seat, where: { RoomID: { [Op.in]: roomIds } } }]
+            });
+
+            if (allocations > 0) {
+                return res.status(400).json({ message: "Cannot delete floor. It has rooms with examination history." });
+            }
         }
 
-        await Floor.destroy({ where: { FloorID: id } });
+        await sequelize.transaction(async (t) => {
+            if (roomIds.length > 0) {
+                await Seat.destroy({ where: { RoomID: { [Op.in]: roomIds } }, transaction: t });
+                await Zone.destroy({ where: { RoomID: { [Op.in]: roomIds } }, transaction: t });
+            }
+            await Room.destroy({ where: { FloorID: id }, transaction: t });
+            await Floor.destroy({ where: { FloorID: id }, transaction: t });
+        });
+
         res.json({ message: "Floor deleted successfully" });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
@@ -295,12 +330,13 @@ export const getRoomLayout = async (req: Request, res: Response) => {
 
 export const createRoom = async (req: Request, res: Response) => {
     try {
-        const { BlockID, FloorID, RoomCode, ExamUsable, Status, TotalRows, BenchesPerRow, SeatsPerBench, Capacity, RowLayout } = req.body;
+        const { BlockID, FloorID, RoomCode, ExamUsable, Status, TotalRows, BenchesPerRow, SeatsPerBench, TotalCapacity, RowLayout } = req.body;
 
         const existing = await Room.findOne({ where: { RoomCode } });
         if (existing) return res.status(400).json({ message: "Room Code/Name must be unique" });
 
         const finalRowLayout = RowLayout || (TotalRows && BenchesPerRow ? Array(TotalRows).fill(BenchesPerRow) : []);
+        const calcCapacity = finalRowLayout.reduce((a: number, b: number) => a + b, 0) * 2;
 
         const room = await Room.create({
             BlockID,
@@ -308,12 +344,12 @@ export const createRoom = async (req: Request, res: Response) => {
             RoomCode,
             ExamUsable: ExamUsable ?? false,
             Status: Status ?? 'Active',
-            Capacity: Capacity || 0,
+            TotalCapacity: calcCapacity,
             RowLayout: finalRowLayout,
-            SeatsPerBench: SeatsPerBench || 0
+            SeatsPerBench: 2
         } as any);
 
-        if (finalRowLayout.length > 0 && SeatsPerBench > 0) {
+        if (finalRowLayout.length > 0) {
             await generateSeats(room);
         }
 
@@ -333,7 +369,7 @@ export const updateRoom = async (req: Request, res: Response) => {
         const TotalRows = req.body.TotalRows || req.body.totalRows;
         const BenchesPerRow = req.body.BenchesPerRow || req.body.benchesPerRow;
         const SeatsPerBench = req.body.SeatsPerBench !== undefined ? req.body.SeatsPerBench : req.body.seatsPerBench;
-        const Capacity = req.body.Capacity !== undefined ? req.body.Capacity : req.body.capacity;
+        const TotalCapacity = req.body.TotalCapacity !== undefined ? req.body.TotalCapacity : req.body.capacity;
         const RoomType = req.body.RoomType || req.body.roomType;
         const RowLayout = req.body.RowLayout || req.body.rowLayout;
 
@@ -385,17 +421,16 @@ export const updateRoom = async (req: Request, res: Response) => {
             
             // Recalculate capacity perfectly matched to layout
             let tLayout = newRowLayout !== undefined ? newRowLayout : room.RowLayout;
-            let tSeats = SeatsPerBench !== undefined ? SeatsPerBench : room.SeatsPerBench;
+            let tSeats = 2; // Fixed requirement
             if (tLayout && Array.isArray(tLayout)) {
-                 room.Capacity = tLayout.reduce((a: number, b: number) => a + b, 0) * tSeats;
-                 room.RoomType = room.Capacity <= 80 ? 'ROOM' : 'HALL';
+                 room.TotalCapacity = tLayout.reduce((a: number, b: number) => a + b, 0) * tSeats;
+                 room.RoomType = room.TotalCapacity <= 80 ? 'ROOM' : 'HALL';
             }
 
             shouldRegenerateSeats = true;
-        } else if (Capacity !== undefined && !isLayoutChange) {
-             room.Capacity = Number(Capacity);
         }
 
+        room.SeatsPerBench = 2;
         await room.save();
 
         if (shouldRegenerateSeats) {

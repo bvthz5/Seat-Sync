@@ -90,9 +90,9 @@ const StudentForgotPassword: React.FC = () => {
                 ) : (
                     <form onSubmit={handleForgot} className="space-y-6">
                         <div className="relative group">
-                            <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 ml-1">
+                            <div className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2 ml-1">
                                 Email Address
-                            </label>
+                            </div>
                             <div className="relative flex items-center transition-all duration-300">
                                 <div className="absolute left-4 text-gray-400 group-focus-within:text-blue-600">
                                     <Mail className="w-5 h-5" />

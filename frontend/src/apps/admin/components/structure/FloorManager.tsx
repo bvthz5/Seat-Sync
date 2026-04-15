@@ -169,9 +169,9 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                 <div className="absolute top-0 right-0 w-64 h-64 bg-blue-100/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
 
                 <div className="flex flex-col gap-2 w-full md:w-1/2 z-10">
-                    <label htmlFor="block-select" className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">
+                    <div className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">
                         Filter by Building Block
-                    </label>
+                    </div>
                     <Autocomplete
                         id="block-select"
                         name="block-select"
@@ -458,9 +458,9 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                             </ModalHeader>
                             <ModalBody className="space-y-6">
                                 <div className="flex flex-col gap-1.5">
-                                    <label htmlFor="modal-floor-block" className="text-sm font-semibold text-slate-700 ml-1">
+                                    <div className="text-sm font-semibold text-slate-700 ml-1">
                                         Building Block
-                                    </label>
+                                    </div>
                                     <Autocomplete
                                         id="modal-floor-block"
                                         name="BlockID"
@@ -506,9 +506,9 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                                 </div>
 
                                 <div className="flex flex-col gap-1.5">
-                                    <label htmlFor="modal-floor-number" className="text-sm font-semibold text-slate-700 ml-1">
+                                    <div className="text-sm font-semibold text-slate-700 ml-1">
                                         Floor Number
-                                    </label>
+                                    </div>
                                     <Input
                                         id="modal-floor-number"
                                         name="FloorNumber"

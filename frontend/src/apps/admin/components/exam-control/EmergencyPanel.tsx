@@ -134,7 +134,7 @@ export const EmergencyPanel: React.FC<EmergencyPanelProps> = ({ examId, examName
 
                             <div className="space-y-5">
                                 <div className="space-y-2">
-                                    <label className="text-sm font-bold text-slate-700 block">Target Exam</label>
+                                    <div className="text-sm font-bold text-slate-700 block">Target Exam</div>
                                     <Input
                                         id="target-exam"
                                         name="target-exam"
@@ -151,7 +151,7 @@ export const EmergencyPanel: React.FC<EmergencyPanelProps> = ({ examId, examName
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-sm font-bold text-slate-700 block">Exclude Room IDs</label>
+                                    <div className="text-sm font-bold text-slate-700 block">Exclude Room IDs</div>
                                     <Input
                                         id="exclude-rooms"
                                         name="exclude-rooms"
@@ -186,7 +186,7 @@ export const EmergencyPanel: React.FC<EmergencyPanelProps> = ({ examId, examName
                             </div>
 
                             <div className="space-y-2">
-                                <label className="text-sm font-bold text-slate-700 block">Room ID</label>
+                                <div className="text-sm font-bold text-slate-700 block">Room ID</div>
                                 <Input
                                     id="room-id"
                                     name="room-id"
@@ -200,7 +200,7 @@ export const EmergencyPanel: React.FC<EmergencyPanelProps> = ({ examId, examName
                             </div>
 
                             <div className="space-y-2">
-                                <label className="text-sm font-bold text-slate-700 block">Reason (Mandatory)</label>
+                                <div className="text-sm font-bold text-slate-700 block">Reason (Mandatory)</div>
                                 <Input
                                     id="disable-reason"
                                     name="disable-reason"
@@ -227,7 +227,7 @@ export const EmergencyPanel: React.FC<EmergencyPanelProps> = ({ examId, examName
                     {tab === 'broadcast' && (
                         <div role="tabpanel" id="panel-broadcast" aria-labelledby="tab-broadcast" className="space-y-6 max-w-xl mx-auto">
                             <div className="space-y-2">
-                                <label className="text-sm font-bold text-slate-700 block">Target Audience</label>
+                                <div className="text-sm font-bold text-slate-700 block">Target Audience</div>
                                 <Input
                                     id="target-audience"
                                     name="target-audience"
@@ -243,7 +243,7 @@ export const EmergencyPanel: React.FC<EmergencyPanelProps> = ({ examId, examName
                             </div>
 
                             <div className="space-y-2">
-                                <label className="text-sm font-bold text-slate-700 block">Audit Message</label>
+                                <div className="text-sm font-bold text-slate-700 block">Audit Message</div>
                                 <textarea
                                     id="audit-message"
                                     name="audit-message"

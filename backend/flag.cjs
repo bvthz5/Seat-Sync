@@ -1,0 +1,1 @@
+const fs = require('fs'); let c = fs.readFileSync('../frontend/src/apps/admin/components/structure/StructureImport.tsx', 'utf8'); c = c.replace(/Checkbox, Input/g, 'Checkbox, Input, Progress'); fs.writeFileSync('../frontend/src/apps/admin/components/structure/StructureImport.tsx', c);

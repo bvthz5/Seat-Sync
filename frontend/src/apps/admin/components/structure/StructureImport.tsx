@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Button, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure, Chip, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Checkbox, Input } from '@heroui/react';
+import { Button, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure, Chip, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Checkbox, Input, Progress } from '@heroui/react';
 import { UploadCloud, FileText, CheckCircle, AlertTriangle, XCircle, ArrowRight, Download, ServerCrash, Trash2 } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
@@ -24,6 +24,8 @@ export const StructureImport: React.FC<{ onChange?: () => void }> = ({ onChange 
     const [isValidating, setIsValidating] = useState(false);
     const [autoZone, setAutoZone] = useState(false);
     const [zoneCount, setZoneCount] = useState<number>(2);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [importStatus, setImportStatus] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -174,18 +176,41 @@ const processRawData = (data: any[]): CSVData[] => {
         if (!file || errors.length > 0) return;
 
         setLoading(true);
+        setUploadProgress(0);
+        setImportStatus('Uploading layout...');
+
+        let currentProgress = 0;
+        const interval = setInterval(() => {
+            currentProgress += (currentProgress < 30) ? 5 : (currentProgress < 75) ? 2 : 1;
+            if (currentProgress > 95) currentProgress = 95;
+            setUploadProgress(currentProgress);
+
+            if (currentProgress < 30) setImportStatus('Parsing spreadsheet data...');
+            else if (currentProgress < 75) setImportStatus('Building row metrics & capacities...');
+            else setImportStatus('Generating physical seats and zones. This may take a minute...');
+        }, 400);
+
         try {
             const result = await structureService.importStructure(file, { autoZone, zoneCount });
+            
+            clearInterval(interval);
+            setUploadProgress(100);
+            setImportStatus('Import complete! Finalizing...');
+
             let msg = `Import successful! Added ${result.blocksCreated} Blocks, ${result.floorsCreated} Floors, ${result.roomsCreated} Rooms.`;
             if (result.roomsUpdated) msg += ` Updated ${result.roomsUpdated} Rooms.`;
-            toast.success(msg);
-            if (onChange) onChange();
-            onClose();
-            setFile(null);
-            setPreviewData([]);
+            
+            setTimeout(() => {
+                toast.success(msg);
+                if (onChange) onChange();
+                onClose();
+                setFile(null);
+                setPreviewData([]);
+                setLoading(false);
+            }, 800);
         } catch (error: any) {
+            clearInterval(interval);
             toast.error(error.response?.data?.message || "Import failed");
-        } finally {
             setLoading(false);
         }
     };
@@ -241,7 +266,7 @@ const processRawData = (data: any[]): CSVData[] => {
                                         <p className="text-slate-500 max-w-sm mt-3 text-base leading-relaxed font-medium">
                                             Upload your College Structure in <span className="font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">.csv</span> or <span className="font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">.xlsx</span> format.
                                         </p>
-                                        <label htmlFor="file-upload" className="sr-only">Upload spreadsheet</label>
+                                        <div className="sr-only">Upload spreadsheet</div>
                                         <input id="file-upload" name="file-upload" type="file"
                                             ref={fileInputRef}
                                             className="hidden"
@@ -315,7 +340,7 @@ const processRawData = (data: any[]): CSVData[] => {
                                                         Auto-Zone Rooms
                                                     </Checkbox>
                                                     {autoZone && (
-                                                        <Input
+                                                        <Input name="custom-input" 
                                                             type="number"
                                                             size="sm"
                                                             value={zoneCount.toString()}
@@ -369,6 +394,18 @@ const processRawData = (data: any[]): CSVData[] => {
                                     </div>
                                 )}
                             </ModalBody>
+                            {loading && (
+                                <div className="px-8 pb-4 w-full flex flex-col items-center gap-2">
+                                    <Progress 
+                                        size="md" 
+                                        radius="sm"
+                                        classNames={{ indicator: 'bg-emerald-500', track: 'bg-emerald-100', value: 'font-semibold text-emerald-600' }}
+                                        value={uploadProgress}
+                                        showValueLabel
+                                    />
+                                    <span className="text-xs font-semibold text-slate-500 animate-pulse">{importStatus || 'Processing...'}</span>
+                                </div>
+                            )}
                             <ModalFooter className="px-8 py-6 border-t border-slate-100 bg-slate-50/50">
                                 <Button 
                                     variant="flat" 

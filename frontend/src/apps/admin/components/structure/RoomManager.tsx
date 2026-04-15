@@ -37,7 +37,7 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
     // Form Data (Single)
     const [singleData, setSingleData] = useState({
         roomCode: '',
-        capacity: 0,
+        TotalCapacity: 0,
         examUsable: true
     });
 
@@ -46,7 +46,7 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
         prefix: 'LH',
         startNumber: 101,
         count: 5,
-        capacity: 40
+        TotalCapacity: 40
     });
 
     // --- Action Confirm Modal State ---
@@ -142,15 +142,15 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
             setEditingRoom(room);
             setSingleData({
                 roomCode: room.RoomCode || room.RoomName || '',
-                capacity: room.Capacity || (room.TotalRows * room.BenchesPerRow * room.SeatsPerBench) || 0,
+                TotalCapacity: room.TotalCapacity || (room.TotalRows * room.BenchesPerRow * room.SeatsPerBench) || 0,
                 examUsable: room.ExamUsable
             });
             setIsBulkMode(false);
         } else {
             // Create Mode
             setEditingRoom(null);
-            setSingleData({ roomCode: '', capacity: 40, examUsable: true });
-            setBulkData({ prefix: 'LH', startNumber: 101, count: 5, capacity: 40 });
+            setSingleData({ roomCode: '', TotalCapacity: 40, examUsable: true });
+            setBulkData({ prefix: 'LH', startNumber: 101, count: 5, TotalCapacity: 40 });
             setIsBulkMode(false);
         }
         onOpen();
@@ -198,11 +198,11 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
     type BulkModeType = 'auto' | 'list' | 'manual' | 'excel';
     const [bulkModeType, setBulkModeType] = useState<BulkModeType>('auto');
     const [listInput, setListInput] = useState(""); // For 'list' mode: "101, 102, 104"
-    const [manualRooms, setManualRooms] = useState<{ code: string; capacity: number }[]>([
-        { code: "", capacity: 60 }
+    const [manualRooms, setManualRooms] = useState<{ code: string; TotalCapacity: number }[]>([
+        { code: "", TotalCapacity: 60 }
     ]);
-    const [excelRooms, setExcelRooms] = useState<{ code: string; capacity: number }[]>([]);
-    const [previewRooms, setPreviewRooms] = useState<{ code: string; capacity: number }[]>([]);
+    const [excelRooms, setExcelRooms] = useState<{ code: string; TotalCapacity: number }[]>([]);
+    const [previewRooms, setPreviewRooms] = useState<{ code: string; TotalCapacity: number }[]>([]);
     const excelInputRef = useRef<HTMLInputElement>(null);
 
     // --- Preview Generator ---
@@ -213,30 +213,30 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
             return;
         }
 
-        let generated: { code: string; capacity: number }[] = [];
+        let generated: { code: string; TotalCapacity: number }[] = [];
 
         if (bulkModeType === 'auto') {
             for (let i = 0; i < bulkData.count; i++) {
                 generated.push({
                     code: `${bulkData.prefix}-${bulkData.startNumber + i}`,
-                    capacity: bulkData.capacity
+                    TotalCapacity: bulkData.TotalCapacity
                 });
             }
         } else if (bulkModeType === 'list') {
             const numbers = listInput.split(',').map(s => s.trim()).filter(s => s);
             generated = numbers.map(num => ({
                 code: `${bulkData.prefix}-${num}`,
-                capacity: bulkData.capacity
+                TotalCapacity: bulkData.TotalCapacity
             }));
         } else if (bulkModeType === 'manual') {
             generated = manualRooms.filter(r => r.code).map(r => ({
                 code: r.code.startsWith(bulkData.prefix) ? r.code : `${bulkData.prefix}-${r.code}`,
-                capacity: r.capacity
+                TotalCapacity: r.TotalCapacity
             }));
         } else if (bulkModeType === 'excel') {
             generated = excelRooms.filter(r => r.code).map(r => ({
                 code: r.code.toString(),
-                capacity: Number(r.capacity)
+                TotalCapacity: Number(r.TotalCapacity)
             }));
         }
         setPreviewRooms(generated);
@@ -249,7 +249,7 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
     };
 
     const addManualRow = () => {
-        setManualRooms([...manualRooms, { code: "", capacity: 60 }]);
+        setManualRooms([...manualRooms, { code: "", TotalCapacity: 60 }]);
     };
 
     const removeManualRow = (index: number) => {
@@ -268,15 +268,15 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
             const ws = wb.Sheets[wsname];
             const data = XLSX.utils.sheet_to_json<any>(ws);
 
-            const parsedRooms: { code: string; capacity: number }[] = [];
+            const parsedRooms: { code: string; TotalCapacity: number }[] = [];
             data.forEach((row, idx) => {
                 const code = row.code || row.Code || row.RoomCode || row.roomCode || row.RoomName || row.Name;
-                const cap = row.capacity || row.Capacity || row.Cap || row.Seats;
+                const cap = row.TotalCapacity || row.Capacity || row.Cap || row.Seats;
                 
                 if (code) {
                     parsedRooms.push({
                         code: code.toString().trim(),
-                        capacity: Number(cap) || 0
+                        TotalCapacity: Number(cap) || 0
                     });
                 }
             });
@@ -311,7 +311,7 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                 // Construct Payload from Preview
                 const roomsPayload = previewRooms.map(r => ({
                     roomCode: r.code,
-                    capacity: r.capacity
+                    TotalCapacity: r.TotalCapacity
                 }));
 
                 await structureService.bulkCreateRooms({
@@ -327,7 +327,7 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                     toast.error("Room Code is required");
                     return;
                 }
-                if (singleData.capacity <= 0) {
+                if (singleData.TotalCapacity <= 0) {
                     toast.error("Capacity must be greater than 0");
                     return;
                 }
@@ -335,7 +335,7 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                 if (editingRoom) {
                     await structureService.updateRoom(editingRoom.RoomID, {
                         RoomCode: singleData.roomCode,
-                        Capacity: singleData.capacity,
+                        TotalCapacity: singleData.TotalCapacity,
                         ExamUsable: singleData.examUsable
                     });
                     toast.success("Room updated");
@@ -344,7 +344,7 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                         BlockID: Number(selectedBlockId),
                         FloorID: Number(selectedFloorId),
                         RoomCode: singleData.roomCode,
-                        Capacity: singleData.capacity,
+                        TotalCapacity: singleData.TotalCapacity,
                         ExamUsable: singleData.examUsable,
                         Status: 'Active'
                     });
@@ -386,9 +386,9 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                     <div className="flex flex-col md:flex-row gap-5 w-full md:w-auto flex-1 z-10">
                         {/* Block Selector */}
                         <div className="flex flex-col gap-2 w-full md:w-72">
-                            <label htmlFor="room-block-select" className="flex items-center gap-1.5 ml-1 text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+                            <div className="flex items-center gap-1.5 ml-1 text-[11px] font-bold text-slate-400 uppercase tracking-widest">
                                 <Building2 size={12} strokeWidth={2.5} /> Building Block
-                            </label>
+                            </div>
                             <Autocomplete
                                 id="room-block-select"
                                 name="block-select"
@@ -447,9 +447,9 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
 
                         {/* Floor Selector */}
                         <div className="flex flex-col gap-2 w-full md:w-72">
-                            <label htmlFor="room-floor-select" className={`flex items-center gap-1.5 ml-1 text-[11px] font-bold uppercase tracking-widest ${(!selectedBlockId || selectedBlockId === 'all') ? 'text-slate-300' : 'text-slate-400'}`}>
+                            <div className={`flex items-center gap-1.5 ml-1 text-[11px] font-bold uppercase tracking-widest ${(!selectedBlockId || selectedBlockId === 'all') ? 'text-slate-300' : 'text-slate-400'}`}>
                                 <Layers size={12} strokeWidth={2.5} /> Floor Level
-                            </label>
+                            </div>
                             <Autocomplete
                                 id="room-floor-select"
                                 name="floor-select"
@@ -597,7 +597,7 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                             <div><p className="font-bold text-slate-700 text-base">{room.RoomCode || room.RoomName}</p><p className="text-xs text-slate-400 font-mono">ID: {room.RoomID}</p></div>
                                         </div>
                                     </TableCell>
-                                    <TableCell><span className="font-bold text-slate-700">{room.Capacity}</span></TableCell>
+                                    <TableCell><span className="font-bold text-slate-700">{room.TotalCapacity}</span></TableCell>
                                     <TableCell><Chip size="sm" variant="flat" color={room.ExamUsable ? "success" : "default"} startContent={room.ExamUsable ? <CheckSquare size={14} /> : undefined} classNames={{ content: "font-semibold" }}>{room.ExamUsable ? "Yes" : "No"}</Chip></TableCell>
                                     <TableCell>
                                         <div className="flex justify-center">
@@ -731,12 +731,12 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                     // Single Room Form
                                     <div className="space-y-6 max-w-lg mx-auto w-full">
                                         <div className="flex flex-col gap-1.5">
-                                            <label htmlFor="modal-room-code" className="text-sm font-semibold text-slate-700 ml-1 mb-1.5">Room Code</label>
+                                            <div className="text-sm font-semibold text-slate-700 ml-1 mb-1.5">Room Code</div>
                                             <Input id="modal-room-code" name="roomCode" autoFocus aria-label="Room Code" placeholder="e.g. LH-201" variant="bordered" classNames={{ inputWrapper: "h-12 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl shadow-sm px-4 transition-all", input: "text-base font-medium text-slate-800 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0" }} value={singleData.roomCode} onValueChange={(v) => setSingleData({ ...singleData, roomCode: v })} />
                                         </div>
                                         <div className="flex flex-col gap-1.5">
-                                            <label htmlFor="modal-room-capacity" className="text-sm font-semibold text-slate-700 ml-1 mb-1.5">Capacity</label>
-                                            <Input id="modal-room-capacity" name="capacity" type="number" aria-label="Capacity" placeholder="60" variant="bordered" classNames={{ inputWrapper: "h-12 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl shadow-sm px-4 transition-all", input: "text-base font-medium text-slate-800 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0" }} value={singleData.capacity.toString()} onValueChange={(v) => setSingleData({ ...singleData, capacity: Number(v) })} />
+                                            <div className="text-sm font-semibold text-slate-700 ml-1 mb-1.5">Capacity</div>
+                                            <Input id="modal-room-capacity" name="capacity" type="number" aria-label="Capacity" placeholder="60" variant="bordered" classNames={{ inputWrapper: "h-12 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl shadow-sm px-4 transition-all", input: "text-base font-medium text-slate-800 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0" }} value={singleData.TotalCapacity.toString()} onValueChange={(v) => setSingleData({ ...singleData, TotalCapacity: Number(v) })} />
                                         </div>
                                         <div className="flex flex-col gap-3 pt-2">
                                             <span className="text-sm font-semibold text-slate-700 ml-1">Exam Compatibility</span>
@@ -755,7 +755,7 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                             {/* Common Prefix & Capacity */}
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div className="flex flex-col gap-1.5">
-                                                    <label htmlFor="bulk-room-prefix" className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1 mb-1.5">Prefix</label>
+                                                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1 mb-1.5">Prefix</div>
                                                     <Input
                                                         id="bulk-room-prefix"
                                                         name="prefix"
@@ -771,7 +771,7 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                                     />
                                                 </div>
                                                 <div className="flex flex-col gap-1.5">
-                                                    <label htmlFor="bulk-room-capacity" className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1 mb-1.5">Default Cap</label>
+                                                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1 mb-1.5">Default Cap</div>
                                                     <Input
                                                         id="bulk-room-capacity"
                                                         name="bulkCapacity"
@@ -783,8 +783,8 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                                             inputWrapper: "h-10 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-lg",
                                                             input: "font-mono font-bold bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
                                                         }}
-                                                        value={bulkData.capacity.toString()}
-                                                        onValueChange={(v) => setBulkData({ ...bulkData, capacity: Number(v) })}
+                                                        value={bulkData.TotalCapacity.toString()}
+                                                        onValueChange={(v) => setBulkData({ ...bulkData, TotalCapacity: Number(v) })}
                                                     />
                                                 </div>
                                             </div>
@@ -793,7 +793,7 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                             {bulkModeType === 'auto' && (
                                                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
                                                     <div className="flex flex-col gap-1.5">
-                                                        <label htmlFor="bulk-start-number" className="text-sm font-semibold text-slate-700 mb-1.5">Start Number</label>
+                                                        <div className="text-sm font-semibold text-slate-700 mb-1.5">Start Number</div>
                                                         <Input
                                                             id="bulk-start-number"
                                                             name="startNumber"
@@ -810,7 +810,7 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                                         />
                                                     </div>
                                                     <div className="flex flex-col gap-1.5">
-                                                        <label htmlFor="bulk-room-count" className="text-sm font-semibold text-slate-700 mb-1.5">Count (How many?)</label>
+                                                        <div className="text-sm font-semibold text-slate-700 mb-1.5">Count (How many?)</div>
                                                         <Input
                                                             id="bulk-room-count"
                                                             name="count"
@@ -831,10 +831,10 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
 
                                             {bulkModeType === 'list' && (
                                                 <div className="flex flex-col gap-1.5">
-                                                    <label htmlFor="bulk-room-list" className="text-sm font-semibold text-slate-700 flex justify-between mb-1.5">
+                                                    <div className="text-sm font-semibold text-slate-700 flex justify-between mb-1.5">
                                                         Room Numbers
                                                         <span className="text-xs font-normal text-slate-500">Comma separated</span>
-                                                    </label>
+                                                    </div>
                                                     <textarea
                                                         id="bulk-room-list"
                                                         name="roomList"
@@ -851,8 +851,8 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                                     {manualRooms.map((row, idx) => (
                                                         <div key={idx} className="flex gap-2 items-center">
                                                             <div className="w-8 text-xs text-slate-400 font-mono text-center">{idx + 1}</div>
-                                                            <Input size="sm" aria-label="Room Code" placeholder="101" variant="bordered" classNames={{ inputWrapper: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 transition-all", input: "bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0" }} value={row.code} onValueChange={(v) => handleManualRowChange(idx, 'code', v)} />
-                                                            <Input type="number" aria-label="Room Capacity" size="sm" placeholder="Cap" variant="bordered" classNames={{ base: "w-24", inputWrapper: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 transition-all", input: "bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0" }} value={row.capacity.toString()} onValueChange={(v) => handleManualRowChange(idx, 'capacity', Number(v))} />
+                                                            <Input name="custom-input"  size="sm" aria-label="Room Code" placeholder="101" variant="bordered" classNames={{ inputWrapper: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 transition-all", input: "bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0" }} value={row.code} onValueChange={(v) => handleManualRowChange(idx, 'code', v)} />
+                                                            <Input name="custom-input"  type="number" aria-label="Room Capacity" size="sm" placeholder="Cap" variant="bordered" classNames={{ base: "w-24", inputWrapper: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 transition-all", input: "bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0" }} value={row.TotalCapacity.toString()} onValueChange={(v) => handleManualRowChange(idx, 'capacity', Number(v))} />
                                                             <button onClick={() => removeManualRow(idx)} className="text-slate-400 hover:text-red-500"><Ban size={16} /></button>
                                                         </div>
                                                     ))}
@@ -909,7 +909,7 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                                             <div key={i} className="flex items-center gap-2 font-mono text-sm group hover:bg-slate-800/50 rounded px-1 transition-colors">
                                                                 <span className="w-8 text-slate-600 text-xs select-none">{String(i + 1).padStart(2, '0')}</span>
                                                                 <span className="flex-1 text-emerald-400 font-semibold">{r.code}</span>
-                                                                <span className="w-16 text-right text-blue-300">{r.capacity}</span>
+                                                                <span className="w-16 text-right text-blue-300">{r.TotalCapacity}</span>
                                                             </div>
                                                         ))
                                                     ) : (
