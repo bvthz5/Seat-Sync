@@ -1,6 +1,7 @@
-﻿import { Request, Response } from 'express';
+import { Request, Response } from 'express';
 import { Room } from '../models/Room.js';
 import { SeatAllocation } from '../models/SeatAllocation.js';
+import { Seat } from '../models/Seat.js';
 import { Student } from '../models/Student.js';
 import { Exam } from '../models/Exam.js';
 import { Department } from '../models/Department.js';
@@ -12,9 +13,17 @@ export const getDashboardSummary = async (req: Request, res: Response) => {
         
         // Use basic aggregate logic (adjusting where clause for series if needed)
         const totalStudents = await Student.count();
-        const totalRoomsResult = await Room.findAll({ attributes: [[sequelize.fn('sum', sequelize.col('Capacity')), 'totalCapacity'], [sequelize.fn('count', sequelize.col('RoomID')), 'totalRooms']] });
-        const totalCapacity = Number(totalRoomsResult?.[0]?.get('totalCapacity')) || 0;
-        const totalRooms = Number(totalRoomsResult?.[0]?.get('totalRooms')) || 0;
+        const totalRoomsResults = await Room.findAll({
+            attributes: [
+                [sequelize.fn('SUM', sequelize.col('Capacity')), 'totalCapacity'],
+                [sequelize.fn('COUNT', sequelize.col('RoomID')), 'totalRooms']
+            ],
+            raw: true
+        }) as any[];
+        
+        const totalRoomsResult = totalRoomsResults[0];
+        const totalCapacity = Number(totalRoomsResult?.totalCapacity) || 0;
+        const totalRooms = Number(totalRoomsResult?.totalRooms) || 0;
         const totalAllocatedSeats = await SeatAllocation.count();
         const utilizationPercentage = totalCapacity > 0 ? ((totalAllocatedSeats / totalCapacity) * 100).toFixed(1) : 0;
         const unallocatedStudents = totalStudents - totalAllocatedSeats;
@@ -45,24 +54,34 @@ export const getDashboardSummary = async (req: Request, res: Response) => {
 export const getLiveRoomUtilization = async (req: Request, res: Response) => {
     try {
         const rooms = await Room.findAll({
-            attributes: [['RoomName', 'roomName'], ['Capacity', 'capacity']],
+            attributes: ['RoomID', 'RoomCode', 'TotalCapacity'],
+            where: { Status: 'Active' },
             raw: true
         });
 
-        // Normally you'd group by RoomID in SeatAllocation, but tracking allocated per room directly or calculating roughly:
+        // Get allocations per room by joining SeatAllocation with Seat
         const allocations = await SeatAllocation.findAll({
-            attributes: ['RoomID', [sequelize.fn('count', sequelize.col('AllocationID')), 'allocated']],
-            group: ['RoomID'],
+            attributes: [
+                [sequelize.col('Seat.RoomID'), 'RoomID'],
+                [sequelize.fn('COUNT', sequelize.col('StudentID')), 'allocated']
+            ],
+            include: [{
+                model: Seat,
+                attributes: [],
+                required: true
+            }],
+            group: [sequelize.col('Seat.RoomID')],
             raw: true
-        });
+        }) as any[];
 
-        // Simple map
+        const allocationMap = new Map(allocations.map(a => [Number(a.RoomID), Number(a.allocated)]));
+
         const data = rooms.map((r: any) => {
-            // we don't have RoomID locally in raw, mapping back typically requires joining, but we'll mock the mock to reality:
-            const allocated = Math.floor(Math.random() * r.TotalCapacity); // TODO: wire real allocations per room
+            const allocated = allocationMap.get(Number(r.RoomID)) || 0;
             let status = 'EMPTY';
-            if (allocated > 0 && allocated <= r.TotalCapacity) status = 'ACTIVE';
-            if (allocated > r.TotalCapacity) status = 'OVERLOADED';
+            if (allocated > 0) status = 'ACTIVE';
+            if (allocated >= Number(r.TotalCapacity)) status = 'FULL';
+            if (allocated > Number(r.TotalCapacity)) status = 'OVERLOADED';
 
             return {
                 roomName: r.RoomCode,
@@ -74,7 +93,8 @@ export const getLiveRoomUtilization = async (req: Request, res: Response) => {
 
         res.json({ success: true, data });
     } catch (error: any) {
-         res.status(500).json({ success: false, message: "Failed to fetch rooms" });
+        console.error("Dashboard Rooms Error:", error);
+        res.status(500).json({ success: false, message: "Failed to fetch rooms", error: error.message });
     }
 };
 
