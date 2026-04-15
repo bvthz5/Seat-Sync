@@ -92,6 +92,7 @@ const SeatingPlans: React.FC = () => {
     const [primaryDept, setPrimaryDept] = useState<string>('');
     const [secondaryDept, setSecondaryDept] = useState<string>('');
     const [avoidSameDeptBench, setAvoidSameDeptBench] = useState(true);
+    const [shuffleRooms, setShuffleRooms] = useState(false);
     const [selectedHallIds, setSelectedHallIds] = useState<Set<number>>(new Set());
     const [hallSearch, setHallSearch] = useState('');
     const [hallFilter, setHallFilter] = useState<'all' | 'empty' | 'partial' | 'full'>('all');
@@ -331,6 +332,7 @@ const SeatingPlans: React.FC = () => {
                 primaryDeptId: primaryDept ? Number(primaryDept) : null,
                 secondaryDeptId: secondaryDept ? Number(secondaryDept) : null,
                 avoidSameDeptBench,
+                shuffleRooms,
             });
             const assigned = Number(r.totalLeftAssigned || 0) + Number(r.totalRightAssigned || 0);
             const totalEligible = Number(r.totalLeftAvailable || 0) + Number(r.totalRightAvailable || 0);
@@ -1092,6 +1094,18 @@ const SeatingPlans: React.FC = () => {
                                         title="Avoid same-department neighbors on each bench"
                                     >
                                         <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${avoidSameDeptBench ? 'translate-x-6' : 'translate-x-1'}`} />
+                                    </button>
+                                </div>
+                                <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 border border-slate-200">
+                                    <div className="text-[11px] text-slate-700 font-medium">Shuffle rooms randomly</div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShuffleRooms(v => !v)}
+                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${shuffleRooms ? 'bg-blue-500' : 'bg-slate-300'}`}
+                                        aria-pressed={shuffleRooms}
+                                        title="Randomize room assignment order to avoid continuous halls"
+                                    >
+                                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${shuffleRooms ? 'translate-x-6' : 'translate-x-1'}`} />
                                     </button>
                                 </div>
                                 {assignmentMode === 'two-alternate' && primaryDept && secondaryDept && primaryDept === secondaryDept && (

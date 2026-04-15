@@ -865,6 +865,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
             primaryDeptId: (req.body as any)?.primaryDeptId,
             secondaryDeptId: (req.body as any)?.secondaryDeptId,
             avoidSameDeptBench: (req.body as any)?.avoidSameDeptBench,
+            shuffleRooms: (req.body as any)?.shuffleRooms,
         });
         const {
             examDate,
@@ -877,6 +878,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
             primaryDeptId,
             secondaryDeptId,
             avoidSameDeptBench,
+            shuffleRooms,
         } = req.body;
 
         if (!examDate || !session || !hallIds || hallIds.length === 0) {
@@ -1021,8 +1023,19 @@ export const bulkAssign = async (req: Request, res: Response) => {
         const hallResults: any[] = [];
         const allNewAllocations: { ExamID: number; SeatID: number; StudentID: number }[] = [];
 
+        // Shuffle halls if toggle is ON (for random room distribution)
+        let hallIdsToUse = [...hallIds.map(Number)];
+        if (shuffleRooms) {
+            // Fisher-Yates shuffle for randomization
+            for (let i = hallIdsToUse.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [hallIdsToUse[i], hallIdsToUse[j]] = [hallIdsToUse[j], hallIdsToUse[i]];
+            }
+            console.log("Shuffled hall order:", hallIdsToUse);
+        }
+
         // Hall-by-hall assignment: fill each hall completely before moving to next
-        for (const hallIdNum of hallIds.map(Number)) {
+        for (const hallIdNum of hallIdsToUse) {
             const hall = targetHalls.find(h => h.RoomID === hallIdNum);
             if (!hall) continue;
 
