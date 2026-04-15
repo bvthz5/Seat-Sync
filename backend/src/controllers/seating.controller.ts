@@ -966,8 +966,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
             mode: resolvedMode,
         });
 
-        let studentIdx = 0;  // Single consecutive index
-        const allStudentsPool = leftStudents.concat(rightStudents);  // Merge into single pool
+        let leftIdx = 0, rightIdx = 0;
         const targetHalls = await Room.findAll({ 
             where: { RoomID: { [Op.in]: hallIds } }, 
             transaction 
@@ -1041,29 +1040,27 @@ export const bulkAssign = async (req: Request, res: Response) => {
 
             let hallLeft = 0, hallRight = 0;
 
-            // Within each hall: row → fill all benches' left seats, then all benches' right seats
+            // Within each hall: row → bench → pair students from left (CE) and right (MCA) pools
             for (const row of allRows) {
-                // First pass: assign all left seats (seat 1)
                 for (const benchNum of allBenchNums) {
                     const benchSeats = (benchMap[row]?.[benchNum] || []).sort(sortSeatsByPosition);
-                    const leftSeat = benchSeats.find(s => getSeatNumber(s) === 1);
 
-                    if (leftSeat && studentIdx < allStudentsPool.length) {
-                        const stu = allStudentsPool[studentIdx++] as any;
-                        allNewAllocations.push({ ExamID: primaryExamId, SeatID: leftSeat.SeatID !, StudentID: stu.StudentID as number });
-                        hallLeft++;
-                    }
-                }
-
-                // Second pass: assign all right seats (seat 2)
-                for (const benchNum of allBenchNums) {
-                    const benchSeats = (benchMap[row]?.[benchNum] || []).sort(sortSeatsByPosition);
-                    const rightSeat = benchSeats.find(s => getSeatNumber(s) !== 1);
-
-                    if (rightSeat && studentIdx < allStudentsPool.length) {
-                        const stu = allStudentsPool[studentIdx++] as any;
-                        allNewAllocations.push({ ExamID: primaryExamId, SeatID: rightSeat.SeatID !, StudentID: stu.StudentID as number });
-                        hallRight++;
+                    for (const seat of benchSeats) {
+                        if (getSeatNumber(seat) === 1) {
+                            // Left seat: assign from left pool (CE students)
+                            if (leftIdx < leftStudents.length) {
+                                const stu = leftStudents[leftIdx++] as any;
+                                allNewAllocations.push({ ExamID: primaryExamId, SeatID: seat.SeatID !, StudentID: stu.StudentID as number });
+                                hallLeft++;
+                            }
+                        } else {
+                            // Right seat: assign from right pool (MCA students)
+                            if (rightIdx < rightStudents.length) {
+                                const stu = rightStudents[rightIdx++] as any;
+                                allNewAllocations.push({ ExamID: primaryExamId, SeatID: seat.SeatID !, StudentID: stu.StudentID as number });
+                                hallRight++;
+                            }
+                        }
                     }
                 }
             }
@@ -1080,14 +1077,14 @@ export const bulkAssign = async (req: Request, res: Response) => {
         }
 
         await transaction.commit();
-        console.log("FINAL assigned count:", studentIdx);
+        console.log("FINAL assigned count:", leftIdx + rightIdx);
         console.log("DEBUG: Sending students to frontend:", students.length);
         res.json({
             success: true,
             studentCount: students.length,
             hallResults,
-            totalLeftAssigned: studentIdx, totalRightAssigned: 0,
-            totalLeftAvailable: allStudentsPool.length, totalRightAvailable: 0,
+            totalLeftAssigned: leftIdx, totalRightAssigned: rightIdx,
+            totalLeftAvailable: leftStudents.length, totalRightAvailable: rightStudents.length,
             mode: resolvedMode,
             avoidSameDeptBench: applyAdjacencyGuard,
         });
