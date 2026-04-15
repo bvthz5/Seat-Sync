@@ -101,4 +101,13 @@ export const SeatingService = {
         const r = await api.get(`${PREFIX}/search-student`, { params: { examDate, session, q } });
         return r.data as { results: { studentId: number; registerNumber: string; name: string; allocated: boolean; hallCode: string | null; hallId: number | null; rowLabel: string | null; benchNumber: number | null; side: string | null; seatLabel: string | null }[] };
     },
+
+    /** Export seating arrangement to Excel */
+    exportSeating: async (examDate: string, session: string) => {
+        const r = await api.get(`${PREFIX}/export`, {
+            params: { examDate, session },
+            responseType: 'blob'
+        });
+        return r.data;
+    },
 };
