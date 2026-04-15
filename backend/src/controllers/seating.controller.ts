@@ -1089,20 +1089,20 @@ export const bulkAssign = async (req: Request, res: Response) => {
                             let targetIdx = rightIdx;
                             let useRightPool = true;
 
-                            // If right pool is empty (single dept mode), use left pool
-                            if (rightStudents.length === 0 && leftIdx < leftStudents.length) {
+                            // If right pool is empty or exhausted, use left pool
+                            if ((rightStudents.length === 0 || rightIdx >= rightStudents.length) && leftIdx < leftStudents.length) {
                                 targetPool = leftStudents;
                                 targetIdx = leftIdx;
                                 useRightPool = false;
                             }
 
                             // When avoidSameDeptBench is on, prioritize different departments
-                            if (applyAdjacencyGuard && leftIdx > 0) {
+                            if (applyAdjacencyGuard && leftIdx > 0 && targetIdx < targetPool.length) {
                                 const lastLeftStudent = leftStudents[leftIdx - 1] as any;
                                 const lastLeftDept = lastLeftStudent?.Department?.DepartmentID;
 
                                 // Check if we have both pools with content
-                                if (rightStudents.length > 0 && leftIdx < leftStudents.length && rightIdx < rightStudents.length) {
+                                if (rightStudents.length > 0 && rightIdx < rightStudents.length && leftIdx < leftStudents.length) {
                                     const rightStudent = rightStudents[rightIdx] as any;
                                     const leftPoolStudent = leftStudents[leftIdx] as any;
                                     const rightDept = rightStudent?.Department?.DepartmentID;
@@ -1114,29 +1114,53 @@ export const bulkAssign = async (req: Request, res: Response) => {
                                         targetIdx = leftIdx;
                                         useRightPool = false;
                                     }
-                                    // Otherwise try to find different dept in target pool
-                                    else {
-                                        const chosenPool = useRightPool ? rightStudents : leftStudents;
-                                        let currentIdx = useRightPool ? rightIdx : leftIdx;
-                                        let foundDifferent = false;
+                                    // If both match, look ahead in both pools
+                                    else if (rightDept === lastLeftDept && leftDept === lastLeftDept) {
+                                        let foundInRight = false, foundInLeft = false;
+                                        let rightDiffIdx = -1, leftDiffIdx = -1;
 
-                                        // Look ahead up to 5 students for different department
-                                        for (let i = 0; i < 5 && currentIdx + i < chosenPool.length; i++) {
-                                            const candidate = chosenPool[currentIdx + i] as any;
-                                            if (candidate?.Department?.DepartmentID !== lastLeftDept) {
-                                                targetIdx = currentIdx + i;
-                                                foundDifferent = true;
+                                        // Look for different dept in right pool
+                                        for (let i = 0; i < 10 && rightIdx + i < rightStudents.length; i++) {
+                                            if (rightStudents[rightIdx + i]?.Department?.DepartmentID !== lastLeftDept) {
+                                                rightDiffIdx = rightIdx + i;
+                                                foundInRight = true;
                                                 break;
                                             }
                                         }
+
+                                        // Look for different dept in left pool
+                                        for (let i = 0; i < 10 && leftIdx + i < leftStudents.length; i++) {
+                                            if (leftStudents[leftIdx + i]?.Department?.DepartmentID !== lastLeftDept) {
+                                                leftDiffIdx = leftIdx + i;
+                                                foundInLeft = true;
+                                                break;
+                                            }
+                                        }
+
+                                        // Prefer the pool with closer different dept
+                                        if (foundInRight && foundInLeft) {
+                                            if (rightDiffIdx - rightIdx <= leftDiffIdx - leftIdx) {
+                                                targetIdx = rightDiffIdx;
+                                                useRightPool = true;
+                                            } else {
+                                                targetIdx = leftDiffIdx;
+                                                targetPool = leftStudents;
+                                                useRightPool = false;
+                                            }
+                                        } else if (foundInRight) {
+                                            targetIdx = rightDiffIdx;
+                                            useRightPool = true;
+                                        } else if (foundInLeft) {
+                                            targetIdx = leftDiffIdx;
+                                            targetPool = leftStudents;
+                                            useRightPool = false;
+                                        }
                                     }
-                                } else if (targetIdx < targetPool.length) {
+                                } else if (targetIdx < targetPool.length && targetPool[targetIdx]?.Department?.DepartmentID === lastLeftDept) {
                                     // Single pool mode: look ahead for different department
-                                    let currentIdx = targetIdx;
-                                    for (let i = 0; i < 5 && currentIdx + i < targetPool.length; i++) {
-                                        const candidate = targetPool[currentIdx + i] as any;
-                                        if (candidate?.Department?.DepartmentID !== lastLeftDept) {
-                                            targetIdx = currentIdx + i;
+                                    for (let i = 0; i < 10 && targetIdx + i < targetPool.length; i++) {
+                                        if (targetPool[targetIdx + i]?.Department?.DepartmentID !== lastLeftDept) {
+                                            targetIdx = targetIdx + i;
                                             break;
                                         }
                                     }
