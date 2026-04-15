@@ -21,7 +21,6 @@ export async function generateSeats(room: Room | any, transaction?: any) {
     const expectedSeatMap = new Map<string, { IsActive: boolean }>();
 
     const seatsPerBench = room.SeatsPerBench || 2;
-    const capacity = Number(room.Capacity || 0);
     let seatSerial = 0;
 
     // Excel maps exactly to:
@@ -29,16 +28,16 @@ export async function generateSeats(room: Room | any, transaction?: any) {
     // benches = RowLayout[rowIndex]
     for (let rowIndex = 0; rowIndex < layout.length; rowIndex++) {
         const benches = layout[rowIndex] || 0;
-        // If benches == 0 → skip
+        // If benches == 0 â†’ skip
         if (benches === 0) continue;
         const rowLabel = String.fromCharCode(65 + rowIndex);
 
         // For benchIndex:
         for (let benchIndex = 1; benchIndex <= benches; benchIndex++) {
             // For seatIndex:
-            for (let seatIndex = 1; seatIndex <= seatsPerBench; seatIndex++) {
+            for (let seatIndex = 1; seatIndex <= seatsPerBench; seatIndex++) {  
                 seatSerial++;
-                const isActive = capacity > 0 ? seatSerial <= capacity : true;
+                const isActive = true;
                 const key = `${rowLabel}-${benchIndex}-${seatIndex}`;
                 expectedSeatKeys.add(key);
                 expectedSeatMap.set(key, { IsActive: isActive });

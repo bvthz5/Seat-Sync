@@ -53,6 +53,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
     const [seatIdMap, setSeatIdMap] = useState<Map<string, number>>(new Map());
 // Cleaned up manual zone states
 
+    const [isSaved, setIsSaved] = useState(true);
     const [loading, setLoading] = useState(false);
     const [initialConfig, setInitialConfig] = useState<any>(null); 
     const [initialSeatZoneMap, setInitialSeatZoneMap] = useState<Map<string, number> | null>(null);
@@ -107,7 +108,13 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
         const fetchRoomDetails = async () => {
             if (selectedRoomId) {
                 try {
-                    setLoading(true);
+                    
+        const calculatedCapacity = config.rowLayout.reduce((acc, curr) => acc + (curr * config.seatsPerBench), 0);
+        if (capacityCount !== calculatedCapacity) {
+             toast.error("Capacity mismatch");
+             return;
+        }
+   setLoading(true);
                     const data = await structureService.getRoomLayout(Number(selectedRoomId));
                     const room = data.room;
                     
@@ -259,11 +266,13 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
     };
 
     const handleAddRow = () => {
+
         const lastBenchCount = config.rowLayout.length > 0 ? config.rowLayout[config.rowLayout.length - 1] : 5;
         setConfig({...config, rowLayout: [...config.rowLayout, lastBenchCount]});
     };
 
     const handleRemoveRow = (index: number) => {
+        setIsSaved(false);
         const newLayout = [...config.rowLayout];
         newLayout.splice(index, 1);
         setConfig({...config, rowLayout: newLayout});
@@ -297,6 +306,16 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
 
 
 
+    
+    useEffect(() => {
+        if (!isSaved && selectedRoomId) {
+            const debounceSave = setTimeout(() => {
+                handleSave();
+            }, 1000);
+            return () => clearTimeout(debounceSave);
+        }
+    }, [config, isSaved, selectedRoomId]);
+    
     const handleSave = async () => {
         if (!selectedRoomId) return;
 
@@ -310,7 +329,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
 
         setLoading(true);
         try {
-            const isLayoutSame = initialConfig && JSON.stringify(config.rowLayout) === JSON.stringify(initialConfig.rowLayout) && config.seatsPerBench === initialConfig.seatsPerBench;
+            const isLayoutSame = false;
 
             // 1. Update Layout Structure
             await structureService.updateRoomLayout(Number(selectedRoomId), { ...room, RowLayout: config.rowLayout as any,
@@ -533,7 +552,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                             <div className={`p-4 rounded-xl border flex justify-between items-center bg-gradient-to-br from-slate-50 to-indigo-50/50`}>
                                                 <div className="flex flex-col">
                                                     <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Capacity</span>
-                                                    <span className="text-[10px] text-slate-400">Max: {rooms.find(r => r.RoomID === Number(selectedRoomId))?.Capacity || 0}</span>
+                                                    <span className="text-[10px] text-slate-400">Calculated</span>
                                                 </div>
                                                 <div className="text-2xl font-black text-indigo-600">{capacityCount}</div>
                                             </div>
@@ -542,7 +561,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                     {!readOnly && (
                                         <div className="grid grid-cols-2 gap-3 pt-4 border-t border-slate-100">
                                             <Button variant="flat" color="danger" isDisabled={!isDirty || loading} onPress={handleReset} startContent={<RotateCcw size={16} />}>Reset</Button>
-                                            <Button color="primary" isLoading={loading} isDisabled={!isDirty || capacityCount === 0} onPress={handleSave} startContent={<Save size={18} />}>Save</Button>
+                                            <Button className={!isSaved ? "animate-pulse" : ""} color={isSaved ? "success" : "primary"} isLoading={loading} isDisabled={!isDirty || capacityCount === 0} onPress={handleSave} startContent={!isSaved ? <Save size={18} /> : null}>{isSaved ? "Saved ✓" : "Save"}</Button>
                                         </div>
                                     )}
                                 </div>

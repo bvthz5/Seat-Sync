@@ -271,7 +271,6 @@ export const getRoomLayout = async (req: Request, res: Response) => {
         if (!room) return res.status(404).json({ message: "Room not found" });
 
         const seats = await Seat.findAll({
-            attributes: ['SeatID', 'RoomID', 'RowIndex', 'BenchIndex', 'SeatIndex', 'IsActive', 'ZoneID'], // Explicitly select ZoneID
             where: { RoomID: roomId },
             order: [
                 ['RowIndex', 'ASC'],
@@ -289,7 +288,8 @@ export const getRoomLayout = async (req: Request, res: Response) => {
             seatCount: seats.length
         });
     } catch (error: any) {
-        res.status(500).json({ message: error.message });
+        console.error("GET ROOM LAYOUT ERROR:", error);
+        res.status(500).json({ message: error.message || "Unknown internal server error" });
     }
 };
 
@@ -375,7 +375,6 @@ export const updateRoom = async (req: Request, res: Response) => {
 
         if (RoomCode) room.RoomCode = RoomCode;
         if (Status) room.Status = Status;
-        if (Capacity !== undefined) room.Capacity = Number(Capacity);
         if (ExamUsable !== undefined) room.ExamUsable = ExamUsable;
         if (RoomType) room.RoomType = RoomType;
 
@@ -383,7 +382,18 @@ export const updateRoom = async (req: Request, res: Response) => {
         if (isPhysicalLayoutChange) {
             if (newRowLayout !== undefined) room.RowLayout = newRowLayout;
             if (SeatsPerBench !== undefined) room.SeatsPerBench = SeatsPerBench;
+            
+            // Recalculate capacity perfectly matched to layout
+            let tLayout = newRowLayout !== undefined ? newRowLayout : room.RowLayout;
+            let tSeats = SeatsPerBench !== undefined ? SeatsPerBench : room.SeatsPerBench;
+            if (tLayout && Array.isArray(tLayout)) {
+                 room.Capacity = tLayout.reduce((a: number, b: number) => a + b, 0) * tSeats;
+                 room.RoomType = room.Capacity <= 80 ? 'ROOM' : 'HALL';
+            }
+
             shouldRegenerateSeats = true;
+        } else if (Capacity !== undefined && !isLayoutChange) {
+             room.Capacity = Number(Capacity);
         }
 
         await room.save();

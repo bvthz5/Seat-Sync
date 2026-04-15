@@ -261,16 +261,22 @@ export class StructureImportService {
                     { where: { RoomCode: roomCode }, transaction }
                 );
 
+                let totalSeats = 0;
+                if (item.rowLayout && item.rowLayout.length > 0) {
+                    totalSeats = item.rowLayout.reduce((a, b) => a + b, 0) * seatsPerBench;
+                }
+                const roomType = totalSeats <= 80 ? 'ROOM' : 'HALL';
+
                 if (!existingRoom) {
                     const newRoom = await Room.create(
                         {
                             RoomCode: roomCode,
                             BlockID: blockId,
                             FloorID: floorId,
-                            Capacity: item.capacity,
+                            Capacity: totalSeats,
                             ExamUsable: isExamUsable,
                             Status: 'Active',
-                            RoomType: 'ROOM',
+                            RoomType: roomType,
                             LayoutType: 'CUSTOM',
                             RowLayout: item.rowLayout,
                             SeatsPerBench: seatsPerBench,
@@ -280,21 +286,21 @@ export class StructureImportService {
                     );
                     roomsCreated++;
 
-                    // Generate exact seats inside the room transaction
+                    // Generate exact seats inside the room transaction       
                     await generateSeats(newRoom, transaction);
-                    
-                    if (options?.autoZone) roomsToZone.push(newRoom.RoomID);
+
+                    if (options?.autoZone) roomsToZone.push(newRoom.RoomID);  
                 } else {
                     console.warn("Room already exists:", roomCode);
-                    // Update existing room if capacity or layout changed
+                    // Update existing room if capacity or layout changed     
                     let needsUpdate = false;
-                    
-                    if (existingRoom.Capacity !== item.capacity) {
-                        existingRoom.Capacity = item.capacity;
+
+                    if (existingRoom.Capacity !== totalSeats) {
+                        existingRoom.Capacity = totalSeats;
                         needsUpdate = true;
                     }
-
-                    // Check if RowLayout explicitly differs
+                    if (existingRoom.RoomType !== roomType) {
+                        existingRoom.RoomType = roomType;
                     const currentLayout = existingRoom.RowLayout || [];
                     const newLayout = item.rowLayout || [];
                     let layoutChanged = currentLayout.length !== newLayout.length;
