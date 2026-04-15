@@ -1041,18 +1041,29 @@ export const bulkAssign = async (req: Request, res: Response) => {
 
             let hallLeft = 0, hallRight = 0;
 
-            // Within each hall: row → bench → seats (consecutive fill)
+            // Within each hall: row → fill all benches' left seats, then all benches' right seats
             for (const row of allRows) {
+                // First pass: assign all left seats (seat 1)
                 for (const benchNum of allBenchNums) {
                     const benchSeats = (benchMap[row]?.[benchNum] || []).sort(sortSeatsByPosition);
+                    const leftSeat = benchSeats.find(s => getSeatNumber(s) === 1);
 
-                    for (const seat of benchSeats) {
-                        if (studentIdx < allStudentsPool.length) {
-                            const stu = allStudentsPool[studentIdx++] as any;
-                            allNewAllocations.push({ ExamID: primaryExamId, SeatID: seat.SeatID !, StudentID: stu.StudentID as number });
-                            if (getSeatNumber(seat) === 1) hallLeft++;
-                            else hallRight++;
-                        }
+                    if (leftSeat && studentIdx < allStudentsPool.length) {
+                        const stu = allStudentsPool[studentIdx++] as any;
+                        allNewAllocations.push({ ExamID: primaryExamId, SeatID: leftSeat.SeatID !, StudentID: stu.StudentID as number });
+                        hallLeft++;
+                    }
+                }
+
+                // Second pass: assign all right seats (seat 2)
+                for (const benchNum of allBenchNums) {
+                    const benchSeats = (benchMap[row]?.[benchNum] || []).sort(sortSeatsByPosition);
+                    const rightSeat = benchSeats.find(s => getSeatNumber(s) !== 1);
+
+                    if (rightSeat && studentIdx < allStudentsPool.length) {
+                        const stu = allStudentsPool[studentIdx++] as any;
+                        allNewAllocations.push({ ExamID: primaryExamId, SeatID: rightSeat.SeatID !, StudentID: stu.StudentID as number });
+                        hallRight++;
                     }
                 }
             }
