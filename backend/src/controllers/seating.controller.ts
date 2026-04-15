@@ -916,6 +916,14 @@ export const bulkAssign = async (req: Request, res: Response) => {
         const applyAdjacencyGuard = Boolean(avoidSameDeptBench);
         const slotValue = String(slot ?? session ?? "").trim();
 
+        console.log("BULK ASSIGN START:", {
+            mode: resolvedMode,
+            primaryDept,
+            secondaryDept,
+            applyAdjacencyGuard,
+            avoidSameDeptBench,
+        });
+
         const students = await getStudentsForExamSession(
             String(examDate),
             slotValue,
@@ -960,6 +968,14 @@ export const bulkAssign = async (req: Request, res: Response) => {
 
         const totalEligibleFetched = leftStudents.length + rightStudents.length;
         console.log("Fetched students:", totalEligibleFetched);
+        console.log("Student pools:", {
+            leftCount: leftStudents.length,
+            leftDepts: leftStudents.slice(0, 3).map((s: any) => `${s.RegisterNumber}(${s.Department?.DepartmentCode})`),
+            rightCount: rightStudents.length,
+            rightDepts: rightStudents.slice(0, 3).map((s: any) => `${s.RegisterNumber}(${s.Department?.DepartmentCode})`),
+            mode: resolvedMode,
+            applyAdjacencyGuard,
+        });
         console.log("Fetched left/right:", {
             left: leftStudents.length,
             right: rightStudents.length,
@@ -1058,30 +1074,59 @@ export const bulkAssign = async (req: Request, res: Response) => {
                             // Right seat: assign from right pool or left pool (depending on mode)
                             let targetPool = rightStudents;
                             let targetIdx = rightIdx;
+                            let useRightPool = true;
 
                             // If right pool is empty (single dept mode), use left pool
                             if (rightStudents.length === 0 && leftIdx < leftStudents.length) {
                                 targetPool = leftStudents;
                                 targetIdx = leftIdx;
+                                useRightPool = false;
                             }
 
-                            // When avoidSameDeptBench is on, try to ensure different departments
-                            if (applyAdjacencyGuard && targetIdx < targetPool.length && leftIdx > 0) {
+                            // When avoidSameDeptBench is on, prioritize different departments
+                            if (applyAdjacencyGuard && leftIdx > 0) {
                                 const lastLeftStudent = leftStudents[leftIdx - 1] as any;
                                 const lastLeftDept = lastLeftStudent?.Department?.DepartmentID;
-                                let currentIdx = targetIdx;
 
-                                // Look ahead up to 5 students for different department
-                                while (currentIdx < Math.min(targetIdx + 5, targetPool.length)) {
-                                    const candidateStudent = targetPool[currentIdx] as any;
-                                    const candidateDept = candidateStudent?.Department?.DepartmentID;
+                                // Check if we have both pools with content
+                                if (rightStudents.length > 0 && leftIdx < leftStudents.length && rightIdx < rightStudents.length) {
+                                    const rightStudent = rightStudents[rightIdx] as any;
+                                    const leftPoolStudent = leftStudents[leftIdx] as any;
+                                    const rightDept = rightStudent?.Department?.DepartmentID;
+                                    const leftDept = leftPoolStudent?.Department?.DepartmentID;
 
-                                    if (candidateDept !== lastLeftDept) {
-                                        // Found different department, use this student
-                                        targetIdx = currentIdx;
-                                        break;
+                                    // If right pool matches left student's dept but left pool doesn't, use left pool
+                                    if (rightDept === lastLeftDept && leftDept !== lastLeftDept) {
+                                        targetPool = leftStudents;
+                                        targetIdx = leftIdx;
+                                        useRightPool = false;
                                     }
-                                    currentIdx++;
+                                    // Otherwise try to find different dept in target pool
+                                    else {
+                                        const chosenPool = useRightPool ? rightStudents : leftStudents;
+                                        let currentIdx = useRightPool ? rightIdx : leftIdx;
+                                        let foundDifferent = false;
+
+                                        // Look ahead up to 5 students for different department
+                                        for (let i = 0; i < 5 && currentIdx + i < chosenPool.length; i++) {
+                                            const candidate = chosenPool[currentIdx + i] as any;
+                                            if (candidate?.Department?.DepartmentID !== lastLeftDept) {
+                                                targetIdx = currentIdx + i;
+                                                foundDifferent = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                } else if (targetIdx < targetPool.length) {
+                                    // Single pool mode: look ahead for different department
+                                    let currentIdx = targetIdx;
+                                    for (let i = 0; i < 5 && currentIdx + i < targetPool.length; i++) {
+                                        const candidate = targetPool[currentIdx + i] as any;
+                                        if (candidate?.Department?.DepartmentID !== lastLeftDept) {
+                                            targetIdx = currentIdx + i;
+                                            break;
+                                        }
+                                    }
                                 }
                             }
 
@@ -1091,7 +1136,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
                                 allNewAllocations.push({ ExamID: primaryExamId, SeatID: seat.SeatID !, StudentID: stu.StudentID as number });
 
                                 // Increment appropriate counter
-                                if (targetPool === rightStudents) {
+                                if (useRightPool) {
                                     rightIdx++;
                                 } else {
                                     leftIdx++;
