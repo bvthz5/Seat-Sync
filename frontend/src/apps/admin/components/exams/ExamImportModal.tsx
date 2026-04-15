@@ -307,7 +307,7 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                         id="file-upload"
                                         ref={fileInputRef}
                                     />
-                                    <div className={`
+                                    <label htmlFor="file-upload" className={`
                                             flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer transition-all
                                             ${selectedFiles.length > 0
                                                 ? 'border-purple-500 bg-purple-50'
@@ -339,7 +339,7 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                                 </>
                                             )}
                                         </div>
-                                    </div>
+                                    </label>
                                 </div>
                             </div>
                         </ModalBody>

@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { motion, useSpring, useTransform } from 'framer-motion';
 import { FileText, UserCheck, Layout, Activity, TrendingUp, ArrowRight } from 'lucide-react';
-import { ExamService } from '../services/examService';
+import { DashboardService } from '../services/dashboardService';
 
 const CountUp = ({ value }: { value: number }) => {
     const spring = useSpring(0, { mass: 1, stiffness: 80, damping: 25 });
@@ -65,22 +65,22 @@ export const DashboardCards: React.FC<{ seriesId?: number }> = ({ seriesId }) =>
     const fetchStats = async () => {
         setLoading(true);
         try {
-            const data = await ExamService.getStats({ seriesId });
+            const data = await DashboardService.getSummary(seriesId);
             setStats(data);
         } catch (e) { console.error(e); }
         finally { setLoading(false); }
     };
 
     const cards: (CardConfig & { loading: boolean })[] = [
-        { title: 'Total Exams', subtitle: 'Across all series', value: stats?.total || 0, icon: <FileText />, trend: '+12%', trendUp: true, accent: 'bg-indigo-500', iconBg: 'bg-indigo-50', iconColor: 'text-indigo-600', loading },
-        { title: 'Completed', subtitle: 'Successfully finished', value: stats?.completed || 0, icon: <UserCheck />, trend: '98% rate', trendUp: true, accent: 'bg-emerald-500', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-600', loading },
-        { title: 'Upcoming', subtitle: 'Scheduled sessions', value: stats?.upcoming || 0, icon: <Layout />, trend: '4 slots', trendUp: false, accent: 'bg-violet-500', iconBg: 'bg-violet-50', iconColor: 'text-violet-600', loading },
-        { title: 'Active Today', subtitle: 'Currently running', value: stats?.activeToday || 0, icon: <Activity />, trend: 'Live', trendUp: true, accent: 'bg-orange-500', iconBg: 'bg-orange-50', iconColor: 'text-orange-600', loading },
+        { title: 'Total Students', subtitle: 'Registered in system', value: stats?.data?.totalStudents || 0, icon: <FileText />, trend: '+12%', trendUp: true, accent: 'bg-indigo-500', iconBg: 'bg-indigo-50', iconColor: 'text-indigo-600', loading },
+        { title: 'Total Capacity', subtitle: 'Total available seats', value: stats?.data?.totalCapacity || 0, icon: <UserCheck />, trend: '98% rate', trendUp: true, accent: 'bg-emerald-500', iconBg: 'bg-emerald-50', iconColor: 'text-emerald-600', loading },
+        { title: 'Allocated Seats', subtitle: 'Assigned to rooms', value: stats?.data?.allocatedStudents || 0, icon: <Layout />, trend: '4 slots', trendUp: false, accent: 'bg-violet-500', iconBg: 'bg-violet-50', iconColor: 'text-violet-600', loading },
+        { title: 'System wide filling', subtitle: 'Currently running', value: stats?.data?.utilizationPercentage || 0, icon: <Activity />, trend: 'Live', trendUp: true, accent: 'bg-orange-500', iconBg: 'bg-orange-50', iconColor: 'text-orange-600', loading },     
     ];
 
     return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
-            {cards.map(card => <MetricCard key={card.title} {...card} />)}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">  
+            {cards.map((card: any) => <MetricCard key={card.title} {...card} />)}
         </div>
     );
 };
