@@ -961,18 +961,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
         const totalEligibleFetched = leftStudents.length + rightStudents.length;
         console.log("Fetched students:", totalEligibleFetched);
 
-        function interleave(deptA: any[], deptB: any[]) {
-            const result = [];
-            let i = 0;
-            while (i < Math.max(deptA.length, deptB.length)) {
-                if (deptA[i]) result.push(deptA[i]);
-                if (deptB[i]) result.push(deptB[i]);
-                i++;
-            }
-            return result;
-        }
-
-        const finalStudents = interleave(leftStudents, rightStudents);
+        const finalStudents = [...leftStudents, ...rightStudents];
 
         const targetHalls = await Room.findAll({
             where: { RoomID: { [Op.in]: hallIds } },
@@ -990,12 +979,13 @@ export const bulkAssign = async (req: Request, res: Response) => {
         });
 
         const orderedSeats = allActiveSeats.sort((a, b) => {
+            if (a.SeatIndex !== b.SeatIndex) return Number(a.SeatIndex) - Number(b.SeatIndex);
             const roomA = Number(a.RoomID);
             const roomB = Number(b.RoomID);
             if (roomA !== roomB) return roomA - roomB;
             if (a.RowIndex !== b.RowIndex) return Number(a.RowIndex) - Number(b.RowIndex);
             if (a.BenchIndex !== b.BenchIndex) return Number(a.BenchIndex) - Number(b.BenchIndex);
-            return Number(a.SeatIndex) - Number(b.SeatIndex);
+            return 0;
         });
 
         const allSeatIds = orderedSeats.map(s => s.SeatID);
@@ -1011,16 +1001,17 @@ export const bulkAssign = async (req: Request, res: Response) => {
         let hallRight = 0; // Keeping legacy variable just in case
         const hallResultsMap = new Map();
 
-        for (let i = 0; i < finalStudents.length; i++) {
-            if (i >= orderedSeats.length) break;
-            const stu = finalStudents[i];
+        let finalIdx = 0;
+        const benchMap = new Map<string, number>();
+
+        for (let i = 0; i < orderedSeats.length && finalIdx < finalStudents.length; i++) {
             const seat = orderedSeats[i]!;
-            
-            if (seat.SeatIndex === 2 && i > 0) {
-                const previousSeatStudent = finalStudents[i - 1];
-                if (previousSeatStudent && stu.DepartmentID === previousSeatStudent.DepartmentID) {
-                    console.warn("Invalid seating pattern: Same department adjacently on Bench " + seat.BenchIndex);
-                }
+            const benchKey = `${seat.RoomID}-${seat.RowIndex}-${seat.BenchIndex}`;
+            const stu = finalStudents[finalIdx];
+
+            if (seat.SeatIndex === 2 && benchMap.get(benchKey) === stu.DepartmentID) {
+                console.warn("Skipping right seat to avoid same department on Bench " + seat.BenchIndex);
+                continue; 
             }
 
             allNewAllocations.push({
@@ -1028,6 +1019,8 @@ export const bulkAssign = async (req: Request, res: Response) => {
                 SeatID: seat.SeatID,
                 StudentID: stu.StudentID
             });
+            
+            if (seat.SeatIndex === 1) benchMap.set(benchKey, stu.DepartmentID);
 
             if (!hallResultsMap.has(seat.RoomID)) {
                 hallResultsMap.set(seat.RoomID, { filled: 0, leftUsed: 0, rightUsed: 0 });
@@ -1036,9 +1029,13 @@ export const bulkAssign = async (req: Request, res: Response) => {
             hc.filled++;
             if (stu === leftStudents.find(l => l.StudentID === stu.StudentID)) {
                 hc.leftUsed++;
+                hallLeft++;
             } else {
                 hc.rightUsed++;
+                hallRight++;
             }
+
+            finalIdx++;
         }
 
         if (allNewAllocations.length > 0) {
@@ -1096,6 +1093,7 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "No exams found for this date + session" });
         }
 
+        // STEP 1: FETCH DATA SAFELY
         const existingAllocations = await SeatAllocation.findAll({
             where: { ExamID: { [Op.in]: examIds } }, transaction
         });
@@ -1105,121 +1103,73 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "No students are currently allocated to shuffle" });
         }
 
+        // Find all unique students & their departments
         const studentIds = [...new Set(existingAllocations.map(a => a.StudentID))];
         const students = await Student.findAll({ where: { StudentID: { [Op.in]: studentIds } }, transaction });
         const stuDeptMap = new Map();
         for (const s of students) stuDeptMap.set(s.StudentID, s.DepartmentID);
 
         const studentExamMap = new Map();
-        const deptMap = new Map();
+        const deptMap = new Map<number, number[]>();
 
-        // STEP 1: GROUP STUDENTS BY DEPARTMENT
+        // STEP 2: GROUP STUDENTS BY DEPARTMENT
         for (const alloc of existingAllocations) {
             const sId = alloc.StudentID;
             const dId = stuDeptMap.get(sId) || 0;
             studentExamMap.set(sId, alloc.ExamID);
             if (!deptMap.has(dId)) deptMap.set(dId, []);
-            deptMap.get(dId).push(sId);
+            deptMap.get(dId)!.push(sId);
         }
-        
-        const orderedDeptKeys = [...deptMap.keys()];
 
-        for (const dId of orderedDeptKeys) {
-            const arr = deptMap.get(dId);
-            arr.sort((a: any, b: any) => {
-                const s1 = students.find(s => s.StudentID === a);
-                const s2 = students.find(s => s.StudentID === b);
-                return String(s1?.RegisterNumber || "").localeCompare(String(s2?.RegisterNumber || ""), undefined, { numeric: true });
+        const orderedDeptKeys = [...deptMap.keys()].sort((a, b) => a - b);
+
+        const deptSeatsMap = new Map<number, any[]>();
+        for (const alloc of existingAllocations) {
+            const sId = alloc.StudentID;
+            const dId = stuDeptMap.get(sId) || 0;
+            if (!deptSeatsMap.has(dId)) deptSeatsMap.set(dId, []);
+            deptSeatsMap.get(dId)!.push({
+                SeatID: alloc.SeatID,
+                ExamID: alloc.ExamID // maintain the exact physical layout and exam bindings
             });
         }
-        
-        console.log("Before shuffle:", Array.from(deptMap.entries()).map(([k, v]) => `[Dept ${k}]: ${v.length}`));
 
-        // STEP 2: SAFE SHUFFLE
         for (const dId of orderedDeptKeys) {
-            const arr = deptMap.get(dId);
+            const arr = deptMap.get(dId)!;
+            
+            // Randomly shuffle the *students* strictly within this department
             for (let i = arr.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
-                [arr[i], arr[j]] = [arr[j], arr[i]];
+                const temp = arr[i];
+                arr[i] = arr[j] as number;
+                arr[j] = temp as number;
             }
         }
-        
-        console.log("After shuffle:", Array.from(deptMap.entries()).map(([k, v]) => `[Dept ${k}]: ${v.length}`));
 
-        // STEP 3: REBUILD INTERLEAVED ORDER
-        function interleave(deptA: any[], deptB: any[]) {
-            const result = [];
-            let i = 0;
-            const lenA = deptA ? deptA.length : 0;
-            const lenB = deptB ? deptB.length : 0;
-            while (i < Math.max(lenA, lenB)) {
-                if (deptA && deptA[i]) result.push(deptA[i]);
-                if (deptB && deptB[i]) result.push(deptB[i]);
-                i++;
-            }
-            return result;
-        }
-
-        let finalStudents = [];
-        if (orderedDeptKeys.length >= 2) {
-            finalStudents = interleave(deptMap.get(orderedDeptKeys[0]), deptMap.get(orderedDeptKeys[1]));
-        } else if (orderedDeptKeys.length === 1) {
-            finalStudents = deptMap.get(orderedDeptKeys[0]);
-        }
-        
-        const finalStudentRegNos = finalStudents.map((sid: any) => students.find(s => s.StudentID === sid)?.RegisterNumber);
-        console.log("Final order length:", finalStudents.length);
-        console.log("Final order (preview):", finalStudentRegNos.slice(0, 10));
-
-        // Delete existing ones
+        // We completely preserve the structural layout created by bulkAssign, 
+        // avoiding any rule violations or physical get-stuck patterns.
         await SeatAllocation.destroy({ where: { ExamID: { [Op.in]: examIds } }, transaction });
 
-        // STEP 4: FIXED SEAT ORDER
-        const seatIds = [...new Set(existingAllocations.map(a => a.SeatID))]; 
-        const allActiveSeats = await Seat.findAll({
-            where: { SeatID: { [Op.in]: seatIds } },
-            attributes: ["SeatID", "RoomID", "RowIndex", "BenchIndex", "SeatIndex"],
-            transaction
-        });
-
-        const orderedSeats = allActiveSeats.sort((a, b) => {
-            const roomA = Number(a.RoomID);
-            const roomB = Number(b.RoomID);
-            if (roomA !== roomB) return roomA - roomB;
-            if (a.RowIndex !== b.RowIndex) return Number(a.RowIndex) - Number(b.RowIndex);
-            if (a.BenchIndex !== b.BenchIndex) return Number(a.BenchIndex) - Number(b.BenchIndex);
-            return Number(a.SeatIndex) - Number(b.SeatIndex);
-        });
-
-        // STEP 5: ASSIGN SEQUENTIALLY
-        const orderedAllocations = [];
-        for (let idx = 0; idx < finalStudents.length; idx++) {
-            if (idx >= orderedSeats.length) break;
+        const assignments: any[] = [];
+        
+        for (const dId of orderedDeptKeys) {
+            const shuffledStudents = deptMap.get(dId)!;
+            const originalSeats = deptSeatsMap.get(dId)!;
             
-            const stuId = finalStudents[idx];
-            const seat = orderedSeats[idx]!;
-
-            if (seat.SeatIndex === 2 && idx > 0) {
-                const currentStudentDept = stuDeptMap.get(stuId);
-                const previousStudentDept = stuDeptMap.get(finalStudents[idx - 1]);
-                if (currentStudentDept === previousStudentDept) {
-                    console.warn(`Validation Warning: Same department adjacently on Bench ${seat.BenchIndex}`);
-                }
+            for (let i = 0; i < shuffledStudents.length; i++) {
+                assignments.push({
+                    ExamID: originalSeats[i].ExamID,
+                    StudentID: shuffledStudents[i],
+                    SeatID: originalSeats[i].SeatID
+                });
             }
-
-            const examIdToMap = Array.from(studentExamMap.entries()).find(([k,v]) => k === stuId)?.[1];
-
-            orderedAllocations.push({
-                ExamID: examIdToMap || examIds[0],
-                StudentID: stuId,
-                SeatID: seat.SeatID
-            });
         }
 
-        await SeatAllocation.bulkCreate(orderedAllocations, { transaction });
+        // STEP 11: FINAL INSERT
+        await SeatAllocation.bulkCreate(assignments, { transaction });
         await transaction.commit();
 
-        res.json({ message: "Seating scrambled successfully!", shuffledCount: orderedAllocations.length });
+        res.json({ message: "Seating scrambled successfully without modifying layout patterns!", shuffledCount: assignments.length });
 
     } catch (error) {
         try { await transaction.rollback(); } catch (e) {}
@@ -1609,3 +1559,5 @@ export const searchStudent = async (req: Request, res: Response) => {
         res.status(500).json({ message: (error instanceof Error ? error.message : String(error)) });
     }
 };
+
+
