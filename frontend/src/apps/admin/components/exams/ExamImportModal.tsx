@@ -229,9 +229,9 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                 {/* Exam Series Selection */}
                                 <div className="space-y-2">
                                     <div className="flex justify-between items-end">
-                                        <label className="block text-sm font-medium text-slate-700">
-                                            Target Exam Series <span className="text-red-500">*</span>
-                                        </label>
+                                          <div className="block text-sm font-medium text-slate-700">
+                                              Target Exam Series <span className="text-red-500">*</span>
+                                          </div>
                                     </div>
                                     <div className="flex gap-2">
                                         <div className="flex-1">
@@ -261,7 +261,7 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
 
                                 {/* Exam Series Title Input */}
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                                      <label htmlFor="examTitle" className="block text-sm font-medium text-slate-700 mb-1">
                                         Exam Name Prefix (Optional)
                                     </label>
                                     <input id="examTitle"

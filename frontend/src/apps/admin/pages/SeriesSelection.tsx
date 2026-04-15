@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardBody, Button, Input, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/react";
-import { BookOpen, Plus, Zap, CheckCircle, ChevronRight, AlertCircle, Search, Sparkles, Grid3x3, Tag, Compass } from "lucide-react";
+import { BookOpen, Plus, Zap, CheckCircle, ChevronRight, AlertCircle, Search, Sparkles, Grid3x3, Tag, Compass, Edit2, Trash2 } from "lucide-react";
 import { toast } from 'react-hot-toast';
 import { SeriesService } from '../services/seriesService';
 
@@ -14,6 +14,54 @@ const SeriesSelection: React.FC = () => {
     const [newSeriesName, setNewSeriesName] = useState('');
     const [newSeriesType, setNewSeriesType] = useState<'Internal' | 'EndSemester'>('Internal');
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Edit Modal State
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editSeriesId, setEditSeriesId] = useState<number | null>(null);
+    const [editSeriesName, setEditSeriesName] = useState('');
+    const [editSeriesType, setEditSeriesType] = useState<'Internal' | 'EndSemester'>('Internal');
+    const [editIsActive, setEditIsActive] = useState(true);
+
+    // Delete Modal State
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [deleteSeriesId, setDeleteSeriesId] = useState<number | null>(null);
+
+    const handleEditSeriesSubmit = async () => {
+        if (!editSeriesName.trim() || !editSeriesId) {
+            toast.error("Please enter a valid series name");
+            return;
+        }
+        setIsSubmitting(true);
+        try {
+            await SeriesService.update(editSeriesId, {
+                SeriesName: editSeriesName.trim(),
+                ExamType: editSeriesType,
+                IsActive: editIsActive
+            });
+            toast.success("Series updated successfully!");
+            setIsEditModalOpen(false);
+            fetchSeries();
+        } catch (error: any) {
+            toast.error(error.response?.data?.message || "Failed to update series");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleDeleteSeriesSubmit = async () => {
+        if (!deleteSeriesId) return;
+        setIsSubmitting(true);
+        try {
+            await SeriesService.delete(deleteSeriesId);
+            toast.success("Series deleted successfully!");
+            setIsDeleteModalOpen(false);
+            fetchSeries();
+        } catch (error: any) {
+            toast.error(error.response?.data?.message || "Failed to delete series");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     useEffect(() => {
         fetchSeries();
@@ -104,6 +152,7 @@ const SeriesSelection: React.FC = () => {
                         <div className="relative max-w-md">
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                             <Input
+                                aria-label="Search series"
                                 placeholder="Search series..."
                                 value={searchQuery}
                                 onValueChange={setSearchQuery}
@@ -199,33 +248,54 @@ const SeriesSelection: React.FC = () => {
                             return (
                                 <Card
                                     key={s.ExamSeriesID}
-                                    isPressable
-                                    onPress={() => handleSelectSeries(s.ExamSeriesID)}
-                                    className={`bg-white border border-slate-200 hover:border-slate-300 hover:shadow-lg transition-all duration-300 group rounded-2xl overflow-hidden cursor-pointer`}
+                                    className={`bg-white border border-slate-200 hover:border-slate-300 hover:shadow-lg transition-all duration-300 group rounded-2xl overflow-hidden`}
                                 >
                                     {/* Top trim line */}
                                     <div className={`h-1.5 w-full ${color.bg.replace('bg-', 'bg-').replace('50', '500')}`}></div>
 
                                     <CardBody className="p-6 space-y-5">
-                                        {/* Icon & Status */}
+                                        {/* Icon & Status & Actions */}
                                         <div className="flex justify-between items-start">
                                             <div className={`p-4 rounded-xl ${color.bg} ${color.icon} group-hover:scale-110 transition-transform duration-300`}>
                                                 <Zap size={24} />
                                             </div>
-                                            {s.IsActive ? (
-                                                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-100`}>
-                                                    <CheckCircle size={14} />
-                                                    Active
-                                                </div>
-                                            ) : (
-                                                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-slate-100 text-slate-500 border border-slate-200`}>
-                                                    Inactive
-                                                </div>
-                                            )}
+                                            <div className="flex gap-2">
+                                                {s.IsActive ? (
+                                                    <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-100`}>
+                                                        <CheckCircle size={14} />
+                                                        Active
+                                                    </div>
+                                                ) : (
+                                                    <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-slate-100 text-slate-500 border border-slate-200`}>
+                                                        Inactive
+                                                    </div>
+                                                )}
+                                                
+                                                <Button 
+                                                    isIconOnly size="sm" variant="flat" color="primary" 
+                                                    className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 min-w-8 w-8 h-8 rounded-md"
+                                                    onPress={() => {
+                                                        setEditSeriesId(s.ExamSeriesID);
+                                                        setEditSeriesName(s.SeriesName);
+                                                        setEditSeriesType(s.ExamType);
+                                                        setEditIsActive(s.IsActive);
+                                                        setIsEditModalOpen(true);
+                                                    }}
+                                                ><Edit2 size={14} /></Button>
+                                                
+                                                <Button 
+                                                    isIconOnly size="sm" variant="flat" color="danger" 
+                                                    className="bg-red-50 text-red-600 hover:bg-red-100 min-w-8 w-8 h-8 rounded-md"
+                                                    onPress={() => {
+                                                        setDeleteSeriesId(s.ExamSeriesID);
+                                                        setIsDeleteModalOpen(true);
+                                                    }}
+                                                ><Trash2 size={14} /></Button>
+                                            </div>
                                         </div>
 
-                                        {/* Content */}
-                                        <div className="min-h-[4rem]">
+                                        {/* Content - wrapped in a click handler */}
+                                        <div className="min-h-[4rem] cursor-pointer group" onClick={() => handleSelectSeries(s.ExamSeriesID)}>
                                             <h3 className="text-xl font-bold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-2">
                                                 {s.SeriesName}
                                             </h3>
@@ -240,7 +310,7 @@ const SeriesSelection: React.FC = () => {
                                         <div className="h-px bg-slate-100"></div>
 
                                         {/* Footer */}
-                                        <div className="flex justify-between items-center group-hover:text-indigo-600">
+                                        <div className="flex justify-between items-center group-hover:text-indigo-600 cursor-pointer" onClick={() => handleSelectSeries(s.ExamSeriesID)}>
                                             <span className="text-xs font-bold text-slate-500 uppercase tracking-widest transition-colors">
                                                 View Exams
                                             </span>
@@ -282,10 +352,12 @@ const SeriesSelection: React.FC = () => {
                         <div className="space-y-6">
                             {/* Series Name */}
                             <div>
-                                <label className="block text-sm font-bold text-slate-700 mb-2">
+                                <label htmlFor="newSeriesName" className="block text-sm font-bold text-slate-700 mb-2">
                                     Series Name
                                 </label>
                                 <Input
+                                    id="newSeriesName"
+                                    aria-label="New Series Name"
                                     placeholder="e.g., Internals, End Semester"
                                     value={newSeriesName}
                                     onValueChange={setNewSeriesName}
@@ -301,9 +373,9 @@ const SeriesSelection: React.FC = () => {
 
                             {/* Exam Type */}
                             <div>
-                                <label className="block text-sm font-bold text-slate-700 mb-2">
-                                    Exam Type
-                                </label>
+                                <div className="block text-sm font-bold text-slate-700 mb-2">
+                                          Exam Type
+                                      </div>
                                 <div className="flex flex-col sm:flex-row gap-3">
                                     <Button
                                         className={`flex-1 h-12 rounded-xl border-2 transition-all font-bold ${
@@ -350,8 +422,109 @@ const SeriesSelection: React.FC = () => {
                     </ModalFooter>
                 </ModalContent>
             </Modal>
+
+            {/* Edit Series Modal */}
+            <Modal
+                isOpen={isEditModalOpen}
+                onClose={() => !isSubmitting && setIsEditModalOpen(false)}
+                size="md"
+                backdrop="blur"
+                classNames={{
+                    backdrop: "bg-slate-900/50 backdrop-blur-sm",
+                    base: "bg-white shadow-2xl border border-slate-200",
+                    header: "border-b border-slate-100 pb-4",
+                    body: "gap-6 py-6",
+                    footer: "border-t border-slate-100 pt-4",
+                    closeButton: "text-slate-400 hover:text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-full"
+                }}
+            >
+                <ModalContent>
+                    <ModalHeader className="flex items-center gap-3 text-slate-900">
+                        <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center border border-indigo-100">
+                            <Edit2 className="text-indigo-600" size={20} />
+                        </div>
+                        <span className="text-xl font-bold">Edit Series</span>
+                    </ModalHeader>
+                    <ModalBody>
+                        <div>
+                            <label htmlFor="editSeriesName" className="block text-sm font-bold text-slate-700 mb-2">Series Name</label>
+                            <Input
+                                id="editSeriesName"
+                                aria-label="Edit Series Name"
+                                value={editSeriesName}
+                                onChange={(e) => setEditSeriesName(e.target.value)}
+                                placeholder="e.g., Spring 2024 Internals"
+                                classNames={{
+                                    inputWrapper: "bg-slate-50 border-2 border-slate-100 hover:border-indigo-300 focus-within:!border-indigo-600 focus-within:!bg-white rounded-xl shadow-inner h-12 transition-all",
+                                    input: "text-slate-900 font-semibold"
+                                }}
+                                disabled={isSubmitting}
+                            />
+                        </div>
+                        
+                        <div>
+                            <div className="block text-sm font-bold text-slate-700 mb-2">
+                                          Exam Type
+                                      </div>
+                            <div className="flex flex-col sm:flex-row gap-3">
+                                <Button
+                                    className={`flex-1 h-12 rounded-xl border-2 transition-all font-bold ${
+                                        editSeriesType === 'Internal'
+                                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200/50'
+                                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                                    }`}
+                                    onPress={() => setEditSeriesType('Internal')}
+                                    disabled={isSubmitting}
+                                >
+                                    Internal Assessment
+                                </Button>
+                                <Button
+                                    className={`flex-1 h-12 rounded-xl border-2 transition-all font-bold ${
+                                        editSeriesType === 'EndSemester'
+                                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200/50'
+                                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                                    }`}
+                                    onPress={() => setEditSeriesType('EndSemester')}
+                                    disabled={isSubmitting}
+                                >
+                                    End Semester
+                                </Button>
+                            </div>
+                        </div>
+                    </ModalBody>
+                    <ModalFooter className="flex gap-3">
+                        <Button variant="light" onPress={() => setIsEditModalOpen(false)} disabled={isSubmitting} className="text-slate-600 font-bold hover:bg-slate-100 rounded-xl h-11">Cancel</Button>
+                        <Button color="primary" onPress={handleEditSeriesSubmit} isLoading={isSubmitting} className="bg-indigo-600 text-white font-bold shadow-md hover:bg-indigo-700 px-6 rounded-xl h-11">Save Changes</Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            {/* Delete Series Modal */}
+            <Modal isOpen={isDeleteModalOpen} onClose={() => !isSubmitting && setIsDeleteModalOpen(false)} size="md" backdrop="blur" classNames={{
+                backdrop: "bg-slate-900/50 backdrop-blur-sm",
+                base: "bg-white shadow-2xl border border-slate-200",
+                header: "border-b border-red-100 pb-4",
+                body: "py-6",
+            }}>
+                <ModalContent>
+                    <ModalHeader className="flex items-center gap-3 text-slate-900">
+                        <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center border border-red-100">
+                            <Trash2 className="text-red-600" size={20} />
+                        </div>
+                        <span className="text-xl font-bold">Delete Series</span>
+                    </ModalHeader>
+                    <ModalBody>
+                        <p className="text-slate-600">Are you sure you want to delete this exam series? This action <span className="font-bold text-red-600">cannot be undone</span> and will delete all associated exams and seating plans.</p>
+                    </ModalBody>
+                    <ModalFooter>
+                        <Button variant="light" onPress={() => setIsDeleteModalOpen(false)} disabled={isSubmitting} className="font-bold">Cancel</Button>
+                        <Button color="danger" onPress={handleDeleteSeriesSubmit} isLoading={isSubmitting} className="font-bold">Delete Series</Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
         </div>
     );
 };
 
 export default SeriesSelection;
+
