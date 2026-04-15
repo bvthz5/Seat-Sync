@@ -865,6 +865,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
             primaryDeptId: (req.body as any)?.primaryDeptId,
             secondaryDeptId: (req.body as any)?.secondaryDeptId,
             avoidSameDeptBench: (req.body as any)?.avoidSameDeptBench,
+            shuffleRooms: (req.body as any)?.shuffleRooms,
         });
         const {
             examDate,
@@ -877,6 +878,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
             primaryDeptId,
             secondaryDeptId,
             avoidSameDeptBench,
+            shuffleRooms,
         } = req.body;
 
         if (!examDate || !session || !hallIds || hallIds.length === 0) {
@@ -915,6 +917,14 @@ export const bulkAssign = async (req: Request, res: Response) => {
         const secondaryDept = secondaryDeptId ?? rightDeptId ?? null;
         const applyAdjacencyGuard = Boolean(avoidSameDeptBench);
         const slotValue = String(slot ?? session ?? "").trim();
+
+        console.log("BULK ASSIGN START:", {
+            mode: resolvedMode,
+            primaryDept,
+            secondaryDept,
+            applyAdjacencyGuard,
+            avoidSameDeptBench,
+        });
 
         const students = await getStudentsForExamSession(
             String(examDate),
@@ -960,35 +970,41 @@ export const bulkAssign = async (req: Request, res: Response) => {
 
         const totalEligibleFetched = leftStudents.length + rightStudents.length;
         console.log("Fetched students:", totalEligibleFetched);
-
-        const finalStudents = [...leftStudents, ...rightStudents];
-
-        const targetHalls = await Room.findAll({
-            where: { RoomID: { [Op.in]: hallIds } },
-            transaction
+        console.log("Student pools:", {
+            leftCount: leftStudents.length,
+            leftDepts: leftStudents.slice(0, 3).map((s: any) => `${s.RegisterNumber}(${s.Department?.DepartmentCode})`),
+            rightCount: rightStudents.length,
+            rightDepts: rightStudents.slice(0, 3).map((s: any) => `${s.RegisterNumber}(${s.Department?.DepartmentCode})`),
+            mode: resolvedMode,
+            applyAdjacencyGuard,
+        });
+        console.log("Fetched left/right:", {
+            left: leftStudents.length,
+            right: rightStudents.length,
+            mode: resolvedMode,
         });
 
+        let leftIdx = 0, rightIdx = 0;
+        const targetHalls = await Room.findAll({ 
+            where: { RoomID: { [Op.in]: hallIds } }, 
+            transaction 
+        });
+
+        // Ensure seats exist for all target halls sequentially
         for (const hall of targetHalls) {
             await ensureSeatsExist(hall, transaction);
         }
 
+        // Fetch all active seats for these halls in one query
         const allActiveSeats = await Seat.findAll({
             where: { RoomID: { [Op.in]: hallIds }, IsActive: true },
             attributes: ["SeatID", "RoomID", "RowIndex", "BenchIndex", "SeatIndex"],
-            transaction
+            order: [["RoomID", "ASC"], ["RowIndex", "ASC"], ["BenchIndex", "ASC"], ["SeatIndex", "ASC"]],
+            transaction,
         });
 
-        const orderedSeats = allActiveSeats.sort((a, b) => {
-            if (a.SeatIndex !== b.SeatIndex) return Number(a.SeatIndex) - Number(b.SeatIndex);
-            const roomA = Number(a.RoomID);
-            const roomB = Number(b.RoomID);
-            if (roomA !== roomB) return roomA - roomB;
-            if (a.RowIndex !== b.RowIndex) return Number(a.RowIndex) - Number(b.RowIndex);
-            if (a.BenchIndex !== b.BenchIndex) return Number(a.BenchIndex) - Number(b.BenchIndex);
-            return 0;
-        });
-
-        const allSeatIds = orderedSeats.map(s => s.SeatID);
+        // Clear existing allocations for all these halls + slot in one query
+        const allSeatIds = allActiveSeats.map(s => s.SeatID);
         if (allSeatIds.length > 0) {
             await SeatAllocation.destroy({
                 where: { ExamID: { [Op.in]: examIds }, SeatID: { [Op.in]: allSeatIds } },
@@ -996,78 +1012,204 @@ export const bulkAssign = async (req: Request, res: Response) => {
             });
         }
 
-        const allNewAllocations = [];
-        let hallLeft = 0; // Keeping legacy variable just in case
-        let hallRight = 0; // Keeping legacy variable just in case
-        const hallResultsMap = new Map();
+        // Group seats by RoomID
+        const roomSeatsMap = new Map<number, any[]>();
+        for (const seat of allActiveSeats) {
+            const roomId = Number((seat as any).RoomID);
+            if (!roomSeatsMap.has(roomId)) roomSeatsMap.set(roomId, []);
+            roomSeatsMap.get(roomId)!.push(seat);
+        }
 
-        let finalIdx = 0;
-        const benchMap = new Map<string, number>();
+        const hallResults: any[] = [];
+        const allNewAllocations: { ExamID: number; SeatID: number; StudentID: number }[] = [];
 
-        for (let i = 0; i < orderedSeats.length && finalIdx < finalStudents.length; i++) {
-            const seat = orderedSeats[i]!;
-            const benchKey = `${seat.RoomID}-${seat.RowIndex}-${seat.BenchIndex}`;
-            const stu = finalStudents[finalIdx];
+        // Shuffle halls if toggle is ON (for random room distribution)
+        let hallIdsToUse = [...hallIds.map(Number)];
+        if (shuffleRooms) {
+            // Fisher-Yates shuffle for randomization
+            for (let i = hallIdsToUse.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [hallIdsToUse[i], hallIdsToUse[j]] = [hallIdsToUse[j], hallIdsToUse[i]];
+            }
+            console.log("Shuffled hall order:", hallIdsToUse);
+        }
 
-            if (seat.SeatIndex === 2 && benchMap.get(benchKey) === stu.DepartmentID) {
-                console.warn("Skipping right seat to avoid same department on Bench " + seat.BenchIndex);
-                continue; 
+        // Hall-by-hall assignment: fill each hall completely before moving to next
+        for (const hallIdNum of hallIdsToUse) {
+            const hall = targetHalls.find(h => h.RoomID === hallIdNum);
+            if (!hall) continue;
+
+            const seats = roomSeatsMap.get(hallIdNum) || [];
+
+            const benchMap: Record<string, Record<number, any[]>> = {};
+            for (const seat of seats) {
+                const rowLabel = getRowLabel(seat);
+                const benchNumber = getBenchNumber(seat);
+                if (!benchMap[rowLabel]) benchMap[rowLabel] = {};
+                const rowMap = benchMap[rowLabel]!;
+                if (!rowMap[benchNumber]) rowMap[benchNumber] = [];
+                rowMap[benchNumber]!.push(seat);
             }
 
-            allNewAllocations.push({
-                ExamID: primaryExamId,
-                SeatID: seat.SeatID,
-                StudentID: stu.StudentID
+            // Get all rows and benches for this hall
+            const allRows = Object.keys(benchMap).sort();
+            const allBenchNums = [...new Set(
+                allRows.flatMap(r => Object.keys(benchMap[r]!).map(Number))
+            )].sort((a, b) => a - b);
+
+            const findCandidateIndex = (arr: any[], startIdx: number, avoidDeptCode?: string): number => {
+                if (startIdx >= arr.length) return -1;
+                if (!avoidDeptCode) return startIdx;
+                for (let i = startIdx; i < arr.length; i++) {
+                    const code = String(arr[i]?.Department?.DepartmentCode || "");
+                    if (code !== avoidDeptCode) return i;
+                }
+                return -1;
+            };
+
+            let hallLeft = 0, hallRight = 0;
+
+            // Within each hall: row → bench → pair students
+            for (const row of allRows) {
+                for (const benchNum of allBenchNums) {
+                    const benchSeats = (benchMap[row]?.[benchNum] || []).sort(sortSeatsByPosition);
+
+                    for (const seat of benchSeats) {
+                        if (getSeatNumber(seat) === 1) {
+                            // Left seat: assign from left pool
+                            if (leftIdx < leftStudents.length) {
+                                const stu = leftStudents[leftIdx++] as any;
+                                console.log(`Bench ${row}${benchNum} Left: ${stu.RegisterNumber} (${stu.Department?.DepartmentCode})`);
+                                allNewAllocations.push({ ExamID: primaryExamId, SeatID: seat.SeatID !, StudentID: stu.StudentID as number });
+                                hallLeft++;
+                            }
+                        } else {
+                            // Right seat: assign from right pool or left pool (depending on mode)
+                            let targetPool = rightStudents;
+                            let targetIdx = rightIdx;
+                            let useRightPool = true;
+
+                            // If right pool is empty or exhausted, use left pool
+                            if ((rightStudents.length === 0 || rightIdx >= rightStudents.length) && leftIdx < leftStudents.length) {
+                                targetPool = leftStudents;
+                                targetIdx = leftIdx;
+                                useRightPool = false;
+                            }
+
+                            // When avoidSameDeptBench is on, prioritize different departments
+                            if (applyAdjacencyGuard && leftIdx > 0 && targetIdx < targetPool.length) {
+                                const lastLeftStudent = leftStudents[leftIdx - 1] as any;
+                                const lastLeftDept = lastLeftStudent?.Department?.DepartmentID;
+
+                                // Check if we have both pools with content
+                                if (rightStudents.length > 0 && rightIdx < rightStudents.length && leftIdx < leftStudents.length) {
+                                    const rightStudent = rightStudents[rightIdx] as any;
+                                    const leftPoolStudent = leftStudents[leftIdx] as any;
+                                    const rightDept = rightStudent?.Department?.DepartmentID;
+                                    const leftDept = leftPoolStudent?.Department?.DepartmentID;
+
+                                    // If right pool matches left student's dept but left pool doesn't, use left pool
+                                    if (rightDept === lastLeftDept && leftDept !== lastLeftDept) {
+                                        targetPool = leftStudents;
+                                        targetIdx = leftIdx;
+                                        useRightPool = false;
+                                    }
+                                    // If both match, look ahead in both pools
+                                    else if (rightDept === lastLeftDept && leftDept === lastLeftDept) {
+                                        let foundInRight = false, foundInLeft = false;
+                                        let rightDiffIdx = -1, leftDiffIdx = -1;
+
+                                        // Look for different dept in right pool
+                                        for (let i = 0; i < 10 && rightIdx + i < rightStudents.length; i++) {
+                                            if (rightStudents[rightIdx + i]?.Department?.DepartmentID !== lastLeftDept) {
+                                                rightDiffIdx = rightIdx + i;
+                                                foundInRight = true;
+                                                break;
+                                            }
+                                        }
+
+                                        // Look for different dept in left pool
+                                        for (let i = 0; i < 10 && leftIdx + i < leftStudents.length; i++) {
+                                            if (leftStudents[leftIdx + i]?.Department?.DepartmentID !== lastLeftDept) {
+                                                leftDiffIdx = leftIdx + i;
+                                                foundInLeft = true;
+                                                break;
+                                            }
+                                        }
+
+                                        // Prefer the pool with closer different dept
+                                        if (foundInRight && foundInLeft) {
+                                            if (rightDiffIdx - rightIdx <= leftDiffIdx - leftIdx) {
+                                                targetIdx = rightDiffIdx;
+                                                useRightPool = true;
+                                            } else {
+                                                targetIdx = leftDiffIdx;
+                                                targetPool = leftStudents;
+                                                useRightPool = false;
+                                            }
+                                        } else if (foundInRight) {
+                                            targetIdx = rightDiffIdx;
+                                            useRightPool = true;
+                                        } else if (foundInLeft) {
+                                            targetIdx = leftDiffIdx;
+                                            targetPool = leftStudents;
+                                            useRightPool = false;
+                                        }
+                                    }
+                                } else if (targetIdx < targetPool.length && targetPool[targetIdx]?.Department?.DepartmentID === lastLeftDept) {
+                                    // Single pool mode: look ahead for different department
+                                    for (let i = 0; i < 10 && targetIdx + i < targetPool.length; i++) {
+                                        if (targetPool[targetIdx + i]?.Department?.DepartmentID !== lastLeftDept) {
+                                            targetIdx = targetIdx + i;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (targetIdx < targetPool.length) {
+                                const stu = targetPool[targetIdx] as any;
+                                console.log(`Bench ${row}${benchNum} Right: ${stu.RegisterNumber} (${stu.Department?.DepartmentCode})`);
+                                allNewAllocations.push({ ExamID: primaryExamId, SeatID: seat.SeatID !, StudentID: stu.StudentID as number });
+
+                                // Increment appropriate counter
+                                if (useRightPool) {
+                                    rightIdx++;
+                                } else {
+                                    leftIdx++;
+                                }
+                                hallRight++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            hallResults.push({
+                hallId: hallIdNum, hallCode: hall.RoomCode,
+                totalSeats: seats.length, filled: hallLeft + hallRight,
+                leftUsed: hallLeft, rightUsed: hallRight,
             });
-            
-            if (seat.SeatIndex === 1) benchMap.set(benchKey, stu.DepartmentID);
-
-            if (!hallResultsMap.has(seat.RoomID)) {
-                hallResultsMap.set(seat.RoomID, { filled: 0, leftUsed: 0, rightUsed: 0 });
-            }
-            const hc = hallResultsMap.get(seat.RoomID);
-            hc.filled++;
-            if (stu === leftStudents.find(l => l.StudentID === stu.StudentID)) {
-                hc.leftUsed++;
-                hallLeft++;
-            } else {
-                hc.rightUsed++;
-                hallRight++;
-            }
-
-            finalIdx++;
         }
 
         if (allNewAllocations.length > 0) {
             await SeatAllocation.bulkCreate(allNewAllocations, { transaction });
         }
 
-        const hallResults = targetHalls.map(hall => {
-            const stats = hallResultsMap.get(hall.RoomID) || { filled: 0, leftUsed: 0, rightUsed: 0 };
-            return {
-                hallId: hall.RoomID,
-                hallCode: hall.RoomCode,
-                totalSeats: orderedSeats.filter(s => s.RoomID === hall.RoomID).length,
-                filled: stats.filled,
-                leftUsed: stats.leftUsed,
-                rightUsed: stats.rightUsed
-            };
-        });
-
         await transaction.commit();
-        console.log("FINAL assigned count:", hallLeft + hallRight);
-        console.log("DEBUG: Sending students to frontend:", leftStudents.length + rightStudents.length);
+        console.log("FINAL assigned count:", leftIdx + rightIdx);
+        console.log("DEBUG: Sending students to frontend:", students.length);
         res.json({
             success: true,
-            studentCount: leftStudents.length + rightStudents.length,
+            studentCount: students.length,
             hallResults,
-            totalLeftAssigned: hallLeft, totalRightAssigned: hallRight,
+            totalLeftAssigned: leftIdx, totalRightAssigned: rightIdx,
             totalLeftAvailable: leftStudents.length, totalRightAvailable: rightStudents.length,
             mode: resolvedMode,
             avoidSameDeptBench: applyAdjacencyGuard,
         });
     } catch (error: any) {
-        try { await transaction.rollback(); } catch (e) {}
+        await transaction.rollback();
         console.error("BULK ASSIGN ERROR:", error);
         res.status(500).json({ message: String(error), stack: error?.stack });
     }
@@ -1093,7 +1235,6 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "No exams found for this date + session" });
         }
 
-        // STEP 1: FETCH DATA SAFELY
         const existingAllocations = await SeatAllocation.findAll({
             where: { ExamID: { [Op.in]: examIds } }, transaction
         });
@@ -1103,76 +1244,99 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "No students are currently allocated to shuffle" });
         }
 
-        // Find all unique students & their departments
         const studentIds = [...new Set(existingAllocations.map(a => a.StudentID))];
         const students = await Student.findAll({ where: { StudentID: { [Op.in]: studentIds } }, transaction });
         const stuDeptMap = new Map();
         for (const s of students) stuDeptMap.set(s.StudentID, s.DepartmentID);
 
         const studentExamMap = new Map();
-        const deptMap = new Map<number, number[]>();
+        const deptMap = new Map();
 
-        // STEP 2: GROUP STUDENTS BY DEPARTMENT
+        // STEP 1: GROUP STUDENTS BY DEPARTMENT
         for (const alloc of existingAllocations) {
             const sId = alloc.StudentID;
             const dId = stuDeptMap.get(sId) || 0;
             studentExamMap.set(sId, alloc.ExamID);
             if (!deptMap.has(dId)) deptMap.set(dId, []);
-            deptMap.get(dId)!.push(sId);
+            deptMap.get(dId).push(sId);
         }
 
-        const orderedDeptKeys = [...deptMap.keys()].sort((a, b) => a - b);
+        const seatIds = [...new Set(existingAllocations.map(a => a.SeatID))];
+        const allSeatInfo = await Seat.findAll({
+            where: { SeatID: { [Op.in]: seatIds } },
+            attributes: ["SeatID", "RoomID", "RowIndex", "BenchIndex", "SeatIndex"],
+            transaction
+        });
+        const seatInfoMap = new Map();
+        for (const s of allSeatInfo) seatInfoMap.set(s.SeatID, s);
 
-        const deptSeatsMap = new Map<number, any[]>();
-        for (const alloc of existingAllocations) {
-            const sId = alloc.StudentID;
-            const dId = stuDeptMap.get(sId) || 0;
-            if (!deptSeatsMap.has(dId)) deptSeatsMap.set(dId, []);
-            deptSeatsMap.get(dId)!.push({
-                SeatID: alloc.SeatID,
-                ExamID: alloc.ExamID // maintain the exact physical layout and exam bindings
-            });
-        }
+        const roomIds = [...new Set(allSeatInfo.map((s) => s.RoomID))];
+        const rooms = await Room.findAll({ where: { RoomID: { [Op.in]: roomIds } }, transaction });
+        const roomOrderMap = new Map();
+        for (const r of rooms) roomOrderMap.set(r.RoomID, r.RoomCode);
 
+        // STEP 3: FIXED SEAT ORDER (Room -> RowIndex -> BenchIndex -> SeatIndex)
+        const orderedSeats = seatIds.sort((a, b) => {
+            const sa = seatInfoMap.get(a);
+            const sb = seatInfoMap.get(b);
+            const rmA = roomOrderMap.get(sa.RoomID) || '';
+            const rmB = roomOrderMap.get(sb.RoomID) || '';
+            if (rmA !== rmB) return rmA.localeCompare(rmB);
+            if (sa.RowIndex !== sb.RowIndex) return sa.RowIndex - sb.RowIndex;
+            if (sa.BenchIndex !== sb.BenchIndex) return sa.BenchIndex - sb.BenchIndex;
+            return sa.SeatIndex - sb.SeatIndex;
+        });
+
+        // STEP 6: SHUFFLE ONLY WITHIN DEPARTMENT GROUPS
+        const orderedDeptKeys = [...deptMap.keys()];
         for (const dId of orderedDeptKeys) {
-            const arr = deptMap.get(dId)!;
-            
-            // Randomly shuffle the *students* strictly within this department
-            for (let i = arr.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                const temp = arr[i];
-                arr[i] = arr[j] as number;
-                arr[j] = temp as number;
+            const arr = deptMap.get(dId);
+            arr.sort(() => Math.random() - 0.5);
+        }
+
+        // STEP 2: BUILD ORDERED INTERLEAVED LIST
+        let finalStudents = [];
+        let hasMore = true;
+        let i = 0;
+        while (hasMore) {
+            hasMore = false;
+            for (const dId of orderedDeptKeys) {
+                const arr = deptMap.get(dId);
+                if (i < arr.length) {
+                    finalStudents.push(arr[i]);
+                    hasMore = true;
+                }
             }
+            i++;
         }
 
-        // We completely preserve the structural layout created by bulkAssign, 
-        // avoiding any rule violations or physical get-stuck patterns.
-        await SeatAllocation.destroy({ where: { ExamID: { [Op.in]: examIds } }, transaction });
+        await SeatAllocation.destroy({
+            where: { ExamID: { [Op.in]: examIds } }, transaction
+        });
 
-        const assignments: any[] = [];
-        
-        for (const dId of orderedDeptKeys) {
-            const shuffledStudents = deptMap.get(dId)!;
-            const originalSeats = deptSeatsMap.get(dId)!;
-            
-            for (let i = 0; i < shuffledStudents.length; i++) {
-                assignments.push({
-                    ExamID: originalSeats[i].ExamID,
-                    StudentID: shuffledStudents[i],
-                    SeatID: originalSeats[i].SeatID
+        // STEP 4: ASSIGN STUDENTS SEQUENTIALLY
+        const newRecords = [];
+        for (let j = 0; j < orderedSeats.length; j++) {
+            const sId = finalStudents[j];
+            const eId = studentExamMap.get(sId);
+            if (eId && orderedSeats[j] !== undefined) {
+                newRecords.push({
+                    ExamID: eId, // STEP 7: PRESERVE STUDENT -> EXAM
+                    SeatID: orderedSeats[j] as number,
+                    StudentID: sId
                 });
             }
         }
 
-        // STEP 11: FINAL INSERT
-        await SeatAllocation.bulkCreate(assignments, { transaction });
-        await transaction.commit();
+        if (newRecords.length > 0) {
+            await SeatAllocation.bulkCreate(newRecords, { transaction });
+        }
 
-        res.json({ message: "Seating scrambled successfully without modifying layout patterns!", shuffledCount: assignments.length });
+        await transaction.commit();
+        res.json({ message: "Seating scrambled successfully!", shuffledCount: newRecords.length });
 
     } catch (error) {
-        try { await transaction.rollback(); } catch (e) {}
+        await transaction.rollback();
         console.error("SHUFFLE GLOBAL ERROR:", error);
         res.status(500).json({ message: (error instanceof Error ? error.message : String(error)) });
     }
@@ -1559,5 +1723,3 @@ export const searchStudent = async (req: Request, res: Response) => {
         res.status(500).json({ message: (error instanceof Error ? error.message : String(error)) });
     }
 };
-
-

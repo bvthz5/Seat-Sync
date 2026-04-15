@@ -81,9 +81,10 @@ export async function generateSeats(room: Room | any, transaction?: any) {
 
     // 4. Update Database safely ensuring we only add or remove the diff
     if (seatIdsToRemove.length > 0) {
-        const destroyOptions: any = { where: { SeatID: seatIdsToRemove } };
-        if (transaction) destroyOptions.transaction = transaction;
-        await Seat.destroy(destroyOptions);
+        // Instead of deleting, mark as inactive to preserve referential integrity
+        const updateOptions: any = { where: { SeatID: seatIdsToRemove } };
+        if (transaction) updateOptions.transaction = transaction;
+        await Seat.update({ IsActive: false }, updateOptions);
     }
 
     if (seatsToUpdateActiveState.length > 0) {
