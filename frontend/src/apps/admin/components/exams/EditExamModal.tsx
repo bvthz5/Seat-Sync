@@ -132,6 +132,7 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
                                 <Select
                                     id="department-select-edit"
                                     name="DepartmentID"
+                                    disableAnimation
                                     aria-label="Department"
                                     placeholder="Select department"
                                     selectedKeys={formData.DepartmentID && departments.some(d => String(d.DepartmentID) === formData.DepartmentID) ? [formData.DepartmentID] : []}

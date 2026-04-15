@@ -240,12 +240,11 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                                 name="seriesSelect"
                                                 placeholder="Select an exam series"
                                                 label="Target Exam Series"
-                                                selectedKeys={selectedSeriesId ? [selectedSeriesId] : []}
+                                                  selectedKeys={selectedSeriesId && series.some(s => String(s.ExamSeriesID) === String(selectedSeriesId)) ? [selectedSeriesId] : []}
                                                 onChange={(e) => setSelectedSeriesId(e.target.value)}
                                                 variant="bordered"
                                                 isDisabled={loadingSeries}
-                                                className="w-full"
-                                            >
+                                                className="w-full"                                                  disableAnimation                                            >
                                                 {series.map((s) => (
                                                     <SelectItem key={String(s.ExamSeriesID)} textValue={s.SeriesName}>
                                                         {s.SeriesName} ({s.AcademicYear?.YearName || 'Unknown Year'})

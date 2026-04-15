@@ -267,8 +267,7 @@ export const CreateNotification: React.FC = () => {
                                 <div className="animate-in fade-in slide-in-from-top-2 space-y-2">
                                     <span className="block text-sm font-bold text-slate-700 ml-1">Which Exam?</span>
                                     <Select id="field-o5xqsr5" name="field-o5xqsr5" aria-label="Select an exam series" placeholder="Select an exam series"
-                                        variant="flat"
-                                        selectedKeys={selectedExam ? [selectedExam] : []}
+                                        variant="flat"                                          disableAnimation                                        selectedKeys={selectedExam ? [selectedExam] : []}
                                         onChange={(e) => setSelectedExam(e.target.value)}
                                         classNames={{
                                             trigger: "bg-slate-50 border-2 border-transparent hover:border-slate-200 focus:!border-indigo-500 focus:!bg-white h-12 shadow-none",

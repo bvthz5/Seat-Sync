@@ -594,6 +594,65 @@ async function ensureSchemaIntegrity() {
             END
         `, { type: QueryTypes.RAW });
 
+        // Ensure ExamSeries has missing fields
+        await sequelize.query(`
+              IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'ExamSeries' AND TABLE_SCHEMA = 'dbo')
+              BEGIN
+                  IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[ExamSeries]') AND name = 'Description')
+                  BEGIN
+                      ALTER TABLE [dbo].[ExamSeries] ADD [Description] NVARCHAR(255) NULL;
+                      PRINT 'Added Description to ExamSeries';
+                  END
+                  IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[ExamSeries]') AND name = 'IsActive')
+                  BEGIN
+                      ALTER TABLE [dbo].[ExamSeries] ADD [IsActive] BIT NOT NULL DEFAULT 1;
+                      PRINT 'Added IsActive to ExamSeries';
+                  END
+              END
+          `, { type: QueryTypes.RAW });
+
+        // Ensure Exams has missing fields
+        await sequelize.query(`
+              IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Exams' AND TABLE_SCHEMA = 'dbo')
+              BEGIN
+                  IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') AND name = 'Duration')
+                  BEGIN
+                      ALTER TABLE [dbo].[Exams] ADD [Duration] INT NOT NULL DEFAULT 180;
+                      PRINT 'Added Duration to Exams';
+                  END
+                  IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') AND name = 'Status')
+                  BEGIN
+                      ALTER TABLE [dbo].[Exams] ADD [Status] NVARCHAR(20) NOT NULL DEFAULT 'Scheduled';
+                      PRINT 'Added Status to Exams';
+                  END
+                  IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') AND name = 'RoomAllocationStatus')
+                  BEGIN
+                      ALTER TABLE [dbo].[Exams] ADD [RoomAllocationStatus] NVARCHAR(20) NULL DEFAULT 'Pending';
+                      PRINT 'Added RoomAllocationStatus to Exams';
+                  END
+                  IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') AND name = 'IsEmergencyMode')
+                  BEGIN
+                      ALTER TABLE [dbo].[Exams] ADD [IsEmergencyMode] BIT NOT NULL DEFAULT 0;
+                      PRINT 'Added IsEmergencyMode to Exams';
+                  END
+                  IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') AND name = 'AttendanceLocked')
+                  BEGIN
+                      ALTER TABLE [dbo].[Exams] ADD [AttendanceLocked] BIT NOT NULL DEFAULT 0;
+                      PRINT 'Added AttendanceLocked to Exams';
+                  END
+                  IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') AND name = 'AuditStatus')
+                  BEGIN
+                      ALTER TABLE [dbo].[Exams] ADD [AuditStatus] NVARCHAR(20) NULL DEFAULT 'Pending';
+                      PRINT 'Added AuditStatus to Exams';
+                  END
+                  IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') AND name = 'ConflictDetails')
+                  BEGIN
+                      ALTER TABLE [dbo].[Exams] ADD [ConflictDetails] NVARCHAR(MAX) NULL;
+                      PRINT 'Added ConflictDetails to Exams';
+                  END
+              END
+          `, { type: QueryTypes.RAW });
+
     } catch (error) {
         console.warn("Schema integrity check warning (non-fatal):", error);
     }
