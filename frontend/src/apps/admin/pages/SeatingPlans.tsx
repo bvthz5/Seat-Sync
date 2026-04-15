@@ -711,78 +711,25 @@ const SeatingPlans: React.FC = () => {
         if (!selectedDate) return;
         setSeatingDownloading(true);
         try {
-            const XLSXmod = await import('xlsx');
-            const XLSX = XLSXmod.default ?? XLSXmod;
-            const wb = XLSX.utils.book_new();
-
-            const allocatedHalls = hallSummary
-                .filter(h => h.filledSeats > 0)
-                .sort((a, b) => a.hallCode.localeCompare(b.hallCode));
-
-            if (!allocatedHalls.length) {
+            if (hallSummary.filter(h => h.filledSeats > 0).length === 0) {
                 toast.error('No halls have assigned seats');
-                setSeatingDownloading(false);
                 return;
             }
 
-            const usedSheetNames = new Set<string>();
-            // Process halls sequentially to avoid concurrent mutation of wb
-            for (const hall of allocatedHalls) {
-                let benches: Bench[] = [];
-                let assignments: Record<number, Assignment> = {};
-
-                try {
-                    const layout = await SeatingService.getHallLayout(hall.hallId);
-                    benches = layout.benches || [];
-                } catch { /* hall may have no layout yet */ }
-
-                try {
-                    const alloc = await SeatingService.getAllocationForHall(selectedDate, selectedSession, hall.hallId);
-                    assignments = alloc?.assignments ?? {};
-                } catch { /* no allocations yet */ }
-
-                const wsData: any[][] = [
-                    [`St. Joseph's College of Engineering And Technology, Palai`],
-                    [`Seating Arrangement — ${hall.hallCode}`],
-                    [`Date: ${fmtDate(selectedDate)}    Session: ${selectedSession === 'FN' ? 'Forenoon' : 'Afternoon'}    Capacity: ${hall.totalSeats}    Assigned: ${hall.filledSeats}`],
-                    [],
-                    ['Bench', 'Left — Reg No', 'Left — Student Name', 'Left Dept', 'Right — Reg No', 'Right — Student Name', 'Right Dept'],
-                ];
-
-                for (const b of benches) {
-                    const ls = b.seats.find(s => s.SeatNumber === 1);
-                    const rs = b.seats.find(s => s.SeatNumber === 2);
-                    const la = ls ? assignments[ls.SeatID] : undefined;
-                    const ra = rs ? assignments[rs.SeatID] : undefined;
-                    wsData.push([
-                        `${b.rowLabel}${b.benchNumber}`,
-                        la?.registerNumber ?? '',
-                        la?.studentName ?? '',
-                        la?.deptCode ?? '',
-                        ra?.registerNumber ?? '',
-                        ra?.studentName ?? '',
-                        ra?.deptCode ?? '',
-                    ]);
-                }
-
-                const ws = XLSX.utils.aoa_to_sheet(wsData);
-                ws['!cols'] = [
-                    { wch: 8 }, { wch: 16 }, { wch: 28 }, { wch: 9 },
-                    { wch: 16 }, { wch: 28 }, { wch: 9 },
-                ];
-                let sheetName = hall.hallCode.replace(/[:\\/?*[\]|]/g, '').slice(0, 31);
-                // Ensure unique sheet name
-                if (usedSheetNames.has(sheetName)) {
-                    let counter = 2;
-                    while (usedSheetNames.has(`${sheetName.slice(0, 28)}_${counter}`)) counter++;
-                    sheetName = `${sheetName.slice(0, 28)}_${counter}`;
-                }
-                usedSheetNames.add(sheetName);
-                XLSX.utils.book_append_sheet(wb, ws, sheetName);
+            const blob = await SeatingService.exportSeating(selectedDate, selectedSession);
+            if (!blob || blob.size === 0) {
+                toast.error('Empty response from server');
+                return;
             }
-
-            XLSX.writeFile(wb, `Seating_${selectedDate}_${selectedSession}.xlsx`);
-            toast.success(`Downloaded ${allocatedHalls.length} hall sheet(s)`);
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `Seating_${selectedDate}_${selectedSession}.xlsx`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            toast.success('Seating downloaded');
         } catch (err: any) {
             console.error('downloadSeatingExcel error:', err);
             toast.error('Failed to generate Excel: ' + (err?.message || 'Unknown error'));

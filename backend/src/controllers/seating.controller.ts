@@ -3,6 +3,7 @@ import { Room, Seat, Student, User, Department, Exam, SeatAllocation, ExamSeries
 import { Op, QueryTypes } from "sequelize";
 import { sequelize } from "../config/database.js";
 import bcrypt from "bcrypt";
+import * as XLSX from "xlsx";
 import { generateSeats } from "../services/seatEngine.js";
 
 /* ────────────────────────────────────────────────────────────
@@ -1720,6 +1721,416 @@ export const searchStudent = async (req: Request, res: Response) => {
         res.json({ results });
     } catch (error: any) {
         console.error("SEARCH STUDENT ERROR:", error);
+        res.status(500).json({ message: (error instanceof Error ? error.message : String(error)) });
+    }
+};
+
+/* ════════════════════════════════════════════════════════════
+ *  GET /api/seating/export
+ *  Downloads seating arrangement as Excel file
+ * ════════════════════════════════════════════════════════════ */
+export const exportSeatingToExcel = async (req: Request, res: Response) => {
+    try {
+        const { examDate, session } = req.query;
+
+        if (!examDate || !session) {
+            return res.status(400).json({ message: "examDate and session are required" });
+        }
+
+        const examIds = await resolveExamIds(String(examDate), String(session));
+        if (examIds.length === 0) {
+            return res.status(400).json({ message: "No exams found for this date and session" });
+        }
+
+        const allocations = await SeatAllocation.findAll({
+            attributes: ["SeatID", "StudentID"],
+            include: [
+                { model: Seat, attributes: ["SeatID", "RoomID", "RowIndex", "BenchIndex", "SeatIndex"] },
+                { model: Student, attributes: ["StudentID", "RegisterNumber", "DepartmentID"] },
+            ],
+            where: { ExamID: { [Op.in]: examIds } },
+            raw: false,
+        } as any);
+
+        if (allocations.length === 0) {
+            return res.status(400).json({ message: "No seating allocations found for this date and session" });
+        }
+
+        const hallMap = new Map<number, any[]>();
+        for (const alloc of allocations) {
+            const roomId = Number((alloc as any).Seat?.RoomID);
+            if (!Number.isFinite(roomId) || roomId <= 0) continue;
+            if (!hallMap.has(roomId)) hallMap.set(roomId, []);
+            hallMap.get(roomId)!.push(alloc);
+        }
+
+        const wb = XLSX.utils.book_new();
+        const usedSheetNames = new Set<string>();
+
+        const borderStyle: any = {
+            top: { style: "thin" },
+            bottom: { style: "thin" },
+            left: { style: "thin" },
+            right: { style: "thin" },
+        };
+
+        const titleStyle: any = {
+            font: { bold: true, size: 14 },
+            alignment: { horizontal: "center", vertical: "center" },
+            border: borderStyle,
+        };
+
+        const subtitleStyle: any = {
+            font: { bold: true, size: 12 },
+            alignment: { horizontal: "center", vertical: "center" },
+            border: borderStyle,
+        };
+
+        const hallStyle: any = {
+            font: { bold: true, size: 18 },
+            alignment: { horizontal: "center", vertical: "center" },
+            border: borderStyle,
+        };
+
+        const seatHeaderStyle: any = {
+            font: { bold: true, size: 11 },
+            alignment: { horizontal: "center", vertical: "center" },
+            fill: { patternType: "solid", fgColor: { rgb: "E5E7EB" } },
+            border: borderStyle,
+        };
+
+        const bodyStyleBase: any = {
+            alignment: { horizontal: "center", vertical: "center", wrapText: true },
+            border: borderStyle,
+        };
+
+        const summaryStyle: any = {
+            font: { bold: true, size: 11 },
+            alignment: { horizontal: "center", vertical: "center" },
+            border: borderStyle,
+        };
+
+        const rowSort = (a: string, b: string): number => {
+            const an = Number(a);
+            const bn = Number(b);
+            const aNum = Number.isFinite(an) && a.trim() !== "";
+            const bNum = Number.isFinite(bn) && b.trim() !== "";
+            if (aNum && bNum) return an - bn;
+            if (aNum) return -1;
+            if (bNum) return 1;
+            return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+        };
+
+        const normalizeSeatSide = (seatIndexRaw: number): "A" | "B" => {
+            // SeatIndex 0 -> A(left), 1 -> B(right). Fallback for 1/2 based data.
+            if (seatIndexRaw === 0) return "A";
+            if (seatIndexRaw === 1) return "B";
+            if (seatIndexRaw === 2) return "B";
+            return seatIndexRaw <= 0 ? "A" : "B";
+        };
+
+        const deptPalette = ["DBEAFE", "DCFCE7", "FCE7F3", "FEF3C7", "EDE9FE", "CCFBF1", "FEE2E2", "E2E8F0"];
+        const fixedDeptColors: Record<string, string> = {
+            EC: "DBEAFE",
+            CT: "DCFCE7",
+            CSE: "DBEAFE",
+            EEE: "FEF3C7",
+            ME: "FEE2E2",
+            CE: "CCFBF1",
+            IT: "EDE9FE",
+            MCA: "FCE7F3",
+        };
+        const deptColorCache = new Map<string, string>();
+        const getDeptFill = (deptCode: string): string => {
+            const key = (deptCode || "NA").toUpperCase();
+            if (deptColorCache.has(key)) return deptColorCache.get(key)!;
+            if (fixedDeptColors[key]) {
+                deptColorCache.set(key, fixedDeptColors[key]);
+                return fixedDeptColors[key];
+            }
+            const hash = key.split("").reduce((s, ch) => s + ch.charCodeAt(0), 0);
+            const color = deptPalette[hash % deptPalette.length] || "E2E8F0";
+            deptColorCache.set(key, color);
+            return color;
+        };
+
+        for (const [roomId, hallAllocs] of hallMap) {
+            const hall = await Room.findByPk(roomId);
+            if (!hall) continue;
+
+            // 1) Load full active seat layout for exact bench-based structure
+            const roomSeats = await Seat.findAll({
+                where: { RoomID: roomId, IsActive: true } as any,
+                attributes: ["SeatID", "RowIndex", "BenchIndex", "SeatIndex"],
+                raw: true,
+            }) as any[];
+
+            const rowBenchSlots = new Map<string, Map<number, { A: boolean; B: boolean }>>();
+            for (const s of roomSeats) {
+                const rowIndex = String(s.RowIndex ?? "").trim();
+                const benchIndex = Number(s.BenchIndex);
+                if (!rowIndex || !Number.isFinite(benchIndex) || benchIndex <= 0) continue;
+
+                if (!rowBenchSlots.has(rowIndex)) rowBenchSlots.set(rowIndex, new Map());
+                const benchMap = rowBenchSlots.get(rowIndex)!;
+                if (!benchMap.has(benchIndex)) benchMap.set(benchIndex, { A: false, B: false });
+
+                const side = normalizeSeatSide(Number(s.SeatIndex));
+                const slot = benchMap.get(benchIndex)!;
+                if (side === "A") slot.A = true;
+                else slot.B = true;
+            }
+
+            // Fallback from allocations if seat table doesn't yield layout
+            if (rowBenchSlots.size === 0) {
+                for (const alloc of hallAllocs) {
+                    const seat = (alloc as any).Seat;
+                    const rowIndex = String(seat?.RowIndex ?? "").trim();
+                    const benchIndex = Number(seat?.BenchIndex);
+                    const side = normalizeSeatSide(Number(seat?.SeatIndex));
+                    if (!rowIndex || !Number.isFinite(benchIndex) || benchIndex <= 0) continue;
+
+                    if (!rowBenchSlots.has(rowIndex)) rowBenchSlots.set(rowIndex, new Map());
+                    const benchMap = rowBenchSlots.get(rowIndex)!;
+                    if (!benchMap.has(benchIndex)) benchMap.set(benchIndex, { A: false, B: false });
+                    const slot = benchMap.get(benchIndex)!;
+                    if (side === "A") slot.A = true;
+                    else slot.B = true;
+                }
+            }
+
+            const rowKeys = Array.from(rowBenchSlots.keys()).sort(rowSort);
+            const benchIndexes = Array.from(new Set(
+                Array.from(rowBenchSlots.values()).flatMap((m) => Array.from(m.keys()))
+            )).sort((a, b) => a - b);
+
+            const maxBenchCount = Math.max(benchIndexes.length, 1);
+            const numCols = maxBenchCount * 2;
+
+            // 2) Build anti-cheating student pools by department
+            const deptById = new Map<number, string>();
+            const deptIds = [...new Set(
+                hallAllocs
+                    .map((a: any) => Number(a?.Student?.DepartmentID))
+                    .filter((id: number) => Number.isFinite(id) && id > 0)
+            )];
+
+            if (deptIds.length > 0) {
+                const depts = await Department.findAll({
+                    where: { DepartmentID: { [Op.in]: deptIds } },
+                    attributes: ["DepartmentID", "DepartmentCode"],
+                    raw: true,
+                }) as any[];
+                for (const d of depts) deptById.set(Number(d.DepartmentID), String(d.DepartmentCode || "NA"));
+            }
+
+            type Stu = { registerNumber: string; deptCode: string; studentId?: number };
+            const seenReg = new Set<string>();
+            const deptQueues = new Map<string, Stu[]>();
+            for (const alloc of hallAllocs) {
+                const student = (alloc as any).Student;
+                if (!student) continue;
+                const registerNumber = String(student.RegisterNumber || "").trim();
+                if (!registerNumber || seenReg.has(registerNumber)) continue;
+                seenReg.add(registerNumber);
+
+                const deptCode = deptById.get(Number(student.DepartmentID)) || "NA";
+                if (!deptQueues.has(deptCode)) deptQueues.set(deptCode, []);
+                deptQueues.get(deptCode)!.push({
+                    registerNumber,
+                    deptCode,
+                    studentId: Number(student.StudentID),
+                });
+            }
+
+            const deptCodes = Array.from(deptQueues.keys()).sort((a, b) => a.localeCompare(b));
+            const queueSize = (code: string) => deptQueues.get(code)?.length || 0;
+            const popFromDept = (code: string): Stu | null => {
+                const q = deptQueues.get(code);
+                if (!q || q.length === 0) return null;
+                return q.shift() || null;
+            };
+            const nextDept = (exclude?: string): string | null => {
+                let candidate: string | null = null;
+                let max = -1;
+                for (const code of deptCodes) {
+                    if (exclude && code === exclude) continue;
+                    const len = queueSize(code);
+                    if (len > max) {
+                        max = len;
+                        candidate = code;
+                    }
+                }
+                return max > 0 ? candidate : null;
+            };
+
+            // 3) Build seatingGrid[rowIndex][benchIndex] = { A, B } with anti-cheating alternation
+            const seatingGrid = new Map<string, Map<number, { A: Stu | null; B: Stu | null }>>();
+            const deptCounts = new Map<string, number>();
+            let flip = false;
+
+            for (const rowKey of rowKeys) {
+                const benches = rowBenchSlots.get(rowKey)!;
+                const rowGrid = new Map<number, { A: Stu | null; B: Stu | null }>();
+
+                for (const benchIndex of benchIndexes) {
+                    const slot = benches.get(benchIndex) || { A: false, B: false };
+                    const cell = { A: null as Stu | null, B: null as Stu | null };
+
+                    // choose two depts, prefer different for A/B
+                    let firstDept = nextDept();
+                    let secondDept = firstDept ? nextDept(firstDept) : null;
+                    if (!secondDept) secondDept = nextDept(); // fallback if only one dept remains
+
+                    if (flip) {
+                        const tmp = firstDept;
+                        firstDept = secondDept;
+                        secondDept = tmp;
+                    }
+
+                    if (slot.A) {
+                        const stuA = firstDept ? popFromDept(firstDept) : null;
+                        if (stuA) {
+                            cell.A = stuA;
+                            deptCounts.set(stuA.deptCode, (deptCounts.get(stuA.deptCode) || 0) + 1);
+                        }
+                    }
+
+                    if (slot.B) {
+                        let stuB: Stu | null = null;
+                        if (secondDept) stuB = popFromDept(secondDept);
+                        if (!stuB && cell.A?.deptCode) {
+                            const alt = nextDept(cell.A.deptCode);
+                            if (alt) stuB = popFromDept(alt);
+                        }
+                        if (!stuB) {
+                            const anyDept = nextDept();
+                            if (anyDept) stuB = popFromDept(anyDept);
+                        }
+                        if (stuB) {
+                            cell.B = stuB;
+                            deptCounts.set(stuB.deptCode, (deptCounts.get(stuB.deptCode) || 0) + 1);
+                        }
+                    }
+
+                    rowGrid.set(benchIndex, cell);
+                    flip = !flip;
+                }
+
+                seatingGrid.set(rowKey, rowGrid);
+            }
+
+            // 4) Prepare AOA data
+            const wsData: any[][] = [];
+            wsData.push(["ST.JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY PALAI (Autonomous)"]);
+            wsData.push(["First Semester End Semester Exam 2024-'25"]);
+            wsData.push([`SEATING ARRANGEMENT - ${examDate} (BENCH-LAYOUT V2)`]);
+            wsData.push([String((hall as any).RoomCode || `Hall_${roomId}`)]);
+            wsData.push([]);
+            wsData.push(benchIndexes.flatMap((b) => [`A${b}`, `B${b}`]));
+
+            // dept codes matrix for color styling lookup
+            const deptGrid: string[][] = [];
+
+            for (const rowKey of rowKeys) {
+                const rowGrid = seatingGrid.get(rowKey)!;
+                const rowCells: string[] = [];
+                const rowDepts: string[] = [];
+
+                for (const benchIndex of benchIndexes) {
+                    const seat = rowGrid.get(benchIndex) || { A: null, B: null };
+
+                    const valA = seat.A ? `${seat.A.registerNumber}\n${seat.A.deptCode}` : "";
+                    const valB = seat.B ? `${seat.B.registerNumber}\n${seat.B.deptCode}` : "";
+
+                    rowCells.push(valA, valB);
+                    rowDepts.push(seat.A?.deptCode || "", seat.B?.deptCode || "");
+                }
+
+                wsData.push(rowCells);
+                deptGrid.push(rowDepts);
+            }
+
+            wsData.push([]);
+            wsData.push(["Number of Students:"]);
+            const sortedDeptCodes = Array.from(deptCounts.keys()).sort((a, b) => a.localeCompare(b));
+            for (const code of sortedDeptCodes) wsData.push([code, deptCounts.get(code) || 0]);
+            wsData.push([]);
+            wsData.push(["Total number of students", Array.from(deptCounts.values()).reduce((s, n) => s + n, 0)]);
+
+            // 5) Sheet + merges
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            ws["!cols"] = Array(numCols).fill({ wch: 16 });
+            ws["!merges"] = [
+                { s: { r: 0, c: 0 }, e: { r: 0, c: numCols - 1 } },
+                { s: { r: 1, c: 0 }, e: { r: 1, c: numCols - 1 } },
+                { s: { r: 2, c: 0 }, e: { r: 2, c: numCols - 1 } },
+                { s: { r: 3, c: 0 }, e: { r: 3, c: numCols - 1 } },
+            ];
+
+            const seatHeaderRow = 5;
+            const dataStart = 6;
+            const dataEnd = dataStart + Math.max(rowKeys.length - 1, 0);
+
+            // 6) Styles + color coding
+            for (let r = 0; r < wsData.length; r++) {
+                for (let c = 0; c < numCols; c++) {
+                    const ref = XLSX.utils.encode_cell({ r, c });
+                    if (!ws[ref]) ws[ref] = { t: "s", v: "" };
+
+                    if (r === 0) ws[ref].s = titleStyle;
+                    else if (r === 1 || r === 2) ws[ref].s = subtitleStyle;
+                    else if (r === 3) ws[ref].s = hallStyle;
+                    else if (r === seatHeaderRow) ws[ref].s = seatHeaderStyle;
+                    else if (r >= dataStart && r <= dataEnd) {
+                        const style = { ...bodyStyleBase };
+                        const deptCode = deptGrid[r - dataStart]?.[c] || "";
+                        if (deptCode) {
+                            style.fill = { patternType: "solid", fgColor: { rgb: getDeptFill(deptCode) } };
+                        }
+                        ws[ref].s = style;
+                    } else {
+                        ws[ref].s = summaryStyle;
+                    }
+                }
+            }
+
+            // 7) A4 print optimization
+            (ws as any)["!pageSetup"] = {
+                paperSize: 9, // A4
+                orientation: "landscape",
+                fitToWidth: 1,
+                fitToHeight: 0,
+                horizontalCentered: true,
+                verticalCentered: false,
+            };
+            (ws as any)["!margins"] = {
+                left: 0.25,
+                right: 0.25,
+                top: 0.35,
+                bottom: 0.35,
+                header: 0.2,
+                footer: 0.2,
+            };
+
+            let sheetName = String((hall as any).RoomCode || `Hall_${roomId}`).replace(/[:\\/?*[\]]/g, "").slice(0, 31);
+            if (!sheetName) sheetName = `Hall_${roomId}`;
+            if (usedSheetNames.has(sheetName)) {
+                let i = 2;
+                while (usedSheetNames.has(`${sheetName.slice(0, 28)}_${i}`)) i++;
+                sheetName = `${sheetName.slice(0, 28)}_${i}`;
+            }
+            usedSheetNames.add(sheetName);
+
+            XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        }
+
+        const buffer = XLSX.write(wb, { bookType: "xlsx", type: "buffer" });
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename="Seating_${examDate}_${session}.xlsx"`);
+        res.send(buffer);
+    } catch (error: any) {
+        console.error("EXPORT SEATING ERROR:", error);
         res.status(500).json({ message: (error instanceof Error ? error.message : String(error)) });
     }
 };
