@@ -1040,23 +1040,48 @@ export const bulkAssign = async (req: Request, res: Response) => {
 
             let hallLeft = 0, hallRight = 0;
 
-            // Within each hall: row → bench → pair students from left (CE) and right (MCA) pools
+            // Within each hall: row → bench → pair students
             for (const row of allRows) {
                 for (const benchNum of allBenchNums) {
                     const benchSeats = (benchMap[row]?.[benchNum] || []).sort(sortSeatsByPosition);
 
                     for (const seat of benchSeats) {
                         if (getSeatNumber(seat) === 1) {
-                            // Left seat: assign from left pool (CE students)
+                            // Left seat: assign from left pool
                             if (leftIdx < leftStudents.length) {
                                 const stu = leftStudents[leftIdx++] as any;
+                                console.log(`Bench ${row}${benchNum} Left: ${stu.RegisterNumber} (${stu.Department?.DepartmentCode})`);
                                 allNewAllocations.push({ ExamID: primaryExamId, SeatID: seat.SeatID !, StudentID: stu.StudentID as number });
                                 hallLeft++;
                             }
                         } else {
-                            // Right seat: assign from right pool (MCA students)
+                            // Right seat: assign from right pool, prioritizing different department
+                            if (applyAdjacencyGuard && rightIdx < rightStudents.length && leftIdx > 0) {
+                                // Get dept of last assigned left student
+                                const lastLeftSeat = allNewAllocations[allNewAllocations.length - 1];
+                                if (lastLeftSeat) {
+                                    const lastLeftStudent = leftStudents[leftIdx - 1] as any;
+                                    const lastLeftDept = lastLeftStudent?.Department?.DepartmentID;
+                                    const rightStudentDept = rightStudents[rightIdx]?.Department?.DepartmentID;
+
+                                    // If same department and we have alternatives, try to skip
+                                    if (lastLeftDept === rightStudentDept && rightIdx + 1 < rightStudents.length) {
+                                        // Look ahead for different dept
+                                        let skipCount = 1;
+                                        while (skipCount < 3 && rightIdx + skipCount < rightStudents.length) {
+                                            if (rightStudents[rightIdx + skipCount]?.Department?.DepartmentID !== lastLeftDept) {
+                                                rightIdx += skipCount;
+                                                break;
+                                            }
+                                            skipCount++;
+                                        }
+                                    }
+                                }
+                            }
+
                             if (rightIdx < rightStudents.length) {
                                 const stu = rightStudents[rightIdx++] as any;
+                                console.log(`Bench ${row}${benchNum} Right: ${stu.RegisterNumber} (${stu.Department?.DepartmentCode})`);
                                 allNewAllocations.push({ ExamID: primaryExamId, SeatID: seat.SeatID !, StudentID: stu.StudentID as number });
                                 hallRight++;
                             }
