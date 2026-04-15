@@ -4,7 +4,10 @@ import { Room } from '../models/Room.js';
 export async function generateSeats(room: Room | any, transaction?: any) {
     if (!room || !room.RowLayout) return;
 
-    const layout = room.RowLayout;
+    let layout = room.RowLayout;
+    if (typeof layout === 'string') {
+        try { layout = JSON.parse(layout); } catch { layout = []; }
+    }
     if (!Array.isArray(layout)) return;
 
     // 1. Fetch all existing seats for the room

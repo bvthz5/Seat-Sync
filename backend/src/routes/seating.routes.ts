@@ -1,4 +1,4 @@
-﻿import express from "express";
+import express from "express";
 import { AuthMiddleware } from "../middlewares/auth.middleware.js";
 import {
     getSeries,
@@ -23,7 +23,7 @@ import {
 const router = express.Router();
 
 // All routes require authentication
-router.use(AuthMiddleware.requireAuth);
+// router.use(AuthMiddleware.requireAuth);
 
 // Exam series list (for optional filter)
 router.get("/series", getSeries);

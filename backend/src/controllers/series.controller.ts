@@ -1,5 +1,4 @@
 import { Request, Response } from "express";
-import { QueryTypes } from "sequelize";
 import { ExamSeries, ActivityLog } from "../models/index.js";
 
 /**
@@ -168,22 +167,31 @@ export const deleteSeries = async (req: Request, res: Response): Promise<void> =
             return;
         }
 
+        const seriesName = series.SeriesName;
+        const seriesIdNum = series.ExamSeriesID;
+
         // Check if exams are linked
         // This is handled by DB FK constraint usually, but we can check or just attempt delete
         await series.destroy();
 
-        // Log activity
-        await ActivityLog.create({
-            UserID: currentUser.UserID,
-            Action: 'DELETE_EXAM_SERIES',
-            EntityType: 'ExamSeries',
-            EntityID: series.ExamSeriesID,
-            Details: `Deleted exam series: ${series.SeriesName}`,
-            IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown',
-            Severity: 'Info',
-            Status: 'Success'
-        });
+        // Log activity (optional - don't fail if this fails)
+        try {
+            if (currentUser?.UserID) {
+                await ActivityLog.create({
+                    UserID: currentUser.UserID,
+                    Action: 'DELETE_EXAM_SERIES',
+                    EntityType: 'ExamSeries',
+                    EntityID: seriesIdNum,
+                    Details: `Deleted exam series: ${seriesName}`,
+                    IPAddress: req.ip || 'unknown',
+                    UserAgent: req.get('user-agent') || 'unknown',
+                    Severity: 'Info',
+                    Status: 'Success'
+                });
+            }
+        } catch (logError) {
+            console.warn("Warning: Failed to log activity:", logError);
+        }
 
         res.status(200).json({
             success: true,

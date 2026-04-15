@@ -42,7 +42,7 @@ ExamSeries.init(
             unique: true,
         },
         ExamType: {
-            type: DataTypes.ENUM('Internal', 'EndSemester'),
+            type: DataTypes.STRING(20),
             allowNull: false,
             defaultValue: 'Internal',
         },

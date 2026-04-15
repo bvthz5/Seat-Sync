@@ -916,6 +916,7 @@ const SeatingPlans: React.FC = () => {
                                         <span className="text-slate-500 normal-case font-medium">(opt)</span>
                                     </span>
                                     <Select aria-label="Exam Series" placeholder="— All Series —" variant="bordered"
+                                        id="exam-series-select" name="examSeries"
                                         selectedKeys={selectedSeries ? [selectedSeries] : []}
                                         onSelectionChange={(k) => setSelectedSeries(Array.from(k)[0] as string || '')}
                                         classNames={{
@@ -956,6 +957,7 @@ const SeatingPlans: React.FC = () => {
                                     <div className="flex gap-2 mt-1">
                                         <div className="flex-1">
                                             <Select aria-label="Exam Date" placeholder={availableDates.length > 0 ? "— Select Date —" : "— No Dates Available —"} variant="bordered"
+                                                id="exam-date-select" name="examDate"
                                                 selectedKeys={selectedDate ? new Set([selectedDate]) : new Set([])}
                                                 onSelectionChange={(k) => setSelectedDate(Array.from(k)[0] as string || '')}
                                                 classNames={{
@@ -1008,6 +1010,7 @@ const SeatingPlans: React.FC = () => {
                                         </span>
                                         <Select
                                             aria-label="Allocation strategy"
+                                            id="allocation-strategy-select" name="allocationStrategy"
                                             selectedKeys={[assignmentMode]}
                                             onSelectionChange={(k) => onAssignmentModeChange((Array.from(k)[0] as 'single' | 'two-alternate' | 'auto-balanced') || 'auto-balanced')}
                                             variant="bordered"
@@ -1029,6 +1032,7 @@ const SeatingPlans: React.FC = () => {
                                                 <ChevronRight size={13} className="text-slate-500" /> Department
                                             </span>
                                             <Select aria-label="Primary Department" placeholder="— Select Department —" variant="bordered"
+                                                id="primary-dept-select-single" name="primaryDeptSingle"
                                                 selectedKeys={primaryDept ? [primaryDept] : []}
                                                 onSelectionChange={(k) => setPrimaryDept(Array.from(k)[0] as string || '')}
                                                 classNames={{
@@ -1048,6 +1052,7 @@ const SeatingPlans: React.FC = () => {
                                                     <ChevronRight size={13} className="text-slate-500" /> Primary Dept
                                                 </span>
                                                 <Select aria-label="Primary Department" placeholder="— None —" variant="bordered"
+                                                    id="primary-dept-select-dual" name="primaryDeptDual"
                                                     selectedKeys={primaryDept ? [primaryDept] : []}
                                                     onSelectionChange={(k) => setPrimaryDept(Array.from(k)[0] as string || '')}
                                                     classNames={{
@@ -1063,6 +1068,7 @@ const SeatingPlans: React.FC = () => {
                                                     <ChevronRight size={13} className="rotate-180 text-slate-500" /> Secondary Dept
                                                 </span>
                                                 <Select aria-label="Secondary Department" placeholder="— None —" variant="bordered"
+                                                    id="secondary-dept-select-dual" name="secondaryDeptDual"
                                                     selectedKeys={secondaryDept ? [secondaryDept] : []}
                                                     onSelectionChange={(k) => setSecondaryDept(Array.from(k)[0] as string || '')}
                                                     classNames={{
@@ -1141,6 +1147,7 @@ const SeatingPlans: React.FC = () => {
                                             />
                                             <Select
                                                 aria-label="Hall fill filter"
+                                                id="hall-fill-filter-select" name="hallFilter"
                                                 selectedKeys={[hallFilter]}
                                                 onSelectionChange={(k) => setHallFilter((Array.from(k)[0] as 'all' | 'empty' | 'partial' | 'full') || 'all')}
                                                 size="sm"

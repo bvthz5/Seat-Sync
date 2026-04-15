@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, ModalContent, ModalHeader, ModalBody, Button, Input } from "@heroui/react";
+import { Modal, ModalContent, ModalHeader, ModalBody, Button, Input, Select, SelectItem } from "@heroui/react";
 import toast from 'react-hot-toast';
 import { ExamService } from '../../services/examService';
 import { SubjectService } from '../../services/subjectService';
+import { academicService } from '../../services/academicService';
 import { Search, AlertTriangle, AlertCircle, Check, Info, Layers } from "lucide-react";
 
 interface CreateExamModalProps {
@@ -29,12 +30,14 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
         ExamDate: '',
         Session: 'FN',
         Duration: '180',
-        ExamType: 'Internal Assessment'
+        ExamType: 'Internal Assessment',
+        DepartmentID: ''
     });
 
     const [subjectSearch, setSubjectSearch] = useState('');
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [filteredSubjects, setFilteredSubjects] = useState<Subject[]>([]);
+    const [departments, setDepartments] = useState<any[]>([]);
 
     // Fetch subjects on mount
     useEffect(() => {
@@ -51,10 +54,25 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
             console.error("Failed to load subjects", error);
             toast.error("Could not load subjects list");
         }
+        try {
+            const response = await academicService.getDepartments();
+            const items = Array.isArray((response as any)?.data)
+                ? (response as any).data
+                : Array.isArray(response)
+                    ? response
+                    : [];
+            setDepartments(items);
+        } catch {
+            setDepartments([]);
+        }
     };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
+    };
+
+    const handleSelectChange = (field: string, value: string) => {
+        setFormData(prev => ({ ...prev, [field]: value }));
     };
 
     const handleSearchChange = (val: string) => {
@@ -93,7 +111,8 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
                 SubjectID: parseInt(formData.SubjectID),
                 ExamDate: formData.ExamDate,
                 Session: formData.Session,
-                Duration: parseInt(formData.Duration)
+                Duration: parseInt(formData.Duration),
+                DepartmentID: formData.DepartmentID ? parseInt(formData.DepartmentID) : undefined
             };
 
             if (seriesId) {
@@ -147,12 +166,12 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
 
                                 {/* 1. Subject Search */}
                                 <div className="relative">
-                                    <label id="subject-search-label" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Subject Name or Code</label>
+                                    <label htmlFor="subjectSearch" id="subject-search-label" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Subject Name or Code</label>
                                     <Input
                                         id="subjectSearch"
                                         name="subjectSearch"
                                         autoComplete="off"
-                                         aria-label="Subject"
+                                        aria-label="Subject"
                                         placeholder="e.g. CS101 - Intro to Comp Sci"
                                         value={subjectSearch}
                                         onValueChange={handleSearchChange}
@@ -193,7 +212,10 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
                                                     ? 'bg-blue-50 border-blue-500 text-blue-700 shadow-sm'
                                                     : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
                                                     }`}
-                                                onClick={() => setFormData({ ...formData, ExamType: type })}
+                                                onClick={() => {
+                                                    const newName = formData.SubjectName ? `${formData.SubjectName} - ${type}` : '';
+                                                    setFormData({ ...formData, ExamType: type, ExamName: newName });
+                                                }}
                                             >
                                                 {type}
                                             </button>
@@ -201,16 +223,63 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
                                     </div>
                                 </div>
 
+                                {/* Department */}
+                                <div>
+                                    <label htmlFor="department-select" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Department</label>
+                                    <Select
+                                        id="department-select"
+                                        name="DepartmentID"
+                                        aria-label="Department"
+                                        placeholder="Select department (Optional)"
+                                        selectedKeys={formData.DepartmentID ? [formData.DepartmentID] : []}
+                                        onSelectionChange={(k) => handleSelectChange('DepartmentID', (Array.from(k)[0] as string) || '')}
+                                        variant="bordered"
+                                        classNames={{
+                                            trigger: "bg-white border-gray-200 h-11 rounded-lg",
+                                            value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-500",
+                                            popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
+                                        }}
+                                    >
+                                        {departments.map((d: any) => (
+                                            <SelectItem key={String(d.DepartmentID)} textValue={`${d.DepartmentCode} - ${d.DepartmentName}`}>
+                                                {d.DepartmentCode} - {d.DepartmentName}
+                                            </SelectItem>
+                                        ))}
+                                    </Select>
+                                </div>
+
+                                {/* Exam Name */}
+                                <div>
+                                    <label htmlFor="exam-name-input" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Exam Name</label>
+                                    <Input
+                                        id="exam-name-input"
+                                        name="ExamName"
+                                        autoComplete="off"
+                                        aria-label="Exam Name"
+                                        placeholder="e.g. End Semester Exam"
+                                        value={formData.ExamName}
+                                        onChange={handleChange}
+                                        variant="flat"
+                                        radius="sm"
+                                        size="lg"
+                                        isRequired
+                                        classNames={{
+                                            inputWrapper: "!bg-gray-50 !border-none !shadow-none hover:!bg-gray-100 group-data-[focus=true]:!bg-white group-data-[focus=true]:!shadow-sm !ring-transparent group-data-[focus=true]:!ring-gray-200",
+                                            input: "font-medium text-gray-800 !border-0 !outline-none placeholder:text-gray-400"
+                                        }}
+                                    />
+                                </div>
+
                                 {/* 3. Date & Session */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
-                                        <label id="exam-date-label" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Date</label>
+                                        <label htmlFor="ExamDate" id="exam-date-label" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Date</label>
                                         <Input
                                             id="ExamDate"
                                             type="date"
                                             name="ExamDate"
                                             autoComplete="off"
-                                             aria-label="Exam Date"
+                                            aria-label="Exam Date"
                                             value={formData.ExamDate}
                                             onChange={handleChange}
                                             variant="flat"
@@ -253,13 +322,13 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
 
                                 {/* 4. Duration - Fixed Overlap */}
                                 <div>
-                                    <label id="duration-label" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Duration (Minutes)</label>
+                                    <label htmlFor="Duration" id="duration-label" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Duration (Minutes)</label>
                                     <Input
                                         id="Duration"
                                         type="number"
                                         name="Duration"
                                         autoComplete="off"
-                                         aria-label="Duration (Minutes)"
+                                        aria-label="Duration (Minutes)"
                                         placeholder="180"
                                         value={formData.Duration}
                                         onChange={handleChange}

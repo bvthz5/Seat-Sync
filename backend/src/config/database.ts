@@ -361,6 +361,24 @@ async function ensureSchemaIntegrity() {
             END
         `, { type: QueryTypes.RAW });
 
+        // Create ExamSeries table if it doesn't exist (MSSQL compatible)
+        await sequelize.query(`
+            IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'ExamSeries' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                CREATE TABLE [dbo].[ExamSeries] (
+                    [ExamSeriesID] INT IDENTITY(1,1) PRIMARY KEY,
+                    [SeriesName]   NVARCHAR(100) NOT NULL,
+                    [ExamType]     NVARCHAR(20)  NOT NULL DEFAULT 'Internal',
+                    [SemesterID]   INT NULL REFERENCES [dbo].[Semesters]([SemesterID]),
+                    [Description]  NVARCHAR(255) NULL,
+                    [IsActive]     BIT NOT NULL DEFAULT 1,
+                    [createdAt]    DATETIME NOT NULL DEFAULT GETDATE(),
+                    [updatedAt]    DATETIME NOT NULL DEFAULT GETDATE()
+                );
+                PRINT 'Created ExamSeries table';
+            END
+        `, { type: QueryTypes.RAW });
+
         // Add ExamSeries SemesterID Nullable Fix
         await sequelize.query(`
             IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'ExamSeries' AND TABLE_SCHEMA = 'dbo')
@@ -374,6 +392,17 @@ async function ensureSchemaIntegrity() {
                 BEGIN
                     ALTER TABLE [dbo].[ExamSeries] ALTER COLUMN [SemesterID] INT NULL;
                     PRINT 'Ensured ExamSeries.SemesterID is nullable';
+                END
+
+                -- Ensure AcademicYearID is nullable
+                IF EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[ExamSeries]') 
+                    AND name = 'AcademicYearID'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[ExamSeries] ALTER COLUMN [AcademicYearID] INT NULL;
+                    PRINT 'Ensured ExamSeries.AcademicYearID is nullable';
                 END
             END
         `, { type: QueryTypes.RAW });

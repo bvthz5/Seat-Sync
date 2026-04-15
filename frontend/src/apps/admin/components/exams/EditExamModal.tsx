@@ -128,11 +128,13 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Department</label>
+                                <label htmlFor="department-select-edit" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Department</label>
                                 <Select
+                                    id="department-select-edit"
+                                    name="DepartmentID"
                                     aria-label="Department"
                                     placeholder="Select department"
-                                    selectedKeys={formData.DepartmentID ? [formData.DepartmentID] : []}
+                                    selectedKeys={formData.DepartmentID && departments.some(d => String(d.DepartmentID) === formData.DepartmentID) ? [formData.DepartmentID] : []}
                                     onSelectionChange={(k) => handleChange('DepartmentID', (Array.from(k)[0] as string) || '')}
                                     variant="bordered"
                                     classNames={{
@@ -151,7 +153,7 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
 
                             {/* Exam Name */}
                             <div>
-                                <label className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Exam Name</label>
+                                <label htmlFor="edit-exam-name" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Exam Name</label>
                                 <Input aria-label="e.g. End Semester Exam" id="edit-exam-name"
                                     name="ExamName"
                                     autoComplete="off"
@@ -172,7 +174,7 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
                             {/* Date & Session */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <label className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Date</label>
+                                    <label htmlFor="edit-exam-date" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Date</label>
                                     <Input
                                         id="edit-exam-date"
                                         type="date"
@@ -221,7 +223,7 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
 
                             {/* Duration */}
                             <div>
-                                <label className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Duration (Minutes)</label>
+                                <label htmlFor="edit-exam-duration" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Duration (Minutes)</label>
                                 <Input
                                     id="edit-exam-duration"
                                     type="number"

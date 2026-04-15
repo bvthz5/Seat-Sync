@@ -8,18 +8,20 @@ import { generateSeats } from "../services/seatEngine.js";
 /* ────────────────────────────────────────────────────────────
  * Helper: resolve exam IDs for a given date + session
  * ──────────────────────────────────────────────────────────── */
-const resolveExamIds = async (examDate: string, session: string): Promise<number[]> => {
+const resolveExamIds = async (examDate: string, session: string, transaction?: any): Promise<number[]> => {
     const exams = await Exam.findAll({
         attributes: ["ExamID"],
         where: { ExamDate: examDate, Session: session },
+        transaction
     });
     return exams.map(e => e.ExamID);
 };
 
-const resolveExamIdsForDate = async (examDate: string): Promise<number[]> => {
+const resolveExamIdsForDate = async (examDate: string, transaction?: any): Promise<number[]> => {
     const exams = await Exam.findAll({
         attributes: ["ExamID"],
         where: { ExamDate: examDate },
+        transaction
     });
     return exams.map(e => e.ExamID);
 };
@@ -145,7 +147,7 @@ const getStudentsForExamSession = async (
     if (subjectIds.length === 0) {
         const fallbackSession = normalizedSlot === "A" ? "FN" : normalizedSlot === "B" ? "AN" : normalizedSlot;
         if (fallbackSession) {
-            const examIds = await resolveExamIds(examDate, fallbackSession);
+            const examIds = await resolveExamIds(examDate, fallbackSession, transaction);
             if (examIds.length > 0) {
                 const fallbackStudents = await getRegisteredStudentsForExamIds(examIds, excludeStudentIds, transaction);
                 console.log("DEBUG: Fallback students fetched:", fallbackStudents.length, { examDate, fallbackSession });
@@ -220,7 +222,12 @@ const ensureSeatsExist = async (room: Room, transaction?: any): Promise<void> =>
     const queryOptions = transaction ? { transaction } : {};
     const existingSeats = await Seat.findAll({
         where: { RoomID: room.RoomID },
-        attributes: ["SeatID", "RowIndex", "BenchIndex", "SeatIndex"],
+        attributes: [
+            "SeatID",
+            "RowIndex",
+            "BenchIndex",
+            "SeatIndex"
+        ],
         ...queryOptions,
     } as any);
 
@@ -271,7 +278,7 @@ export const getSeries = async (_req: Request, res: Response) => {
         res.json(series);
     } catch (error: any) {
         console.error("GET SERIES ERROR:", error);
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: error.message || String(error), stack: error.stack });
     }
 };
 
@@ -497,6 +504,7 @@ export const autoAssign = async (req: Request, res: Response) => {
         // Fetch seats
         const seats = await Seat.findAll({
             where: { RoomID: Number(hallId), IsActive: true },
+            attributes: ["SeatID", "RowIndex", "BenchIndex", "SeatIndex"],
             order: [["RowIndex", "ASC"], ["BenchIndex", "ASC"], ["SeatIndex", "ASC"]],
         });
         if (seats.length === 0) return res.status(400).json({ message: "No active seats found for this hall" });
@@ -574,8 +582,8 @@ export const autoAssign = async (req: Request, res: Response) => {
             return -1;
         };
 
-        for (const benchNum of allBenchNums) {
-            for (const row of allRows) {
+        for (const row of allRows) {
+                for (const benchNum of allBenchNums) {
                 const benchSeats = ((benchMap[row] ?? {})[benchNum] ?? []).sort(sortSeatsByPosition);
                 let currentBenchLeftDept = "";
                 for (const seat of benchSeats) {
@@ -677,7 +685,7 @@ export const saveAllocation = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "examDate, session, and hallId are required" });
         }
 
-        const examIds = await resolveExamIds(examDate, session);
+        const examIds = await resolveExamIds(examDate, session, transaction);
         if (examIds.length === 0) {
             await transaction.rollback();
             return res.status(400).json({ message: "No exams found for this slot" });
@@ -687,6 +695,7 @@ export const saveAllocation = async (req: Request, res: Response) => {
 
         const seats = await Seat.findAll({
             where: { RoomID: Number(hallId), IsActive: true },
+            attributes: ["SeatID", "RowIndex", "BenchIndex", "SeatIndex"],
             transaction,
         });
         const seatIds = seats.map(s => s.SeatID);
@@ -787,37 +796,47 @@ export const getAllocationSummary = async (req: Request, res: Response) => {
         const examIds = await resolveExamIds(examDate as string, session as string);
 
         const activeHalls = await Room.findAll({ where: { Status: "Active" }, order: [["RoomCode", "ASC"]] });
+        
+        // Optimize: Do an aggregated count of active seats and allocations by RoomID
+        const activeSeatsCounts = await Seat.findAll({
+            where: { IsActive: true },
+            attributes: ["RoomID", [sequelize.fn("COUNT", sequelize.col("SeatID")), "count"]],
+            group: ["RoomID"],
+            raw: true,
+        }) as any[];
+        
+        const seatCountMap = new Map<number, number>();
+        for (const r of activeSeatsCounts) {
+            seatCountMap.set(r.RoomID, Number(r.count));
+        }
+
+        const allocationCountMap = new Map<number, number>();
+        if (examIds.length > 0) {
+            const allocations = await SeatAllocation.findAll({
+                where: { ExamID: { [Op.in]: examIds } },
+                include: [{ model: Seat, attributes: ["RoomID"] }],
+                attributes: [[sequelize.col("Seat.RoomID"), "RoomID"], [sequelize.fn("COUNT", sequelize.col("SeatAllocation.SeatID")), "count"]],
+                group: ["Seat.RoomID"],
+                raw: true,
+            }) as any[];
+            for (const r of allocations) {
+                allocationCountMap.set(r.RoomID, Number(r.count));
+            }
+        }
 
         const summary: any[] = [];
         for (const hall of activeHalls) {
-            try {
-                await ensureSeatsExist(hall);
-                const activeSeats = await Seat.count({ where: { RoomID: hall.RoomID, IsActive: true } });
-                let filledSeats = 0;
-                if (examIds.length > 0 && activeSeats > 0) {
-                    const seatIds = (await Seat.findAll({ where: { RoomID: hall.RoomID, IsActive: true }, attributes: ["SeatID"] })).map(s => s.SeatID);
-                    filledSeats = await SeatAllocation.count({
-                        where: { ExamID: { [Op.in]: examIds }, SeatID: { [Op.in]: seatIds } },
-                    });
-                }
-                summary.push({
-                    hallId: hall.RoomID,
-                    hallCode: hall.RoomCode,
-                    capacity: hall.Capacity,
-                    totalSeats: Number(hall.Capacity || 0),
-                    filledSeats,
-                });
-            } catch (hallError: any) {
-                console.error(`ALLOCATION SUMMARY HALL ERROR (${hall.RoomCode}):`, hallError?.message || hallError);
-                summary.push({
-                    hallId: hall.RoomID,
-                    hallCode: hall.RoomCode,
-                    capacity: hall.Capacity,
-                    totalSeats: Number(hall.Capacity || 0),
-                    filledSeats: 0,
-                    hasError: true,
-                });
-            }
+            const totalSeats = Number(hall.Capacity || 0);
+            const activeSeats = seatCountMap.get(hall.RoomID) || 0;
+            const filledSeats = allocationCountMap.get(hall.RoomID) || 0;
+            
+            summary.push({
+                hallId: hall.RoomID,
+                hallCode: hall.RoomCode,
+                capacity: hall.Capacity,
+                totalSeats: totalSeats,
+                filledSeats,
+            });
         }
 
         res.json(summary);
@@ -865,7 +884,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "examDate, session, and hallIds are required" });
         }
 
-        const examIds = await resolveExamIds(examDate, session);
+        const examIds = await resolveExamIds(examDate, session, transaction);
         if (examIds.length === 0) {
             await transaction.rollback();
             return res.status(400).json({ message: "No exams found for this date + session" });
@@ -948,27 +967,49 @@ export const bulkAssign = async (req: Request, res: Response) => {
         });
 
         let leftIdx = 0, rightIdx = 0;
-        const hallResults: any[] = [];
+        const targetHalls = await Room.findAll({ 
+            where: { RoomID: { [Op.in]: hallIds } }, 
+            transaction 
+        });
 
-        for (const hallId of hallIds) {
-            const hall = await Room.findByPk(Number(hallId), { transaction });
-            if (!hall) continue;
-            await ensureSeatsExist(hall);
+        // Ensure seats exist for all target halls sequentially
+        for (const hall of targetHalls) {
+            await ensureSeatsExist(hall, transaction);
+        }
 
-            const seats = await Seat.findAll({
-                where: { RoomID: hall.RoomID, IsActive: true },
-                order: [["RowIndex", "ASC"], ["BenchIndex", "ASC"], ["SeatIndex", "ASC"]],
+        // Fetch all active seats for these halls in one query
+        const allActiveSeats = await Seat.findAll({
+            where: { RoomID: { [Op.in]: hallIds }, IsActive: true },
+            attributes: ["SeatID", "RoomID", "RowIndex", "BenchIndex", "SeatIndex"],
+            order: [["RoomID", "ASC"], ["RowIndex", "ASC"], ["BenchIndex", "ASC"], ["SeatIndex", "ASC"]],
+            transaction,
+        });
+
+        // Clear existing allocations for all these halls + slot in one query
+        const allSeatIds = allActiveSeats.map(s => s.SeatID);
+        if (allSeatIds.length > 0) {
+            await SeatAllocation.destroy({
+                where: { ExamID: { [Op.in]: examIds }, SeatID: { [Op.in]: allSeatIds } },
                 transaction,
             });
+        }
 
-            // Clear existing allocations for this hall + slot
-            const seatIds = seats.map(s => s.SeatID);
-            if (seatIds.length > 0) {
-                await SeatAllocation.destroy({
-                    where: { ExamID: { [Op.in]: examIds }, SeatID: { [Op.in]: seatIds } },
-                    transaction,
-                });
-            }
+        // Group seats by RoomID
+        const roomSeatsMap = new Map<number, any[]>();
+        for (const seat of allActiveSeats) {
+            const roomId = Number((seat as any).RoomID);
+            if (!roomSeatsMap.has(roomId)) roomSeatsMap.set(roomId, []);
+            roomSeatsMap.get(roomId)!.push(seat);
+        }
+
+        const hallResults: any[] = [];
+        const allNewAllocations: { ExamID: number; SeatID: number; StudentID: number }[] = [];
+
+        for (const hallIdNum of hallIds.map(Number)) {
+            const hall = targetHalls.find(h => h.RoomID === hallIdNum);
+            if (!hall) continue;
+
+            const seats = roomSeatsMap.get(hallIdNum) || [];
 
             const benchMap: Record<string, Record<number, any[]>> = {};
             for (const seat of seats) {
@@ -999,8 +1040,8 @@ export const bulkAssign = async (req: Request, res: Response) => {
                 return -1;
             };
 
-            for (const benchNum of allBenchNums) {
-                for (const row of allRows) {
+            for (const row of allRows) {
+                for (const benchNum of allBenchNums) {
                     const benchSeats = (benchMap[row]?.[benchNum] || []).sort(sortSeatsByPosition);
                     let currentBenchLeftDept = "";
                     for (const seat of benchSeats) {
@@ -1032,13 +1073,17 @@ export const bulkAssign = async (req: Request, res: Response) => {
                 }
             }
 
-            if (records.length > 0) await SeatAllocation.bulkCreate(records, { transaction });
+            if (records.length > 0) allNewAllocations.push(...records);
 
             hallResults.push({
-                hallId: hall.RoomID, hallCode: hall.RoomCode,
+                hallId: hallIdNum, hallCode: hall.RoomCode,
                 totalSeats: seats.length, filled: records.length,
                 leftUsed: hallLeft, rightUsed: hallRight,
             });
+        }
+
+        if (allNewAllocations.length > 0) {
+            await SeatAllocation.bulkCreate(allNewAllocations, { transaction });
         }
 
         await transaction.commit();
@@ -1056,7 +1101,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
     } catch (error: any) {
         await transaction.rollback();
         console.error("BULK ASSIGN ERROR:", error);
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: String(error), stack: error?.stack });
     }
 };
 
@@ -1074,7 +1119,7 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "examDate and session are required" });
         }
 
-        const examIds = await resolveExamIds(examDate, session);
+        const examIds = await resolveExamIds(examDate, session, transaction);
         if (examIds.length === 0) {
             await transaction.rollback();
             return res.status(400).json({ message: "No exams found for this date + session" });
@@ -1096,6 +1141,7 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
         const seatIds = [...new Set(existingAllocations.map(a => a.SeatID))];
         const allSeats = await Seat.findAll({
             where: { SeatID: { [Op.in]: seatIds } },
+            attributes: ["SeatID", "RowIndex", "BenchIndex", "SeatIndex"],
             transaction,
         });
         const seatNumMap = new Map<number, number>();
@@ -1107,6 +1153,7 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
         // Fetch full seat info so we can sort column-by-column per hall
         const allSeatInfo = await Seat.findAll({
             where: { SeatID: { [Op.in]: seatIds } },
+            attributes: ["SeatID", "RoomID", "RowIndex", "BenchIndex", "SeatIndex"],
             transaction,
         });
         const seatInfoMap = new Map<number, any>();
@@ -1118,11 +1165,11 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
         const roomOrder = new Map<number, string>();
         for (const r of rooms) roomOrder.set(r.RoomID, r.RoomCode);
 
-        // Column-by-column sort: roomCode → benchNumber → rowLabel → seatNumber
+        // Column-by-column sort: roomCode → rowLabel → benchNumber → seatNumber
         const columnSort = (seatId: number) => {
             const s = seatInfoMap.get(seatId);
             if (!s) return '';
-            return `${roomOrder.get(s.RoomID) ?? ''}_${String(getBenchNumber(s)).padStart(6, '0')}_${getRowLabel(s)}_${getSeatNumber(s)}`;
+            return `${roomOrder.get(s.RoomID) ?? ''}_${getRowLabel(s)}_${String(getBenchNumber(s)).padStart(6, '0')}_${getSeatNumber(s)}`;
         };
 
         // Sort seats column-by-column
@@ -1271,7 +1318,7 @@ export const importSeatingFromExcel = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "examDate, session, and rows array are required" });
         }
 
-        const examIds = await resolveExamIds(examDate, session);
+        const examIds = await resolveExamIds(examDate, session, transaction);
         if (examIds.length === 0) {
             await transaction.rollback();
             return res.status(400).json({ message: "No exams/slots found for this date + session. Create a slot first." });
@@ -1409,10 +1456,11 @@ export const importSeatingFromExcel = async (req: Request, res: Response) => {
         for (const hall of targetHalls) {
             if (leftIdx >= leftStudentIds.length && rightIdx >= rightStudentIds.length) break;
 
-            await ensureSeatsExist(hall);
+            await ensureSeatsExist(hall, transaction);
 
             const seats = await Seat.findAll({
                 where: { RoomID: hall.RoomID, IsActive: true },
+                attributes: ["SeatID", "RowIndex", "BenchIndex", "SeatIndex"],
                 order: [["RowIndex", "ASC"], ["BenchIndex", "ASC"], ["SeatIndex", "ASC"]],
                 transaction,
             });
@@ -1442,8 +1490,8 @@ export const importSeatingFromExcel = async (req: Request, res: Response) => {
                 allRows.flatMap(r => Object.keys(benchMap[r]!).map(Number))
             )].sort((a, b) => a - b);
 
-            for (const benchNum of allBenchNums) {
-                for (const row of allRows) {
+            for (const row of allRows) {
+                for (const benchNum of allBenchNums) {
                     const benchSeats = (benchMap[row]?.[benchNum] || []).sort(sortSeatsByPosition);
                     for (const seat of benchSeats) {
                         if (getSeatNumber(seat) === 1 && leftIdx < leftStudentIds.length) {

@@ -463,11 +463,53 @@ export class ExamController {
     // Create a new exam
     static async createExam(req: Request, res: Response) {
         try {
-            const { SubjectID, ExamName, ExamDate, Session, Duration } = req.body;
+            const { SubjectID, ExamName, ExamDate, Session, Duration, ExamSeriesID, DepartmentID } = req.body;
 
             // Basic validation
             if (!SubjectID || !ExamName || !ExamDate || !Session || !Duration) {
                 return res.status(400).json({ message: 'Missing required fields' });
+            }
+
+            // Validate ExamSeriesID if provided
+            if (ExamSeriesID) {
+                const series = await ExamSeries.findByPk(ExamSeriesID);
+                if (!series) {
+                    return res.status(400).json({ message: 'Invalid Exam Series ID' });
+                }
+            }
+
+            let finalSubjectId = SubjectID;
+
+            if (DepartmentID !== undefined && DepartmentID !== null && String(DepartmentID).trim() !== '') {
+                const departmentIdNum = Number(DepartmentID);
+                if (!Number.isFinite(departmentIdNum)) {
+                    return res.status(400).json({ message: 'Invalid DepartmentID' });
+                }
+
+                const department = await Department.findByPk(departmentIdNum);
+                if (!department) {
+                    return res.status(404).json({ message: 'Department not found' });
+                }
+
+                const currentSubject = await Subject.findByPk(SubjectID);
+                if (!currentSubject) {
+                    return res.status(404).json({ message: 'Current subject not found for exam' });
+                }
+
+                const [targetSubject] = await Subject.findOrCreate({
+                    where: {
+                        SubjectCode: currentSubject.SubjectCode,
+                        DepartmentID: departmentIdNum
+                    },
+                    defaults: {
+                        SubjectCode: currentSubject.SubjectCode,
+                        SubjectName: currentSubject.SubjectName,
+                        DepartmentID: departmentIdNum,
+                        SemesterID: currentSubject.SemesterID
+                    }
+                });
+
+                finalSubjectId = targetSubject.SubjectID;
             }
 
             // Determine status based on date (simple logic for now)
@@ -480,8 +522,8 @@ export class ExamController {
                 status = 'Completed';
             }
 
-            const newExam = await Exam.create({
-                SubjectID,
+            const payload: any = {
+                SubjectID: finalSubjectId,
                 ExamName,
                 ExamDate,
                 Session,
@@ -489,7 +531,13 @@ export class ExamController {
                 Status: status,
                 IsEmergencyMode: false,
                 AttendanceLocked: false
-            });
+            };
+
+            if (ExamSeriesID) {
+                payload.ExamSeriesID = parseInt(String(ExamSeriesID));
+            }
+
+            const newExam = await Exam.create(payload);
 
             res.status(201).json(newExam);
         } catch (error: any) {

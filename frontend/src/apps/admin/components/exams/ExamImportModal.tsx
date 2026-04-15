@@ -35,12 +35,14 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
         setLoadingSeries(true);
         try {
             const response = await SeriesService.getAll();
-            if (response.success) {
-                setSeries(response.data);
-                // Auto-select first series if available AND no pre-selection
-                if (response.data.length > 0 && !selectedSeriesId && !preSelectedSeriesId) {
-                    setSelectedSeriesId(String(response.data[0].ExamSeriesID));
-                }
+            // Handle both {success, data} wrapper and plain array
+            const list = Array.isArray(response)
+                ? response
+                : (response?.data || []);
+            setSeries(list);
+            // Auto-select first series if available AND no pre-selection
+            if (list.length > 0 && !preSelectedSeriesId && !selectedSeriesId) {
+                setSelectedSeriesId(String(list[0].ExamSeriesID));
             }
         } catch (error) {
             console.error("Failed to fetch series:", error);
