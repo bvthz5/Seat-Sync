@@ -1584,8 +1584,7 @@ export class ExamController {
                     s.RegisterNumber,
                     s.FullName,
                     s.Status,
-                    u.Email,
-                    er.CreatedAt
+                    u.Email
                 FROM Students s
                 LEFT JOIN Users u ON s.UserID = u.UserID
                 INNER JOIN ExamRegistrations er ON s.StudentID = er.StudentID
@@ -1602,7 +1601,7 @@ export class ExamController {
                 FullName: row.FullName,
                 Email: row.Email || 'N/A',
                 Status: row.Status,
-                CreatedAt: row.CreatedAt
+                CreatedAt: null
             }));
 
             res.json({

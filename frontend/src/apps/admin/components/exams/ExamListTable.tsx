@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
-import { Chip, Tooltip, Pagination, Button } from "@heroui/react";
-import { Edit2, Trash2, CheckCircle, AlertTriangle, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
+import { Chip, Tooltip, Button } from "@heroui/react";
+import { Edit2, Trash2, Calendar, Clock, ChevronDown, ChevronUp, FileText, CheckCircle, AlertTriangle, RefreshCw, ChevronLeft, ChevronRight, LayoutGrid } from "lucide-react";
 import { normalizeExamDepartmentCode } from './departmentCode';
 
 interface Exam {
@@ -19,7 +18,6 @@ interface Exam {
             DepartmentCode: string;
         }
     };
-    // Mock fields for UI match (keeping some for now)
     Enrollment?: number;
     AuditStatus?: 'Clean' | 'Conflict' | 'Pending';
     ConflictDetails?: string;
@@ -34,193 +32,255 @@ interface ExamListTableProps {
     onRowClick: (exam: Exam) => void;
 }
 
-const statusClasses: Record<string, string> = {
-    "Completed": "bg-gray-100 text-gray-600 border-gray-200",
-    "Scheduled": "bg-green-50 text-green-700 border-green-200",
-    "Review Needed": "bg-yellow-50 text-yellow-700 border-yellow-200",
-    "Pending": "bg-gray-100 text-gray-600 border-gray-200",
-    "In Progress": "bg-blue-50 text-blue-700 border-blue-200"
+interface GroupedExam {
+    id: string;
+    subjectName: string;
+    subjectCode: string;
+    date: string;
+    session: string;
+    exams: Exam[];
+}
+
+const getStatusDetails = (status: string) => {
+    switch (status.toLowerCase()) {
+        case 'scheduled': return { color: 'primary' as const, bg: 'bg-blue-50 text-blue-700 border-blue-200' };
+        case 'completed': return { color: 'success' as const, bg: 'bg-green-50 text-green-700 border-green-200' };
+        case 'ongoing':
+        case 'in progress': return { color: 'warning' as const, bg: 'bg-orange-50 text-orange-700 border-orange-200' };
+        default: return { color: 'default' as const, bg: 'bg-gray-100 text-gray-600 border-gray-200' };
+    }
 };
 
 const ExamListTable: React.FC<ExamListTableProps> = ({ exams, loading, onEdit, onDelete, onAllocate, onRowClick }) => {
-
     const [currentPage, setCurrentPage] = useState(1);
     const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
-    // Reset to page 1 whenever exams data changes (e.g. filters applied)
+    // 2. FRONTEND GROUPING ONLY - Strict requirement
+    const groupedExams = useMemo(() => {
+        const groups: Record<string, GroupedExam> = {};
+        
+        exams.forEach(exam => {
+            const subName = exam.Subject?.SubjectName || exam.ExamName;
+            const subCode = exam.Subject?.SubjectCode || `EXP-${exam.ExamID}`;
+            const dateStr = exam.ExamDate;
+            const session = exam.Session;
+            
+            // Unique key for grouping
+            const key = `${subCode}-${dateStr}-${session}`;
+            
+            if (!groups[key]) {
+                groups[key] = {
+                    id: key,
+                    subjectName: subName,
+                    subjectCode: subCode,
+                    date: dateStr,
+                    session: session,
+                    exams: []
+                };
+            }
+            groups[key].exams.push(exam);
+        });
+        
+        return Object.values(groups);
+    }, [exams]);
+
+    // Reset pagination
     useEffect(() => {
         setCurrentPage(1);
-    }, [exams.length]);
+    }, [groupedExams.length]);
 
-    const totalPages = Math.max(1, Math.ceil(exams.length / rowsPerPage));
+    const totalPages = Math.max(1, Math.ceil(groupedExams.length / rowsPerPage));
 
-    const paginatedExams = useMemo(() => {
+    const paginatedGroups = useMemo(() => {
         const start = (currentPage - 1) * rowsPerPage;
-        return exams.slice(start, start + rowsPerPage);
-    }, [exams, currentPage, rowsPerPage]);
+        return groupedExams.slice(start, start + rowsPerPage);
+    }, [groupedExams, currentPage, rowsPerPage]);
+
+    const toggleExpand = (id: string) => {
+        setExpandedGroups(prev => ({ ...prev, [id]: !prev[id] }));
+    };
 
     if (loading) {
-        return <div className="text-center py-20 text-gray-400">Loading exam schedule...</div>;
+        return (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[1, 2, 3, 4, 5, 6].map(i => (
+                    <div key={i} className="h-48 bg-slate-200/50 rounded-2xl animate-pulse"></div>
+                ))}
+            </div>
+        );
     }
 
     if (exams.length === 0) {
         return (
-            <div className="text-center py-20 bg-gray-50/50 rounded-xl border border-dashed border-gray-300">
-                <p className="text-gray-500 font-medium">No exams found for this semester.</p>
-                <p className="text-sm text-gray-400 mt-1">Try adjusting your filters or create a new exam.</p>
+            <div className="text-center py-20 bg-white border border-slate-200/60 rounded-[24px] shadow-sm max-w-3xl mx-auto">
+                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-5 text-indigo-400">
+                    <LayoutGrid size={32} />
+                </div>
+                <h2 className="text-slate-900 font-bold text-xl mb-2">No exams found</h2>
+                <p className="text-slate-500 text-sm mb-8">Try adjusting your filters or create a new exam.</p>
             </div>
         );
     }
 
     return (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                    <thead>
-                        <tr className="border-b border-gray-100 text-xs uppercase tracking-wider text-gray-500 font-semibold bg-gray-50/50">
-                            <th className="px-6 py-4">Subject Code</th>
-                            <th className="px-6 py-4">Department</th>
-                            <th className="px-6 py-4">Date & Session</th>
-                            <th className="px-6 py-4 text-center">Enrollment</th>
-                            <th className="px-6 py-4">Status</th>
-                            <th className="px-6 py-4">SeatSync Audit</th>
-                            <th className="px-6 py-4 text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                        {paginatedExams.map((exam) => {
-                            const audit = exam.AuditStatus || 'Pending';
-                            const displayStatus = exam.Status;
-                            const deptName = exam.Subject?.Department?.DepartmentName || 'General';
-                            const deptCode = normalizeExamDepartmentCode(exam.Subject?.Department?.DepartmentCode || 'GEN');
+        <div className="space-y-6">
+            {/* CARD GRID LAYOUT */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                {paginatedGroups.map((group) => {
+                    const isExpanded = !!expandedGroups[group.id];
+                    const dateObj = new Date(group.date);
+                    const formattedDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    const displaySession = group.session === 'FN' ? 'Morning' : (group.session === 'AN' ? 'Afternoon' : group.session);
 
-                            return (
-                                <tr
-                                    key={exam.ExamID}
-                                    className="hover:bg-gray-50/80 transition-colors group cursor-pointer"
-                                    onClick={() => onRowClick(exam)}
-                                >
-                                    {/* Subject */}
-                                    <td className="px-6 py-4">
-                                        <div className="flex flex-col">
-                                            <span className="font-bold text-gray-900 text-sm">
-                                                {exam.Subject ? exam.Subject.SubjectCode : 'EXP-' + exam.ExamID}
-                                            </span>
-                                            <span className="text-xs text-gray-500 mt-0.5">
-                                                {exam.Subject ? exam.Subject.SubjectName : exam.ExamName}
-                                            </span>
+                    return (
+                        <div key={group.id} className="bg-white border border-gray-200 shadow-sm rounded-2xl overflow-hidden transition-all hover:shadow-md">
+                            {/* Card Header (Subject Summary) */}
+                            <div className="p-6 cursor-pointer" onClick={() => toggleExpand(group.id)}>
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="flex gap-4 items-start">
+                                        <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                                            <FileText size={24} />
                                         </div>
-                                    </td>
-
-                                    {/* Department */}
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-2">
-                                            <div className={`w-2 h-2 rounded-full 
-                                                ${deptCode === 'CS' ? 'bg-blue-500' :
-                                                    deptCode === 'MA' ? 'bg-purple-500' :
-                                                        deptCode === 'BIO' ? 'bg-green-500' : 'bg-gray-400'}`}
-                                            />
-                                            <span className="text-sm text-gray-700">{deptName}</span>
+                                        <div>
+                                            <h3 className="font-extrabold text-lg text-gray-900 line-clamp-1 leading-tight">{group.subjectName}</h3>
+                                            <p className="text-sm font-bold text-indigo-600 mt-1 uppercase tracking-widest">{group.subjectCode}</p>
                                         </div>
-                                    </td>
+                                    </div>
+                                    <div className="bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm whitespace-nowrap">
+                                        <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{group.exams.length} Depts</span>
+                                    </div>
+                                </div>
+                                
+                                <div className="flex gap-3">
+                                    <Chip 
+                                        startContent={<Calendar size={14} className="text-indigo-500" />} 
+                                        variant="flat" 
+                                        color="primary"
+                                        size="sm"
+                                        className="font-bold tracking-wide"
+                                    >
+                                        {formattedDate}
+                                    </Chip>
+                                    <Chip 
+                                        startContent={<Clock size={14} className="text-purple-500" />} 
+                                        variant="flat" 
+                                        color="secondary"
+                                        size="sm"
+                                        className="font-bold tracking-wide"
+                                    >
+                                        {displaySession}
+                                    </Chip>
+                                </div>
+                            </div>
 
-                                    {/* Date */}
-                                    <td className="px-6 py-4">
-                                        <div className="flex flex-col">
-                                            <span className="font-semibold text-gray-900 text-sm">
-                                                {new Date(exam.ExamDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                            </span>
-                                            <span className="text-xs text-gray-500">
-                                                {exam.Session === 'FN' ? 'Morning (09:00 - 12:00)' : 'Afternoon (14:00 - 17:00)'}
-                                            </span>
-                                        </div>
-                                    </td>
+                            {/* Expand Indicator */}
+                            <div 
+                                onClick={() => toggleExpand(group.id)} 
+                                className="bg-gray-50/50 border-t border-gray-100 flex items-center justify-between px-6 py-2 cursor-pointer hover:bg-gray-50 transition-colors"
+                            >
+                                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                                    {isExpanded ? 'Hide Departments' : 'View Departments'}
+                                </span>
+                                <div className="text-gray-400">
+                                    {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                                </div>
+                            </div>
 
-                                    {/* Enrollment */}
-                                    <td className="px-6 py-4 text-center">
-                                        <span className="text-sm font-semibold text-gray-400">-</span>
-                                    </td>
+                            {/* Expanded Body: Departments List */}
+                            {isExpanded && (
+                                <div className="p-4 border-t border-gray-100 bg-gray-50/50 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                                    {group.exams.map((exam) => {
+                                        const deptName = exam.Subject?.Department?.DepartmentName || 'General';
+                                        const statusStyle = getStatusDetails(exam.Status);
+                                        const audit = exam.AuditStatus || 'Pending';
 
-                                    {/* Status */}
-                                    <td className="px-6 py-4">
-                                        <span className={`text-xs font-bold px-2.5 py-1 rounded-md border ${statusClasses[displayStatus] || statusClasses['Pending']}`}>
-                                            {displayStatus}
-                                        </span>
-                                    </td>
-
-                                    {/* Audit */}
-                                    <td className="px-6 py-4">
-                                        {audit === 'Clean' && (
-                                            <div className="flex items-center gap-2 text-green-600">
-                                                <CheckCircle size={16} fill="currentColor" className="text-white" />
-                                                <span className="text-sm font-medium">No clashes found</span>
-                                            </div>
-                                        )}
-                                        {audit === 'Conflict' && (
-                                            <div className="flex flex-col">
-                                                <div className="flex items-center gap-2 text-red-600">
-                                                    <AlertTriangle size={16} fill="currentColor" className="text-white" />
-                                                    <span className="text-sm font-bold">Batch Clash</span>
+                                        return (
+                                            <div 
+                                                key={exam.ExamID} 
+                                                className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm hover:border-indigo-200 transition-colors cursor-pointer group"
+                                                onClick={() => onRowClick(exam)}
+                                            >
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-3 mb-2">
+                                                        <span className="font-bold text-gray-800 line-clamp-1">{deptName}</span>
+                                                        <div className={`px-2 py-0.5 rounded-md text-[10px] uppercase font-bold tracking-widest border ${statusStyle.bg}`}>
+                                                            {exam.Status}
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    {/* Audit Status */}
+                                                    <div className="flex items-center gap-2">
+                                                        {audit === 'Clean' && (
+                                                            <div className="flex items-center gap-1.5 text-green-600 bg-green-50 px-2 py-1 rounded-md border border-green-100">
+                                                                <CheckCircle size={14} />
+                                                                <span className="text-xs font-bold">No Clashes</span>
+                                                            </div>
+                                                        )}
+                                                        {audit === 'Conflict' && (
+                                                            <div className="flex items-center gap-1.5 text-red-600 bg-red-50 px-2 py-1 rounded-md border border-red-100" title={exam.ConflictDetails}>
+                                                                <AlertTriangle size={14} />
+                                                                <span className="text-xs font-bold line-clamp-1 max-w-[200px]">{exam.ConflictDetails || 'Batch Clash'}</span>
+                                                            </div>
+                                                        )}
+                                                        {audit === 'Pending' && (
+                                                            <div className="flex items-center gap-1.5 text-blue-500 bg-blue-50 px-2 py-1 rounded-md border border-blue-100">
+                                                                <RefreshCw size={14} className="animate-spin" />
+                                                                <span className="text-xs font-bold">Analyzing</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                <span className="text-xs text-red-400 pl-6 truncate max-w-[200px]" title={exam.ConflictDetails}>
-                                                    {exam.ConflictDetails || 'Multiple exams for same batch'}
-                                                </span>
-                                            </div>
-                                        )}
-                                        {audit === 'Pending' && (
-                                            <div className="flex items-center gap-2 text-blue-600">
-                                                <RefreshCw size={14} className="animate-spin" />
-                                                <span className="text-sm font-medium">Analyzing...</span>
-                                            </div>
-                                        )}
-                                    </td>
 
-                                    {/* Actions */}
-                                    <td className="px-6 py-4 text-right">
-                                        <div className="flex items-center justify-end gap-2">
-                                            <Tooltip content="Edit Exam">
-                                                <Button
-                                                    isIconOnly
-                                                    size="sm"
-                                                    variant="flat"
-                                                    color="primary"
-                                                    onPress={() => onEdit(exam)}
-                                                    className="bg-blue-50 text-blue-600 hover:bg-blue-100"
+                                                {/* Actions */}
+                                                <div 
+                                                    className="flex items-center gap-2"
+                                                    onClick={(e) => e.stopPropagation()} // Prevent firing row click
                                                 >
-                                                    <Edit2 size={18} />
-                                                </Button>
-                                            </Tooltip>
-                                            <Tooltip content="Delete Exam" color="danger">
-                                                <Button
-                                                    isIconOnly
-                                                    size="sm"
-                                                    variant="flat"
-                                                    color="danger"
-                                                    onPress={() => onDelete(exam.ExamID)}
-                                                    className="bg-red-50 text-red-600 hover:bg-red-100"
-                                                >
-                                                    <Trash2 size={18} />
-                                                </Button>
-                                            </Tooltip>
-                                        </div>
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
+                                                    <Tooltip content="Edit Exam">
+                                                        <Button
+                                                            isIconOnly
+                                                            size="sm"
+                                                            variant="flat"
+                                                            color="primary"
+                                                            onPress={() => onEdit(exam)}
+                                                            className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg shadow-sm"
+                                                        >
+                                                            <Edit2 size={16} />
+                                                        </Button>
+                                                    </Tooltip>
+                                                    <Tooltip content="Delete Exam" color="danger">
+                                                        <Button
+                                                            isIconOnly
+                                                            size="sm"
+                                                            variant="flat"
+                                                            color="danger"
+                                                            onPress={() => onDelete(exam.ExamID)}
+                                                            className="bg-red-50 text-red-600 hover:bg-red-100 rounded-lg shadow-sm"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </Button>
+                                                    </Tooltip>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
 
-            {/* Pagination Footer */}
-            <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50/30">
-                <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 text-sm text-gray-500">
-                        <span>Rows per page:</span>
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-gray-200 shadow-sm">
+                    <label className="flex items-center gap-2 text-sm text-gray-500 font-medium cursor-pointer" htmlFor="rowsPerPageSelect">
+                        <span>Items per page:</span>
                         <select
-                            id="rows-per-page"
-                            name="rows-per-page"
-                            aria-label="Rows per page"
-                            className="bg-white border border-gray-300 text-gray-700 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 p-1.5 px-2.5"
+                            id="rowsPerPageSelect"
+                            aria-label="Items per page selection"
+                            className="bg-gray-50 border border-gray-200 text-gray-700 font-bold rounded-lg focus:ring-indigo-500 p-1.5 px-3 outline-none cursor-pointer"
                             value={rowsPerPage}
                             onChange={(e) => {
                                 setRowsPerPage(Number(e.target.value));
@@ -231,70 +291,35 @@ const ExamListTable: React.FC<ExamListTableProps> = ({ exams, loading, onEdit, o
                             <option value={20}>20</option>
                             <option value={50}>50</option>
                         </select>
-                    </div>
-                    <span className="text-xs text-gray-400">
-                        {Math.min((currentPage - 1) * rowsPerPage + 1, exams.length)}–{Math.min(currentPage * rowsPerPage, exams.length)} of {exams.length}
-                    </span>
-                </div>
+                    </label>
 
-                <div className="flex items-center gap-2">
-                    <Button
-                        isIconOnly
-                        size="sm"
-                        variant="light"
-                        isDisabled={currentPage === 1}
-                        onPress={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    >
-                        <ChevronLeft size={16} />
-                    </Button>
-                    <div className="flex gap-1">
-                        {(() => {
-                            const pages: (number | string)[] = [];
-                            if (totalPages <= 5) {
-                                for (let i = 1; i <= totalPages; i++) pages.push(i);
-                            } else {
-                                pages.push(1);
-                                if (currentPage > 3) pages.push('...');
-                                for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
-                                    pages.push(i);
-                                }
-                                if (currentPage < totalPages - 2) pages.push('...');
-                                pages.push(totalPages);
-                            }
-                            return pages.map((page, idx) =>
-                                typeof page === 'string' ? (
-                                    <span key={`ellipsis-${idx}`} className="text-gray-400 px-1 pt-1">...</span>
-                                ) : (
-                                    <Button
-                                        key={page}
-                                        isIconOnly
-                                        size="sm"
-                                        radius="sm"
-                                        className={page === currentPage
-                                            ? "bg-blue-600 text-white font-bold text-xs"
-                                            : "text-gray-500 text-xs"
-                                        }
-                                        variant={page === currentPage ? "solid" : "light"}
-                                        onPress={() => setCurrentPage(page)}
-                                    >
-                                        {page}
-                                    </Button>
-                                )
-                            );
-                        })()}
+                    <div className="flex gap-1.5">
+                        <Button
+                            isIconOnly
+                            size="sm"
+                            variant="flat"
+                            className="bg-gray-50 text-gray-600 font-bold"
+                            isDisabled={currentPage === 1}
+                            onPress={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        >
+                            <ChevronLeft size={18} />
+                        </Button>
+                        <div className="flex items-center px-4 bg-gray-50 border border-gray-100 rounded-lg font-bold text-sm text-gray-700">
+                            Page {currentPage} of {totalPages}
+                        </div>
+                        <Button
+                            isIconOnly
+                            size="sm"
+                            variant="flat"
+                            className="bg-gray-50 text-gray-600 font-bold"
+                            isDisabled={currentPage === totalPages}
+                            onPress={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        >
+                            <ChevronRight size={18} />
+                        </Button>
                     </div>
-                    <Button
-                        isIconOnly
-                        size="sm"
-                        variant="light"
-                        isDisabled={currentPage === totalPages}
-                        onPress={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                        className="text-gray-600"
-                    >
-                        <ChevronRight size={16} />
-                    </Button>
                 </div>
-            </div>
+            )}
         </div>
     );
 };

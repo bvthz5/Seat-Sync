@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button, Card, CardBody } from '@heroui/react';
-import { ArrowLeft, CalendarDays, Upload } from 'lucide-react';
+import { ArrowLeft, Upload, Sun, Moon, Info, CalendarClock } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { ExamService } from '../services/examService';
 import EligibleStudentsImportModal from '../components/exams/EligibleStudentsImportModal';
@@ -21,6 +21,7 @@ type GroupedExam = {
     session: string;
     status: string;
     duration: number;
+    subjectCode: string;
     branches: BranchOption[];
 };
 
@@ -44,6 +45,7 @@ const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
                 session,
                 status: String(exam?.Status || 'Scheduled'),
                 duration,
+                subjectCode: String(exam?.Subject?.SubjectCode || ''),
                 branches: [],
                 branchKeys: new Set<string>()
             });
@@ -117,6 +119,8 @@ const ExamDateDetail: React.FC = () => {
             Status: exam.status,
             Duration: exam.duration,
             Subject: {
+                SubjectName: exam.examName,
+                SubjectCode: exam.subjectCode,
                 Department: {
                     DepartmentCode: branch.departmentCode,
                     DepartmentName: branch.departmentName,
@@ -127,23 +131,93 @@ const ExamDateDetail: React.FC = () => {
         setIsDetailPanelOpen(true);
     };
 
-    return (
-        <div className="min-h-screen bg-[#f4f6f9] pb-12">
-            <div className="bg-white border-b border-slate-200/80 px-8 py-8 mb-8 shadow-sm">
-                <div className="max-w-[1600px] mx-auto flex items-center justify-between gap-6">
-                    <div className="flex items-center gap-4">
-                        <Button
-                            isIconOnly
-                            variant="light"
-                            className="text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all"
-                            onPress={() => navigate(`/admin/exams/series/${seriesId}/dates`)}
-                        >
-                            <ArrowLeft size={24} />
-                        </Button>
-                        <div>
-                            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Exams on {date}</h1>
-                            <p className="text-slate-500 mt-1">Exams scheduled for {selectedDateLabel}</p>
+    // UI-ONLY Grouping Logic
+    const morningExams = exams.filter(e => e.session === 'FN');
+    const afternoonExams = exams.filter(e => e.session === 'AN');
+    const otherExams = exams.filter(e => e.session !== 'FN' && e.session !== 'AN');
+
+    const ExamCard = ({ exam }: { exam: GroupedExam }) => (
+        <Card className="bg-white border-transparent shadow-[0_4px_20px_-8px_rgba(0,0,0,0.06)] hover:shadow-[0_12px_32px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-1 transition-all duration-300 rounded-[24px]">
+            <CardBody className="p-7">
+                <div className="flex flex-col h-full justify-between">
+                    <div>
+                        <div className="flex justify-between items-start gap-4 mb-5">
+                            <h3 className="text-xl font-black text-slate-800 leading-tight">
+                                {exam.examName}
+                            </h3>
+                            <div className="flex shrink-0 gap-2">
+                                <span className="px-3 py-1.5 rounded-xl text-[10px] font-extrabold uppercase tracking-widest bg-slate-100 text-slate-500 border border-slate-200/60 shadow-sm leading-none flex items-center justify-center">
+                                    <CalendarClock size={12} className="mr-1.5 stroke-[2.5]" /> {exam.duration}m
+                                </span>
+                            </div>
                         </div>
+
+                        <div className="mb-6">
+                            <div className="flex flex-wrap gap-2">
+                                {exam.branches.map((branch) => (
+                                    <span
+                                        key={`${exam.groupKey}-${branch.examId}`}
+                                        className="px-3 py-1.5 rounded-[10px] text-[11px] font-extrabold tracking-wide uppercase bg-indigo-50/80 text-indigo-700 border border-indigo-100 shadow-sm"
+                                    >
+                                        {branch.departmentCode}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 mt-4 pt-5 border-t border-slate-100">
+                        <div className="flex items-center">
+                            <span className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                                {exam.branches.length} Department{exam.branches.length !== 1 ? 's' : ''}
+                            </span>
+                        </div>
+                        <div className="flex gap-2">
+                            <Button
+                                size="sm"
+                                variant="flat"
+                                className="font-bold bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl px-4"
+                                startContent={<Info size={14} className="stroke-[2.5] font-black" />}
+                                onPress={() => openDetailPanel(exam, exam.branches[0])}
+                            >
+                                Details
+                            </Button>
+                            <Button
+                                size="sm"
+                                className="font-bold bg-slate-900 text-white rounded-xl shadow-md px-4 hover:-translate-y-0.5 transition-transform"
+                                startContent={<Upload size={14} className="stroke-[2.5]" />}
+                                onPress={() => openImport(exam)}
+                            >
+                                Import
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            </CardBody>
+        </Card>
+    );
+
+    return (
+        <div className="min-h-screen bg-[#F8F9FA] pb-16">
+            <div className="bg-white border-b border-slate-200/80 px-8 py-8 md:py-10 mb-8 shadow-sm relative overflow-hidden">
+                <div className="absolute right-0 top-0 w-64 h-64 bg-indigo-50 rounded-full blur-3xl opacity-60 -translate-y-1/2 translate-x-1/3"></div>
+                <div className="max-w-[1600px] mx-auto flex items-center gap-5 relative z-10">
+                    <Button
+                        isIconOnly
+                        variant="light"
+                        className="bg-slate-50 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-2xl shadow-sm border border-slate-100 transition-all w-12 h-12"
+                        onPress={() => navigate(`/admin/exams/series/${seriesId}`)}
+                    >
+                        <ArrowLeft size={20} className="stroke-[2.5]" />
+                    </Button>
+                    <div>
+                        <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-baseline gap-3">
+                            <span className="text-indigo-600 text-xl font-extrabold uppercase tracking-widest">
+                                {new Date(date || '').getDate().toString().padStart(2, '0')}
+                            </span>
+                            {selectedDateLabel}
+                        </h1>
+                        <p className="text-slate-500 mt-1.5 font-medium text-sm">Managing explicit subjects scheduled for this day.</p>
                     </div>
                 </div>
             </div>
@@ -152,77 +226,55 @@ const ExamDateDetail: React.FC = () => {
                 {loading ? (
                     <div className="text-center py-12">Loading...</div>
                 ) : exams.length === 0 ? (
-                    <div className="text-center py-24 bg-white border border-slate-200 rounded-2xl shadow-sm">No exams scheduled for this date</div>
+                    <div className="text-center py-24 bg-white border border-slate-200 rounded-[32px] shadow-sm">No exams scheduled for this date</div>
                 ) : (
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                        {exams.map((exam) => (
-                            <Card key={exam.groupKey} className="bg-white border border-slate-200 hover:shadow-lg transition-all duration-300 rounded-2xl overflow-hidden">
-                                <div className="h-1.5 w-full bg-indigo-500"></div>
-                                <CardBody className="p-6 space-y-5">
-                                    <div className="flex items-start justify-between gap-4">
-                                        <div className="space-y-2">
-                                            <h3 className="text-xl font-bold text-slate-900">{exam.examName}</h3>
-                                            <div className="flex flex-wrap gap-2">
-                                                <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold border bg-indigo-50 text-indigo-700 border-indigo-100">
-                                                    {exam.session === 'FN' ? 'Morning' : 'Afternoon'}
-                                                </span>
-                                                <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold border bg-blue-50 text-blue-700 border-blue-100">
-                                                    {exam.status}
-                                                </span>
-                                                <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold border bg-slate-100 text-slate-600 border-slate-200">
-                                                    {exam.duration} mins
-                                                </span>
-                                                <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold border bg-emerald-50 text-emerald-700 border-emerald-100">
-                                                    {exam.branches.length} branch{exam.branches.length > 1 ? 'es' : ''}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <div className="w-14 h-14 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
-                                            <CalendarDays size={28} />
-                                        </div>
+                    <div className="space-y-12">
+
+                        {/* FORENOON SESSION */}
+                        {morningExams.length > 0 && (
+                            <section>
+                                <div className="flex items-center gap-3 mb-6">
+                                    <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center border border-amber-100 shadow-sm shrink-0">
+                                        <Sun size={20} className="stroke-[2.5]" />
                                     </div>
+                                    <h2 className="text-2xl font-black text-slate-800 tracking-tight">Forenoon Session</h2>
+                                </div>
+                                <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6">
+                                    {morningExams.map((exam) => <ExamCard key={exam.groupKey} exam={exam} />)}
+                                </div>
+                            </section>
+                        )}
 
-                                    <div className="flex flex-wrap gap-2">
-                                        {exam.branches.map((branch) => (
-                                            <span
-                                                key={`${exam.groupKey}-${branch.examId}`}
-                                                className="px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200"
-                                            >
-                                                {branch.departmentCode}
-                                            </span>
-                                        ))}
+                        {/* AFTERNOON SESSION */}
+                        {afternoonExams.length > 0 && (
+                            <section>
+                                <div className="flex items-center gap-3 mb-6">
+                                    <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-500 flex items-center justify-center border border-indigo-100 shadow-sm shrink-0">
+                                        <Moon size={20} className="stroke-[2.5]" />
                                     </div>
+                                    <h2 className="text-2xl font-black text-slate-800 tracking-tight">Afternoon Session</h2>
+                                </div>
+                                <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6">
+                                    {afternoonExams.map((exam) => <ExamCard key={exam.groupKey} exam={exam} />)}
+                                </div>
+                            </section>
+                        )}
 
-                                    <div className="h-px bg-slate-100"></div>
-
-                                    <div className="flex items-center justify-between gap-3">
-                                        <div className="text-slate-500 text-sm font-medium flex items-center gap-1.5">
-                                            <CalendarDays size={16} />
-                                            <span>{new Date(exam.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                                        </div>
-
-                                        <div className="flex gap-2">
-                                            <Button
-                                                color="default"
-                                                variant="flat"
-                                                className="font-semibold"
-                                                onPress={() => openDetailPanel(exam, exam.branches[0])}
-                                            >
-                                                View Details
-                                            </Button>
-                                            <Button
-                                                color="primary"
-                                                className="bg-indigo-600 font-semibold"
-                                                startContent={<Upload size={16} />}
-                                                onPress={() => openImport(exam)}
-                                            >
-                                                Import Eligible Students
-                                            </Button>
-                                        </div>
+                        {/* OTHER SESSIONS */}
+                        {otherExams.length > 0 && (
+                            <section>
+                                <div className="flex items-center gap-3 mb-6">
+                                    <div className="w-10 h-10 rounded-[14px] bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                                        <CalendarClock size={20} className="stroke-[2.5]" />
                                     </div>
-                                </CardBody>
-                            </Card>
-                        ))}
+                                    <h2 className="text-2xl font-black text-slate-800 tracking-tight">Other Sessions</h2>
+                                </div>
+                                <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6">
+                                    {otherExams.map((exam) => <ExamCard key={exam.groupKey} exam={exam} />)}
+                                </div>
+                            </section>
+                        )}
+
                     </div>
                 )}
             </div>
@@ -242,7 +294,7 @@ const ExamDateDetail: React.FC = () => {
                     isOpen={isDetailPanelOpen}
                     exam={selectedExamForDetail}
                     onClose={() => setIsDetailPanelOpen(false)}
-                    onEdit={() => {}}
+                    onEdit={() => { }}
                 />
             )}
         </div>
