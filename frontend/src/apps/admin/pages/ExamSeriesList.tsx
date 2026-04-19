@@ -180,6 +180,14 @@ const ExamSeriesList: React.FC = () => {
                             Import Timetable
                         </Button>
                         <Button
+                            onPress={() => navigate(`/admin/exams/series/${seriesId}/dates`)}
+                            variant="flat"
+                            className="bg-white text-slate-700 border border-slate-300 font-semibold hover:bg-slate-50 transition-all px-6 rounded-xl h-14 w-full lg:w-auto"
+                            startContent={<CalendarDays size={18} />}
+                        >
+                            Date View
+                        </Button>
+                        <Button
                             onPress={() => setIsDeleteAllOpen(true)}
                             variant="flat"
                             className="bg-red-50 text-red-600 border border-red-200 font-semibold hover:bg-red-100 transition-all px-6 rounded-xl h-14 w-full lg:w-auto"

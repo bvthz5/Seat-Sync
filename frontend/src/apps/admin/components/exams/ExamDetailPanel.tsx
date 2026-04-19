@@ -1,7 +1,8 @@
 
-import React from 'react';
-import { Button, Chip } from "@heroui/react";
-import { X, Calendar, Clock, FileText, Hash, Timer, BookOpen } from "lucide-react";
+import React, { useState, useEffect } from 'react';
+import { Button, Chip, Spinner } from "@heroui/react";
+import { X, Calendar, Clock, FileText, Hash, Timer, BookOpen, Users } from "lucide-react";
+import { ExamService } from '../../services/examService';
 
 interface ExamDetailPanelProps {
     exam: any;
@@ -11,6 +12,30 @@ interface ExamDetailPanelProps {
 }
 
 const ExamDetailPanel: React.FC<ExamDetailPanelProps> = ({ exam, isOpen, onClose, onEdit }) => {
+    const [students, setStudents] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        if (isOpen && exam?.ExamID) {
+            fetchEligibleStudents();
+        }
+    }, [isOpen, exam?.ExamID]);
+
+    const fetchEligibleStudents = async () => {
+        setLoading(true);
+        try {
+            console.log('Fetching eligible students for exam:', exam.ExamID);
+            const data = await ExamService.getEligibleStudents(exam.ExamID);
+            console.log('Received eligible students:', data);
+            setStudents(data.students || []);
+        } catch (error) {
+            console.error('Failed to fetch eligible students:', error);
+            setStudents([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     if (!isOpen || !exam) return null;
 
     const formattedDate = new Date(exam.ExamDate).toLocaleDateString('en-IN', {
@@ -32,7 +57,7 @@ const ExamDetailPanel: React.FC<ExamDetailPanelProps> = ({ exam, isOpen, onClose
             />
 
             {/* Slide-over Panel */}
-            <div className={`fixed top-0 bottom-0 right-0 w-full sm:w-[480px] bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+            <div className={`fixed top-0 bottom-0 right-0 w-full sm:w-[520px] bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
                 <div className="flex flex-col h-full">
 
                     {/* Header */}
@@ -123,6 +148,34 @@ const ExamDetailPanel: React.FC<ExamDetailPanelProps> = ({ exam, isOpen, onClose
                                     <span className="text-sm font-medium text-gray-800">{exam.Session === 'FN' ? 'Forenoon (FN)' : 'Afternoon (AN)'}</span>
                                 </div>
                             </div>
+                        </div>
+
+                        {/* Eligible Students */}
+                        <div className="bg-gray-50 p-5 rounded-xl border border-gray-100">
+                            <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                                <Users size={16} className="text-green-600" /> Eligible Students ({students.length})
+                            </h3>
+                            {loading ? (
+                                <div className="flex justify-center py-4">
+                                    <Spinner size="sm" />
+                                </div>
+                            ) : students.length > 0 ? (
+                                <div className="space-y-2 max-h-64 overflow-y-auto">
+                                    {students.map((student, idx) => (
+                                        <div key={idx} className="flex items-center justify-between text-sm p-2 bg-white rounded-lg border border-gray-200 hover:bg-gray-50">
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-medium text-gray-800 truncate">{student.FullName}</p>
+                                                <p className="text-xs text-gray-500">{student.RegisterNumber}</p>
+                                            </div>
+                                            <Chip size="sm" variant="flat" className="bg-green-100 text-green-700">
+                                                {student.Status || 'Active'}
+                                            </Chip>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-sm text-gray-500 text-center py-4">No eligible students imported</p>
+                            )}
                         </div>
 
                     </div>

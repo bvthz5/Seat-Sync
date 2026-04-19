@@ -12,6 +12,7 @@ interface StudentAttributes {
   StudentID: number;
   UserID: number | null;
   RegisterNumber: string;
+  FullName: string;
   DepartmentID: number;
   ProgramID: number;
   SemesterID: number;
@@ -23,13 +24,14 @@ interface StudentAttributes {
 /**
  * Attributes required when creating a student
  */
-interface StudentCreationAttributes extends Optional<StudentAttributes, "StudentID" | "UserID" | "Status" | "AdmissionDate"> { }
+interface StudentCreationAttributes extends Optional<StudentAttributes, "StudentID" | "UserID" | "Status" | "AdmissionDate" | "DepartmentID" | "ProgramID" | "SemesterID" | "BatchYear" | "FullName"> {}
 
 export class Student extends Model<StudentAttributes, StudentCreationAttributes>
   implements StudentAttributes {
   declare StudentID: number;
   declare UserID: number | null;
   declare RegisterNumber: string;
+  declare FullName: string;
   declare DepartmentID: number;
   declare ProgramID: number;
   declare SemesterID: number;
@@ -59,9 +61,14 @@ Student.init(
       allowNull: false,
       unique: true,
     },
+    FullName: {
+      type: DataTypes.STRING(100),
+      allowNull: false,
+      defaultValue: '',
+    },
     DepartmentID: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
       references: {
         model: "Departments",
         key: "DepartmentID",
@@ -69,7 +76,7 @@ Student.init(
     },
     ProgramID: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
       references: {
         model: "Programs",
         key: "ProgramID",
@@ -77,7 +84,7 @@ Student.init(
     },
     SemesterID: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
       references: {
         model: "Semesters",
         key: "SemesterID",
@@ -85,7 +92,7 @@ Student.init(
     },
     BatchYear: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
     },
     Status: {
       type: DataTypes.STRING(20),

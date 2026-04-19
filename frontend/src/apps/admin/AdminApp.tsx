@@ -25,6 +25,8 @@ import AcademicSetup from './pages/AcademicSetup';
 import Notifications from './pages/Notifications';
 import Security from './pages/Security';
 import ExamControl from './pages/ExamControl';
+import ExamDates from './pages/ExamDates';
+import ExamDateDetail from './pages/ExamDateDetail';
 import AuditLogs from './pages/AuditLogs';
 import DataCleanup from './pages/DataCleanup';
 import Profile from './pages/Profile';
@@ -46,6 +48,8 @@ const AdminApp: React.FC = () => {
                     <Route path="students" element={<Students />} />
                     <Route path="exams" element={<SeriesSelection />} />
                     <Route path="exams/series/:seriesId" element={<ExamSeriesList />} />
+                    <Route path="exams/series/:seriesId/dates" element={<ExamDates />} />
+                    <Route path="exams/series/:seriesId/dates/:date" element={<ExamDateDetail />} />
                     <Route path="seating" element={<SeatingPlans />} />
                     <Route path="invigilators" element={<Invigilators />} />
                     <Route path="attendance" element={<Attendance />} />

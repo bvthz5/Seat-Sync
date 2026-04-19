@@ -3,14 +3,18 @@ import { Request, Response } from 'express';
 import { Exam } from '../models/Exam.js';
 import { Subject } from '../models/Subject.js';
 import { Department } from '../models/Department.js';
+import { Student } from '../models/Student.js';
+import { User } from '../models/User.js';
 import { Semester } from "../models/Semester.js";
 import { Program } from "../models/Program.js";
+import { ExamRegistration } from "../models/ExamRegistration.js";
 import { AcademicYear } from "../models/AcademicYear.js";
 import { Op, QueryTypes } from 'sequelize';
 import { ExamSeries } from '../models/index.js';
 import * as XLSX from 'xlsx';
 import { PDFParse } from 'pdf-parse';
 import { createWorker } from 'tesseract.js';
+import bcrypt from 'bcrypt';
 import { createRequire } from 'module';
 import os from 'os';
 import path from 'path';
@@ -372,6 +376,140 @@ const extractRowsFromPdf = async (buffer: Buffer) => {
     } finally {
         await parser.destroy();
     }
+};
+
+const normalizeEligibleHeader = (value: unknown) =>
+    String(value ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ');
+
+const getEligibleCellValue = (row: any, keys: string[]) => {
+    const rowKeys = Object.keys(row || {});
+    for (const key of keys) {
+        if (row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== '') {
+            return row[key];
+        }
+
+        const normalizedKey = normalizeEligibleHeader(key);
+        const matchKey = rowKeys.find((existingKey) => normalizeEligibleHeader(existingKey) === normalizedKey);
+        if (matchKey && row[matchKey] !== undefined && row[matchKey] !== null && String(row[matchKey]).trim() !== '') {
+            return row[matchKey];
+        }
+    }
+    return undefined;
+};
+
+const parseEligibleWorkbook = (buffer: Buffer, filename: string) => {
+    const lowerName = String(filename || '').toLowerCase();
+    const workbook = lowerName.endsWith('.csv')
+        ? XLSX.read(buffer.toString('utf8'), { type: 'string' })
+        : XLSX.read(buffer, { type: 'buffer' });
+
+    const sheetName = workbook.SheetNames[0];
+    if (!sheetName) {
+        throw new Error('Invalid file: No sheets found');
+    }
+
+    const sheet = workbook.Sheets[sheetName];
+    if (!sheet) {
+        throw new Error('Invalid file: Sheet not found');
+    }
+
+    return XLSX.utils.sheet_to_json(sheet, { defval: '' }) as Record<string, any>[];
+};
+
+const sanitizeEmailToken = (value: string) =>
+    value
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '')
+        .trim();
+
+const buildEligibleStudentEmail = (fullName: string, registerNumber: string) => {
+    const nameToken = sanitizeEmailToken(fullName) || 'student';
+    const regToken = sanitizeEmailToken(registerNumber) || 'reg';
+    return `${nameToken}.${regToken}@students.local`;
+};
+
+const resolveProgramForEligibleImport = async (
+    departmentId: number,
+    row: any,
+    transaction: any
+) => {
+    const programValue = String(getEligibleCellValue(row, ['Program', 'Program Name', 'Programme', 'Course', 'Branch', 'Stream']) ?? '').trim();
+    const programCodeValue = String(getEligibleCellValue(row, ['Program Code', 'Programme Code']) ?? '').trim();
+
+    if (programValue || programCodeValue) {
+        const programWhere: any = { DepartmentID: departmentId };
+        const programConditions: any[] = [];
+        if (programValue) programConditions.push({ ProgramName: programValue });
+        if (programCodeValue) programConditions.push({ ProgramCode: programCodeValue });
+        if (programConditions.length > 0) {
+            programWhere[Op.or] = programConditions;
+        }
+
+        const program = await Program.findOne({
+            where: programWhere,
+            transaction
+        });
+        if (program) return program;
+
+        return Program.create({
+            ProgramName: programValue || programCodeValue,
+            ProgramCode: programCodeValue || undefined,
+            DepartmentID: departmentId,
+            IsActive: true
+        } as any, { transaction });
+    }
+
+    const fallbackProgram = await Program.findOne({
+        where: { DepartmentID: departmentId },
+        order: [['ProgramID', 'ASC']],
+        transaction
+    });
+
+    if (fallbackProgram) return fallbackProgram;
+
+    return Program.create({
+        ProgramName: 'Eligible Import Program',
+        DepartmentID: departmentId,
+        IsActive: true
+    } as any, { transaction });
+};
+
+const resolveSemesterForEligibleImport = async (programId: number, row: any, transaction: any) => {
+    const semesterRaw = getEligibleCellValue(row, ['Semester', 'Sem', 'Term', 'Semester Number']);
+    const semesterNumber = semesterRaw !== undefined ? parseInt(String(semesterRaw).match(/\d+/)?.[0] || '', 10) : NaN;
+
+    if (Number.isFinite(semesterNumber) && semesterNumber > 0) {
+        const existingSemester = await Semester.findOne({
+            where: { ProgramID: programId, SemesterNumber: semesterNumber },
+            transaction
+        });
+        if (existingSemester) return existingSemester;
+
+        return Semester.create({
+            ProgramID: programId,
+            SemesterNumber: semesterNumber,
+            SemesterName: `S${semesterNumber}`,
+            IsActive: true
+        } as any, { transaction });
+    }
+
+    const fallbackSemester = await Semester.findOne({
+        where: { ProgramID: programId },
+        order: [['SemesterNumber', 'ASC']],
+        transaction
+    });
+
+    if (fallbackSemester) return fallbackSemester;
+
+    return Semester.create({
+        ProgramID: programId,
+        SemesterNumber: 1,
+        SemesterName: 'S1',
+        IsActive: true
+    } as any, { transaction });
 };
 
 export class ExamController {
@@ -908,13 +1046,15 @@ export class ExamController {
 
             for (const row of data) {
                 try {
-                    // Flexible Column Mapping
+                    // Flexible Column Mapping - support both old and new timetable formats
                     const deptRaw = row['DepartmentCode'] || row['Department Code'] || row['Department'] || row['Branches'] || row['Branch'];
                     const codeRaw = row['SubjectCode'] || row['Subject Code'] || row['Code'] || row['Course Code'];
-                    const nameRaw = row['SubjectName'] || row['Subject Name'] || row['Course Name'] || row['Name'];
+                    const nameRaw = row['SubjectName'] || row['Subject Name'] || row['Course Name'] || row['Examination Name'] || row['ExaminationName'] || row['Name'];
                     const dateRaw = row['ExamDate'] || row['Date'];
-                    const timeRaw = row['Session'] || row['Time'];
-                    const importedExamName = row['ExamName'] || row['Exam Name'];
+                    // New format has Time (e.g., "9:30 AM – 12:00 PM") and Session (e.g., "FN") columns
+                    const timeRaw = row['Time'] || row['Session'];
+                    const sessionRaw = row['Session'];
+                    const importedExamName = row['ExamName'] || row['Exam Name'] || row['Examination Name'] || row['ExaminationName'];
                     const durationRaw = row['Duration'];
 
                     const code = codeRaw ? String(codeRaw).trim() : null;
@@ -927,7 +1067,7 @@ export class ExamController {
 
                     const cleanCode = String(code).trim();
 
-                    // 3. Parse Date
+                    // Parse Date
                     const examDate = parseExamDateValue(dateRaw);
                     const dateStrRaw: string = String(dateRaw).trim();
 
@@ -936,16 +1076,21 @@ export class ExamController {
                     }
                     const formattedDate: string = formatDateForDb(examDate);
 
-                    // 4. Parse Session
+                    // Parse Session and Duration
                     let session = 'FN';
                     let duration: number = typeof durationRaw === 'number' ? durationRaw : 180;
 
-                    if (timeRaw) {
+                    // If Session column exists (new format), use it directly
+                    if (sessionRaw && (sessionRaw === 'FN' || sessionRaw === 'AN')) {
+                        session = sessionRaw;
+                    } else if (timeRaw) {
+                        // Otherwise infer from Time column
                         const timeStr: string = String(timeRaw).toLowerCase();
                         if (timeStr === 'fn' || timeStr === 'an') {
                             session = timeStr.toUpperCase();
                         } else if (timeStr.includes('am') || timeStr.includes('pm') || timeStr.includes('-')) {
-                            const rawParts: string[] = timeStr.split('-');
+                            // Extract start time from "9:30 AM – 12:00 PM" format
+                            const rawParts: string[] = timeStr.split(/[-–]/);
                             if (rawParts.length > 0) {
                                 const part0 = rawParts[0];
                                 const startPart: string = part0 ? part0.trim() : '';
@@ -961,6 +1106,7 @@ export class ExamController {
                                         } else if (isAM) {
                                             session = 'FN';
                                         } else {
+                                            // No AM/PM explicitly, infer from hour
                                             if (h >= 12) session = 'AN';
                                             else if (h >= 1 && h <= 6) session = 'AN';
                                             else session = 'FN';
@@ -968,6 +1114,14 @@ export class ExamController {
                                     }
                                 }
                             }
+                        }
+                    }
+                    
+                    // Infer duration from Time column if present (typically 2.5 hours = 150 mins)
+                    if (timeRaw && typeof durationRaw === 'undefined') {
+                        const timeStr: string = String(timeRaw).toLowerCase();
+                        if (timeStr.includes('12:00') || timeStr.includes('12:30') || timeStr.includes('4:00')) {
+                            duration = 150; // Most exams are 2.5 hours
                         }
                     }
 
@@ -1112,6 +1266,174 @@ export class ExamController {
         }
     }
 
+    static async importEligibleStudents(req: Request, res: Response) {
+        const examId = Number(req.params.id);
+        if (!Number.isFinite(examId)) {
+            return res.status(400).json({ message: 'Invalid exam id' });
+        }
+
+        if (!req.file) {
+            return res.status(400).json({ message: 'No file uploaded' });
+        }
+
+        try {
+            const exam = await Exam.findByPk(examId, {
+                include: [{
+                    model: Subject,
+                    include: [{
+                        model: Department,
+                        attributes: ['DepartmentID', 'DepartmentCode', 'DepartmentName']
+                    }]
+                }]
+            });
+
+            if (!exam) {
+                return res.status(404).json({ message: 'Exam not found' });
+            }
+
+            const subject: any = (exam as any).Subject;
+            const department: any = subject?.Department;
+            if (!subject || !department) {
+                return res.status(400).json({ message: 'Exam branch information is missing' });
+            }
+
+            const rows = parseEligibleWorkbook(req.file.buffer, req.file.originalname);
+            if (!rows.length) {
+                return res.status(400).json({ message: 'No student rows found in uploaded file' });
+            }
+
+            const transaction = await sequelize.transaction();
+            const seenRegNos = new Set<string>();
+            const errors: Array<{ row: number; reason: string }> = [];
+            let createdUsers = 0;
+            let updatedUsers = 0;
+            let createdStudents = 0;
+            let updatedStudents = 0;
+            let registrationsCreated = 0;
+            let registrationsSkipped = 0;
+
+            try {
+                for (let index = 0; index < rows.length; index++) {
+                    const row = rows[index];
+                    const rowNumber = index + 2;
+
+                    const fullName = String(getEligibleCellValue(row, ['Name', 'Student Name', 'Full Name', 'FullName']) ?? '').trim();
+                    const registerNumber = String(getEligibleCellValue(row, ['Register Number', 'RegisterNumber', 'Reg No', 'RegNo', 'University RegNo', 'University Registration No']) ?? '').trim();
+                    const isEligibleRaw = String(getEligibleCellValue(row, ['Eligible', 'IsEligible', 'isEligible', 'Eligibility']) ?? '').trim().toLowerCase();
+
+                    console.log(`[IMPORT DEBUG] Row ${rowNumber}:`, { fullName, registerNumber, isEligibleRaw, row });
+
+                    if (!fullName || !registerNumber) {
+                        console.log(`[IMPORT DEBUG] Row ${rowNumber} skipped: Missing required Name or Register Number`);
+                        errors.push({ row: rowNumber, reason: 'Missing required Name or Register Number' });
+                        continue;
+                    }
+
+                    const normalizedRegNo = registerNumber.toUpperCase();
+                    if (seenRegNos.has(normalizedRegNo)) {
+                        continue;
+                    }
+                    seenRegNos.add(normalizedRegNo);
+
+                    // Only skip if explicitly marked as not eligible (treat missing/empty as eligible by default)
+                    if (isEligibleRaw && ['no', 'not eligible', '0', 'false'].includes(isEligibleRaw)) {
+                        continue;
+                    }
+
+                    let student = await Student.findOne({
+                        where: { RegisterNumber: normalizedRegNo },
+                        transaction
+                    });
+
+                    if (!student) {
+                        // Create a User first (required for Student.UserID)
+                        const email = buildEligibleStudentEmail(fullName, registerNumber);
+                        const defaultPassword = await bcrypt.hash('12345678', 10);
+                        
+                        const [user, userCreated] = await User.findOrCreate({
+                            where: { Email: email },
+                            defaults: {
+                                Email: email,
+                                FullName: fullName,
+                                PasswordHash: defaultPassword,
+                                Role: 'student',
+                                IsActive: true,
+                                IsPasswordChanged: false,
+                                IsActivated: false
+                            } as any,
+                            transaction
+                        });
+
+                        if (userCreated) {
+                            createdUsers++;
+                        } else {
+                            updatedUsers++;
+                        }
+
+                        student = await Student.create({
+                            RegisterNumber: normalizedRegNo,
+                            FullName: fullName,
+                            UserID: user.UserID,
+                            Status: 'ACTIVE'
+                        } as any, { transaction });
+                        createdStudents++;
+                    } else {
+                        await student.update({
+                            Status: 'ACTIVE'
+                        }, { transaction });
+                        updatedStudents++;
+                    }
+
+                    const [registration, created] = await ExamRegistration.findOrCreate({
+                        where: {
+                            ExamID: examId,
+                            StudentID: student.StudentID
+                        },
+                        defaults: {
+                            ExamID: examId,
+                            StudentID: student.StudentID
+                        },
+                        transaction
+                    });
+
+                    if (created) {
+                        registrationsCreated++;
+                    } else if (registration) {
+                        registrationsSkipped++;
+                    }
+                }
+
+                await transaction.commit();
+
+                return res.json({
+                    message: 'Eligible students imported successfully',
+                    examId,
+                    branch: {
+                        DepartmentID: department.DepartmentID,
+                        DepartmentCode: department.DepartmentCode,
+                        DepartmentName: department.DepartmentName
+                    },
+                    createdUsers,
+                    updatedUsers,
+                    createdStudents,
+                    updatedStudents,
+                    registrationsCreated,
+                    registrationsSkipped,
+                    errorCount: errors.length,
+                    errors
+                });
+            } catch (error: any) {
+                await transaction.rollback();
+                throw error;
+            }
+        } catch (error: any) {
+            return res.status(500).json({
+                message: 'Failed to import eligible students',
+                error: error.message
+            });
+        }
+    }
+
     // Logic-Based Timetable Audit
     static async auditSeries(seriesId: number) {
         console.log(`Starting Audit for Series ID: ${seriesId}`);
@@ -1180,6 +1502,118 @@ export class ExamController {
 
         } catch (error) {
             console.error("Audit Failed:", error);
+        }
+    }
+
+    // Preview timetable without importing
+    static async previewTimetable(req: Request, res: Response) {
+        if (!req.file) {
+            return res.status(400).json({ message: "No file uploaded" });
+        }
+
+        try {
+            const filename = (req.file.originalname || '').toLowerCase();
+            const isPdf = req.file.mimetype === 'application/pdf' || filename.endsWith('.pdf');
+            const isDocx = filename.endsWith('.docx');
+            const isDoc = filename.endsWith('.doc');
+            const isRtf = filename.endsWith('.rtf');
+
+            const pdfExtractResult = isPdf ? await extractRowsFromPdf(req.file.buffer) : null;
+            const textDocData = (isDocx || isDoc || isRtf)
+                ? await extractRowsFromTextDocument(req.file.buffer, isDocx ? 'docx' : isDoc ? 'doc' : 'rtf')
+                : null;
+
+            const data: any[] = isPdf
+                ? pdfExtractResult?.rows || []
+                : (textDocData || extractRowsFromSpreadsheet(req.file.buffer));
+
+            if (!Array.isArray(data) || data.length === 0) {
+                return res.status(400).json({
+                    message: isPdf
+                        ? "No timetable rows could be parsed from PDF"
+                        : (isDocx || isDoc || isRtf)
+                            ? "No timetable rows could be parsed from the Word/RTF file"
+                            : "No rows found in uploaded file"
+                });
+            }
+
+            // Get column headers from first row
+            const headers = data.length > 0 ? Object.keys(data[0]) : [];
+
+            // Return preview data
+            res.status(200).json({
+                success: true,
+                message: "Timetable preview loaded",
+                data: data.slice(0, 100), // Limit to first 100 rows for preview
+                headers,
+                totalRows: data.length,
+                parseMode: isPdf
+                    ? (pdfExtractResult?.usedOcr ? 'pdf-ocr' : 'pdf-text')
+                    : isDocx
+                        ? 'docx-text'
+                        : isDoc
+                            ? 'doc-text'
+                            : isRtf
+                                ? 'rtf-text'
+                                : 'spreadsheet'
+            });
+
+        } catch (error: any) {
+            console.error("Preview error:", error);
+            res.status(500).json({ message: "Failed to preview timetable", error: error.message });
+        }
+    }
+
+    // Get eligible students for an exam
+    static async getEligibleStudents(req: Request, res: Response) {
+        try {
+            const examId = Number(req.params.id);
+            if (!Number.isFinite(examId)) {
+                return res.status(400).json({ message: 'Invalid exam id' });
+            }
+
+            const exam = await Exam.findByPk(examId);
+            if (!exam) {
+                return res.status(404).json({ message: 'Exam not found' });
+            }
+
+            // Use raw query to get students with ExamRegistration data
+            const students = await sequelize.query(`
+                SELECT 
+                    s.StudentID,
+                    s.RegisterNumber,
+                    s.FullName,
+                    s.Status,
+                    u.Email,
+                    er.CreatedAt
+                FROM Students s
+                LEFT JOIN Users u ON s.UserID = u.UserID
+                INNER JOIN ExamRegistrations er ON s.StudentID = er.StudentID
+                WHERE er.ExamID = :examId
+                ORDER BY s.FullName ASC
+            `, {
+                replacements: { examId },
+                type: QueryTypes.SELECT
+            });
+
+            const studentList = students.map((row: any) => ({
+                StudentID: row.StudentID,
+                RegisterNumber: row.RegisterNumber,
+                FullName: row.FullName,
+                Email: row.Email || 'N/A',
+                Status: row.Status,
+                CreatedAt: row.CreatedAt
+            }));
+
+            res.json({
+                success: true,
+                examId,
+                totalStudents: studentList.length,
+                students: studentList
+            });
+        } catch (error: any) {
+            console.error("Error fetching eligible students:", error);
+            res.status(500).json({ message: 'Failed to fetch eligible students', error: error.message });
         }
     }
 }

@@ -5,6 +5,7 @@ import { Upload, Download, FileSpreadsheet, CheckCircle2, Plus } from 'lucide-re
 import { ExamService } from '../../services/examService';
 import { SeriesService } from '../../services/seriesService';
 import { toast } from 'react-hot-toast';
+import ExamImportPreview from './ExamImportPreview';
 
 interface ExamImportModalProps {
     isOpen: boolean;
@@ -20,6 +21,9 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
     const [series, setSeries] = useState<any[]>([]);
     const [selectedSeriesId, setSelectedSeriesId] = useState<string>('');
     const [loadingSeries, setLoadingSeries] = useState(false);
+    const [previewing, setPreviewing] = useState(false);
+    const [previewData, setPreviewData] = useState<any>(null);
+    const [showPreview, setShowPreview] = useState(false);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
@@ -106,6 +110,32 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
         }
     };
 
+    const handlePreview = async () => {
+        if (selectedFiles.length === 0) {
+            toast.error('Please select a file first');
+            return;
+        }
+
+        setPreviewing(true);
+        try {
+            const result = await ExamService.previewTimetable(selectedFiles[0]);
+            setPreviewData({
+                ...result,
+                successCount: result.data?.length || 0,
+                updatedCount: 0,
+                errorCount: 0,
+                errors: []
+            });
+            setShowPreview(true);
+        } catch (error: any) {
+            console.error(error);
+            const errorMsg = error.response?.data?.message || 'Failed to preview timetable';
+            toast.error(errorMsg);
+        } finally {
+            setPreviewing(false);
+        }
+    };
+
     const handleImport = async () => {
         if (selectedFiles.length === 0) {
             toast.error('Please select at least one file');
@@ -167,6 +197,8 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
             }
 
             setSelectedFiles([]);
+            setShowPreview(false);
+            setPreviewData(null);
             onSuccess();
             onClose();
         } catch (error: any) {
@@ -185,21 +217,24 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
 
     const handleClose = () => {
         setSelectedFiles([]);
+        setShowPreview(false);
+        setPreviewData(null);
         onClose();
     };
 
     return (
-        <Modal
-            isOpen={isOpen}
-            onOpenChange={handleClose}
-            size="2xl"
-            backdrop="blur"
-            classNames={{
-                wrapper: "z-[999]",
-                backdrop: "z-[998] bg-black/50",
-                base: "bg-white"
-            }}
-        >
+        <>
+            <Modal
+                isOpen={isOpen}
+                onOpenChange={handleClose}
+                size="2xl"
+                backdrop="blur"
+                classNames={{
+                    wrapper: "z-[999]",
+                    backdrop: "z-[998] bg-black/50",
+                    base: "bg-white"
+                }}
+            >
             <ModalContent>
                 {(onClose) => (
                     <>
@@ -347,6 +382,17 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                             <Button variant="light" onPress={onClose}>
                                 Cancel
                             </Button>
+                            {selectedFiles.length > 0 && (
+                                <Button
+                                    color="secondary"
+                                    isLoading={previewing}
+                                    variant="bordered"
+                                    onPress={handlePreview}
+                                    className="font-medium"
+                                >
+                                    {previewing ? 'Loading Preview...' : 'Preview'}
+                                </Button>
+                            )}
                             <Button
                                 color="primary"
                                 isLoading={importing}
@@ -360,7 +406,20 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                     </>
                 )}
             </ModalContent>
-        </Modal>
+            </Modal>
+
+            {/* Preview Modal */}
+            {showPreview && previewData && (
+                <ExamImportPreview
+                    isOpen={showPreview}
+                    onClose={() => setShowPreview(false)}
+                    data={previewData}
+                    headers={previewData.headers || []}
+                    onConfirmImport={handleImport}
+                    isImporting={importing}
+                />
+            )}
+        </>
     );
 };
 

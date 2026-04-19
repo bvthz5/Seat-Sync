@@ -226,17 +226,24 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
 
                         {/* Formatting Guide */}
                         <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                            <h4 className="text-gray-700 text-sm font-bold mb-3">Required Columns</h4>
-                            <div className="grid grid-cols-2 gap-x-8 gap-y-2">
-                                <ul className="space-y-2 text-xs text-gray-500">
-                                    <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-gray-900 rounded-full"></div>Register Number</li>
-                                    <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-gray-900 rounded-full"></div>Name</li>
-                                </ul>
-                                <ul className="space-y-2 text-xs text-gray-500">
-                                    <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-gray-900 rounded-full"></div>Program</li>
-                                    <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-gray-900 rounded-full"></div>Semester</li>
-                                </ul>
-                            </div>
+                            <h4 className="text-blue-900 text-base font-semibold mb-3 flex items-center gap-2">
+  <Info className="w-4 h-4 text-blue-500" /> Expected Excel Columns
+</h4>
+<div className="grid grid-cols-2 md:grid-cols-3 gap-x-10 gap-y-2">
+  <ul className="space-y-2 text-sm text-blue-900/80 font-medium">
+    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Name</li>
+    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Register Number</li>
+    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Email</li>
+  </ul>
+  <ul className="space-y-2 text-sm text-blue-900/80 font-medium">
+    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Program</li>
+    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Semester</li>
+    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Batch</li>
+  </ul>
+  <ul className="space-y-2 text-sm text-blue-900/80 font-medium">
+    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Department</li>
+  </ul>
+</div>
                         </div>
 
                         {/* Results */}

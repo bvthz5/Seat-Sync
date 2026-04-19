@@ -62,5 +62,24 @@ export const ExamService = {
     allocate: async (examId: number) => {
         const response = await api.post('/allocation/create', { examId });
         return response.data;
+    },
+
+    previewTimetable: async (file: File) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await api.post(`${PREFIX}/preview-timetable`, formData);
+        return response.data;
+    },
+
+    importEligibleStudents: async (examId: number, file: File) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await api.post(`${PREFIX}/${examId}/eligible-students/import`, formData);
+        return response.data;
+    },
+
+    getEligibleStudents: async (examId: number) => {
+        const response = await api.get(`${PREFIX}/${examId}/eligible-students`);
+        return response.data;
     }
 };
