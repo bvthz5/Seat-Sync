@@ -1703,7 +1703,7 @@ const SeatingPlans: React.FC = () => {
                                                                 style={{
                                                                     background: ld
                                                                         ? 'repeating-linear-gradient(45deg, #1a1f2e, #1a1f2e 3px, #1e2436 3px, #1e2436 6px)'
-                                                                        : la ? '#1a2035' : '#181d2b',
+                                                                        : la ? 'linear-gradient(135deg, #10263b 0%, #151c2e 100%)' : '#131826',
                                                                     borderLeft: lSt && !ld ? `3px solid ${lSt.text}` : '3px solid transparent',
                                                                     borderBottom: `1px solid ${lSt && !ld ? lSt.text + '30' : '#253040'}`,
                                                                     borderRight: '1px solid #253040'
@@ -1732,7 +1732,7 @@ const SeatingPlans: React.FC = () => {
                                                                 style={{
                                                                     background: rd
                                                                         ? 'repeating-linear-gradient(45deg, #1a1f2e, #1a1f2e 3px, #1e2436 3px, #1e2436 6px)'
-                                                                        : ra ? '#1a2035' : '#181d2b',
+                                                                        : ra ? 'linear-gradient(135deg, #301730 0%, #1c1524 100%)' : '#19131d',
                                                                     borderRight: rSt && !rd ? `3px solid ${rSt.text}` : '3px solid transparent',
                                                                     borderBottom: `1px solid ${rSt && !rd ? rSt.text + '30' : '#253040'}`,
                                                                     borderLeft: '1px solid #253040'
