@@ -988,44 +988,10 @@ export class ExamController {
                 } as any);
             }
 
-            // Get or create default semester for subject assignment during import
-            let defaultSemesterID = 1;
-            let semesterOne = await Semester.findByPk(1);
-            if (!semesterOne) {
-                console.log("[importTimetable] Semester ID 1 not found, finding or creating default...");
-                let anySemester = await Semester.findOne();
-                if (anySemester) {
-                    defaultSemesterID = anySemester.SemesterID;
-                    console.log(`[importTimetable] Using existing semester ID ${defaultSemesterID}`);
-                } else {
-                    // Create a default semester - find first program
-                    const program = await Program.findOne();
-                    if (program) {
-                        try {
-                            const newSem = await Semester.create({
-                                SemesterNumber: 1,
-                                SemesterName: "Semester 1",
-                                ProgramID: program.ProgramID
-                            });
-                            defaultSemesterID = newSem.SemesterID;
-                            console.log(`[importTimetable] Created default semester ID ${defaultSemesterID}`);
-                        } catch (e: any) {
-                            console.warn("[importTimetable] Could not create default semester:", e.message);
-                            // Fallback to ID 1 anyway
-                        }
-                    }
-                }
-            }
-
-            let successCount = 0;
-            let updatedCount = 0;
-            let errors: string[] = [];
-
-            // Cache (No transaction needed for initial load)
+            // Pre-load existing data to avoid redundant queries
             const deptCache = new Map<string, number>();
             const subjectCache = new Map<string, number>();
 
-            // Pre-load existing data to avoid redundant queries
             const existingDepts = await Department.findAll();
             existingDepts.forEach(d => deptCache.set(normalizeDepartmentCode(d.DepartmentCode), d.DepartmentID));
             let fallbackDepartmentID: number | null = existingDepts[0]?.DepartmentID ?? null;
@@ -1040,6 +1006,42 @@ export class ExamController {
                 fallbackDepartmentID = fallbackDept.DepartmentID;
                 deptCache.set(normalizeDepartmentCode(fallbackDept.DepartmentCode), fallbackDepartmentID);
             }
+
+            // Get or create default semester for subject assignment during import
+            let defaultSemesterID = 1;
+            let anySemester = await Semester.findOne();
+            
+            if (anySemester) {
+                defaultSemesterID = anySemester.SemesterID;
+            } else {
+                // We need a program to create a semester
+                let program = await Program.findOne();
+                if (!program) {
+                    program = await Program.create({
+                        ProgramName: 'General Program',
+                        ProgramCode: 'GEN-P',
+                        DepartmentID: fallbackDepartmentID,
+                        IsActive: true
+                    } as any);
+                }
+                
+                try {
+                    const newSem = await Semester.create({
+                        SemesterNumber: 1,
+                        SemesterName: "Semester 1",
+                        ProgramID: program.ProgramID,
+                        IsActive: true
+                    });
+                    defaultSemesterID = newSem.SemesterID;
+                    console.log(`[importTimetable] Created default semester ID ${defaultSemesterID}`);
+                } catch (e: any) {
+                    console.warn("[importTimetable] Could not create default semester:", e.message);
+                }
+            }
+
+            let successCount = 0;
+            let updatedCount = 0;
+            let errors: string[] = [];
 
             const existingSubjects = await Subject.findAll();
             existingSubjects.forEach(s => subjectCache.set(`${s.SubjectCode}::${s.DepartmentID}`, s.SubjectID));
