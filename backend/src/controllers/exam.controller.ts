@@ -642,8 +642,7 @@ export class ExamController {
                     defaults: {
                         SubjectCode: currentSubject.SubjectCode,
                         SubjectName: currentSubject.SubjectName,
-                        DepartmentID: departmentIdNum,
-                        SemesterID: currentSubject.SemesterID
+                        DepartmentID: departmentIdNum
                     }
                 });
 
@@ -721,8 +720,7 @@ export class ExamController {
                     defaults: {
                         SubjectCode: currentSubject.SubjectCode,
                         SubjectName: currentSubject.SubjectName,
-                        DepartmentID: departmentId,
-                        SemesterID: currentSubject.SemesterID
+                        DepartmentID: departmentId
                     }
                 });
 
@@ -988,35 +986,6 @@ export class ExamController {
                 } as any);
             }
 
-            // Get or create default semester for subject assignment during import
-            let defaultSemesterID = 1;
-            let semesterOne = await Semester.findByPk(1);
-            if (!semesterOne) {
-                console.log("[importTimetable] Semester ID 1 not found, finding or creating default...");
-                let anySemester = await Semester.findOne();
-                if (anySemester) {
-                    defaultSemesterID = anySemester.SemesterID;
-                    console.log(`[importTimetable] Using existing semester ID ${defaultSemesterID}`);
-                } else {
-                    // Create a default semester - find first program
-                    const program = await Program.findOne();
-                    if (program) {
-                        try {
-                            const newSem = await Semester.create({
-                                SemesterNumber: 1,
-                                SemesterName: "Semester 1",
-                                ProgramID: program.ProgramID
-                            });
-                            defaultSemesterID = newSem.SemesterID;
-                            console.log(`[importTimetable] Created default semester ID ${defaultSemesterID}`);
-                        } catch (e: any) {
-                            console.warn("[importTimetable] Could not create default semester:", e.message);
-                            // Fallback to ID 1 anyway
-                        }
-                    }
-                }
-            }
-
             let successCount = 0;
             let updatedCount = 0;
             let errors: string[] = [];
@@ -1183,8 +1152,7 @@ export class ExamController {
                                 defaults: {
                                     SubjectCode: cleanCode,
                                     SubjectName: subjectName,
-                                    DepartmentID: departmentID,
-                                    SemesterID: defaultSemesterID
+                                    DepartmentID: departmentID
                                 }
                             });
                             subjectID = subj.SubjectID;

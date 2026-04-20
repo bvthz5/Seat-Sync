@@ -168,8 +168,7 @@ export const importUnifiedAcademic = async (req: Request, res: Response) => {
                     defaults: {
                         SubjectCode: subj.code,
                         SubjectName: subj.name,
-                        DepartmentID: departmentID,
-                        SemesterID: 1
+                        DepartmentID: departmentID
                     },
                     transaction
                 });

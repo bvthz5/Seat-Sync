@@ -497,13 +497,13 @@ export const getAllSubjects = async (req: Request, res: Response): Promise<void>
 
 export const createSubject = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { SubjectCode, SubjectName, DepartmentID, SemesterID, ProgramID, AcademicYearID, Credits } = req.body;
+        const { SubjectCode, SubjectName, DepartmentID, ProgramID, AcademicYearID, Credits } = req.body;
         const currentUser = (req as any).user;
 
-        if (!SubjectCode || !SubjectName || !DepartmentID || !SemesterID || !ProgramID || !AcademicYearID) {
+        if (!SubjectCode || !SubjectName || !DepartmentID || !ProgramID || !AcademicYearID) {
             res.status(400).json({
                 success: false,
-                message: "SubjectCode, SubjectName, DepartmentID, SemesterID, ProgramID, and AcademicYearID are required"
+                message: "SubjectCode, SubjectName, DepartmentID, ProgramID, and AcademicYearID are required"
             });
             return;
         }
@@ -511,8 +511,7 @@ export const createSubject = async (req: Request, res: Response): Promise<void> 
         const subject = await Subject.create({
             SubjectCode,
             SubjectName,
-            DepartmentID,
-            SemesterID
+            DepartmentID
         });
 
         // Log activity
