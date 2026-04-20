@@ -220,49 +220,77 @@ const sortSeatsByPosition = (a: any, b: any) => {
  * Helper: Auto-generate Seat rows for a room if none exist yet
  * ──────────────────────────────────────────────────────────── */
 const ensureSeatsExist = async (room: Room, transaction?: any): Promise<void> => {
-    const queryOptions = transaction ? { transaction } : {};
-    const existingSeats = await Seat.findAll({
-        where: { RoomID: room.RoomID },
-        attributes: [
-            "SeatID",
-            "RowIndex",
-            "BenchIndex",
-            "SeatIndex"
-        ],
-        ...queryOptions,
-    } as any);
+    try {
+        if (!room || !room.RoomID) {
+            console.error("ensureSeatsExist: Invalid room", room);
+            return;
+        }
 
-    let rowLayout: any = (room as any).RowLayout;
-    if (typeof rowLayout === "string") {
-        try { rowLayout = JSON.parse(rowLayout); } catch { rowLayout = []; }
-    }
-    const layout: number[] = Array.isArray(rowLayout)
-        ? rowLayout.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n) && n > 0)
-        : [];
-    const seatsPerBench = Math.max(1, Number((room as any).SeatsPerBench || 2));
+        const queryOptions: any = { 
+            where: { RoomID: Number(room.RoomID) },
+            attributes: [
+                "SeatID",
+                "RowIndex",
+                "BenchIndex",
+                "SeatIndex"
+            ],
+            raw: true
+        };
+        if (transaction) queryOptions.transaction = transaction;
 
-    const expectedKeys = new Set<string>();
-    for (let r = 0; r < layout.length; r++) {
-        const rowLabel = String.fromCharCode(65 + r);
-        const benches = layout[r] || 0;
-        for (let b = 1; b <= benches; b++) {
-            for (let s = 1; s <= seatsPerBench; s++) {
-                expectedKeys.add(`${rowLabel}-${b}-${s}`);
+        console.log(`ensureSeatsExist: Querying seats for room ${room.RoomID}`, queryOptions);
+        const existingSeats = await Seat.findAll(queryOptions);
+        console.log(`ensureSeatsExist: Found ${existingSeats?.length || 0} existing seats for room ${room.RoomID}`);
+
+        let rowLayout: any = (room as any).RowLayout;
+        if (typeof rowLayout === "string") {
+            try { rowLayout = JSON.parse(rowLayout); } catch (e) { 
+                console.warn(`ensureSeatsExist: Failed to parse RowLayout for room ${room.RoomID}:`, e);
+                rowLayout = []; 
             }
         }
-    }
+        const layout: number[] = Array.isArray(rowLayout)
+            ? rowLayout.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n) && n > 0)
+            : [];
+        const seatsPerBench = Math.max(1, Number((room as any).SeatsPerBench || 2));
 
-    const existingKeys = new Set(
-        (existingSeats as any[]).map((s: any) => `${String(s.RowIndex)}-${Number(s.BenchIndex)}-${Number(s.SeatIndex)}`)
-    );
+        console.log(`ensureSeatsExist: Room ${room.RoomID} layout:`, { layout, seatsPerBench });
 
-    const hasLayoutMismatch =
-        existingSeats.length === 0 ||
-        existingKeys.size !== expectedKeys.size ||
-        [...existingKeys].some((k) => !expectedKeys.has(k));
+        if (layout.length === 0) {
+            console.warn(`ensureSeatsExist: Room ${room.RoomID} has empty layout, skipping seat generation`);
+            return;
+        }
 
-    if (hasLayoutMismatch) {
-        await generateSeats(room as any, transaction);
+        const expectedKeys = new Set<string>();
+        for (let r = 0; r < layout.length; r++) {
+            const rowLabel = String.fromCharCode(65 + r);
+            const benches = layout[r] || 0;
+            for (let b = 1; b <= benches; b++) {
+                for (let s = 1; s <= seatsPerBench; s++) {
+                    expectedKeys.add(`${rowLabel}-${b}-${s}`);
+                }
+            }
+        }
+
+        const existingKeys = new Set(
+            (existingSeats as any[]).map((s: any) => `${String(s.RowIndex)}-${Number(s.BenchIndex)}-${Number(s.SeatIndex)}`)
+        );
+
+        const hasLayoutMismatch =
+            !existingSeats || existingSeats.length === 0 ||
+            existingKeys.size !== expectedKeys.size ||
+            [...existingKeys].some((k) => !expectedKeys.has(k));
+
+        console.log(`ensureSeatsExist: Room ${room.RoomID} layout mismatch: ${hasLayoutMismatch}`, { existingCount: existingSeats?.length || 0, expectedCount: expectedKeys.size });
+
+        if (hasLayoutMismatch) {
+            console.log(`ensureSeatsExist: Generating seats for room ${room.RoomID}`);
+            await generateSeats(room as any, transaction);
+            console.log(`ensureSeatsExist: Seats generated successfully for room ${room.RoomID}`);
+        }
+    } catch (error: any) {
+        console.error(`ensureSeatsExist ERROR for room ${room?.RoomID}:`, error);
+        throw error;
     }
 };
 
@@ -985,16 +1013,21 @@ export const bulkAssign = async (req: Request, res: Response) => {
             mode: resolvedMode,
         });
 
+        // If no students to assign, skip the bulk assignment and return early
+        if (totalEligibleFetched === 0) {
+            await transaction.commit();
+            return res.status(400).json({ 
+                message: "No eligible students found for this exam date + session combination",
+                studentCount: 0,
+                hallResults: [],
+            });
+        }
+
         let leftIdx = 0, rightIdx = 0;
         const targetHalls = await Room.findAll({ 
             where: { RoomID: { [Op.in]: hallIds } }, 
             transaction 
         });
-
-        // Ensure seats exist for all target halls sequentially
-        for (const hall of targetHalls) {
-            await ensureSeatsExist(hall, transaction);
-        }
 
         // Fetch all active seats for these halls in one query
         const allActiveSeats = await Seat.findAll({
@@ -1212,7 +1245,18 @@ export const bulkAssign = async (req: Request, res: Response) => {
     } catch (error: any) {
         await transaction.rollback();
         console.error("BULK ASSIGN ERROR:", error);
-        res.status(500).json({ message: String(error), stack: error?.stack });
+        console.error("ERROR DETAILS:", {
+            message: error?.message,
+            name: error?.name,
+            stack: error?.stack,
+            sql: error?.sql,
+            code: error?.code
+        });
+        res.status(500).json({ 
+            message: error?.message || String(error), 
+            stack: error?.stack,
+            details: error?.sql
+        });
     }
 };
 

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { SeatingService } from '../services/seatingService';
+import { ExamService } from '../services/examService';
 import api from '../../../services/api';
 
 
@@ -83,6 +84,8 @@ const SeatingPlans: React.FC = () => {
     const [examDates, setExamDates] = useState<ExamDateSlot[]>([]);
     const [halls, setHalls] = useState<Hall[]>([]);
     const [departments, setDepartments] = useState<Dept[]>([]);
+    const [examDeptMap, setExamDeptMap] = useState<Record<string, Dept[]>>({});
+    const [exams, setExams] = useState<any[]>([]);
     const [hallSummary, setHallSummary] = useState<HallSummary[]>([]);
 
     const [selectedSeries, setSelectedSeries] = useState<string>('');
@@ -121,7 +124,11 @@ const SeatingPlans: React.FC = () => {
 
     /* derived */
     const availableDates = [...new Set(examDates.filter(d => d.session === selectedSession).map(d => d.examDate))].sort();
+    // Calculate the number of unique exams for the selected date/session
+    const filteredExams = exams.filter(e => String(e.ExamDate).split('T')[0] === selectedDate && String(e.Session).toUpperCase() === selectedSession);
+    const uniqueExamNames = Array.from(new Set(filteredExams.map(e => e.ExamName)));
     const currentSlot = examDates.find(d => d.examDate === selectedDate && d.session === selectedSession);
+    const currentExamCount = uniqueExamNames.length;
     const totalFilled = hallSummary.reduce((s, h) => s + h.filledSeats, 0);
     const totalCapacity = hallSummary.reduce((s, h) => s + h.totalSeats, 0);
     const detailFilled = Object.keys(detailAssignments).length;
@@ -212,16 +219,43 @@ const SeatingPlans: React.FC = () => {
             SeatingService.getDepartments()
                 .then(r => setDepartments(Array.isArray(r) ? r : []))
                 .catch(() => { });
+            setExams([]);
             return;
         }
 
-        SeatingService.getExamDepartments(
-            selectedDate,
-            selectedSession,
-            selectedSeries ? Number(selectedSeries) : undefined
-        )
-            .then(r => setDepartments(Array.isArray(r) ? r : []))
-            .catch(() => toast.error('Failed to load exam departments'));
+        // Fetch exams for the selected date/session
+        (async () => {
+            try {
+                const examList = await ExamService.getAll({ startDate: selectedDate, endDate: selectedDate, session: selectedSession });
+                setExams(Array.isArray(examList) ? examList : []);
+                // Fetch eligible students for each exam and aggregate by department
+                const deptMap: Record<string, Dept> = {};
+                await Promise.all(examList.map(async (exam: any) => {
+                    const dept = exam?.Subject?.Department;
+                    if (dept && dept.DepartmentID) {
+                        let studentCount = 0;
+                        try {
+                            const students = await ExamService.getEligibleStudents(exam.ExamID);
+                            studentCount = Array.isArray(students) ? students.length : 0;
+                        } catch { studentCount = 0; }
+                        if (!deptMap[dept.DepartmentID]) {
+                            deptMap[dept.DepartmentID] = {
+                                DepartmentID: dept.DepartmentID,
+                                DepartmentName: dept.DepartmentName,
+                                DepartmentCode: dept.DepartmentCode,
+                                studentCount: 0
+                            };
+                        }
+                        deptMap[dept.DepartmentID].studentCount += studentCount;
+                    }
+                }));
+                setDepartments(Object.values(deptMap));
+            } catch {
+                toast.error('Failed to load exams/departments');
+                setDepartments([]);
+                setExams([]);
+            }
+        })();
     }, [selectedDate, selectedSession, selectedSeries]);
 
     useEffect(() => {
@@ -1043,7 +1077,7 @@ const SeatingPlans: React.FC = () => {
                                     <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 shadow-sm">
                                         <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_6px_rgba(99,102,241,0.4)] animate-pulse" />
                                         <span className="text-[10px] font-medium text-slate-500 tracking-wide">
-                                            {fmtDate(selectedDate)} · {selectedSession === 'FN' ? 'FN' : 'AN'} · <span className="text-slate-800 font-semibold">{currentSlot.examCount} exam{currentSlot.examCount !== 1 ? 's' : ''}</span>
+                                            {fmtDate(selectedDate)} · {selectedSession === 'FN' ? 'FN' : 'AN'} · <span className="text-slate-800 font-semibold">{currentExamCount} exam{currentExamCount !== 1 ? 's' : ''}</span>
                                         </span>
                                     </div>
                                 )}
