@@ -1001,13 +1001,37 @@ export const bulkAssign = async (req: Request, res: Response) => {
         });
 
         // Fetch all active seats for these halls in one query
-        // NOTE: Fetching without transaction to avoid MSSQL SQL generation issues
-        const allActiveSeats = await Seat.findAll({
-            where: { RoomID: { [Op.in]: hallIds }, IsActive: true },
-            attributes: ["SeatID", "RoomID", "RowIndex", "BenchIndex", "SeatIndex"],
-            order: [["RoomID", "ASC"], ["RowIndex", "ASC"], ["BenchIndex", "ASC"], ["SeatIndex", "ASC"]],
-            raw: true,
-        });
+        // Using raw SQL to avoid Sequelize MSSQL dialect issues
+        let allActiveSeats: any[] = [];
+        try {
+            allActiveSeats = await sequelize.query(`
+                SELECT SeatID, RoomID, RowIndex, BenchIndex, SeatIndex
+                FROM Seats
+                WHERE RoomID IN (${hallIds.map((id: any) => Number(id)).join(',')})
+                AND IsActive = 1
+                ORDER BY RoomID ASC, RowIndex ASC, BenchIndex ASC, SeatIndex ASC
+            `, {
+                type: QueryTypes.SELECT,
+                raw: true,
+            }) as any[];
+        } catch (seatError: any) {
+            console.error("Seats query error:", seatError?.message);
+            await transaction.commit();
+            return res.status(400).json({ 
+                message: "Unable to fetch seats for selected halls. Please ensure halls are configured with proper seating layout.",
+                error: seatError?.message,
+            });
+        }
+
+        if (allActiveSeats.length === 0) {
+            await transaction.commit();
+            return res.status(400).json({ 
+                message: "No active seats found in selected halls. Please configure seating layouts for the halls.",
+                hallsRequested: hallIds.length,
+            });
+        }
+
+        console.log(`DEBUG: Fetched ${allActiveSeats.length} active seats for halls`);
 
         // Clear existing allocations for all these halls + slot in one query
         const allSeatIds = allActiveSeats.map(s => s.SeatID);
