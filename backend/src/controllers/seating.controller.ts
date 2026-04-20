@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { Room, Seat, Student, User, Department, Exam, SeatAllocation, ExamSeries, Subject, Semester, Program, Zone, ExamSchedule } from "../models/index.js";
+import { Room, Seat, Student, User, Department, Exam, SeatAllocation, ExamSeries, Subject, Semester, Program, Zone, ExamSchedule, ExamRegistration } from "../models/index.js";
 import { Op, QueryTypes } from "sequelize";
 import { sequelize } from "../config/database.js";
 import bcrypt from "bcrypt";
@@ -105,84 +105,55 @@ const getStudentsForExamSession = async (
     transaction?: any
 ) => {
     const normalizedSlot = String(slot || "").trim().toUpperCase();
-    const slotAliasMap: Record<string, string[]> = {
-        FN: ["FN", "FORENOON", "MORNING", "A"],
-        AN: ["AN", "AFTERNOON", "EVENING", "B"],
-        A: ["A", "FN", "FORENOON", "MORNING"],
-        B: ["B", "AN", "AFTERNOON", "EVENING"],
-    };
-    const acceptedSlots = normalizedSlot
-        ? Array.from(new Set([normalizedSlot, ...(slotAliasMap[normalizedSlot] || [])]))
-        : [];
 
-    const schedulesForDate = await ExamSchedule.findAll({
-        where: { ExamDate: examDate },
+    // First, resolve all exam IDs for this date + session
+    const examIds = await resolveExamIds(examDate, normalizedSlot, transaction);
+    console.log("DEBUG: Exams fetched for date/session:", examIds.length, { examDate, session: normalizedSlot });
+
+    if (examIds.length === 0) {
+        console.log("DEBUG: No exams found for this date/session");
+        return [];
+    }
+
+    // Fetch students registered for these exams via ExamRegistration table (the source of truth)
+    const registrations = await ExamRegistration.findAll({
+        where: { ExamID: { [Op.in]: examIds } },
+        attributes: ["StudentID"],
         ...(transaction ? { transaction } : {}),
-    });
+    }) as any[];
 
-    const schedules = (schedulesForDate as any[]).filter((s: any) => {
-        if (acceptedSlots.length === 0) return true;
-        const scheduleSlot = String(s?.Slot || "").trim().toUpperCase();
-        return acceptedSlots.includes(scheduleSlot);
-    });
-    console.log("DEBUG: Schedules fetched:", schedules.length, { examDate, slot: normalizedSlot, acceptedSlots });
+    console.log("DEBUG: ExamRegistrations fetched:", registrations.length, { examIds: examIds.length });
 
-    const subjectCodes = [...new Set(
-        (schedules as any[])
-            .map((s: any) => String(s.SubjectCode || "").trim())
+    const studentIds = [...new Set(
+        (registrations as any[])
+            .map((r: any) => Number(r.StudentID))
             .filter(Boolean)
     )];
 
-    const subjects = subjectCodes.length > 0
-        ? await Subject.findAll({
-            where: { SubjectCode: { [Op.in]: subjectCodes } },
-            ...(transaction ? { transaction } : {}),
-        })
-        : [];
-    console.log("DEBUG: Subjects fetched:", subjects.length);
-
-    const subjectIds = [...new Set((subjects as any[]).map((s: any) => Number(s.SubjectID)).filter(Boolean))];
-
-    // Fallback: if timetable schedules are missing/mismatched, derive eligible students
-    // from Exams -> Subjects(departments) for the selected date/session.
-    if (subjectIds.length === 0) {
-        const fallbackSession = normalizedSlot === "A" ? "FN" : normalizedSlot === "B" ? "AN" : normalizedSlot;
-        if (fallbackSession) {
-            const examIds = await resolveExamIds(examDate, fallbackSession, transaction);
-            if (examIds.length > 0) {
-                const fallbackStudents = await getRegisteredStudentsForExamIds(examIds, excludeStudentIds, transaction);
-                console.log("DEBUG: Fallback students fetched:", fallbackStudents.length, { examDate, fallbackSession });
-                return fallbackStudents;
-            }
-        }
+    if (studentIds.length === 0) {
+        console.log("DEBUG: No registered students found for these exams");
+        return [];
     }
 
-    const where: any = {};
-    const excluded = excludeStudentIds.map(Number).filter(Boolean);
-    if (excluded.length > 0) {
-        where.StudentID = { [Op.notIn]: excluded };
-    }
+    // Filter out excluded students
+    const excluded = new Set<number>(excludeStudentIds.map(Number));
+    const filteredStudentIds = studentIds.filter(id => !excluded.has(id));
 
+    console.log("DEBUG: Filtered student IDs:", { total: studentIds.length, afterExclude: filteredStudentIds.length });
+
+    // Fetch full student data
     const students = await Student.findAll({
-        where,
+        where: { StudentID: { [Op.in]: filteredStudentIds } },
         include: [
             { model: User, attributes: ["FullName"] },
-            { model: Department, attributes: ["DepartmentCode"] },
-            {
-                model: Subject,
-                where: { SubjectID: { [Op.in]: subjectIds.length > 0 ? subjectIds : [-1] } },
-                required: true,
-                through: { attributes: [] },
-            },
+            { model: Department, attributes: ["DepartmentCode", "DepartmentID"] },
         ],
+        order: [["RegisterNumber", "ASC"]],
         ...(transaction ? { transaction } : {}),
     });
-    console.log("DEBUG: Students fetched:", students.length);
 
-    const uniqueStudents = Array.from(
-        new Map((students as any[]).map((s: any) => [s.StudentID, s])).values()
-    );
-    return uniqueStudents;
+    console.log("DEBUG: Students fetched with details:", students.length);
+    return students;
 };
 
 const getDefaultZoneIdForRoom = async (roomId: number): Promise<number | null> => {
@@ -1030,11 +1001,12 @@ export const bulkAssign = async (req: Request, res: Response) => {
         });
 
         // Fetch all active seats for these halls in one query
+        // NOTE: Fetching without transaction to avoid MSSQL SQL generation issues
         const allActiveSeats = await Seat.findAll({
             where: { RoomID: { [Op.in]: hallIds }, IsActive: true },
             attributes: ["SeatID", "RoomID", "RowIndex", "BenchIndex", "SeatIndex"],
             order: [["RoomID", "ASC"], ["RowIndex", "ASC"], ["BenchIndex", "ASC"], ["SeatIndex", "ASC"]],
-            transaction,
+            raw: true,
         });
 
         // Clear existing allocations for all these halls + slot in one query
