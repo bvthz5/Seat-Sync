@@ -52,7 +52,7 @@ export class StructureImportService {
      * Helper: Identify if headers contain the detailed Excel format
      * with "Room Number with block" or similar merged header format
      */
-    private parseUnifiedFile(fileBuffer: Buffer): { roomName: string; block?: string; floor?: number; rowLayout: number[]; totalCapacity: number }[] {
+    private parseUnifiedFile(fileBuffer: Buffer): { roomName: string; block?: string; floor?: number; rowLayout: number[]; totalCapacity: number; seatsPerBench: number }[] {
         const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
         const sheetName = workbook.SheetNames[0];
         if (!sheetName) throw new Error("No sheets found in file");
@@ -63,7 +63,7 @@ export class StructureImportService {
         const rawRows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
         if (!rawRows || rawRows.length === 0) throw new Error("File is empty or invalid format.");
 
-        const results: { roomName: string; block?: string; floor?: number; rowLayout: number[]; totalCapacity: number }[] = [];
+        const results: { roomName: string; block?: string; floor?: number; rowLayout: number[]; totalCapacity: number; seatsPerBench: number }[] = [];
         const seenRooms = new Set<string>();
 
         let roomColIdx = -1;
@@ -133,9 +133,13 @@ export class StructureImportService {
             let rTotalCapacity = 0;
 
             const safeNumber = (v: any) => {
-                const n = Number(v);
+                if (v === null || v === undefined || v === '') return 0;
+                const n = Number(String(v).replace(/[^\d.-]/g, ''));
                 return isNaN(n) ? 0 : n;
             };
+
+            let excelCapacity = capColIdx !== -1 ? safeNumber(row[capColIdx]) : 0;
+            let rSeatsPerBench = 2;
 
             if (colMap.size > 0) {
                 const rowKeys = ["row a","row b","row c","row d","row e","row f"];
@@ -159,20 +163,45 @@ export class StructureImportService {
                 }
                 
                 const totalBenches = rowLayout.reduce((a,b) => a+b, 0);
-                rTotalCapacity = totalBenches * 2;
+
+                // EDGE CASE 1: All rows = 0 -> skip
+                if (totalBenches === 0) continue;
+
+                // Edge case 3: missing capacity -> compute
+                if (excelCapacity === 0) {
+                    excelCapacity = totalBenches * 2;
+                }
+                
+                rTotalCapacity = excelCapacity;
+
+                // EDGE CASE 2: Capacity 0 -> skip
+                if (rTotalCapacity === 0) continue;
+
+                // STEP 4: Determine SeatsPerBench
+                if (rTotalCapacity === totalBenches) {
+                    rSeatsPerBench = 1;
+                } else {
+                    rSeatsPerBench = 2;
+                }
+
+                // STEP 5: Validation
+                const expectedCapacity = totalBenches * rSeatsPerBench;
+                if (expectedCapacity !== rTotalCapacity) {
+                    console.warn(`Capacity mismatch for Room ${roomName}. Expected ${expectedCapacity}, got ${rTotalCapacity}`);
+                }
+            } else {
+                 if (excelCapacity === 0) continue;
+                 rTotalCapacity = excelCapacity;
             }
 
             if (rowLayout.length > 6) rowLayout = rowLayout.slice(0, 6);
 
-            if (rTotalCapacity === 0) {
-                console.warn("Invalid layout detected", roomName, rowLayout);
-            }
-
             console.log("ROOM:", roomName);
             console.log("ROWS:", rowLayout);
             console.log("CAPACITY:", rTotalCapacity);
+            console.log("SEATS/BENCH:", rSeatsPerBench);
 
-            const res:any = { roomName, rowLayout, totalCapacity: rTotalCapacity };
+            const res:any = { roomName, rowLayout, totalCapacity: rTotalCapacity, seatsPerBench: rSeatsPerBench };
             if (blockStr !== undefined) res.block = blockStr;
             if (floorNum !== undefined) res.floor = floorNum;
             results.push(res);
@@ -197,7 +226,6 @@ export class StructureImportService {
         try {
             const blockCache = new Map<string, number>();
             const floorCache = new Map<string, number>();
-            const seatsPerBench = 2;
 
             for (const item of parsedData) {
                 const parsed = this.parseRoomCode(item.roomName);
@@ -208,6 +236,7 @@ export class StructureImportService {
                 const roomCode = item.roomName; // keep full name exactly as provided
 
                 const isExamUsable = true;
+                const seatsPerBench = item.seatsPerBench || 2;
 
                 let blockId = blockCache.get(blockName.toLowerCase());
                 if (!blockId) {
@@ -252,10 +281,7 @@ export class StructureImportService {
                     { where: { RoomCode: roomCode }, transaction }
                 );
 
-                let totalSeats = 0;
-                if (item.rowLayout && item.rowLayout.length > 0) {
-                    totalSeats = item.rowLayout.reduce((a, b) => a + b, 0) * seatsPerBench;
-                }
+                const totalSeats = item.totalCapacity;
                 const roomType = totalSeats <= 80 ? 'ROOM' : 'HALL';
 
                 if (!existingRoom) {
@@ -292,6 +318,10 @@ export class StructureImportService {
                     }
                     if (existingRoom.RoomType !== roomType) {
                         existingRoom.RoomType = roomType;
+                        needsUpdate = true;
+                    }
+                    if (existingRoom.SeatsPerBench !== seatsPerBench) {
+                        existingRoom.SeatsPerBench = seatsPerBench;
                         needsUpdate = true;
                     }
 
