@@ -1103,12 +1103,14 @@ export const bulkAssign = async (req: Request, res: Response) => {
             for (const row of allRows) {
                 for (const benchNum of allBenchNums) {
                     const benchSeats = (benchMap[row]?.[benchNum] || []).sort(sortSeatsByPosition);
+                    let currentBenchLeftDept: number | null = null;
 
                     for (const seat of benchSeats) {
                         if (getSeatNumber(seat) === 1) {
                             // Left seat: assign from left pool
                             if (leftIdx < leftStudents.length) {
                                 const stu = leftStudents[leftIdx++] as any;
+                                currentBenchLeftDept = stu.Department?.DepartmentID || null;
                                 console.log(`Bench ${row}${benchNum} Left: ${stu.RegisterNumber} (${stu.Department?.DepartmentCode})`);
                                 allNewAllocations.push({ ExamID: primaryExamId, SeatID: seat.SeatID !, StudentID: stu.StudentID as number });
                                 hallLeft++;
@@ -1127,9 +1129,8 @@ export const bulkAssign = async (req: Request, res: Response) => {
                             }
 
                             // When avoidSameDeptBench is on, prioritize different departments
-                            if (applyAdjacencyGuard && leftIdx > 0 && targetIdx < targetPool.length) {
-                                const lastLeftStudent = leftStudents[leftIdx - 1] as any;
-                                const lastLeftDept = lastLeftStudent?.Department?.DepartmentID;
+                            if (applyAdjacencyGuard && currentBenchLeftDept !== null && targetIdx < targetPool.length) {
+                                const lastLeftDept = currentBenchLeftDept;
 
                                 // Check if we have both pools with content
                                 if (rightStudents.length > 0 && rightIdx < rightStudents.length && leftIdx < leftStudents.length) {
@@ -1198,6 +1199,15 @@ export const bulkAssign = async (req: Request, res: Response) => {
                             }
 
                             if (targetIdx < targetPool.length) {
+                                // Swap to prevent duplication/skipping
+                                if (useRightPool && targetIdx !== rightIdx) {
+                                    [rightStudents[rightIdx], rightStudents[targetIdx]] = [rightStudents[targetIdx], rightStudents[rightIdx]];
+                                    targetIdx = rightIdx;
+                                } else if (!useRightPool && targetIdx !== leftIdx) {
+                                    [leftStudents[leftIdx], leftStudents[targetIdx]] = [leftStudents[targetIdx], leftStudents[leftIdx]];
+                                    targetIdx = leftIdx;
+                                }
+
                                 const stu = targetPool[targetIdx] as any;
                                 console.log(`Bench ${row}${benchNum} Right: ${stu.RegisterNumber} (${stu.Department?.DepartmentCode})`);
                                 allNewAllocations.push({ ExamID: primaryExamId, SeatID: seat.SeatID !, StudentID: stu.StudentID as number });

@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Autocomplete, AutocompleteItem, Input, Button, Card, CardBody, CardHeader, Divider, Tooltip, Chip, Switch, Select, SelectItem, Badge, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from '@heroui/react';
 import { Trash2, MousePointer2, CheckCircle2, RotateCcw, Save, Layers, Building, Building2, Armchair, Layout, Check, X, Shield, Plus, Grid3X3, Spline, ArrowRight, ArrowLeft, MonitorPlay, AlertTriangle, MapPin, ChevronRight, Hash, Maximize2, Minimize2, Eye, Ban, Minus, DoorOpen, Box, Grid } from 'lucide-react';
 import { structureService } from '../../services/structureService';
@@ -530,15 +530,27 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                                     ))}
                                                     {config.rowLayout.length === 0 && <p className="text-xs text-slate-400 text-center py-4">No rows defined</p>}
                                                 </div>
-                                                <Input name="custom-input"  label="Seats Per Bench" labelPlacement="outside" size="sm" variant="bordered" type="number" min={1} value={config.seatsPerBench.toString()} onValueChange={(v) => setConfig({...config, seatsPerBench: Number(v)})} classNames={{ inputWrapper: "bg-white hover:bg-slate-50 transition-colors" }} />
                                             </div>
 
-                                            <div className={`p-4 rounded-xl border flex justify-between items-center bg-gradient-to-br from-slate-50 to-indigo-50/50`}>
-                                                <div className="flex flex-col">
-                                                    <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Capacity</span>
-                                                    <span className="text-[10px] text-slate-400">Calculated</span>
+                                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col gap-3">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Total Benches</span>
+                                                    <span className="font-mono font-bold text-slate-800">{config.rowLayout.reduce((acc, curr) => acc + curr, 0)}</span>
                                                 </div>
-                                                <div className="text-2xl font-black text-indigo-600">{capacityCount}</div>
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Seats Per Bench</span>
+                                                    <span className="font-bold text-slate-700">
+                                                        {config.seatsPerBench === 1 ? 'Single Seating' : config.seatsPerBench === 2 ? 'Dual Seating' : config.seatsPerBench}
+                                                    </span>
+                                                </div>
+                                                <Divider className="my-1"/>
+                                                <div className="flex justify-between items-center">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-xs font-bold uppercase tracking-widest text-indigo-600">Final Capacity</span>
+                                                        <span className="text-[10px] text-slate-400">Capacity is auto-calculated based on layout</span>
+                                                    </div>
+                                                    <span className="text-2xl font-black text-indigo-600">{capacityCount}</span>
+                                                </div>
                                             </div>
                                         </div>
 

@@ -99,7 +99,7 @@ export const updateBlock = async (req: Request, res: Response) => {
 export const deleteBlock = async (req: Request, res: Response) => {
     try {
         const id = Number(req.params.id);
-        
+
         // Find all rooms in this block
         const rooms = await Room.findAll({ where: { BlockID: id }, attributes: ['RoomID'] });
         const roomIds = rooms.map((r: any) => r.RoomID);
@@ -221,7 +221,7 @@ export const updateFloor = async (req: Request, res: Response) => {
 export const deleteFloor = async (req: Request, res: Response) => {
     try {
         const id = Number(req.params.id);
-        
+
         // Find all rooms in this floor
         const rooms = await Room.findAll({ where: { FloorID: id }, attributes: ['RoomID'] });
         const roomIds = rooms.map((r: any) => r.RoomID);
@@ -285,7 +285,7 @@ export const getRooms = async (req: Request, res: Response) => {
         };
         if (limitNum !== undefined && !isNaN(limitNum)) qOpts.limit = limitNum;
         if (offsetNum !== undefined && !isNaN(offsetNum)) qOpts.offset = offsetNum;
-        
+
         const { count, rows } = await Room.findAndCountAll(qOpts);
 
         res.json({
@@ -418,13 +418,13 @@ export const updateRoom = async (req: Request, res: Response) => {
         if (isPhysicalLayoutChange) {
             if (newRowLayout !== undefined) room.RowLayout = newRowLayout;
             if (SeatsPerBench !== undefined) room.SeatsPerBench = SeatsPerBench;
-            
+
             // Recalculate capacity perfectly matched to layout
             let tLayout = newRowLayout !== undefined ? newRowLayout : room.RowLayout;
             let tSeats = 2; // Fixed requirement
             if (tLayout && Array.isArray(tLayout)) {
-                 room.TotalCapacity = tLayout.reduce((a: number, b: number) => a + b, 0) * tSeats;
-                 room.RoomType = room.TotalCapacity <= 80 ? 'ROOM' : 'HALL';
+                room.TotalCapacity = tLayout.reduce((a: number, b: number) => a + b, 0) * tSeats;
+                room.RoomType = room.TotalCapacity <= 80 ? 'ROOM' : 'HALL';
             }
 
             shouldRegenerateSeats = true;
@@ -470,20 +470,20 @@ export const bulkCreateRooms = async (req: Request, res: Response) => {
     try {
         const { rooms } = req.body;
         if (!Array.isArray(rooms)) {
-            return res.status(400).json({ message: "rooms must be an array" });      
+            return res.status(400).json({ message: "rooms must be an array" });
         }
 
         // We run in a transaction
         await sequelize.transaction(async (t) => {
-            const createdRooms = await Room.bulkCreate(rooms, { transaction: t });   
-            
+            const createdRooms = await Room.bulkCreate(rooms, { transaction: t });
+
             // Note: seats need to be generated for each room individually because rowLayout logic
             for (const r of createdRooms) {
                 await generateSeats(r);
             }
         });
 
-        res.status(201).json({ message: "Rooms structurally built successfully" });  
+        res.status(201).json({ message: "Rooms structurally built successfully" });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
     }
@@ -543,7 +543,7 @@ export const autoZoneRoom = async (req: Request, res: Response) => {
         }
 
         const room = await Room.findByPk(roomId);
-        if (!room) return res.status(404).json({ message: "Room not found" });       
+        if (!room) return res.status(404).json({ message: "Room not found" });
 
         // 1. Fetch seats sorted by RowIndex, BenchIndex, SeatIndex
         const seats = await Seat.findAll({
@@ -560,13 +560,13 @@ export const autoZoneRoom = async (req: Request, res: Response) => {
         await Zone.destroy({ where: { RoomID: roomId } });
 
         // Create new zones
-        const colors = ['blue', 'red', 'green', 'yellow', 'purple', 'orange'];       
+        const colors = ['blue', 'red', 'green', 'yellow', 'purple', 'orange'];
         const zones: any[] = [];
         for (let i = 0; i < zoneCount; i++) {
             const z = await Zone.create({
                 RoomID: roomId,
-                ZoneCode: `Z${i+1}`,
-                ZoneName: `Zone ${i+1}`,
+                ZoneCode: `Z${i + 1}`,
+                ZoneName: `Zone ${i + 1}`,
                 Color: colors[i % colors.length] as string
             });
             zones.push(z);
