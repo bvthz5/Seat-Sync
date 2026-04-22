@@ -26,7 +26,11 @@ export const importStructureMetrics = async (req: Request, res: Response) => {
         res.status(200).json(result);
 
     } catch (error: any) {        
-        console.error("[IMPORT ERROR]:", error);        
-        res.status(400).json({ message: error.message });
+        console.error("[IMPORT ERROR]:", error.message);
+        console.error("[IMPORT STACK]:", error.stack);
+        res.status(400).json({ 
+            message: error.message,
+            error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 };

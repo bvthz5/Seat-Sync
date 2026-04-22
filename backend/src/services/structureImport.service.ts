@@ -102,7 +102,14 @@ export class StructureImportService {
             }
         }
 
-        if (roomColIdx === -1) throw new Error("Could not detect Room column in Excel headers.");
+        if (roomColIdx === -1) {
+            console.error('[PARSE ERROR] Could not find Room column. Headers found:', 
+                rawRows[0]?.slice(0, 10).map((v, i) => `Col${i}: ${v}`)
+            );
+            throw new Error("Could not detect Room column in Excel file. Expected headers: Room/Code/RoomCode/RoomName with Capacity, Block (optional), Floor (optional) columns, and optional Row A-F columns for seat layout.");
+        }
+
+        console.log('[PARSE SUCCESS] Found columns:', { roomColIdx, capColIdx, blockColIdx, floorColIdx, rowColumns: colMap.size });
 
         for (let i = 0; i < rawRows.length; i++) {
             const row = rawRows[i];
