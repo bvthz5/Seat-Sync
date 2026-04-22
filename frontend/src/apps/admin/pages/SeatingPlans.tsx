@@ -1,15 +1,16 @@
-﻿import React, { useEffect, useState, useCallback, useTransition, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useTransition, useMemo } from 'react';
 import {
     Card, CardBody, CardHeader, Button, Select, SelectItem,
     Chip, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter,
     Divider, Tooltip, Progress,
-    Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Input
+    Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Input, Switch
 } from '@heroui/react';
 import {
     LayoutGrid, Zap, Save, Trash2, Printer,
     Building2, Users, CheckCircle2, AlertCircle, RefreshCw,
     Calendar, Sun, Moon, Armchair, ClipboardList, ChevronRight, Ban, Eye,
-    MoreVertical, Power, XCircle, Shuffle, FileSpreadsheet, FileDown, Sheet
+    MoreVertical, Power, XCircle, Shuffle, FileSpreadsheet, FileDown, Sheet,
+    ArrowLeft
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { SeatingService } from '../services/seatingService';
@@ -22,7 +23,7 @@ interface Hall { RoomID: number; RoomCode: string; Capacity: number; TotalRows: 
 interface Dept { DepartmentID: number; DepartmentName: string; DepartmentCode: string; studentCount: number; }
 interface SeatInfo { SeatID: number; RowLabel: string; BenchNumber: number; SeatNumber: number; IsActive: boolean; }
 interface Bench { rowLabel: string; benchNumber: number; seats: SeatInfo[]; }
-interface Assignment { seatId: number; studentId: number; studentName: string; registerNumber: string; deptCode: string; side: 'left' | 'right'; isEligible?: boolean; isBlocked?: boolean; subjectCode?: string; }
+interface Assignment { seatId: number; studentId: number; studentName: string; registerNumber: string; deptCode: string; side: 'left' | 'right'; isEligible?: boolean; isBlocked?: boolean; subjectCode?: string; subjectName?: string; }
 interface Series { ExamSeriesID: number; SeriesName: string; IsActive: boolean; }
 interface ExamDateSlot { examDate: string; session: string; examCount: number; }
 interface HallSummary { hallId: number; hallCode: string; capacity: number; totalSeats: number; filledSeats: number; }
@@ -281,6 +282,10 @@ const SeatingPlans: React.FC = () => {
                     }
                 }));
                 setDepartments(Object.values(deptMap));
+                
+                // Set EndSem state correctly on load instead of waiting for generation
+                const hasEndSem = Array.isArray(examList) && examList.some((e: any) => e.ExamSeries?.ExamType === 'EndSemester');
+                setLastExamType(hasEndSem ? 'EndSemester' : 'Internal');
             } catch {
                 toast.error('Failed to load exams/departments');
                 setDepartments([]);
@@ -1636,6 +1641,9 @@ const SeatingPlans: React.FC = () => {
                         {/* ── Refined Header ── */}
                         <ModalHeader className="shrink-0 flex justify-between items-center px-8 py-4 border-b border-slate-200 sticky top-0 z-50" style={{ background: 'linear-gradient(180deg, #1d2335 0%, #171c28 100%)' }}>
                             <div className="flex items-center gap-5">
+                                <Button size="sm" isIconOnly variant="light" className="text-slate-400 hover:text-white" onPress={() => setDetailHall(null)}>
+                                    <ArrowLeft size={18} />
+                                </Button>
                                 <div className="relative w-12 h-12 flex items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg shadow-amber-900/25">
                                     <Armchair size={20} className="text-slate-800" />
                                     <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-white border border-slate-200 rounded-md text-[8px] font-extrabold text-amber-600 tracking-widest whitespace-nowrap">
@@ -1643,7 +1651,7 @@ const SeatingPlans: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="ml-1">
-                                    <h2 className="text-[17px] font-bold text-slate-800 tracking-tight">Seating Layout</h2>
+                                    <h2 className="text-[17px] font-bold text-slate-100 tracking-tight">Seating Layout</h2>
                                     <div className="flex items-center gap-2 mt-1.5">
                                         <span className="text-[10px] font-medium text-slate-500">{selectedDate && fmtDate(selectedDate)}</span>
                                         <span className="w-1 h-1 rounded-full bg-slate-600"></span>
@@ -1653,7 +1661,21 @@ const SeatingPlans: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-6">
+                                {/* LEGEND & TOGGLE */}
+                                <div className="flex items-center gap-4 text-[9px] font-semibold uppercase tracking-wider bg-[#101520]/60 px-4 py-2 rounded-xl border border-slate-700/50 hidden md:flex shadow-inner">
+                                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full shadow-[0_0_8px_#3b82f6] bg-blue-500"></span><span className="text-slate-300">Normal</span></div>
+                                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full shadow-[0_0_8px_#eab308] bg-yellow-500"></span><span className="text-slate-300">Conflict</span></div>
+                                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full shadow-[0_0_8px_#ef4444] bg-red-500"></span><span className="text-slate-300">Not Eligible</span></div>
+                                </div>
+                                <div className="flex items-center gap-2 bg-[#101520]/60 px-3 py-1.5 rounded-xl border border-slate-700/50 shadow-inner">
+                                    <Switch size="sm" isSelected={hideIneligible} onValueChange={setHideIneligible} 
+                                            classNames={{ wrapper: "group-data-[selected=true]:bg-indigo-500" }} />
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-300">Hide Ineligible</span>
+                                </div>
+
+                                {/* ACTIONS */}
+                                <div className="flex items-center gap-2">
                                 {detailFilled > 0 && (<>
                                     <Button size="sm" variant="flat" onPress={handleSaveHall}
                                         className="font-semibold text-[11px] text-teal-300 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/25 rounded-lg h-8 px-4 transition-all" startContent={<Save size={13} />}>Save</Button>
@@ -1662,6 +1684,7 @@ const SeatingPlans: React.FC = () => {
                                     <Button size="sm" variant="flat" onPress={handleClearHall}
                                         className="font-semibold text-[11px] text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-lg h-8 px-4 transition-all" startContent={<Trash2 size={13} />}>Clear</Button>
                                 </>)}
+                                </div>
                             </div>
                         </ModalHeader>
 
@@ -1734,38 +1757,7 @@ const SeatingPlans: React.FC = () => {
                                                 });
                                             })()}
 
-                                            {/* Eligibility legend pills */}
-                                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-white border border-emerald-200" style={{ color: '#10b981' }}>
-                                                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                                                Eligible
-                                            </div>
-                                            {Object.values(detailAssignments).some(a => a.isBlocked) && (
-                                                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-white border border-red-200" style={{ color: '#ef4444' }}>
-                                                    <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
-                                                    Not Eligible
-                                                </div>
-                                            )}
-                                            {lastExamType === 'EndSemester' && (
-                                                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold bg-amber-900/30 border border-amber-500/30" style={{ color: '#fbbf24' }}>
-                                                    ⚠ Same-subject bench conflict
-                                                </div>
-                                            )}
 
-                                            {/* Hide Ineligible toggle */}
-                                            {Object.values(detailAssignments).some(a => a.isBlocked) && (
-                                                <div className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-slate-200">
-                                                    <span className="text-[10px] font-medium text-slate-600">Hide Ineligible</span>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setHideIneligible(v => !v)}
-                                                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${hideIneligible ? 'bg-red-500' : 'bg-slate-300'}`}
-                                                        aria-pressed={hideIneligible}
-                                                        id="hide-ineligible-toggle"
-                                                    >
-                                                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${hideIneligible ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                                                    </button>
-                                                </div>
-                                            )}
                                         </div>
                                     )}
 
@@ -1774,12 +1766,38 @@ const SeatingPlans: React.FC = () => {
                                         className="grid gap-5 items-start"
                                         style={{ gridTemplateColumns: `repeat(${Math.max(detailBenchRows.length, 1)}, minmax(220px, 1fr))` }}
                                     >
-                                        {detailBenchRows.map((row, rowIdx) => (
+                                        {detailBenchRows.map((row, rowIdx) => {
+                                            const isEndSemGlobal = lastExamType === 'EndSemester';
+                                            let displayLabel: string = row.rowLabel;
+                                            let primarySubStyle: any = null;
+
+                                            if (isEndSemGlobal) {
+                                                const firstBenchWithLeftSeat = row.benches.find(b => {
+                                                    const s = b.seats.find(st => st.SeatNumber === 1);
+                                                    return s && detailAssignments[s.SeatID]?.subjectCode;
+                                                });
+                                                if (firstBenchWithLeftSeat) {
+                                                    const s = firstBenchWithLeftSeat.seats.find(st => st.SeatNumber === 1);
+                                                    const alloc = detailAssignments[s!.SeatID];
+                                                    displayLabel = alloc.subjectName ? `${alloc.subjectName} (${alloc.subjectCode})` : (alloc.subjectCode || row.rowLabel);
+                                                    primarySubStyle = getSubjectStyle(alloc.subjectCode || '');
+                                                }
+                                            }
+
+                                            return (
                                             <div key={row.rowLabel} className="space-y-4" style={{ animationDelay: `${rowIdx * 40}ms` }}>
-                                                <div className="h-8 flex items-center justify-center">
-                                                    <span className="w-9 h-9 rounded-full bg-[#22314a] border border-[#2f4364] text-[12px] font-extrabold text-slate-500 flex items-center justify-center">
-                                                        {row.rowLabel}
-                                                    </span>
+                                                <div className="h-8 flex flex-row items-center justify-center w-full min-w-max shrink-0">
+                                                    {isEndSemGlobal && displayLabel !== row.rowLabel ? (
+                                                        <span className="px-3 h-8 rounded-full border text-[11px] font-extrabold flex items-center gap-2"
+                                                              style={{ background: primarySubStyle?.glow || '#22314a', color: primarySubStyle?.text || '#94a3b8', borderColor: `${primarySubStyle?.text || '#2f4364'}40` }}>
+                                                            <span className="w-5 h-5 rounded-full bg-slate-900/40 flex items-center justify-center text-[10px] text-white/80 shrink-0">{row.rowLabel}</span>
+                                                            <span className="truncate max-w-[200px]">{displayLabel}</span>
+                                                        </span>
+                                                    ) : (
+                                                        <span className="w-9 h-9 rounded-full bg-[#22314a] border border-[#2f4364] text-[12px] font-extrabold text-slate-500 flex items-center justify-center">
+                                                            {row.rowLabel}
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 {row.benches.map((bench, benchIdx) => {
                                                     const ls = bench.seats.find(s => s.SeatNumber === 1);
@@ -1793,8 +1811,8 @@ const SeatingPlans: React.FC = () => {
 
                                                     const lSt = laVisible ? getDeptStyle(laVisible.deptCode) : null;
                                                     const rSt = raVisible ? getDeptStyle(raVisible.deptCode) : null;
-                                                    const lSub = laVisible?.subjectCode ? getSubjectStyle(laVisible.subjectCode) : null;
-                                                    const rSub = raVisible?.subjectCode ? getSubjectStyle(raVisible.subjectCode) : null;
+                                                    const lSub = laVisible?.subjectCode ? getSubjectStyle(laVisible.subjectCode!) : null;
+                                                    const rSub = raVisible?.subjectCode ? getSubjectStyle(raVisible.subjectCode!) : null;
                                                     const isEndSem = lastExamType === 'EndSemester';
 
                                                     const ld = ls && !ls.IsActive;
@@ -1895,10 +1913,17 @@ const SeatingPlans: React.FC = () => {
                                                                                         <span className="text-[13px] font-bold font-mono tracking-wide w-full leading-none" style={{ color: lAccent || (lSt?.text ?? '#94a3b8') }}>{laVisible.registerNumber}</span>
                                                                                         <span className="text-[9px] text-slate-500 font-medium w-full truncate leading-none">{laVisible.studentName}</span>
                                                                                         {isEndSem && laVisible.subjectCode && (
-                                                                                            <span className="mt-0.5 px-1.5 py-0.5 rounded text-[7px] font-bold tracking-widest uppercase"
-                                                                                                style={{ background: `${lSub?.glow ?? '#334155'}`, color: lSub?.text ?? '#94a3b8', border: `1px solid ${lSub?.text ?? '#334155'}40` }}>
-                                                                                                {laVisible.subjectCode}
-                                                                                            </span>
+                                                                                            <div className="flex flex-col items-center mt-1 w-full flex-1 justify-center">
+                                                                                                <span className="px-1.5 py-0.5 rounded-[4px] text-[8px] font-extrabold tracking-widest uppercase truncate max-w-full"
+                                                                                                    style={{ background: `${lSub?.glow ?? '#334155'}`, color: lSub?.text ?? '#94a3b8', border: `1px solid ${lSub?.text ?? '#334155'}40` }}>
+                                                                                                    {laVisible.subjectCode}
+                                                                                                </span>
+                                                                                                {laVisible.subjectName && (
+                                                                                                    <span className="text-[6.5px] leading-tight text-slate-400 mt-1 uppercase tracking-wider w-full text-center truncate opacity-80" title={laVisible.subjectName}>
+                                                                                                        {laVisible.subjectName}
+                                                                                                    </span>
+                                                                                                )}
+                                                                                            </div>
                                                                                         )}
                                                                                     </div>
                                                                                 ) : (
@@ -1949,10 +1974,17 @@ const SeatingPlans: React.FC = () => {
                                                                                         <span className="text-[13px] font-bold font-mono tracking-wide w-full leading-none" style={{ color: rAccent || (rSt?.text ?? '#94a3b8') }}>{raVisible.registerNumber}</span>
                                                                                         <span className="text-[9px] text-slate-500 font-medium w-full truncate leading-none">{raVisible.studentName}</span>
                                                                                         {isEndSem && raVisible.subjectCode && (
-                                                                                            <span className="mt-0.5 px-1.5 py-0.5 rounded text-[7px] font-bold tracking-widest uppercase"
-                                                                                                style={{ background: `${rSub?.glow ?? '#334155'}`, color: rSub?.text ?? '#94a3b8', border: `1px solid ${rSub?.text ?? '#334155'}40` }}>
-                                                                                                {raVisible.subjectCode}
-                                                                                            </span>
+                                                                                            <div className="flex flex-col items-center mt-1 w-full flex-1 justify-center">
+                                                                                                <span className="px-1.5 py-0.5 rounded-[4px] text-[8px] font-extrabold tracking-widest uppercase truncate max-w-full"
+                                                                                                    style={{ background: `${rSub?.glow ?? '#334155'}`, color: rSub?.text ?? '#94a3b8', border: `1px solid ${rSub?.text ?? '#334155'}40` }}>
+                                                                                                    {raVisible.subjectCode}
+                                                                                                </span>
+                                                                                                {raVisible.subjectName && (
+                                                                                                    <span className="text-[6.5px] leading-tight text-slate-400 mt-1 uppercase tracking-wider w-full text-center truncate opacity-80" title={raVisible.subjectName}>
+                                                                                                        {raVisible.subjectName}
+                                                                                                    </span>
+                                                                                                )}
+                                                                                            </div>
                                                                                         )}
                                                                                     </div>
                                                                                 ) : (
@@ -1969,7 +2001,8 @@ const SeatingPlans: React.FC = () => {
                                                     );
                                                 })}
                                             </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             )}

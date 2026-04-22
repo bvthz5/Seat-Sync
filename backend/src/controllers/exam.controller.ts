@@ -558,7 +558,7 @@ export class ExamController {
                     },
                     {
                         model: ExamSeries,
-                        attributes: ['SeriesName', 'ExamSeriesID']
+                        attributes: ['SeriesName', 'ExamSeriesID', 'ExamType']
                     }
                 ],
                 order: [['ExamDate', 'ASC']]

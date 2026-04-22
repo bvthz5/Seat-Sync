@@ -688,8 +688,8 @@ export const getAllocationForHall = async (req: Request, res: Response) => {
         // Build (StudentID, ExamID) pairs from allocations
         if (allocations.length > 0) {
             const studentIds = [...new Set((allocations as any[]).map(a => Number(a.StudentID)))];
-            const regsWithSubject = await sequelize.query<{ StudentID: number; ExamID: number; SubjectCode: string }>(`
-                SELECT er.StudentID, er.ExamID, s.SubjectCode
+            const regsWithSubject = await sequelize.query<{ StudentID: number; ExamID: number; SubjectCode: string, SubjectName: string }>(`
+                SELECT er.StudentID, er.ExamID, s.SubjectCode, s.SubjectName
                 FROM   ExamRegistrations er
                 INNER JOIN Exams e ON e.ExamID = er.ExamID
                 INNER JOIN Subjects s ON s.SubjectID = e.SubjectID
@@ -699,18 +699,20 @@ export const getAllocationForHall = async (req: Request, res: Response) => {
                 type: QueryTypes.SELECT,
                 replacements: { studentIds, examIds },
             });
-            // Build lookup: studentId → subjectCode (first match wins)
-            const subjectByStudent = new Map<number, string>();
+            // Build lookup: studentId → info (first match wins)
+            const subjectByStudent = new Map<number, {code: string, name: string}>();
             for (const r of regsWithSubject) {
                 if (!subjectByStudent.has(Number(r.StudentID))) {
-                    subjectByStudent.set(Number(r.StudentID), r.SubjectCode);
+                    subjectByStudent.set(Number(r.StudentID), { code: r.SubjectCode, name: r.SubjectName });
                 }
             }
             // Inject into assignments
             for (const alloc of allocations as any[]) {
                 const sid = Number(alloc.StudentID);
                 if (subjectByStudent.has(sid)) {
-                    assignments[alloc.SeatID].subjectCode = subjectByStudent.get(sid) ?? null;
+                    const sbjObj = subjectByStudent.get(sid);
+                    assignments[alloc.SeatID].subjectCode = sbjObj?.code ?? null;
+                    assignments[alloc.SeatID].subjectName = sbjObj?.name ?? null;
                 }
             }
         }
@@ -998,14 +1000,7 @@ const pushAllocation = (
     });
 };
 
-/* ─────────────────────────────────────────────────────────────
- * END-SEM: fetch all ExamRegistration rows for a date+session,
- * grouped by SubjectCode, sorted by RegisterNumber inside each
- * group.  Returns:
- *   subjectQueue – ordered SubjectCode keys
- *   subjectMap   – { [subjectCode]: [student, …] }
- *   examIdBySubjectCode – { [subjectCode]: ExamID }
- * ───────────────────────────────────────────────────────────── */
+// No global shuffling helpers needed anymore. We strictly use sequential pull.
 const fetchEndSemStudentsBySubject = async (
     examDate: string,
     session:  string,
@@ -1016,7 +1011,6 @@ const fetchEndSemStudentsBySubject = async (
     subjectMap: Record<string, any[]>;
     examIdBySubjectCode: Record<string, number>;
 }> => {
-    // 1. Fetch all exams on this date+session with their subject info
     const exams = await sequelize.query<{
         ExamID: number; SubjectID: number; SubjectCode: string; SubjectName: string;
     }>(`
@@ -1039,7 +1033,6 @@ const fetchEndSemStudentsBySubject = async (
         examIdsList.push(Number(ex.ExamID));
     }
 
-    // 2. Fetch all registrations for these exams
     const regs = await sequelize.query<{
         StudentID: number; ExamID: number; IsEligible: number;
     }>(`
@@ -1053,100 +1046,49 @@ const fetchEndSemStudentsBySubject = async (
         ...(transaction ? { transaction } : {}),
     });
 
-    // 3. Build eligibility + examId maps; collect unique StudentIDs
     const excluded = new Set<number>(excludeStudentIds.map(Number));
     const eligibilityMap = new Map<number, boolean>();
-    const studentExamMap = new Map<number, string>(); // studentId → subjectCode
+    const studentExamMap = new Map<number, { code: string, name: string }>(); 
     for (const r of regs) {
         const sid  = Number(r.StudentID);
         if (excluded.has(sid)) continue;
         const elig = Number(r.IsEligible) !== 0;
         if (!eligibilityMap.has(sid) || !elig) eligibilityMap.set(sid, elig);
-        // find SubjectCode for this ExamID
+        
         const ex = exams.find(e => Number(e.ExamID) === Number(r.ExamID));
-        if (ex) studentExamMap.set(sid, ex.SubjectCode);
+        if (ex) studentExamMap.set(sid, { code: ex.SubjectCode, name: ex.SubjectName });
     }
 
     const allStudentIds = [...eligibilityMap.keys()];
     if (allStudentIds.length === 0) return { subjectQueue: [], subjectMap: {}, examIdBySubjectCode };
 
-    // 4. Fetch full student details
     const students = await Student.findAll({
         where: { StudentID: { [Op.in]: allStudentIds } },
         include: [
             { model: User,       attributes: ['FullName'] },
             { model: Department, attributes: ['DepartmentCode', 'DepartmentID'] },
         ],
-        order: [['RegisterNumber', 'ASC']],
+        order: [['StudentID', 'ASC']], // Crucial: Exact spreadsheet import order!
         ...(transaction ? { transaction } : {}),
     }) as any[];
 
-    // 5. Attach eligibility + subjectCode, group by SubjectCode
     const subjectMap: Record<string, any[]> = {};
     for (const s of students) {
         const stu = typeof s.toJSON === 'function' ? s.toJSON() : { ...s };
         stu._isEligible   = eligibilityMap.get(Number(stu.StudentID)) ?? true;
-        stu._subjectCode  = studentExamMap.get(Number(stu.StudentID)) ?? '';
+        const examDetails = studentExamMap.get(Number(stu.StudentID)) ?? null;
+        if (!examDetails) continue;
+        
+        stu._subjectCode  = examDetails.code;
+        stu._subjectName  = examDetails.name;
+        
         const code = stu._subjectCode;
-        if (!code) continue;
         if (!subjectMap[code]) subjectMap[code] = [];
         subjectMap[code].push(stu);
     }
 
-    // Each subject group is already sorted by RegisterNumber (Student.findAll order)
-    const subjectQueue = Object.keys(subjectMap).sort(); // deterministic order
+    const subjectQueue = Object.keys(subjectMap).sort(); 
     return { subjectQueue, subjectMap, examIdBySubjectCode };
-};
-
-/* ─────────────────────────────────────────────────────────────
- * END-SEM: build a round-robin interleaved global queue from
- * per-subject pools, chunk-shuffle within each subject first.
- * ───────────────────────────────────────────────────────────── */
-const buildEndSemQueue = (
-    subjectQueue: string[],
-    subjectMap: Record<string, any[]>,
-    chunkSize: number = 4
-): any[] => {
-    // Chunk-shuffle within each subject to add local randomness while keeping reg-order continuity
-    const shuffled: Record<string, any[]> = {};
-    for (const code of subjectQueue) {
-        shuffled[code] = chunkShuffle(subjectMap[code]!, chunkSize);
-    }
-
-    // Round-robin interleave
-    const queue: any[] = [];
-    const ptrs: Record<string, number> = {};
-    for (const code of subjectQueue) ptrs[code] = 0;
-
-    let added = true;
-    while (added) {
-        added = false;
-        for (const code of subjectQueue) {
-            if (ptrs[code]! < shuffled[code]!.length) {
-                queue.push(shuffled[code]![ptrs[code]!]);
-                ptrs[code]!++;
-                added = true;
-            }
-        }
-    }
-    return queue;
-};
-
-/* ─────────────────────────────────────────────────────────────
- * END-SEM: find next candidate in queue starting from ptr
- * whose _subjectCode differs from avoidCode (for bench constraint).
- * Returns the index in queue or -1 if not found within lookahead.
- * ───────────────────────────────────────────────────────────── */
-const findDifferentSubject = (
-    queue: any[],
-    startPtr: number,
-    avoidCode: string,
-    lookahead: number = 30
-): number => {
-    for (let i = startPtr; i < queue.length && i < startPtr + lookahead; i++) {
-        if (queue[i]?._subjectCode !== avoidCode) return i;
-    }
-    return -1;
 };
 
 export const bulkAssign = async (req: Request, res: Response) => {
@@ -1250,9 +1192,11 @@ export const bulkAssign = async (req: Request, res: Response) => {
             const totalEndSemStudents = Object.values(subjectMap).reduce((s, a) => s + a.length, 0);
             console.log(`[EndSem] Subjects: ${subjectQueue.join(', ')} | Total students: ${totalEndSemStudents}`);
 
-            // ── Build global round-robin interleaved queue ──
-            let globalQueue = buildEndSemQueue(subjectQueue, subjectMap, CHUNK);
-            let qPtr = 0; // current position in globalQueue
+            // ── Prepare Subject Pools ──
+            const pools: Array<{ code: string, students: any[] }> = subjectQueue.map(c => ({
+                code: c,
+                students: subjectMap[c] || []
+            }));
 
             // ── Fetch and cap seats ──
             let allActiveSeatsES: any[] = await sequelize.query(`
@@ -1275,7 +1219,6 @@ export const bulkAssign = async (req: Request, res: Response) => {
                 if (!roomSeatsMapES.has(rid)) roomSeatsMapES.set(rid, []);
                 roomSeatsMapES.get(rid)!.push(seat);
             }
-            // Cap: keep only first `capLimit` seats per room
             const cappedSeatsES: any[] = [];
             for (const [, roomSeats] of roomSeatsMapES) {
                 cappedSeatsES.push(...roomSeats.slice(0, capLimit));
@@ -1293,8 +1236,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
             // ── Assign seats: room → row → bench → seatIndex ──
             const hallResultsES: any[] = [];
             const allNewAllocsES: { ExamID: number; SeatID: number; StudentID: number; IsEligible: boolean; IsBlocked: boolean }[] = [];
-
-            // Group capped seats by room
+            
             const cappedByRoom = new Map<number, any[]>();
             for (const seat of cappedSeatsES) {
                 const rid = Number(seat.RoomID);
@@ -1311,10 +1253,13 @@ export const bulkAssign = async (req: Request, res: Response) => {
                 }
             }
 
+            const rowPrimarySubjectMap: Record<number, Record<string, string>> = {};
+
             for (const hallIdNum of hallIdsToUseES) {
                 const hall = targetHallsES.find(h => h.RoomID === hallIdNum);
                 if (!hall) continue;
 
+                rowPrimarySubjectMap[hallIdNum] = {};
                 const seats = cappedByRoom.get(hallIdNum) || [];
                 if (seats.length === 0) {
                     hallResultsES.push({ hallId: hallIdNum, hallCode: (hall as any).RoomCode, totalSeats: 0, filled: 0 });
@@ -1331,44 +1276,45 @@ export const bulkAssign = async (req: Request, res: Response) => {
                     benchMapES[row]![bench]!.push(seat);
                 }
 
-                const allRowsES   = Object.keys(benchMapES).sort();
+                const allRowsES = Object.keys(benchMapES).sort();
                 const allBenchNums = [...new Set(allRowsES.flatMap(r => Object.keys(benchMapES[r]!).map(Number)))].sort((a,b) => a-b);
                 let hallFilledES = 0;
 
                 for (const row of allRowsES) {
+                    let rowSubjectSet = false;
+
                     for (const bench of allBenchNums) {
                         const benchSeats = (benchMapES[row]?.[bench] || []).sort(sortSeatsByPosition);
-                        let seat1SubjectCode: string | null = null;
+                        const seat1 = benchSeats.find(s => getSeatNumber(s) === 1);
+                        const seat2 = benchSeats.find(s => getSeatNumber(s) === 2);
 
-                        for (const seat of benchSeats) {
-                            if (qPtr >= globalQueue.length) break;
-
-                            if (getSeatNumber(seat) === 1) {
-                                // Seat 1 — any next student
-                                const stu = globalQueue[qPtr++]!;
-                                seat1SubjectCode = stu._subjectCode ?? null;
-                                const subjExamId = examIdBySubjectCode[stu._subjectCode!] ?? primaryExamId;
-                                pushAllocation(allNewAllocsES, subjExamId, seat, stu);
-                                hallFilledES++;
-                            } else {
-                                // Seat 2 — must differ from seat 1's subjectCode
-                                if (seat1SubjectCode !== null && qPtr < globalQueue.length) {
-                                    const nextCode = globalQueue[qPtr]?._subjectCode;
-                                    if (nextCode === seat1SubjectCode) {
-                                        // Look ahead for different subject
-                                        const altIdx = findDifferentSubject(globalQueue, qPtr, seat1SubjectCode, 30);
-                                        if (altIdx !== -1 && altIdx !== qPtr) {
-                                            // Swap to bring different-subject student to current position
-                                            [globalQueue[qPtr], globalQueue[altIdx]] = [globalQueue[altIdx]!, globalQueue[qPtr]!];
-                                        }
-                                        // If no alt found, assign same-subject anyway (last resort)
-                                    }
-                                    const stu = globalQueue[qPtr++]!;
-                                    const subjExamId = examIdBySubjectCode[stu._subjectCode!] ?? primaryExamId;
-                                    pushAllocation(allNewAllocsES, subjExamId, seat, stu);
-                                    hallFilledES++;
+                        let seat1Code: string | null = null;
+                        
+                        if (seat1) {
+                            const p1Idx = pools.findIndex(p => p.students.length > 0);
+                            if (p1Idx !== -1) {
+                                const stu = pools[p1Idx]!.students.shift();
+                                seat1Code = stu._subjectCode;
+                                
+                                if (!rowSubjectSet) {
+                                    rowPrimarySubjectMap[hallIdNum][row] = `${stu._subjectName} (${seat1Code})`;
+                                    rowSubjectSet = true;
                                 }
+
+                                const subjExamId = examIdBySubjectCode[seat1Code!] ?? primaryExamId;
+                                pushAllocation(allNewAllocsES, subjExamId, seat1, stu);
+                                hallFilledES++;
                             }
+                        }
+
+                        if (seat2 && seat1Code) {
+                            const p2Idx = pools.findIndex(p => p.students.length > 0 && p.code !== seat1Code);
+                            if (p2Idx !== -1) {
+                                const stu = pools[p2Idx]!.students.shift();
+                                const subjExamId = examIdBySubjectCode[stu._subjectCode] ?? primaryExamId;
+                                pushAllocation(allNewAllocsES, subjExamId, seat2, stu);
+                                hallFilledES++;
+                            } // else: leave seat EMPTY
                         }
                     }
                 }
@@ -1395,6 +1341,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
                 assignedCount: allNewAllocsES.length,
                 hallResults: hallResultsES,
                 subjects: subjectQueue,
+                rowSubjects: rowPrimarySubjectMap,
                 roomCapacityLimit: capLimit,
             });
         }
