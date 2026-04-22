@@ -110,6 +110,7 @@ const SeatingPlans: React.FC = () => {
     const [examDates, setExamDates] = useState<ExamDateSlot[]>([]);
     const [halls, setHalls] = useState<Hall[]>([]);
     const [departments, setDepartments] = useState<Dept[]>([]);
+    const [totalEligibleStudents, setTotalEligibleStudents] = useState<number>(0);
     const [examDeptMap, setExamDeptMap] = useState<Record<string, Dept[]>>({});
     const [exams, setExams] = useState<any[]>([]);
     const [hallSummary, setHallSummary] = useState<HallSummary[]>([]);
@@ -178,19 +179,10 @@ const SeatingPlans: React.FC = () => {
                 benches: (rows[rowLabel] || []).sort((a, b) => a.benchNumber - b.benchNumber),
             }));
     }, [detailBenches]);
-    const primaryDeptObj = departments.find(d => String(d.DepartmentID) === primaryDept);
-    const secondaryDeptObj = departments.find(d => String(d.DepartmentID) === secondaryDept);
-    const eligibleStudentCount = (() => {
-        const primaryCount = Number(primaryDeptObj?.studentCount || 0);
-        const secondaryCount = Number(secondaryDeptObj?.studentCount || 0);
-        if (assignmentMode === 'auto-balanced') {
-            return departments.reduce((sum, d) => sum + Number(d.studentCount || 0), 0);
-        }
-        if (assignmentMode === 'single') return primaryCount;
-        if (!primaryDept || !secondaryDept) return 0;
-        if (primaryDept === secondaryDept) return primaryCount;
-        return primaryCount + secondaryCount;
-    })();
+    
+    // We strictly use the independently counted total across all queries
+    const eligibleStudentCount = totalEligibleStudents;
+
     const visibleHalls = hallSummary.filter(h => {
         const q = hallSearch.trim().toLowerCase();
         const pct = h.totalSeats > 0 ? Math.round((h.filledSeats / h.totalSeats) * 100) : 0;
@@ -260,16 +252,19 @@ const SeatingPlans: React.FC = () => {
             try {
                 const examList = await ExamService.getAll({ startDate: selectedDate, endDate: selectedDate, session: selectedSession });
                 setExams(Array.isArray(examList) ? examList : []);
-                // Fetch eligible students for each exam and aggregate by department
-                const deptMap: Record<string, Dept> = {};
+                const deptMap: Record<number, Dept> = {};
+                let totalExamStudents = 0;
                 await Promise.all(examList.map(async (exam: any) => {
+                    let studentCount = 0;
+                    try {
+                        const res = await ExamService.getEligibleStudents(exam.ExamID);
+                        studentCount = res?.students && Array.isArray(res.students) ? res.students.length : (Array.isArray(res) ? res.length : 0);
+                    } catch { studentCount = 0; }
+                    
+                    totalExamStudents += studentCount;
+
                     const dept = exam?.Subject?.Department;
                     if (dept && dept.DepartmentID) {
-                        let studentCount = 0;
-                        try {
-                            const students = await ExamService.getEligibleStudents(exam.ExamID);
-                            studentCount = Array.isArray(students) ? students.length : 0;
-                        } catch { studentCount = 0; }
                         if (!deptMap[dept.DepartmentID]) {
                             deptMap[dept.DepartmentID] = {
                                 DepartmentID: dept.DepartmentID,
@@ -282,6 +277,8 @@ const SeatingPlans: React.FC = () => {
                     }
                 }));
                 setDepartments(Object.values(deptMap));
+                setTotalEligibleStudents(totalExamStudents);
+                
                 
                 // Set EndSem state correctly on load instead of waiting for generation
                 const hasEndSem = Array.isArray(examList) && examList.some((e: any) => e.ExamSeries?.ExamType === 'EndSemester');
@@ -289,6 +286,7 @@ const SeatingPlans: React.FC = () => {
             } catch {
                 toast.error('Failed to load exams/departments');
                 setDepartments([]);
+                setTotalEligibleStudents(0);
                 setExams([]);
             }
         })();
