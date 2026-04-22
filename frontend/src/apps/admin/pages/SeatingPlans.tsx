@@ -491,6 +491,7 @@ const SeatingPlans: React.FC = () => {
                     primaryDeptId: primaryDept ? Number(primaryDept) : null,
                     secondaryDeptId: secondaryDept ? Number(secondaryDept) : null,
                     avoidSameDeptBench,
+                    shuffleRooms,
                     roomCapacityLimit,
                 });
                 
@@ -2279,20 +2280,36 @@ const SeatingPlans: React.FC = () => {
                             </ModalHeader>
                             <ModalBody className="p-0">
                                 {!seriesRunning && seriesTasks.some(t => t.status === 'pending' || t.status === 'failed') && (
-                                    <div className="px-6 py-3.5 bg-white border-b border-slate-100 flex items-center justify-between shadow-[0_2px_10px_rgba(0,0,0,0.02)] relative z-10">
-                                        <div className="flex flex-col">
+                                    <div className="px-6 py-3.5 bg-white border-b border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] relative z-10">
+                                        <div className="flex flex-col mb-2.5">
                                             <span className="text-[12px] font-bold text-slate-700">Configuration</span>
-                                            <span className="text-[10px] text-slate-400 font-medium">Applied to End Semester exams</span>
+                                            <span className="text-[10px] text-slate-400 font-medium">Applied to all sessions in this series</span>
                                         </div>
-                                        <div className="flex items-center px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 gap-2">
-                                            <span className="text-[11px] text-slate-600 font-medium whitespace-nowrap">Room cap <span className="text-slate-400 text-[9px]">(End Sem)</span></span>
-                                            <input
-                                                type="number" min={1} max={200}
-                                                value={roomCapacityLimit}
-                                                onChange={e => setRoomCapacityLimit(Math.max(1, Number(e.target.value) || 40))}
-                                                className="w-12 h-6 text-center text-[11px] font-bold text-slate-700 border border-slate-300 rounded-md bg-white focus:outline-none focus:border-indigo-400"
-                                                disabled={seriesRunning}
-                                            />
+                                        <div className="flex items-center gap-3">
+                                            {/* Shuffle room order toggle */}
+                                            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 flex-1">
+                                                <span className="text-[11px] text-slate-600 font-medium whitespace-nowrap">Shuffle room order</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShuffleRooms(v => !v)}
+                                                    disabled={seriesRunning}
+                                                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ml-auto ${shuffleRooms ? 'bg-blue-500' : 'bg-slate-300'}`}
+                                                    aria-pressed={shuffleRooms}
+                                                >
+                                                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${shuffleRooms ? 'translate-x-4' : 'translate-x-[3px]'}`} />
+                                                </button>
+                                            </div>
+                                            {/* Room cap */}
+                                            <div className="flex items-center px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 gap-2">
+                                                <span className="text-[11px] text-slate-600 font-medium whitespace-nowrap">Room cap <span className="text-slate-400 text-[9px]">(End Sem)</span></span>
+                                                <input
+                                                    type="number" min={1} max={200}
+                                                    value={roomCapacityLimit}
+                                                    onChange={e => setRoomCapacityLimit(Math.max(1, Number(e.target.value) || 40))}
+                                                    className="w-12 h-6 text-center text-[11px] font-bold text-slate-700 border border-slate-300 rounded-md bg-white focus:outline-none focus:border-indigo-400"
+                                                    disabled={seriesRunning}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 )}
