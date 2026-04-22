@@ -642,8 +642,7 @@ export class ExamController {
                     defaults: {
                         SubjectCode: currentSubject.SubjectCode,
                         SubjectName: currentSubject.SubjectName,
-                        DepartmentID: departmentIdNum,
-                        SemesterID: currentSubject.SemesterID
+                        DepartmentID: departmentIdNum
                     }
                 });
 
@@ -721,8 +720,7 @@ export class ExamController {
                     defaults: {
                         SubjectCode: currentSubject.SubjectCode,
                         SubjectName: currentSubject.SubjectName,
-                        DepartmentID: departmentId,
-                        SemesterID: currentSubject.SemesterID
+                        DepartmentID: departmentId
                     }
                 });
 
@@ -988,7 +986,7 @@ export class ExamController {
                 } as any);
             }
 
-            // Pre-load existing data to avoid redundant queries
+            // Pre-load existing data to avoid redundant queries (No transaction needed for initial load)
             const deptCache = new Map<string, number>();
             const subjectCache = new Map<string, number>();
 
@@ -1185,8 +1183,7 @@ export class ExamController {
                                 defaults: {
                                     SubjectCode: cleanCode,
                                     SubjectName: subjectName,
-                                    DepartmentID: departmentID,
-                                    SemesterID: defaultSemesterID
+                                    DepartmentID: departmentID
                                 }
                             });
                             subjectID = subj.SubjectID;

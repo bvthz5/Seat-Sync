@@ -1,7 +1,6 @@
 import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from "../config/database.js";
 import { Department } from "./Department.js";
-import { Semester } from "./Semester.js";
 
 /**
  * Subject table attributes
@@ -11,7 +10,6 @@ interface SubjectAttributes {
   SubjectCode: string;
   SubjectName: string;
   DepartmentID: number;
-  SemesterID: number;
 }
 
 /**
@@ -25,7 +23,6 @@ export class Subject extends Model<SubjectAttributes, SubjectCreationAttributes>
   declare SubjectCode: string;
   declare SubjectName: string;
   declare DepartmentID: number;
-  declare SemesterID: number;
 }
 
 Subject.init(
@@ -50,14 +47,6 @@ Subject.init(
         model: "Departments",
         key: "DepartmentID",
       },
-    },
-    SemesterID: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      references: {
-        model: "Semesters",
-        key: "SemesterID",
-      },
     }
   },
   {
@@ -76,15 +65,6 @@ Subject.belongsTo(Department, {
 
 Department.hasMany(Subject, {
   foreignKey: "DepartmentID",
-  onDelete: 'CASCADE',
-});
-
-Subject.belongsTo(Semester, {
-  foreignKey: "SemesterID",
-});
-
-Semester.hasMany(Subject, {
-  foreignKey: "SemesterID",
   onDelete: 'CASCADE',
 });
 

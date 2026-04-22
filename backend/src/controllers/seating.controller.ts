@@ -1987,8 +1987,7 @@ export const quickAddExamSlot = async (req: Request, res: Response) => {
             defaults: {
                 SubjectCode: 'SEAT-SLOT',
                 SubjectName: 'Generic Seating Slot',
-                DepartmentID: genericDept.DepartmentID,
-                SemesterID: systemSemester.SemesterID,
+                DepartmentID: genericDept.DepartmentID
             }
         });
 

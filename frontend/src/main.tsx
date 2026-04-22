@@ -13,7 +13,7 @@ console.error = (...args: any[]) => {
 
 const originalWarn = console.warn;
 console.warn = (...args: any[]) => {
-  if (typeof args[0] === 'string' && args[0].includes('aria-hidden')) return;
+  if (typeof args[0] === 'string' && (args[0].includes('aria-hidden') || args[0].includes('aria-label'))) return;
   originalWarn.call(console, ...args);
 };
 
