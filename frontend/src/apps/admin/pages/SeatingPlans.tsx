@@ -152,8 +152,10 @@ const SeatingPlans: React.FC = () => {
     const [assignmentFeedback, setAssignmentFeedback] = useState<AssignFeedback | null>(null);
     const [hideIneligible, setHideIneligible] = useState(false);
     const [showClearAllConfirm, setShowClearAllConfirm] = useState(false);
-    const [lastExamType, setLastExamType] = useState<'Internal' | 'EndSemester'>('Internal');
-    const [lastSubjects, setLastSubjects] = useState<string[]>([]);
+    // Derive exam type from loaded exams (prevents reset-on-reload bug)
+    // fallback to Internal if no exams loaded yet
+    const [_lastExamTypeOverride, setLastExamTypeOverride] = useState<'Internal' | 'EndSemester' | null>(null);
+    const [_lastSubjectsFromBulk, setLastSubjectsFromBulk] = useState<string[]>([]);
 
     /* derived */
     const availableDates = [...new Set(examDates.filter(d => d.session === selectedSession).map(d => d.examDate))].sort();
@@ -182,6 +184,26 @@ const SeatingPlans: React.FC = () => {
     
     // We strictly use the independently counted total across all queries
     const eligibleStudentCount = totalEligibleStudents;
+
+    // Derive lastExamType: auto-detect from loaded exams; override kicks in after bulkAssign or openHallDetail
+    const lastExamType: 'Internal' | 'EndSemester' = useMemo(() => {
+        if (_lastExamTypeOverride) return _lastExamTypeOverride;
+        const fromExams = exams.some((e: any) => e.ExamSeries?.ExamType === 'EndSemester');
+        if (fromExams) return 'EndSemester';
+        // also check detailAssignments – if any seat has a subjectCode it's EndSem
+        const hasSubject = Object.values(detailAssignments).some((a: any) => !!a.subjectCode);
+        return hasSubject ? 'EndSemester' : 'Internal';
+    }, [_lastExamTypeOverride, exams, detailAssignments]);
+
+    // Derive subjects shown after bulkAssign or reopening the detail modal
+    const lastSubjects: string[] = useMemo(() => {
+        if (_lastSubjectsFromBulk.length > 0) return _lastSubjectsFromBulk;
+        return [...new Set(Object.values(detailAssignments).map((a: any) => a.subjectCode).filter(Boolean))] as string[];
+    }, [_lastSubjectsFromBulk, detailAssignments]);
+
+    // alias setters so existing call-sites keep working unchanged
+    const setLastExamType = setLastExamTypeOverride;
+    const setLastSubjects = setLastSubjectsFromBulk;
 
     const visibleHalls = hallSummary.filter(h => {
         const q = hallSearch.trim().toLowerCase();
@@ -278,11 +300,8 @@ const SeatingPlans: React.FC = () => {
                 }));
                 setDepartments(Object.values(deptMap));
                 setTotalEligibleStudents(totalExamStudents);
-                
-                
-                // Set EndSem state correctly on load instead of waiting for generation
-                const hasEndSem = Array.isArray(examList) && examList.some((e: any) => e.ExamSeries?.ExamType === 'EndSemester');
-                setLastExamType(hasEndSem ? 'EndSemester' : 'Internal');
+                // Reset any manual override so the auto-derived value from exams takes over
+                setLastExamType(null);
             } catch {
                 toast.error('Failed to load exams/departments');
                 setDepartments([]);
@@ -461,6 +480,9 @@ const SeatingPlans: React.FC = () => {
     /* detail modal */
     const openHallDetail = async (hs: HallSummary) => {
         setDetailHall(hs); setDetailLoading(true); setDetailBenches([]); setDetailAssignments({});
+        // Reset bulk overrides so auto-derivation from the fetched assignments takes over
+        setLastExamType(null);
+        setLastSubjects([]);
         try {
             const layout = await SeatingService.getHallLayout(hs.hallId);
             startTransition(() => {
@@ -470,7 +492,9 @@ const SeatingPlans: React.FC = () => {
             if (selectedDate) {
                 try {
                     const alloc = await SeatingService.getAllocationForHall(selectedDate, selectedSession, hs.hallId);
-                    if (alloc?.assignments) startTransition(() => setDetailAssignments(alloc.assignments));
+                    if (alloc?.assignments) {
+                        startTransition(() => setDetailAssignments(alloc.assignments));
+                    }
                 } catch { }
             }
         } catch { toast.error('Failed to load hall'); }
@@ -1709,36 +1733,12 @@ const SeatingPlans: React.FC = () => {
                                     >
                                         {detailBenchRows.map((row, rowIdx) => {
                                             const isEndSemGlobal = lastExamType === 'EndSemester';
-                                            let displayLabel: string = row.rowLabel;
-                                            let primarySubStyle: any = null;
-
-                                            if (isEndSemGlobal) {
-                                                const firstBenchWithLeftSeat = row.benches.find(b => {
-                                                    const s = b.seats.find(st => st.SeatNumber === 1);
-                                                    return s && detailAssignments[s.SeatID]?.subjectCode;
-                                                });
-                                                if (firstBenchWithLeftSeat) {
-                                                    const s = firstBenchWithLeftSeat.seats.find(st => st.SeatNumber === 1);
-                                                    const alloc = detailAssignments[s!.SeatID];
-                                                    displayLabel = alloc.subjectName ? `${alloc.subjectName} (${alloc.subjectCode})` : (alloc.subjectCode || row.rowLabel);
-                                                    primarySubStyle = getSubjectStyle(alloc.subjectCode || '');
-                                                }
-                                            }
-
                                             return (
                                             <div key={row.rowLabel} className="space-y-4" style={{ animationDelay: `${rowIdx * 40}ms` }}>
                                                 <div className="h-8 flex flex-row items-center justify-center w-full min-w-max shrink-0">
-                                                    {isEndSemGlobal && displayLabel !== row.rowLabel ? (
-                                                        <span className="px-3 h-8 rounded-full border text-[11px] font-extrabold flex items-center gap-2"
-                                                              style={{ background: primarySubStyle?.glow || '#22314a', color: primarySubStyle?.text || '#94a3b8', borderColor: `${primarySubStyle?.text || '#2f4364'}40` }}>
-                                                            <span className="w-5 h-5 rounded-full bg-slate-900/40 flex items-center justify-center text-[10px] text-white/80 shrink-0">{row.rowLabel}</span>
-                                                            <span className="truncate max-w-[200px]">{displayLabel}</span>
-                                                        </span>
-                                                    ) : (
-                                                        <span className="w-9 h-9 rounded-full bg-[#22314a] border border-[#2f4364] text-[12px] font-extrabold text-slate-500 flex items-center justify-center">
-                                                            {row.rowLabel}
-                                                        </span>
-                                                    )}
+                                                    <span className="w-9 h-9 rounded-full bg-[#22314a] border border-[#2f4364] text-[12px] font-extrabold text-slate-500 flex items-center justify-center shadow-sm">
+                                                        {row.rowLabel}
+                                                    </span>
                                                 </div>
                                                 {row.benches.map((bench, benchIdx) => {
                                                     const ls = bench.seats.find(s => s.SeatNumber === 1);
