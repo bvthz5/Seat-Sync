@@ -1127,75 +1127,18 @@ const SeatingPlans: React.FC = () => {
                                 <div className={`space-y-3 transition-opacity ${!selectedDate ? 'opacity-40 pointer-events-none' : ''}`}>
                                     <div className="flex items-center gap-2">
                                         <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-extrabold flex items-center justify-center shrink-0">2</span>
-                                        <span className="text-[11px] font-bold text-slate-700 uppercase tracking-widest">Choose Mode</span>
+                                        <span className="text-[11px] font-bold text-slate-700 uppercase tracking-widest">Assignment Strategy</span>
                                     </div>
-
-                                    <Select
-                                        aria-label="Allocation strategy"
-                                        id="allocation-strategy-select" name="allocationStrategy"
-                                        selectedKeys={[assignmentMode]}
-                                        onSelectionChange={(k) => onAssignmentModeChange((Array.from(k)[0] as 'single' | 'two-alternate' | 'auto-balanced') || 'auto-balanced')}
-                                        variant="bordered"
-                                        classNames={{
-                                            trigger: "relative pr-10 bg-white border border-slate-200 rounded-xl h-10 text-slate-800 text-[13px] font-semibold data-[hover=true]:border-emerald-400 transition-all",
-                                            value: "text-slate-800 font-semibold",
-                                            selectorIcon: "text-slate-400 absolute w-4 right-3",
-                                            popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
-                                        }}>
-                                        <SelectItem key="auto-balanced">Auto Balanced (Recommended)</SelectItem>
-                                        <SelectItem key="single">Single Department</SelectItem>
-                                        <SelectItem key="two-alternate">Two-Department Alternate</SelectItem>
-                                    </Select>
-
-                                    {assignmentMode === 'single' && (
-                                        <Select aria-label="Primary Department" placeholder="Select Department" variant="bordered"
-                                            id="primary-dept-select-single" name="primaryDeptSingle"
-                                            selectedKeys={primaryDept ? [primaryDept] : []}
-                                            onSelectionChange={(k) => setPrimaryDept(Array.from(k)[0] as string || '')}
-                                            classNames={{
-                                                trigger: "relative pr-10 bg-white border border-slate-200 rounded-xl h-10 text-slate-800 text-[13px] font-semibold data-[hover=true]:border-emerald-400 transition-all",
-                                                value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-400",
-                                                selectorIcon: "text-slate-400 absolute w-4 right-3",
-                                                popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
-                                            }}>
-                                            {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={formatDeptLabel(d)} className="data-[hover=true]:bg-emerald-50 data-[hover=true]:text-emerald-700 font-semibold">{formatDeptLabel(d)} ({d.studentCount})</SelectItem>)}
-                                        </Select>
-                                    )}
-
-                                    {assignmentMode === 'two-alternate' && (
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div className="space-y-1">
-                                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Primary</span>
-                                                <Select aria-label="Primary Department" placeholder="None" variant="bordered"
-                                                    id="primary-dept-select-dual" name="primaryDeptDual"
-                                                    selectedKeys={primaryDept ? [primaryDept] : []}
-                                                    onSelectionChange={(k) => setPrimaryDept(Array.from(k)[0] as string || '')}
-                                                    classNames={{
-                                                        trigger: "relative pr-8 bg-white border border-slate-200 rounded-xl h-10 text-slate-800 text-[12px] font-semibold data-[hover=true]:border-emerald-400 transition-all",
-                                                        value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-400",
-                                                        selectorIcon: "text-slate-400 absolute w-4 right-2",
-                                                        popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
-                                                    }}>
-                                                    {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={formatDeptLabel(d)} className="data-[hover=true]:bg-emerald-50 data-[hover=true]:text-emerald-700 font-semibold">{formatDeptLabel(d)} ({d.studentCount})</SelectItem>)}
-                                                </Select>
-                                            </div>
-                                            <div className="space-y-1">
-                                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Secondary</span>
-                                                <Select aria-label="Secondary Department" placeholder="None" variant="bordered"
-                                                    id="secondary-dept-select-dual" name="secondaryDeptDual"
-                                                    selectedKeys={secondaryDept ? [secondaryDept] : []}
-                                                    onSelectionChange={(k) => setSecondaryDept(Array.from(k)[0] as string || '')}
-                                                    classNames={{
-                                                        trigger: "relative pr-8 bg-white border border-slate-200 rounded-xl h-10 text-slate-800 text-[12px] font-semibold data-[hover=true]:border-emerald-400 transition-all",
-                                                        value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-400",
-                                                        selectorIcon: "text-slate-400 absolute w-4 right-2",
-                                                        popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
-                                                    }}>
-                                                    {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={formatDeptLabel(d)} className="data-[hover=true]:bg-emerald-50 data-[hover=true]:text-emerald-700 font-semibold">{formatDeptLabel(d)} ({d.studentCount})</SelectItem>)}
-                                                </Select>
-                                            </div>
-                                        </div>
-                                    )}
+                                    <div className="flex flex-col gap-1 px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm">
+                                        <span className="text-[12px] font-bold text-slate-800">
+                                            {lastExamType === 'EndSemester' ? 'Subject-Based Auto Alignment' : 'Auto Balanced Allocation'}
+                                        </span>
+                                        <span className="text-[10px] text-slate-500 font-medium leading-relaxed">
+                                            {lastExamType === 'EndSemester' 
+                                                ? 'Strict contiguous subject assignments natively applied to avoid bench conflicts.'
+                                                : 'Intelligent multi-department distribution matching capacity perfectly.'}
+                                        </span>
+                                    </div>
 
                                     {/* Options row — compact toggles */}
                                     <div className="flex flex-col gap-2">
