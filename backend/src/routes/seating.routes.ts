@@ -11,6 +11,7 @@ import {
     getAllocationForHall,
     saveAllocation,
     clearAllocation,
+    clearAllAllocations,
     getStudentsByDept,
     getAllocationSummary,
     bulkAssign,
@@ -80,5 +81,8 @@ router.get("/allocation/:examDate/:session/:hallId", getAllocationForHall);
 
 // Clear allocation for date + session + hall
 router.delete("/allocation/:examDate/:session/:hallId", clearAllocation);
+
+// Clear ALL allocations for an entire date + session
+router.delete("/allocation/:examDate/:session", clearAllAllocations);
 
 export default router;

@@ -118,11 +118,21 @@ const getStudentsForExamSession = async (
     // Fetch students registered for these exams via ExamRegistration table (the source of truth)
     const registrations = await ExamRegistration.findAll({
         where: { ExamID: { [Op.in]: examIds } },
-        attributes: ["StudentID"],
+        attributes: ["StudentID", "IsEligible"],
         ...(transaction ? { transaction } : {}),
     }) as any[];
 
     console.log("DEBUG: ExamRegistrations fetched:", registrations.length, { examIds: examIds.length });
+
+    // Build a map: StudentID -> IsEligible (latest value wins when student appears in multiple exams)
+    const eligibilityMap = new Map<number, boolean>();
+    for (const r of registrations as any[]) {
+        const sid = Number(r.StudentID);
+        // If ANY registration for this student is ineligible, mark them ineligible for this slot
+        if (!eligibilityMap.has(sid) || r.IsEligible === false) {
+            eligibilityMap.set(sid, r.IsEligible !== false);
+        }
+    }
 
     const studentIds = [...new Set(
         (registrations as any[])
@@ -153,7 +163,13 @@ const getStudentsForExamSession = async (
     });
 
     console.log("DEBUG: Students fetched with details:", students.length);
-    return students;
+
+    // Attach eligibility flag to each student without altering the array order
+    return (students as any[]).map((s: any) => {
+        const jsonStu = typeof s.toJSON === 'function' ? s.toJSON() : { ...s };
+        jsonStu._isEligible = eligibilityMap.get(Number(jsonStu.StudentID)) ?? true;
+        return jsonStu;
+    });
 };
 
 const getDefaultZoneIdForRoom = async (roomId: number): Promise<number | null> => {
@@ -662,7 +678,41 @@ export const getAllocationForHall = async (req: Request, res: Response) => {
                 registerNumber: s?.RegisterNumber,
                 deptCode: s?.Department?.DepartmentCode || "",
                 side: getSeatNumber(seat as any) === 1 ? "left" : "right",
+                isEligible: alloc.IsEligible !== false,
+                isBlocked: alloc.IsBlocked === true,
+                subjectCode: null as string | null,
             };
+        }
+
+        // Enrich with subjectCode via ExamRegistration → Exam → Subject
+        // Build (StudentID, ExamID) pairs from allocations
+        if (allocations.length > 0) {
+            const studentIds = [...new Set((allocations as any[]).map(a => Number(a.StudentID)))];
+            const regsWithSubject = await sequelize.query<{ StudentID: number; ExamID: number; SubjectCode: string }>(`
+                SELECT er.StudentID, er.ExamID, s.SubjectCode
+                FROM   ExamRegistrations er
+                INNER JOIN Exams e ON e.ExamID = er.ExamID
+                INNER JOIN Subjects s ON s.SubjectID = e.SubjectID
+                WHERE  er.StudentID IN (:studentIds)
+                AND    er.ExamID IN (:examIds)
+            `, {
+                type: QueryTypes.SELECT,
+                replacements: { studentIds, examIds },
+            });
+            // Build lookup: studentId → subjectCode (first match wins)
+            const subjectByStudent = new Map<number, string>();
+            for (const r of regsWithSubject) {
+                if (!subjectByStudent.has(Number(r.StudentID))) {
+                    subjectByStudent.set(Number(r.StudentID), r.SubjectCode);
+                }
+            }
+            // Inject into assignments
+            for (const alloc of allocations as any[]) {
+                const sid = Number(alloc.StudentID);
+                if (subjectByStudent.has(sid)) {
+                    assignments[alloc.SeatID].subjectCode = subjectByStudent.get(sid) ?? null;
+                }
+            }
         }
 
         res.json({ assignments });
@@ -760,6 +810,61 @@ export const clearAllocation = async (req: Request, res: Response) => {
 };
 
 /* ════════════════════════════════════════════════════════════
+ *  DELETE /api/seating/allocation/:examDate/:session
+ *  Clear ALL seat allocations for an entire date + session
+ *  (nuclear wipe — confirmation should be done on the client)
+ * ════════════════════════════════════════════════════════════ */
+export const clearAllAllocations = async (req: Request, res: Response) => {
+    const transaction = await sequelize.transaction();
+    try {
+        const { examDate, session } = req.params;
+
+        const examIds = await resolveExamIds(examDate as string, session as string, transaction);
+        if (examIds.length === 0) {
+            await transaction.rollback();
+            return res.json({ message: "No exams found — nothing to clear.", deleted: 0, hallsAffected: 0 });
+        }
+
+        // Count before delete so we can return meaningful stats
+        const countBefore = await SeatAllocation.count({
+            where: { ExamID: { [Op.in]: examIds } },
+            transaction,
+        });
+
+        if (countBefore === 0) {
+            await transaction.rollback();
+            return res.json({ message: "No allocations exist for this session.", deleted: 0, hallsAffected: 0 });
+        }
+
+        // Count distinct halls affected (via Seats join)
+        const hallRows = await sequelize.query<{ RoomID: number }>(`
+            SELECT DISTINCT se.RoomID
+            FROM   SeatAllocations sa
+            INNER JOIN Seats se ON se.SeatID = sa.SeatID
+            WHERE  sa.ExamID IN (:examIds)
+        `, { type: QueryTypes.SELECT, replacements: { examIds }, transaction });
+
+        await SeatAllocation.destroy({
+            where: { ExamID: { [Op.in]: examIds } },
+            transaction,
+        });
+
+        await transaction.commit();
+
+        console.log(`[clearAllAllocations] Deleted ${countBefore} allocations across ${hallRows.length} halls for ${examDate} ${session}`);
+        res.json({
+            message: `Cleared ${countBefore} seat allocation${countBefore !== 1 ? 's' : ''} across ${hallRows.length} hall${hallRows.length !== 1 ? 's' : ''}.`,
+            deleted: countBefore,
+            hallsAffected: hallRows.length,
+        });
+    } catch (error: any) {
+        await transaction.rollback();
+        console.error("CLEAR ALL ALLOCATIONS ERROR:", error);
+        res.status(500).json({ message: (error instanceof Error ? error.message : String(error)) });
+    }
+};
+
+/* ════════════════════════════════════════════════════════════
  *  GET /api/seating/students/:deptId
  * ════════════════════════════════════════════════════════════ */
 export const getStudentsByDept = async (req: Request, res: Response) => {
@@ -846,11 +951,204 @@ export const getAllocationSummary = async (req: Request, res: Response) => {
     }
 };
 
+/* ─────────────────────────────────────────────────────────────
+ * Utility: chunk-safe shuffle
+ * Splits arr into chunks of `size`, shuffles WITHIN each chunk
+ * only, then re-joins.  Preserves coarse ordering while adding
+ * enough per-chunk randomness to feel non-deterministic.
+ * ───────────────────────────────────────────────────────────── */
+const chunkShuffle = <T>(arr: T[], chunkSize: number = 4): T[] => {
+    const out: T[] = [];
+    for (let i = 0; i < arr.length; i += chunkSize) {
+        const chunk = arr.slice(i, i + chunkSize);
+        // Fisher-Yates on the chunk only
+        for (let j = chunk.length - 1; j > 0; j--) {
+            const k = Math.floor(Math.random() * (j + 1));
+            [chunk[j], chunk[k]] = [chunk[k]!, chunk[j]!];
+        }
+        out.push(...chunk);
+    }
+    return out;
+};
+
 /* ════════════════════════════════════════════════════════════
  *  POST /api/seating/bulk-assign
- *  Body: { examDate, session, hallIds: number[], leftDeptId, rightDeptId }
- *  Distributes students across multiple halls continuously
+ *  Dispatcher: detects ExamType from ExamSeries and routes to
+ *    • Internal  → existing dept-based pool logic (unchanged)
+ *    • EndSemester → new subject-based round-robin with bench
+ *                   subject-separation constraint
  * ════════════════════════════════════════════════════════════ */
+
+/* ── Shared seat-traversal helpers ─────────────────────────── */
+
+/** Assign one student to one seat record and push to allNewAllocations */
+const pushAllocation = (
+    allNewAllocations: { ExamID: number; SeatID: number; StudentID: number; IsEligible: boolean; IsBlocked: boolean }[],
+    examId: number,
+    seat: any,
+    stu: any
+) => {
+    const eligible = stu._isEligible !== false;
+    allNewAllocations.push({
+        ExamID:     examId,
+        SeatID:     Number(seat.SeatID),
+        StudentID:  Number(stu.StudentID),
+        IsEligible: eligible,
+        IsBlocked:  !eligible,
+    });
+};
+
+/* ─────────────────────────────────────────────────────────────
+ * END-SEM: fetch all ExamRegistration rows for a date+session,
+ * grouped by SubjectCode, sorted by RegisterNumber inside each
+ * group.  Returns:
+ *   subjectQueue – ordered SubjectCode keys
+ *   subjectMap   – { [subjectCode]: [student, …] }
+ *   examIdBySubjectCode – { [subjectCode]: ExamID }
+ * ───────────────────────────────────────────────────────────── */
+const fetchEndSemStudentsBySubject = async (
+    examDate: string,
+    session:  string,
+    excludeStudentIds: number[],
+    transaction?: any
+): Promise<{
+    subjectQueue: string[];
+    subjectMap: Record<string, any[]>;
+    examIdBySubjectCode: Record<string, number>;
+}> => {
+    // 1. Fetch all exams on this date+session with their subject info
+    const exams = await sequelize.query<{
+        ExamID: number; SubjectID: number; SubjectCode: string; SubjectName: string;
+    }>(`
+        SELECT e.ExamID, e.SubjectID, s.SubjectCode, s.SubjectName
+        FROM   Exams e
+        INNER JOIN Subjects s ON s.SubjectID = e.SubjectID
+        WHERE  e.ExamDate = :examDate AND e.Session = :session
+    `, {
+        type: QueryTypes.SELECT,
+        replacements: { examDate, session },
+        ...(transaction ? { transaction } : {}),
+    });
+
+    if (exams.length === 0) return { subjectQueue: [], subjectMap: {}, examIdBySubjectCode: {} };
+
+    const examIdBySubjectCode: Record<string, number> = {};
+    const examIdsList: number[] = [];
+    for (const ex of exams) {
+        examIdBySubjectCode[ex.SubjectCode] = Number(ex.ExamID);
+        examIdsList.push(Number(ex.ExamID));
+    }
+
+    // 2. Fetch all registrations for these exams
+    const regs = await sequelize.query<{
+        StudentID: number; ExamID: number; IsEligible: number;
+    }>(`
+        SELECT er.StudentID, er.ExamID,
+               CAST(ISNULL(er.IsEligible, 1) AS BIT) AS IsEligible
+        FROM   ExamRegistrations er
+        WHERE  er.ExamID IN (${examIdsList.join(',')})
+    `, {
+        type: QueryTypes.SELECT,
+        raw: true,
+        ...(transaction ? { transaction } : {}),
+    });
+
+    // 3. Build eligibility + examId maps; collect unique StudentIDs
+    const excluded = new Set<number>(excludeStudentIds.map(Number));
+    const eligibilityMap = new Map<number, boolean>();
+    const studentExamMap = new Map<number, string>(); // studentId → subjectCode
+    for (const r of regs) {
+        const sid  = Number(r.StudentID);
+        if (excluded.has(sid)) continue;
+        const elig = Number(r.IsEligible) !== 0;
+        if (!eligibilityMap.has(sid) || !elig) eligibilityMap.set(sid, elig);
+        // find SubjectCode for this ExamID
+        const ex = exams.find(e => Number(e.ExamID) === Number(r.ExamID));
+        if (ex) studentExamMap.set(sid, ex.SubjectCode);
+    }
+
+    const allStudentIds = [...eligibilityMap.keys()];
+    if (allStudentIds.length === 0) return { subjectQueue: [], subjectMap: {}, examIdBySubjectCode };
+
+    // 4. Fetch full student details
+    const students = await Student.findAll({
+        where: { StudentID: { [Op.in]: allStudentIds } },
+        include: [
+            { model: User,       attributes: ['FullName'] },
+            { model: Department, attributes: ['DepartmentCode', 'DepartmentID'] },
+        ],
+        order: [['RegisterNumber', 'ASC']],
+        ...(transaction ? { transaction } : {}),
+    }) as any[];
+
+    // 5. Attach eligibility + subjectCode, group by SubjectCode
+    const subjectMap: Record<string, any[]> = {};
+    for (const s of students) {
+        const stu = typeof s.toJSON === 'function' ? s.toJSON() : { ...s };
+        stu._isEligible   = eligibilityMap.get(Number(stu.StudentID)) ?? true;
+        stu._subjectCode  = studentExamMap.get(Number(stu.StudentID)) ?? '';
+        const code = stu._subjectCode;
+        if (!code) continue;
+        if (!subjectMap[code]) subjectMap[code] = [];
+        subjectMap[code].push(stu);
+    }
+
+    // Each subject group is already sorted by RegisterNumber (Student.findAll order)
+    const subjectQueue = Object.keys(subjectMap).sort(); // deterministic order
+    return { subjectQueue, subjectMap, examIdBySubjectCode };
+};
+
+/* ─────────────────────────────────────────────────────────────
+ * END-SEM: build a round-robin interleaved global queue from
+ * per-subject pools, chunk-shuffle within each subject first.
+ * ───────────────────────────────────────────────────────────── */
+const buildEndSemQueue = (
+    subjectQueue: string[],
+    subjectMap: Record<string, any[]>,
+    chunkSize: number = 4
+): any[] => {
+    // Chunk-shuffle within each subject to add local randomness while keeping reg-order continuity
+    const shuffled: Record<string, any[]> = {};
+    for (const code of subjectQueue) {
+        shuffled[code] = chunkShuffle(subjectMap[code]!, chunkSize);
+    }
+
+    // Round-robin interleave
+    const queue: any[] = [];
+    const ptrs: Record<string, number> = {};
+    for (const code of subjectQueue) ptrs[code] = 0;
+
+    let added = true;
+    while (added) {
+        added = false;
+        for (const code of subjectQueue) {
+            if (ptrs[code]! < shuffled[code]!.length) {
+                queue.push(shuffled[code]![ptrs[code]!]);
+                ptrs[code]!++;
+                added = true;
+            }
+        }
+    }
+    return queue;
+};
+
+/* ─────────────────────────────────────────────────────────────
+ * END-SEM: find next candidate in queue starting from ptr
+ * whose _subjectCode differs from avoidCode (for bench constraint).
+ * Returns the index in queue or -1 if not found within lookahead.
+ * ───────────────────────────────────────────────────────────── */
+const findDifferentSubject = (
+    queue: any[],
+    startPtr: number,
+    avoidCode: string,
+    lookahead: number = 30
+): number => {
+    for (let i = startPtr; i < queue.length && i < startPtr + lookahead; i++) {
+        if (queue[i]?._subjectCode !== avoidCode) return i;
+    }
+    return -1;
+};
+
 export const bulkAssign = async (req: Request, res: Response) => {
     const transaction = await sequelize.transaction();
     try {
@@ -879,6 +1177,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
             secondaryDeptId,
             avoidSameDeptBench,
             shuffleRooms,
+            roomCapacityLimit,   // End-Sem: optional per-room seat cap (default 40)
         } = req.body;
 
         if (!examDate || !session || !hallIds || hallIds.length === 0) {
@@ -892,6 +1191,216 @@ export const bulkAssign = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "No exams found for this date + session" });
         }
         const primaryExamId = examIds[0] as number;
+
+        /* ══════════════════════════════════════════════════════
+         * STEP 1: Detect ExamType for this date+session
+         * Query ExamSeries through the Exams table.
+         * ══════════════════════════════════════════════════════ */
+        const examTypeRows = await sequelize.query<{ ExamType: string }>(`
+            SELECT DISTINCT es.ExamType
+            FROM   Exams e
+            INNER JOIN ExamSeries es ON es.ExamSeriesID = e.ExamSeriesID
+            WHERE  e.ExamDate = :examDate AND e.Session = :session
+        `, {
+            type: QueryTypes.SELECT,
+            replacements: { examDate: String(examDate), session: String(session) },
+            transaction,
+        });
+        // Any EndSemester exam in the slot → use EndSemester logic
+        const examType: 'Internal' | 'EndSemester' =
+            examTypeRows.some(r => r.ExamType === 'EndSemester') ? 'EndSemester' : 'Internal';
+        console.log(`[bulkAssign] ExamType detected: ${examType} (rows: ${examTypeRows.length})`);
+
+        /* ══════════════════════════════════════════════════════
+         * END-SEMESTER BRANCH — returns early
+         * ══════════════════════════════════════════════════════ */
+        if (examType === 'EndSemester') {
+            const capLimit = roomCapacityLimit ? Number(roomCapacityLimit) : 40;
+            const CHUNK    = 4;
+
+            // ── Already-allocated excludes ──
+            const selectedHallSetES = new Set<number>((hallIds as number[]).map((id: number) => Number(id)));
+            const existingAllocsES = await SeatAllocation.findAll({
+                where: { ExamID: { [Op.in]: examIds } },
+                include: [{ model: Seat, attributes: ['RoomID'], required: true }],
+                transaction,
+            });
+            const allocatedES = new Set<number>(
+                (existingAllocsES as any[])
+                    .filter((a: any) => !selectedHallSetES.has(Number(a?.Seat?.RoomID)))
+                    .map((a: any) => Number(a.StudentID))
+                    .filter(Boolean)
+            );
+            const excludeIdsES = allocatedES.size > 0 ? [...allocatedES] : [-1];
+
+            // ── Fetch all subject-grouped students ──
+            const { subjectQueue, subjectMap, examIdBySubjectCode } =
+                await fetchEndSemStudentsBySubject(String(examDate), String(session), excludeIdsES, transaction);
+
+            if (subjectQueue.length === 0 || Object.keys(subjectMap).length === 0) {
+                await transaction.commit();
+                return res.status(400).json({
+                    message: 'No registered students found for this End Semester exam slot.',
+                    studentCount: 0,
+                    hallResults: [],
+                    examType,
+                });
+            }
+
+            const totalEndSemStudents = Object.values(subjectMap).reduce((s, a) => s + a.length, 0);
+            console.log(`[EndSem] Subjects: ${subjectQueue.join(', ')} | Total students: ${totalEndSemStudents}`);
+
+            // ── Build global round-robin interleaved queue ──
+            let globalQueue = buildEndSemQueue(subjectQueue, subjectMap, CHUNK);
+            let qPtr = 0; // current position in globalQueue
+
+            // ── Fetch and cap seats ──
+            let allActiveSeatsES: any[] = await sequelize.query(`
+                SELECT SeatID, RoomID, RowIndex, BenchIndex, SeatIndex
+                FROM   Seats
+                WHERE  RoomID IN (${(hallIds as number[]).map(Number).join(',')})
+                AND    IsActive = 1
+                ORDER BY RoomID ASC, RowIndex ASC, BenchIndex ASC, SeatIndex ASC
+            `, { type: QueryTypes.SELECT, raw: true, transaction }) as any[];
+
+            if (allActiveSeatsES.length === 0) {
+                await transaction.commit();
+                return res.status(400).json({ message: 'No active seats found in selected halls.', examType });
+            }
+
+            // Apply per-room capacity cap
+            const roomSeatsMapES = new Map<number, any[]>();
+            for (const seat of allActiveSeatsES) {
+                const rid = Number(seat.RoomID);
+                if (!roomSeatsMapES.has(rid)) roomSeatsMapES.set(rid, []);
+                roomSeatsMapES.get(rid)!.push(seat);
+            }
+            // Cap: keep only first `capLimit` seats per room
+            const cappedSeatsES: any[] = [];
+            for (const [, roomSeats] of roomSeatsMapES) {
+                cappedSeatsES.push(...roomSeats.slice(0, capLimit));
+            }
+
+            // ── Clear old allocations for these halls ──
+            const allSeatIdsES = allActiveSeatsES.map(s => s.SeatID);
+            if (allSeatIdsES.length > 0) {
+                await SeatAllocation.destroy({
+                    where: { ExamID: { [Op.in]: examIds }, SeatID: { [Op.in]: allSeatIdsES } },
+                    transaction,
+                });
+            }
+
+            // ── Assign seats: room → row → bench → seatIndex ──
+            const hallResultsES: any[] = [];
+            const allNewAllocsES: { ExamID: number; SeatID: number; StudentID: number; IsEligible: boolean; IsBlocked: boolean }[] = [];
+
+            // Group capped seats by room
+            const cappedByRoom = new Map<number, any[]>();
+            for (const seat of cappedSeatsES) {
+                const rid = Number(seat.RoomID);
+                if (!cappedByRoom.has(rid)) cappedByRoom.set(rid, []);
+                cappedByRoom.get(rid)!.push(seat);
+            }
+
+            const targetHallsES = await Room.findAll({ where: { RoomID: { [Op.in]: hallIds } }, transaction });
+            let hallIdsToUseES = [...(hallIds as number[]).map(Number)];
+            if (shuffleRooms) {
+                for (let i = hallIdsToUseES.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    const tmp = hallIdsToUseES[i]!; hallIdsToUseES[i] = hallIdsToUseES[j]!; hallIdsToUseES[j] = tmp;
+                }
+            }
+
+            for (const hallIdNum of hallIdsToUseES) {
+                const hall = targetHallsES.find(h => h.RoomID === hallIdNum);
+                if (!hall) continue;
+
+                const seats = cappedByRoom.get(hallIdNum) || [];
+                if (seats.length === 0) {
+                    hallResultsES.push({ hallId: hallIdNum, hallCode: (hall as any).RoomCode, totalSeats: 0, filled: 0 });
+                    continue;
+                }
+
+                // Build bench map for this hall
+                const benchMapES: Record<string, Record<number, any[]>> = {};
+                for (const seat of seats) {
+                    const row = getRowLabel(seat);
+                    const bench = getBenchNumber(seat);
+                    if (!benchMapES[row]) benchMapES[row] = {};
+                    if (!benchMapES[row]![bench]) benchMapES[row]![bench] = [];
+                    benchMapES[row]![bench]!.push(seat);
+                }
+
+                const allRowsES   = Object.keys(benchMapES).sort();
+                const allBenchNums = [...new Set(allRowsES.flatMap(r => Object.keys(benchMapES[r]!).map(Number)))].sort((a,b) => a-b);
+                let hallFilledES = 0;
+
+                for (const row of allRowsES) {
+                    for (const bench of allBenchNums) {
+                        const benchSeats = (benchMapES[row]?.[bench] || []).sort(sortSeatsByPosition);
+                        let seat1SubjectCode: string | null = null;
+
+                        for (const seat of benchSeats) {
+                            if (qPtr >= globalQueue.length) break;
+
+                            if (getSeatNumber(seat) === 1) {
+                                // Seat 1 — any next student
+                                const stu = globalQueue[qPtr++]!;
+                                seat1SubjectCode = stu._subjectCode ?? null;
+                                const subjExamId = examIdBySubjectCode[stu._subjectCode!] ?? primaryExamId;
+                                pushAllocation(allNewAllocsES, subjExamId, seat, stu);
+                                hallFilledES++;
+                            } else {
+                                // Seat 2 — must differ from seat 1's subjectCode
+                                if (seat1SubjectCode !== null && qPtr < globalQueue.length) {
+                                    const nextCode = globalQueue[qPtr]?._subjectCode;
+                                    if (nextCode === seat1SubjectCode) {
+                                        // Look ahead for different subject
+                                        const altIdx = findDifferentSubject(globalQueue, qPtr, seat1SubjectCode, 30);
+                                        if (altIdx !== -1 && altIdx !== qPtr) {
+                                            // Swap to bring different-subject student to current position
+                                            [globalQueue[qPtr], globalQueue[altIdx]] = [globalQueue[altIdx]!, globalQueue[qPtr]!];
+                                        }
+                                        // If no alt found, assign same-subject anyway (last resort)
+                                    }
+                                    const stu = globalQueue[qPtr++]!;
+                                    const subjExamId = examIdBySubjectCode[stu._subjectCode!] ?? primaryExamId;
+                                    pushAllocation(allNewAllocsES, subjExamId, seat, stu);
+                                    hallFilledES++;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                hallResultsES.push({
+                    hallId: hallIdNum,
+                    hallCode: (hall as any).RoomCode,
+                    totalSeats: seats.length,
+                    filled: hallFilledES,
+                    cappedAt: capLimit,
+                });
+            }
+
+            if (allNewAllocsES.length > 0) {
+                await SeatAllocation.bulkCreate(allNewAllocsES, { transaction });
+            }
+
+            await transaction.commit();
+            console.log(`[EndSem] Assigned ${allNewAllocsES.length} seats across ${hallResultsES.length} halls`);
+            return res.json({
+                success: true,
+                examType,
+                studentCount: totalEndSemStudents,
+                assignedCount: allNewAllocsES.length,
+                hallResults: hallResultsES,
+                subjects: subjectQueue,
+                roomCapacityLimit: capLimit,
+            });
+        }
+        /* ══════════════════════════════════════════════════════
+         * INTERNAL BRANCH — continues below (unchanged)
+         * ══════════════════════════════════════════════════════ */
 
         // Already-allocated students in OTHER halls (outside the current bulk-run scope)
         // Students already seated in selected halls must remain eligible because those halls are re-cleared/reassigned.
@@ -908,6 +1417,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
                 .filter(Boolean)
         );
         const excludeIds = allocatedStudentIds.size > 0 ? [...allocatedStudentIds] : [-1];
+
 
         let resolvedMode: "single" | "two-alternate" | "auto-balanced" =
             mode === "single" || mode === "two-alternate" || mode === "auto-balanced"
@@ -933,7 +1443,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
             transaction
         );
 
-        // Build left/right pools based on selected mode + departments.
+        // ── STEP 2: Build left/right pools based on mode + departments ──
         const sortByRegNo = (arr: any[]) =>
             [...arr].sort((a, b) =>
                 String(a?.RegisterNumber || "").localeCompare(String(b?.RegisterNumber || ""), undefined, {
@@ -949,24 +1459,24 @@ export const bulkAssign = async (req: Request, res: Response) => {
         let leftStudents: any[] = [];
         let rightStudents: any[] = [];
 
-        if (
-            primaryDeptIdNum &&
-            secondaryDeptIdNum &&
-            primaryDeptIdNum !== secondaryDeptIdNum
-        ) {
+        if (primaryDeptIdNum && secondaryDeptIdNum && primaryDeptIdNum !== secondaryDeptIdNum) {
             leftStudents = sortByRegNo(allStudentsSorted.filter((s: any) => deptOf(s) === primaryDeptIdNum));
             rightStudents = sortByRegNo(allStudentsSorted.filter((s: any) => deptOf(s) === secondaryDeptIdNum));
         } else if (primaryDeptIdNum) {
-            // Single selected department: keep left side continuous.
-            const pool = sortByRegNo(allStudentsSorted.filter((s: any) => deptOf(s) === primaryDeptIdNum));
-            leftStudents = pool;
+            leftStudents = sortByRegNo(allStudentsSorted.filter((s: any) => deptOf(s) === primaryDeptIdNum));
             rightStudents = [];
         } else {
-            // No department split selected: use block split so each side is continuous.
             const splitAt = Math.ceil(allStudentsSorted.length / 2);
             leftStudents = allStudentsSorted.slice(0, splitAt);
             rightStudents = allStudentsSorted.slice(splitAt);
         }
+
+        // ── STEP 3: Chunk-safe shuffle — feels random, preserves row continuity ──
+        // chunkSize = 4 (roughly one bench-column worth of students)
+        const CHUNK = 4;
+        leftStudents  = chunkShuffle(leftStudents,  CHUNK);
+        rightStudents = chunkShuffle(rightStudents, CHUNK);
+        console.log("Chunk-shuffled pools:", { left: leftStudents.length, right: rightStudents.length, chunk: CHUNK });
 
         const totalEligibleFetched = leftStudents.length + rightStudents.length;
         console.log("Fetched students:", totalEligibleFetched);
@@ -1051,7 +1561,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
         }
 
         const hallResults: any[] = [];
-        const allNewAllocations: { ExamID: number; SeatID: number; StudentID: number }[] = [];
+        const allNewAllocations: { ExamID: number; SeatID: number; StudentID: number; IsEligible: boolean; IsBlocked: boolean }[] = [];
 
         // Shuffle halls if toggle is ON (for random room distribution)
         let hallIdsToUse = [...hallIds.map(Number)];
@@ -1111,8 +1621,15 @@ export const bulkAssign = async (req: Request, res: Response) => {
                             if (leftIdx < leftStudents.length) {
                                 const stu = leftStudents[leftIdx++] as any;
                                 currentBenchLeftDept = stu.Department?.DepartmentID || null;
-                                console.log(`Bench ${row}${benchNum} Left: ${stu.RegisterNumber} (${stu.Department?.DepartmentCode})`);
-                                allNewAllocations.push({ ExamID: primaryExamId, SeatID: seat.SeatID !, StudentID: stu.StudentID as number });
+                                const stuEligible = stu._isEligible !== false;
+                                console.log(`Bench ${row}${benchNum} Left: ${stu.RegisterNumber} (${stu.Department?.DepartmentCode}) eligible=${stuEligible}`);
+                                allNewAllocations.push({
+                                    ExamID: primaryExamId,
+                                    SeatID: seat.SeatID!,
+                                    StudentID: stu.StudentID as number,
+                                    IsEligible: stuEligible,
+                                    IsBlocked: !stuEligible,
+                                });
                                 hallLeft++;
                             }
                         } else {
@@ -1209,8 +1726,15 @@ export const bulkAssign = async (req: Request, res: Response) => {
                                 }
 
                                 const stu = targetPool[targetIdx] as any;
-                                console.log(`Bench ${row}${benchNum} Right: ${stu.RegisterNumber} (${stu.Department?.DepartmentCode})`);
-                                allNewAllocations.push({ ExamID: primaryExamId, SeatID: seat.SeatID !, StudentID: stu.StudentID as number });
+                                const stuEligible = stu._isEligible !== false;
+                                console.log(`Bench ${row}${benchNum} Right: ${stu.RegisterNumber} (${stu.Department?.DepartmentCode}) eligible=${stuEligible}`);
+                                allNewAllocations.push({
+                                    ExamID: primaryExamId,
+                                    SeatID: seat.SeatID!,
+                                    StudentID: stu.StudentID as number,
+                                    IsEligible: stuEligible,
+                                    IsBlocked: !stuEligible,
+                                });
 
                                 // Increment appropriate counter
                                 if (useRightPool) {
@@ -1241,6 +1765,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
         console.log("DEBUG: Sending students to frontend:", students.length);
         res.json({
             success: true,
+            examType: 'Internal',
             studentCount: students.length,
             hallResults,
             totalLeftAssigned: leftIdx, totalRightAssigned: rightIdx,
@@ -1269,7 +1794,14 @@ export const bulkAssign = async (req: Request, res: Response) => {
 /* ════════════════════════════════════════════════════════════
  *  POST /api/seating/shuffle-global
  *  Body: { examDate, session }
- *  Randomly shuffles all currently assigned students (lefts with lefts, rights with rights) across all halls
+ *
+ *  Re-shuffles ALL currently-assigned students using the SAME
+ *  chunk-safe algorithm as bulkAssign:
+ *    • leftPool  = every student assigned to a SeatIndex-1 seat
+ *    • rightPool = every student assigned to a SeatIndex-2 seat
+ *    • chunk-shuffle each pool independently (chunkSize = 4)
+ *    • re-assign left seats → leftPool, right seats → rightPool
+ *  This ensures the visual pattern is identical to a fresh run.
  * ════════════════════════════════════════════════════════════ */
 export const shuffleGlobal = async (req: Request, res: Response) => {
     const transaction = await sequelize.transaction();
@@ -1286,97 +1818,111 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "No exams found for this date + session" });
         }
 
+        // ── Fetch all current allocations ──────────────────────────────
         const existingAllocations = await SeatAllocation.findAll({
-            where: { ExamID: { [Op.in]: examIds } }, transaction
-        });
+            where: { ExamID: { [Op.in]: examIds } },
+            transaction,
+        }) as any[];
 
         if (existingAllocations.length === 0) {
             await transaction.rollback();
             return res.status(400).json({ message: "No students are currently allocated to shuffle" });
         }
 
-        const studentIds = [...new Set(existingAllocations.map(a => a.StudentID))];
-        const students = await Student.findAll({ where: { StudentID: { [Op.in]: studentIds } }, transaction });
-        const stuDeptMap = new Map();
-        for (const s of students) stuDeptMap.set(s.StudentID, s.DepartmentID);
-
-        const studentExamMap = new Map();
-        const deptMap = new Map();
-
-        // STEP 1: GROUP STUDENTS BY DEPARTMENT
-        for (const alloc of existingAllocations) {
-            const sId = alloc.StudentID;
-            const dId = stuDeptMap.get(sId) || 0;
-            studentExamMap.set(sId, alloc.ExamID);
-            if (!deptMap.has(dId)) deptMap.set(dId, []);
-            deptMap.get(dId).push(sId);
-        }
-
-        const seatIds = [...new Set(existingAllocations.map(a => a.SeatID))];
+        // ── Fetch seat metadata so we can classify left vs right ───────
+        const seatIdSet = [...new Set<number>(existingAllocations.map((a: any) => Number(a.SeatID)))];
         const allSeatInfo = await Seat.findAll({
-            where: { SeatID: { [Op.in]: seatIds } },
+            where: { SeatID: { [Op.in]: seatIdSet } },
             attributes: ["SeatID", "RoomID", "RowIndex", "BenchIndex", "SeatIndex"],
-            transaction
-        });
-        const seatInfoMap = new Map();
-        for (const s of allSeatInfo) seatInfoMap.set(s.SeatID, s);
+            transaction,
+        }) as any[];
+        const seatInfoMap = new Map<number, any>();
+        for (const s of allSeatInfo) seatInfoMap.set(Number(s.SeatID), s);
 
-        const roomIds = [...new Set(allSeatInfo.map((s) => s.RoomID))];
-        const rooms = await Room.findAll({ where: { RoomID: { [Op.in]: roomIds } }, transaction });
-        const roomOrderMap = new Map();
-        for (const r of rooms) roomOrderMap.set(r.RoomID, r.RoomCode);
+        // ── Build canonical seat order: Room(code) → Row → Bench → SeatIndex ──
+        const roomIds = [...new Set<number>(allSeatInfo.map((s: any) => Number(s.RoomID)))];
+        const rooms  = await Room.findAll({ where: { RoomID: { [Op.in]: roomIds } }, transaction }) as any[];
+        const roomCodeMap = new Map<number, string>();
+        for (const r of rooms) roomCodeMap.set(Number(r.RoomID), String(r.RoomCode || ''));
 
-        // STEP 3: FIXED SEAT ORDER (Room -> RowIndex -> BenchIndex -> SeatIndex)
-        const orderedSeats = seatIds.sort((a, b) => {
+        const orderedSeatIds = [...seatIdSet].sort((a, b) => {
             const sa = seatInfoMap.get(a);
             const sb = seatInfoMap.get(b);
-            const rmA = roomOrderMap.get(sa.RoomID) || '';
-            const rmB = roomOrderMap.get(sb.RoomID) || '';
-            if (rmA !== rmB) return rmA.localeCompare(rmB);
-            if (sa.RowIndex !== sb.RowIndex) return sa.RowIndex - sb.RowIndex;
-            if (sa.BenchIndex !== sb.BenchIndex) return sa.BenchIndex - sb.BenchIndex;
-            return sa.SeatIndex - sb.SeatIndex;
+            if (!sa || !sb) return 0;
+            const rcA = roomCodeMap.get(Number(sa.RoomID)) || '';
+            const rcB = roomCodeMap.get(Number(sb.RoomID)) || '';
+            if (rcA !== rcB) return rcA.localeCompare(rcB);
+            if (sa.RowIndex   !== sb.RowIndex)   return Number(sa.RowIndex)   - Number(sb.RowIndex);
+            if (sa.BenchIndex !== sb.BenchIndex) return Number(sa.BenchIndex) - Number(sb.BenchIndex);
+            return Number(sa.SeatIndex) - Number(sb.SeatIndex);
         });
 
-        // STEP 6: SHUFFLE ONLY WITHIN DEPARTMENT GROUPS
-        const orderedDeptKeys = [...deptMap.keys()];
-        for (const dId of orderedDeptKeys) {
-            const arr = deptMap.get(dId);
-            arr.sort(() => Math.random() - 0.5);
+        // ── Separate seats into left (SeatIndex === 1) and right pools ──
+        const leftSeatIds:  number[] = [];
+        const rightSeatIds: number[] = [];
+        for (const sid of orderedSeatIds) {
+            const seatIdx = Number(seatInfoMap.get(sid)?.SeatIndex ?? 2);
+            if (seatIdx === 1) leftSeatIds.push(sid);
+            else               rightSeatIds.push(sid);
         }
 
-        // STEP 2: BUILD ORDERED INTERLEAVED LIST
-        let finalStudents = [];
-        let hasMore = true;
-        let i = 0;
-        while (hasMore) {
-            hasMore = false;
-            for (const dId of orderedDeptKeys) {
-                const arr = deptMap.get(dId);
-                if (i < arr.length) {
-                    finalStudents.push(arr[i]);
-                    hasMore = true;
-                }
-            }
-            i++;
+        // ── Build per-pool student lists + eligibility map ─────────────
+        type AllocRec = { studentId: number; examId: number; isEligible: boolean; isBlocked: boolean };
+        const seatToAlloc = new Map<number, AllocRec>();
+        for (const alloc of existingAllocations) {
+            seatToAlloc.set(Number(alloc.SeatID), {
+                studentId: Number(alloc.StudentID),
+                examId:    Number(alloc.ExamID),
+                isEligible: (alloc as any).IsEligible !== false,
+                isBlocked:  (alloc as any).IsBlocked  === true,
+            });
         }
 
-        await SeatAllocation.destroy({
-            where: { ExamID: { [Op.in]: examIds } }, transaction
-        });
+        // Collect student records in left-seat order, then right-seat order
+        let leftPool:  AllocRec[] = leftSeatIds .map(sid => seatToAlloc.get(sid)!).filter(Boolean);
+        let rightPool: AllocRec[] = rightSeatIds.map(sid => seatToAlloc.get(sid)!).filter(Boolean);
 
-        // STEP 4: ASSIGN STUDENTS SEQUENTIALLY
-        const newRecords = [];
-        for (let j = 0; j < orderedSeats.length; j++) {
-            const sId = finalStudents[j];
-            const eId = studentExamMap.get(sId);
-            if (eId && orderedSeats[j] !== undefined) {
-                newRecords.push({
-                    ExamID: eId, // STEP 7: PRESERVE STUDENT -> EXAM
-                    SeatID: orderedSeats[j] as number,
-                    StudentID: sId
-                });
-            }
+        // ── STEP 3: Chunk-safe shuffle — same algorithm as bulkAssign ──
+        const CHUNK = 4;
+        leftPool  = chunkShuffle(leftPool,  CHUNK);
+        rightPool = chunkShuffle(rightPool, CHUNK);
+        console.log("shuffleGlobal chunk-shuffle:", { left: leftPool.length, right: rightPool.length, chunk: CHUNK });
+
+        // ── Clear old allocations ──────────────────────────────────────
+        await SeatAllocation.destroy({ where: { ExamID: { [Op.in]: examIds } }, transaction });
+
+        // ── Re-assign: leftPool → left seats, rightPool → right seats ──
+        const newRecords: { ExamID: number; SeatID: number; StudentID: number; IsEligible: boolean; IsBlocked: boolean }[] = [];
+
+        for (let i = 0; i < leftPool.length && i < leftSeatIds.length; i++) {
+            const rec = leftPool[i]!;
+            newRecords.push({
+                ExamID:     rec.examId,
+                SeatID:     leftSeatIds[i]!,
+                StudentID:  rec.studentId,
+                IsEligible: rec.isEligible,
+                IsBlocked:  rec.isBlocked,
+            });
+        }
+        for (let i = 0; i < rightPool.length && i < rightSeatIds.length; i++) {
+            const rec = rightPool[i]!;
+            newRecords.push({
+                ExamID:     rec.examId,
+                SeatID:     rightSeatIds[i]!,
+                StudentID:  rec.studentId,
+                IsEligible: rec.isEligible,
+                IsBlocked:  rec.isBlocked,
+            });
+        }
+
+        // ── Validate: no student should appear twice ───────────────────
+        const seenStudents = new Set<number>();
+        const seenSeats    = new Set<number>();
+        for (const r of newRecords) {
+            if (seenStudents.has(r.StudentID)) console.warn(`[shuffleGlobal] Duplicate student ${r.StudentID} detected — skipping`);
+            if (seenSeats.has(r.SeatID))       console.warn(`[shuffleGlobal] Duplicate seat ${r.SeatID} detected — skipping`);
+            seenStudents.add(r.StudentID);
+            seenSeats.add(r.SeatID);
         }
 
         if (newRecords.length > 0) {
@@ -1384,7 +1930,7 @@ export const shuffleGlobal = async (req: Request, res: Response) => {
         }
 
         await transaction.commit();
-        res.json({ message: "Seating scrambled successfully!", shuffledCount: newRecords.length });
+        res.json({ message: "Seating reshuffled successfully!", shuffledCount: newRecords.length });
 
     } catch (error) {
         await transaction.rollback();
