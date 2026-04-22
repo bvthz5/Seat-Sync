@@ -6,6 +6,8 @@
 *.log
 .DS_Store
 Thumbs.db
+test_*.csv
+test_*.ps1
 
 # ===============================
 # NODE

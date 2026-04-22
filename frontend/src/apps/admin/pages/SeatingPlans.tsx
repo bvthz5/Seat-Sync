@@ -10,7 +10,7 @@ import {
     Building2, Users, CheckCircle2, AlertCircle, RefreshCw,
     Calendar, Sun, Moon, Armchair, ClipboardList, ChevronRight, Ban, Eye,
     MoreVertical, Power, XCircle, Shuffle, FileSpreadsheet, FileDown, Sheet,
-    ArrowLeft
+    ArrowLeft, Rocket, Play, Check
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { SeatingService } from '../services/seatingService';
@@ -27,6 +27,13 @@ interface Assignment { seatId: number; studentId: number; studentName: string; r
 interface Series { ExamSeriesID: number; SeriesName: string; IsActive: boolean; }
 interface ExamDateSlot { examDate: string; session: string; examCount: number; }
 interface HallSummary { hallId: number; hallCode: string; capacity: number; totalSeats: number; filledSeats: number; }
+interface SeriesTask {
+    date: string;
+    session: 'FN' | 'AN';
+    status: 'pending' | 'running' | 'success' | 'failed';
+    error?: string;
+    assigned?: number;
+}
 interface AssignFeedback {
     assigned: number;
     unassigned: number;
@@ -129,7 +136,6 @@ const SeatingPlans: React.FC = () => {
     const [hallFilter, setHallFilter] = useState<'all' | 'empty' | 'partial' | 'full'>('all');
 
     const [assigning, setAssigning] = useState(false);
-    const [shuffling, setShuffling] = useState(false);
     const [loadingSummary, setLoadingSummary] = useState(false);
     const [addingSlot, setAddingSlot] = useState(false);
 
@@ -145,7 +151,6 @@ const SeatingPlans: React.FC = () => {
     const [detailTotalSeats, setDetailTotalSeats] = useState(0);
     const [detailLoading, setDetailLoading] = useState(false);
     const [showPrintModal, setShowPrintModal] = useState(false);
-    const [showShuffleConfirm, setShowShuffleConfirm] = useState(false);
     const [globalDownloading, setGlobalDownloading] = useState(false);
     const [seatingDownloading, setSeatingDownloading] = useState(false);
     const [clearingAll, setClearingAll] = useState(false);
@@ -156,6 +161,11 @@ const SeatingPlans: React.FC = () => {
     // fallback to Internal if no exams loaded yet
     const [_lastExamTypeOverride, setLastExamTypeOverride] = useState<'Internal' | 'EndSemester' | null>(null);
     const [_lastSubjectsFromBulk, setLastSubjectsFromBulk] = useState<string[]>([]);
+
+    /* auto assign series */
+    const [showSeriesModal, setShowSeriesModal] = useState(false);
+    const [seriesTasks, setSeriesTasks] = useState<SeriesTask[]>([]);
+    const [seriesRunning, setSeriesRunning] = useState(false);
 
     /* derived */
     const availableDates = [...new Set(examDates.filter(d => d.session === selectedSession).map(d => d.examDate))].sort();
@@ -460,21 +470,76 @@ const SeatingPlans: React.FC = () => {
         if (first) await openHallDetail(first);
     };
 
-    /* global shuffle */
-    const executeShuffleGlobal = async () => {
-        if (!selectedDate || !selectedSession) return;
-        startTransition(() => { setShuffling(true); setShowShuffleConfirm(false); });
-        try {
-            const r = await SeatingService.shuffleGlobal({ examDate: selectedDate, session: selectedSession });
-            toast.success(r.message || 'Halls shuffled successfully');
-            startTransition(() => loadSummary());
-        } catch (e: any) { toast.error(e?.response?.data?.message || 'Shuffle failed'); }
-        finally { startTransition(() => setShuffling(false)); }
+    /* auto assign series */
+    const openSeriesModal = () => {
+        if (!selectedSeries) return;
+        
+        if (examDates.length === 0) {
+            toast.error("No valid exams found in this series.");
+            return;
+        }
+        
+        const tasks: SeriesTask[] = examDates.map(d => ({
+            date: String(d.examDate).split('T')[0],
+            session: d.session as 'FN' | 'AN',
+            status: 'pending'
+        }));
+        
+        setSeriesTasks(tasks);
+        setShowSeriesModal(true);
     };
 
-    const handleShuffleGlobal = () => {
-        if (!selectedDate || !selectedSession) return;
-        setShowShuffleConfirm(true);
+    const runSeriesAllocation = async () => {
+        setSeriesRunning(true);
+        let ids = selectedHallIds.size > 0 ? [...selectedHallIds] : halls.map(h => h.RoomID);
+        
+        const tasks = [...seriesTasks];
+        let hasError = false;
+        
+        for (let i = 0; i < tasks.length; i++) {
+            const task = tasks[i];
+            if (task.status === 'success') continue;
+            
+            task.status = 'running';
+            setSeriesTasks([...tasks]);
+            
+            try {
+                const r = await SeatingService.bulkAssign({
+                    examDate: task.date, 
+                    session: task.session, 
+                    hallIds: ids,
+                    mode: assignmentMode,
+                    primaryDeptId: primaryDept ? Number(primaryDept) : null,
+                    secondaryDeptId: secondaryDept ? Number(secondaryDept) : null,
+                    avoidSameDeptBench,
+                    shuffleRooms,
+                    roomCapacityLimit,
+                });
+                
+                let assigned = 0;
+                const examType: string = r.examType || 'Internal';
+                if (examType === 'EndSemester') {
+                    assigned = Number(r.assignedCount || 0);
+                } else {
+                    assigned = Number(r.totalLeftAssigned || 0) + Number(r.totalRightAssigned || 0);
+                }
+                
+                task.status = 'success';
+                task.assigned = assigned;
+            } catch (err: any) {
+                task.status = 'failed';
+                task.error = err?.response?.data?.message || 'Failed';
+                hasError = true;
+            }
+            setSeriesTasks([...tasks]);
+        }
+        setSeriesRunning(false);
+        if (hasError) toast.error("Completed with some errors");
+        else toast.success("Successfully assigned entire series");
+        
+        if (selectedDate && selectedSession) {
+            loadSummary();
+        }
     };
 
     /* detail modal */
@@ -1281,26 +1346,35 @@ const SeatingPlans: React.FC = () => {
 
                                 <div className="h-px bg-slate-100" />
 
-                                {/* ─── STEP 5: Generate / Shuffle ───────── */}
+                                {/* ─── STEP 5: Generate ───────── */}
                                 <div className="space-y-3">
                                     <div className="flex items-center gap-2">
                                         <span className="w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-extrabold flex items-center justify-center shrink-0">5</span>
-                                        <span className="text-[11px] font-bold text-slate-700 uppercase tracking-widest">Generate / Shuffle</span>
+                                        <span className="text-[11px] font-bold text-slate-700 uppercase tracking-widest">Generate Seating</span>
                                     </div>
 
-                                    <div className="flex gap-2">
+                                    <div className="flex flex-col gap-2">
                                         <Button onPress={handleBulkAssign} isLoading={assigning}
                                             isDisabled={!selectedDate || !canAssignByMode}
-                                            className="flex-1 font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl h-11 border border-indigo-700 transition-all data-[disabled=true]:opacity-50 text-[14px] shadow-md shadow-indigo-200"
+                                            className="w-full font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl h-11 border border-indigo-700 transition-all data-[disabled=true]:opacity-50 text-[14px] shadow-md shadow-indigo-200"
                                             startContent={!assigning ? <Zap size={16} fill="currentColor" /> : undefined} size="lg">
                                             {assigning ? 'Generating…' : 'Generate Seating'}
                                         </Button>
-                                        <Button onPress={handleShuffleGlobal} isLoading={shuffling}
-                                            isDisabled={!selectedDate || totalFilled === 0}
-                                            className="font-bold text-white bg-pink-600 hover:bg-pink-700 rounded-xl h-11 w-11 min-w-11 px-0 border border-pink-700 transition-all data-[disabled=true]:opacity-50 shadow-md shadow-pink-200"
-                                            title="Re-shuffle existing (chunk-safe)">
-                                            {!shuffling && <Shuffle size={16} />}
-                                        </Button>
+                                        
+                                        <Tooltip content={!selectedSeries ? "Select an Exam Series in Step 1 first" : "Assign seating for all valid sessions in the selected series"} placement="bottom" showArrow classNames={{ content: "font-semibold text-[11px]" }}>
+                                            <div className="w-full">
+                                                <Button onPress={openSeriesModal} 
+                                                    isDisabled={!selectedSeries}
+                                                    className={`w-full font-bold text-white rounded-xl h-11 border transition-all ${
+                                                        !selectedSeries 
+                                                        ? 'bg-slate-300 border-slate-300 opacity-60 cursor-not-allowed' 
+                                                        : 'bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 border-fuchsia-500/50 shadow-[0_0_20px_rgba(217,70,239,0.2)]'
+                                                    }`}
+                                                    startContent={<Rocket size={16} fill="currentColor" />}>
+                                                    Auto-Assign Full Series
+                                                </Button>
+                                            </div>
+                                        </Tooltip>
                                     </div>
 
                                     {/* Post-run feedback */}
@@ -2162,52 +2236,91 @@ const SeatingPlans: React.FC = () => {
                 </ModalContent>
             </Modal>
 
-            {/* ═══ Global Shuffle Confirmation Modal ═══ */}
-            <Modal isOpen={showShuffleConfirm} onOpenChange={setShowShuffleConfirm} placement="center" backdrop="blur" classNames={{ base: "bg-white border border-[#e2e8f0] shadow-2xl overflow-hidden", backdrop: "bg-slate-800/20 backdrop-blur-md" }}>
+            {/* ═══ Auto-Assign Full Series Modal ═══ */}
+            <Modal isOpen={showSeriesModal} onOpenChange={setShowSeriesModal} isDismissable={!seriesRunning} backdrop="blur" classNames={{ base: "bg-slate-50 border border-slate-200 shadow-2xl overflow-hidden max-w-[500px]", backdrop: "bg-slate-800/40 backdrop-blur-md" }}>
                 <ModalContent>
                     {(onClose) => (
                         <>
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-pink-500/10 rounded-full blur-[40px] -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-                            <ModalHeader className="flex flex-col gap-1 border-b border-[#e2e8f0] px-6 py-5 relative z-10">
-                                <div className="p-3 bg-pink-500/10 border border-pink-500/20 text-pink-400 rounded-xl inline-flex w-fit mb-3">
-                                    <Shuffle size={20} strokeWidth={2.5} />
+                            <ModalHeader className="flex items-center gap-3 border-b border-slate-200 px-6 py-5 bg-white relative overflow-hidden">
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-fuchsia-500/10 rounded-full blur-[40px] pointer-events-none"></div>
+                                <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-fuchsia-600 rounded-xl flex items-center justify-center shadow-lg shadow-fuchsia-500/20 text-white relative z-10 shrink-0">
+                                    <Rocket size={20} strokeWidth={2.5} />
                                 </div>
-                                <h3 className="text-xl font-bold text-slate-800 tracking-tight">
-                                    Global Reshuffle
-                                </h3>
+                                <div className="relative z-10">
+                                    <h3 className="text-[18px] font-bold text-slate-800 tracking-tight">Auto-Assign Full Series</h3>
+                                    <p className="text-[11px] font-medium text-slate-500 uppercase tracking-widest">{seriesTasks.length} sessions queued</p>
+                                </div>
                             </ModalHeader>
-                            <ModalBody className="px-6 py-6 pb-8">
-                                <div className="space-y-4">
-                                    <p className="text-[14px] text-slate-600 leading-relaxed font-medium">
-                                        You are about to randomly scramble all currently assigned students across the entire campus for <br /><span className="text-slate-800 font-bold bg-slate-200 px-2 py-0.5 rounded shadow-inner inline-block mt-1">Date: {selectedDate ? fmtDate(selectedDate) : ''} · Session: {selectedSession}</span>
-                                    </p>
-
-                                    <div className="bg-white border border-[#e2e8f0] rounded-xl p-4 space-y-3 shadow-inner">
-                                        <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest border-b border-[#e2e8f0] pb-2">What happens next:</h4>
-                                        <ul className="text-[13px] text-slate-600 space-y-3 font-medium">
-                                            <li className="flex items-start gap-2.5">
-                                                <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5 " />
-                                                Left-side students will be completely randomized across all available Left seats.
-                                            </li>
-                                            <li className="flex items-start gap-2.5">
-                                                <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5 " />
-                                                Right-side students will be completely randomized across all available Right seats.
-                                            </li>
-                                            <li className="flex items-start gap-2.5">
-                                                <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5 " />
-                                                <span className="text-amber-200/90">This action cannot be undone.</span>
-                                            </li>
-                                        </ul>
+                            <ModalBody className="p-0">
+                                {!seriesRunning && seriesTasks.some(t => t.status === 'pending' || t.status === 'failed') && (
+                                    <div className="px-6 py-3.5 bg-white border-b border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] relative z-10">
+                                        <div className="flex flex-col mb-2.5">
+                                            <span className="text-[12px] font-bold text-slate-700">Configuration</span>
+                                            <span className="text-[10px] text-slate-400 font-medium">Applied to all sessions in this series</span>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            {/* Shuffle room order toggle */}
+                                            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 flex-1">
+                                                <span className="text-[11px] text-slate-600 font-medium whitespace-nowrap">Shuffle room order</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShuffleRooms(v => !v)}
+                                                    disabled={seriesRunning}
+                                                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ml-auto ${shuffleRooms ? 'bg-blue-500' : 'bg-slate-300'}`}
+                                                    aria-pressed={shuffleRooms}
+                                                >
+                                                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${shuffleRooms ? 'translate-x-4' : 'translate-x-[3px]'}`} />
+                                                </button>
+                                            </div>
+                                            {/* Room cap */}
+                                            <div className="flex items-center px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 gap-2">
+                                                <span className="text-[11px] text-slate-600 font-medium whitespace-nowrap">Room cap <span className="text-slate-400 text-[9px]">(End Sem)</span></span>
+                                                <input
+                                                    type="number" min={1} max={200}
+                                                    value={roomCapacityLimit}
+                                                    onChange={e => setRoomCapacityLimit(Math.max(1, Number(e.target.value) || 40))}
+                                                    className="w-12 h-6 text-center text-[11px] font-bold text-slate-700 border border-slate-300 rounded-md bg-white focus:outline-none focus:border-indigo-400"
+                                                    disabled={seriesRunning}
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
+                                )}
+                                <div className="max-h-[60vh] overflow-y-auto px-6 py-5 space-y-3 bg-slate-50/50" style={{ scrollbarWidth: 'thin' }}>
+                                    {seriesTasks.map((t, i) => (
+                                        <div key={i} className={`flex items-center justify-between p-3 rounded-xl border bg-white shadow-sm transition-all ${
+                                            t.status === 'running' ? 'border-indigo-400 ring-2 ring-indigo-500/20' 
+                                            : t.status === 'success' ? 'border-emerald-200 bg-emerald-50/30' 
+                                            : t.status === 'failed' ? 'border-rose-200 bg-rose-50/30'
+                                            : 'border-slate-200'
+                                        }`}>
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex flex-col">
+                                                    <span className="text-[13px] font-bold text-slate-700">{t.date}</span>
+                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded mt-1 w-fit uppercase tracking-widest ${
+                                                        t.session === 'FN' ? 'bg-indigo-50 text-indigo-600' : 'bg-orange-50 text-orange-600'
+                                                    }`}>{t.session === 'FN' ? 'Forenoon' : 'Afternoon'}</span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-right">
+                                                {t.status === 'pending' && <span className="text-[11px] font-bold text-slate-400">WAITING</span>}
+                                                {t.status === 'running' && <><RefreshCw size={14} className="text-indigo-500 animate-spin" /><span className="text-[11px] font-bold text-indigo-600">RUNNING...</span></>}
+                                                {t.status === 'success' && <div className="flex flex-col items-end"><div className="flex items-center gap-1.5"><Check size={14} className="text-emerald-500" strokeWidth={3} /><span className="text-[11px] font-bold text-emerald-600">SUCCESS</span></div><span className="text-[10px] text-slate-500 font-medium">Assigned {t.assigned}</span></div>}
+                                                {t.status === 'failed' && <div className="flex flex-col items-end"><div className="flex items-center gap-1.5"><AlertCircle size={14} className="text-rose-500" strokeWidth={3} /><span className="text-[11px] font-bold text-rose-600">FAILED</span></div><Tooltip content={t.error}><span className="text-[10px] text-rose-500 font-semibold cursor-help underline decoration-dotted">View error</span></Tooltip></div>}
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </ModalBody>
-                            <ModalFooter className="border-t border-[#e2e8f0] px-6 py-4 bg-slate-50 relative z-10 flex justify-end gap-3">
-                                <Button className="font-semibold text-slate-600 hover:text-slate-800" variant="light" onPress={onClose}>
-                                    Cancel
+                            <ModalFooter className="border-t border-slate-200 px-6 py-4 bg-white relative z-10 flex justify-end gap-3 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)]">
+                                <Button className="font-semibold text-slate-600 hover:text-slate-800" variant="light" onPress={onClose} isDisabled={seriesRunning}>
+                                    Close
                                 </Button>
-                                <Button className="font-bold text-slate-800 shadow-[0_0_20px_rgba(236,72,153,0.2)] bg-pink-600 hover:bg-pink-500 border border-pink-500/50" onPress={executeShuffleGlobal} startContent={<Shuffle size={16} />}>
-                                    Yes, Shuffle All
-                                </Button>
+                                {seriesTasks.some(t => t.status === 'pending' || t.status === 'failed') && (
+                                    <Button className="font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-200" onPress={runSeriesAllocation} isLoading={seriesRunning} startContent={!seriesRunning && <Play size={14} fill="currentColor" />}>
+                                        {seriesTasks.some(t => t.status === 'failed' || t.status === 'success') ? "Resume Pending" : "Start Auto-Assign"}
+                                    </Button>
+                                )}
                             </ModalFooter>
                         </>
                     )}
