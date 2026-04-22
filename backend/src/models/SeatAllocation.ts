@@ -11,6 +11,8 @@ interface SeatAllocationAttributes {
   ExamID: number;
   SeatID: number;
   StudentID: number;
+  IsEligible?: boolean;
+  IsBlocked?: boolean;
 }
 
 export class SeatAllocation extends Model<SeatAllocationAttributes>
@@ -18,6 +20,8 @@ export class SeatAllocation extends Model<SeatAllocationAttributes>
   declare ExamID: number;
   declare SeatID: number;
   declare StudentID: number;
+  declare IsEligible: boolean;
+  declare IsBlocked: boolean;
 }
 
 SeatAllocation.init(
@@ -47,6 +51,16 @@ SeatAllocation.init(
         model: "Students",
         key: "StudentID",
       },
+    },
+    IsEligible: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: true,
+    },
+    IsBlocked: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: false,
     },
   },
   {

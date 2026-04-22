@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useTransition, useMemo } from 'react';
+﻿import React, { useEffect, useState, useCallback, useTransition, useMemo } from 'react';
 import {
     Card, CardBody, CardHeader, Button, Select, SelectItem,
     Chip, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter,
@@ -22,7 +22,7 @@ interface Hall { RoomID: number; RoomCode: string; Capacity: number; TotalRows: 
 interface Dept { DepartmentID: number; DepartmentName: string; DepartmentCode: string; studentCount: number; }
 interface SeatInfo { SeatID: number; RowLabel: string; BenchNumber: number; SeatNumber: number; IsActive: boolean; }
 interface Bench { rowLabel: string; benchNumber: number; seats: SeatInfo[]; }
-interface Assignment { seatId: number; studentId: number; studentName: string; registerNumber: string; deptCode: string; side: 'left' | 'right'; }
+interface Assignment { seatId: number; studentId: number; studentName: string; registerNumber: string; deptCode: string; side: 'left' | 'right'; isEligible?: boolean; isBlocked?: boolean; subjectCode?: string; }
 interface Series { ExamSeriesID: number; SeriesName: string; IsActive: boolean; }
 interface ExamDateSlot { examDate: string; session: string; examCount: number; }
 interface HallSummary { hallId: number; hallCode: string; capacity: number; totalSeats: number; filledSeats: number; }
@@ -56,6 +56,31 @@ const getDeptStyle = (code: string) => {
     const hash = code.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
     const keys = Object.keys(DARK_DEPT_COLORS);
     return DARK_DEPT_COLORS[keys[hash % keys.length]] || { bg: 'rgba(148, 163, 184, 0.05)', text: '#94a3b8', border: 'rgba(148, 163, 184, 0.3)' };
+};
+
+/* ─── Subject Color Palette (hue wheel, 12 distinct hues) ── */
+const SUBJECT_HUE_PALETTE = [
+    { h: 220, text: '#60a5fa', glow: 'rgba(96,165,250,0.35)' },   // blue
+    { h: 280, text: '#c084fc', glow: 'rgba(192,132,252,0.35)' },  // violet
+    { h: 160, text: '#34d399', glow: 'rgba(52,211,153,0.35)' },   // emerald
+    { h: 30, text: '#fb923c', glow: 'rgba(251,146,60,0.35)' },   // orange
+    { h: 340, text: '#f472b6', glow: 'rgba(244,114,182,0.35)' },  // pink
+    { h: 200, text: '#22d3ee', glow: 'rgba(34,211,238,0.35)' },   // cyan
+    { h: 50, text: '#fbbf24', glow: 'rgba(251,191,36,0.35)' },   // amber
+    { h: 120, text: '#4ade80', glow: 'rgba(74,222,128,0.35)' },   // green
+    { h: 260, text: '#818cf8', glow: 'rgba(129,140,248,0.35)' },  // indigo
+    { h: 0, text: '#f87171', glow: 'rgba(248,113,113,0.35)' },  // red (non-error)
+    { h: 310, text: '#e879f9', glow: 'rgba(232,121,249,0.35)' },  // fuchsia
+    { h: 170, text: '#2dd4bf', glow: 'rgba(45,212,191,0.35)' },   // teal
+];
+const subjectColorCache = new Map<string, typeof SUBJECT_HUE_PALETTE[0]>();
+const getSubjectStyle = (code: string): typeof SUBJECT_HUE_PALETTE[0] => {
+    if (!code) return SUBJECT_HUE_PALETTE[0]!;
+    if (subjectColorCache.has(code)) return subjectColorCache.get(code)!;
+    const hash = [...code].reduce((a, c) => a * 31 + c.charCodeAt(0), 0);
+    const style = SUBJECT_HUE_PALETTE[Math.abs(hash) % SUBJECT_HUE_PALETTE.length]!;
+    subjectColorCache.set(code, style);
+    return style;
 };
 
 const fmtDate = (iso: string) => {
@@ -96,6 +121,7 @@ const SeatingPlans: React.FC = () => {
     const [secondaryDept, setSecondaryDept] = useState<string>('');
     const [avoidSameDeptBench, setAvoidSameDeptBench] = useState(true);
     const [shuffleRooms, setShuffleRooms] = useState(false);
+    const [roomCapacityLimit, setRoomCapacityLimit] = useState<number>(40);
     const [selectedHallIds, setSelectedHallIds] = useState<Set<number>>(new Set());
     const [hallSearch, setHallSearch] = useState('');
     const [hallFilter, setHallFilter] = useState<'all' | 'empty' | 'partial' | 'full'>('all');
@@ -120,7 +146,12 @@ const SeatingPlans: React.FC = () => {
     const [showShuffleConfirm, setShowShuffleConfirm] = useState(false);
     const [globalDownloading, setGlobalDownloading] = useState(false);
     const [seatingDownloading, setSeatingDownloading] = useState(false);
+    const [clearingAll, setClearingAll] = useState(false);
     const [assignmentFeedback, setAssignmentFeedback] = useState<AssignFeedback | null>(null);
+    const [hideIneligible, setHideIneligible] = useState(false);
+    const [showClearAllConfirm, setShowClearAllConfirm] = useState(false);
+    const [lastExamType, setLastExamType] = useState<'Internal' | 'EndSemester'>('Internal');
+    const [lastSubjects, setLastSubjects] = useState<string[]>([]);
 
     /* derived */
     const availableDates = [...new Set(examDates.filter(d => d.session === selectedSession).map(d => d.examDate))].sort();
@@ -367,9 +398,20 @@ const SeatingPlans: React.FC = () => {
                 secondaryDeptId: secondaryDept ? Number(secondaryDept) : null,
                 avoidSameDeptBench,
                 shuffleRooms,
+                roomCapacityLimit,
             });
-            const assigned = Number(r.totalLeftAssigned || 0) + Number(r.totalRightAssigned || 0);
-            const totalEligible = Number(r.totalLeftAvailable || 0) + Number(r.totalRightAvailable || 0);
+            // Support both Internal (totalLeft/RightAssigned) and EndSem (assignedCount) response shapes
+            const examType: string = r.examType || 'Internal';
+            setLastExamType(examType === 'EndSemester' ? 'EndSemester' : 'Internal');
+            if (examType === 'EndSemester' && Array.isArray(r.subjects)) setLastSubjects(r.subjects);
+            let assigned = 0, totalEligible = 0;
+            if (examType === 'EndSemester') {
+                assigned = Number(r.assignedCount || 0);
+                totalEligible = Number(r.studentCount || 0);
+            } else {
+                assigned = Number(r.totalLeftAssigned || 0) + Number(r.totalRightAssigned || 0);
+                totalEligible = Number(r.totalLeftAvailable || 0) + Number(r.totalRightAvailable || 0);
+            }
             const unassigned = Math.max(totalEligible - assigned, 0);
             const usedHallIds = (Array.isArray(r.hallResults) ? r.hallResults : [])
                 .filter((h: any) => Number(h.filled || 0) > 0)
@@ -381,7 +423,8 @@ const SeatingPlans: React.FC = () => {
                 hallsUsed: usedHallIds.length,
                 hallIds: usedHallIds,
             });
-            toast.success(`Assigned ${assigned} student${assigned !== 1 ? 's' : ''}${unassigned > 0 ? ` · ${unassigned} unassigned` : ''}`);
+            const typeLabel = examType === 'EndSemester' ? ' (End Sem)' : '';
+            toast.success(`${typeLabel} Assigned ${assigned} student${assigned !== 1 ? 's' : ''}${unassigned > 0 ? ` · ${unassigned} unassigned` : ''}`);
             startTransition(() => loadSummary());
         } catch (e: any) { toast.error(e?.response?.data?.message || 'Bulk assign failed'); }
         finally { startTransition(() => setAssigning(false)); }
@@ -434,6 +477,23 @@ const SeatingPlans: React.FC = () => {
     const handleClearHall = async () => {
         if (!detailHall || !selectedDate) return;
         try { await SeatingService.clearAllocation(selectedDate, selectedSession, detailHall.hallId); setDetailAssignments({}); toast.success('Hall cleared'); loadSummary(); } catch { toast.error('Failed to clear'); }
+    };
+
+    /* clear ALL allocations for the current date+session */
+    const handleClearAllAllocations = async () => {
+        if (!selectedDate) return;
+        setShowClearAllConfirm(false);
+        startTransition(() => setClearingAll(true));
+        try {
+            const r = await SeatingService.clearAllAllocations(selectedDate, selectedSession);
+            toast.success(r.message || 'All allocations cleared');
+            setAssignmentFeedback(null);
+            startTransition(() => loadSummary());
+        } catch (e: any) {
+            toast.error(e?.response?.data?.message || 'Failed to clear all allocations');
+        } finally {
+            startTransition(() => setClearingAll(false));
+        }
     };
 
     const handleSaveHall = async () => {
@@ -988,187 +1048,142 @@ const SeatingPlans: React.FC = () => {
             <div className="px-8 py-6 max-w-[1920px] mx-auto">
                 <div className="flex flex-col xl:flex-row gap-8 items-start">
 
-                    {/* ═══════ LEFT PANEL ═══════ */}
+                    {/* ═══════ LEFT PANEL — 5-STEP WIZARD ═══════ */}
                     <div className="w-full xl:w-[400px] shrink-0 xl:sticky xl:top-2 z-10 flex flex-col gap-4">
 
-                        {/* ── Exam Slot Section ── */}
-                        <Card className="border border-slate-200 shadow-xl bg-white/80 backdrop-blur-2xl rounded-[24px] overflow-hidden">
-                            <CardHeader className="flex gap-4 bg-slate-50 border-b border-slate-100 px-5 py-4 relative overflow-hidden">
-                                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-full blur-[40px] -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-                                <div className="p-2.5 bg-indigo-50 border border-indigo-100 text-indigo-500 rounded-xl relative z-10 shadow-sm">
-                                    <ClipboardList size={18} strokeWidth={2} />
-                                </div>
-                                <div className="relative z-10">
-                                    <h3 className="text-[14px] font-bold text-slate-800 tracking-wide">Exam Slot</h3>
-                                    <p className="text-[10px] text-slate-500 font-semibold tracking-widest uppercase mt-0.5">Series · Date · Session</p>
-                                </div>
-                            </CardHeader>
-                            <CardBody className="px-5 py-4 flex flex-col gap-4">
-                                {/* Series */}
-                                <div className="space-y-1.5">
-                                    <span className="text-[11px] font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2">
-                                        <Building2 size={13} className="text-slate-500" /> Series
-                                        <span className="text-slate-500 normal-case font-medium">(opt)</span>
-                                    </span>
-                                    <Select aria-label="Exam Series" placeholder="— All Series —" variant="bordered"
+                        <Card className="border border-slate-200 shadow-xl bg-white/95 backdrop-blur-2xl rounded-[24px] overflow-hidden">
+                            <CardBody className="px-5 py-5 flex flex-col gap-5">
+
+                                {/* ─── STEP 1: Exam Slot ─────────────────── */}
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-extrabold flex items-center justify-center shrink-0">1</span>
+                                        <span className="text-[11px] font-bold text-slate-700 uppercase tracking-widest">Select Exam</span>
+                                    </div>
+
+                                    {/* Series (optional) */}
+                                    <Select aria-label="Exam Series" placeholder="All Series (optional)" variant="bordered"
                                         id="exam-series-select" name="examSeries"
                                         selectedKeys={selectedSeries ? [selectedSeries] : []}
                                         onSelectionChange={(k) => setSelectedSeries(Array.from(k)[0] as string || '')}
                                         classNames={{
-                                            trigger: "relative pr-10 bg-white border-2 border-slate-200 shadow-sm rounded-xl data-[hover=true]:border-indigo-400 data-[hover=true]:bg-indigo-50 transition-all h-11 text-slate-800 text-[14px] font-semibold",
-                                            value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-500", selectorIcon: "text-slate-500 absolute w-5 right-3", innerWrapper: "w-full text-slate-800",
+                                            trigger: "relative pr-10 bg-white border border-slate-200 rounded-xl h-10 text-slate-800 text-[13px] font-semibold data-[hover=true]:border-indigo-400 transition-all",
+                                            value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-400",
+                                            selectorIcon: "text-slate-400 absolute w-4 right-3",
                                             popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
                                         }}>
                                         {seriesList.map(s => <SelectItem key={String(s.ExamSeriesID)} textValue={s.SeriesName} className="data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700 font-semibold">{s.SeriesName}</SelectItem>)}
                                     </Select>
-                                </div>
 
-                                {/* Session */}
-                                <div className="space-y-1.5">
-                                    <span className="text-[11px] font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2">
-                                        <Calendar size={13} className="text-slate-500" /> Session
-                                    </span>
-                                    <div className="grid grid-cols-2 gap-3 mt-1">
+                                    {/* Session toggle */}
+                                    <div className="grid grid-cols-2 gap-2">
                                         {(['FN', 'AN'] as const).map(s => (
                                             <button key={s} onClick={() => { setSelectedSession(s); setSelectedDate(''); }}
-                                                className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-[14px] font-bold transition-all border-2 shadow-sm ${selectedSession === s
-                                                    ? s === 'FN'
-                                                        ? 'bg-indigo-50 text-indigo-700 border-indigo-300'
-                                                        : 'bg-orange-50 text-orange-700 border-orange-300'
-                                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-800'
-                                                    }`}
-                                            >
-                                                {s === 'FN' ? <Sun size={16} className={selectedSession === s ? "text-indigo-600" : "text-slate-500"} /> : <Moon size={16} className={selectedSession === s ? "text-orange-600" : "text-slate-500"} />}
+                                                className={`flex items-center justify-center gap-2 py-2 rounded-xl text-[13px] font-bold transition-all border-2 ${selectedSession === s
+                                                        ? s === 'FN' ? 'bg-indigo-50 text-indigo-700 border-indigo-300' : 'bg-orange-50 text-orange-700 border-orange-300'
+                                                        : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+                                                    }`}>
+                                                {s === 'FN' ? <Sun size={14} className={selectedSession === s ? 'text-indigo-600' : 'text-slate-400'} /> : <Moon size={14} className={selectedSession === s ? 'text-orange-600' : 'text-slate-400'} />}
                                                 {s === 'FN' ? 'Forenoon' : 'Afternoon'}
                                             </button>
                                         ))}
                                     </div>
-                                </div>
 
-                                <div className="space-y-1.5">
-                                    <span className="text-[11px] font-bold text-slate-600 uppercase tracking-widest flex items-center justify-between">
-                                        <span className="flex items-center gap-2"><Calendar size={13} className="text-slate-500" /> Date</span>
-                                    </span>
-                                    <div className="flex gap-2 mt-1">
-                                        <div className="flex-1">
-                                            <Select aria-label="Exam Date" placeholder={availableDates.length > 0 ? "— Select Date —" : "— No Dates Available —"} variant="bordered"
-                                                id="exam-date-select" name="examDate"
-                                                selectedKeys={selectedDate ? new Set([selectedDate]) : new Set([])}
-                                                onSelectionChange={(k) => setSelectedDate(Array.from(k)[0] as string || '')}
-                                                classNames={{
-                                                    trigger: "relative pr-10 bg-white border-2 border-slate-200 shadow-sm rounded-xl data-[hover=true]:border-indigo-400 data-[hover=true]:bg-indigo-50 transition-all h-11 text-slate-800 text-[14px] font-semibold",
-                                                    value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-500",
-                                                    selectorIcon: "text-slate-500 absolute w-5 right-3",
-                                                    popoverContent: "bg-white border text-slate-800 border-slate-200 shadow-xl font-medium"
-                                                }}
-                                                isDisabled={availableDates.length === 0}
-                                            >
-                                                {availableDates.map(d => (
-                                                    <SelectItem key={String(d)} textValue={fmtDate(d)} className="data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700 font-semibold text-slate-800">
-                                                        {fmtDate(d)}
-                                                    </SelectItem>
-                                                ))}
-                                            </Select>
-                                        </div>
-                                    </div>
-                                </div>
+                                    {/* Date */}
+                                    <Select aria-label="Exam Date" placeholder={availableDates.length > 0 ? 'Select Date' : 'No dates for this session'} variant="bordered"
+                                        id="exam-date-select" name="examDate"
+                                        selectedKeys={selectedDate ? new Set([selectedDate]) : new Set([])}
+                                        onSelectionChange={(k) => setSelectedDate(Array.from(k)[0] as string || '')}
+                                        isDisabled={availableDates.length === 0}
+                                        classNames={{
+                                            trigger: "relative pr-10 bg-white border border-slate-200 rounded-xl h-10 text-slate-800 text-[13px] font-semibold data-[hover=true]:border-indigo-400 transition-all",
+                                            value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-400",
+                                            selectorIcon: "text-slate-400 absolute w-4 right-3",
+                                            popoverContent: "bg-white border text-slate-800 border-slate-200 shadow-xl font-medium"
+                                        }}>
+                                        {availableDates.map(d => (
+                                            <SelectItem key={String(d)} textValue={fmtDate(d)} className="data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700 font-semibold text-slate-800">{fmtDate(d)}</SelectItem>
+                                        ))}
+                                    </Select>
 
-                                {selectedDate && currentSlot && (
-                                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 shadow-sm">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_6px_rgba(99,102,241,0.4)] animate-pulse" />
-                                        <span className="text-[10px] font-medium text-slate-500 tracking-wide">
-                                            {fmtDate(selectedDate)} · {selectedSession === 'FN' ? 'FN' : 'AN'} · <span className="text-slate-800 font-semibold">{currentExamCount} exam{currentExamCount !== 1 ? 's' : ''}</span>
-                                        </span>
-                                    </div>
-                                )}
-                            </CardBody>
-                        </Card>
-
-                        {/* ── Assignment Setup Section ── */}
-                        <Card className="border border-slate-200 shadow-xl bg-white/80 backdrop-blur-2xl rounded-[24px] overflow-hidden">
-                            <CardHeader className="flex gap-4 bg-slate-50 border-b border-slate-100 px-5 py-4 relative overflow-hidden">
-                                <div className="absolute top-0 left-0 w-32 h-32 bg-emerald-50 rounded-full blur-[40px] -translate-y-1/2 -translate-x-1/2 pointer-events-none"></div>
-                                <div className="p-2.5 bg-emerald-50 border border-emerald-100 text-emerald-500 rounded-xl relative z-10 shadow-sm">
-                                    <Users size={18} strokeWidth={2} />
-                                </div>
-                                <div className="relative z-10">
-                                    <h3 className="text-[14px] font-bold text-slate-800 tracking-wide">Assignment Setup</h3>
-                                    <p className="text-[10px] text-slate-500 font-semibold tracking-widest uppercase mt-0.5">Departments · Halls · Auto-Assign</p>
-                                </div>
-                            </CardHeader>
-                            <CardBody className="px-5 py-4 flex flex-col gap-4">
-                                {/* Mode-based assignment controls */}
-                                <div className="space-y-3">
-                                    <div className="space-y-1.5">
-                                        <span className="text-[11px] font-bold text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
-                                            <ChevronRight size={13} className="text-slate-500" /> Allocation Strategy
-                                        </span>
-                                        <Select
-                                            aria-label="Allocation strategy"
-                                            id="allocation-strategy-select" name="allocationStrategy"
-                                            selectedKeys={[assignmentMode]}
-                                            onSelectionChange={(k) => onAssignmentModeChange((Array.from(k)[0] as 'single' | 'two-alternate' | 'auto-balanced') || 'auto-balanced')}
-                                            variant="bordered"
-                                            classNames={{
-                                                trigger: "relative pr-10 bg-white border-2 border-slate-200 shadow-sm rounded-xl data-[hover=true]:border-emerald-400 data-[hover=true]:bg-emerald-50 transition-all h-11 text-slate-800 text-[14px] font-semibold",
-                                                value: "text-slate-800 font-semibold",
-                                                selectorIcon: "text-slate-500 absolute w-5 right-3",
-                                                popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
-                                            }}
-                                        >
-                                            <SelectItem key="auto-balanced">Auto Balanced (Recommended)</SelectItem>
-                                            <SelectItem key="single">Single Department</SelectItem>
-                                            <SelectItem key="two-alternate">Two-Department Alternate</SelectItem>
-                                        </Select>
-                                    </div>
-                                    {assignmentMode === 'single' && (
-                                        <div className="space-y-1.5">
-                                            <span className="text-[11px] font-bold text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
-                                                <ChevronRight size={13} className="text-slate-500" /> Department
+                                    {selectedDate && currentSlot && (
+                                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-100">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                                            <span className="text-[10px] font-medium text-indigo-700">
+                                                {fmtDate(selectedDate)} · {selectedSession} · <strong>{currentExamCount} exam{currentExamCount !== 1 ? 's' : ''}</strong>
                                             </span>
-                                            <Select aria-label="Primary Department" placeholder="— Select Department —" variant="bordered"
-                                                id="primary-dept-select-single" name="primaryDeptSingle"
-                                                selectedKeys={primaryDept ? [primaryDept] : []}
-                                                onSelectionChange={(k) => setPrimaryDept(Array.from(k)[0] as string || '')}
-                                                classNames={{
-                                                    trigger: "relative pr-10 bg-white border-2 border-slate-200 shadow-sm rounded-xl data-[hover=true]:border-emerald-400 data-[hover=true]:bg-emerald-50 transition-all h-11 text-slate-800 text-[14px] font-semibold",
-                                                    value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-500",
-                                                    selectorIcon: "text-slate-500 absolute w-5 right-3",
-                                                    popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
-                                                }}>
-                                                {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={formatDeptLabel(d)} className="data-[hover=true]:bg-emerald-50 data-[hover=true]:text-emerald-700 font-semibold">{formatDeptLabel(d)} ({d.studentCount})</SelectItem>)}
-                                            </Select>
                                         </div>
                                     )}
+                                </div>
+
+                                <div className="h-px bg-slate-100" />
+
+                                {/* ─── STEP 2: Allocation Strategy ──────── */}
+                                <div className={`space-y-3 transition-opacity ${!selectedDate ? 'opacity-40 pointer-events-none' : ''}`}>
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-extrabold flex items-center justify-center shrink-0">2</span>
+                                        <span className="text-[11px] font-bold text-slate-700 uppercase tracking-widest">Choose Mode</span>
+                                    </div>
+
+                                    <Select
+                                        aria-label="Allocation strategy"
+                                        id="allocation-strategy-select" name="allocationStrategy"
+                                        selectedKeys={[assignmentMode]}
+                                        onSelectionChange={(k) => onAssignmentModeChange((Array.from(k)[0] as 'single' | 'two-alternate' | 'auto-balanced') || 'auto-balanced')}
+                                        variant="bordered"
+                                        classNames={{
+                                            trigger: "relative pr-10 bg-white border border-slate-200 rounded-xl h-10 text-slate-800 text-[13px] font-semibold data-[hover=true]:border-emerald-400 transition-all",
+                                            value: "text-slate-800 font-semibold",
+                                            selectorIcon: "text-slate-400 absolute w-4 right-3",
+                                            popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
+                                        }}>
+                                        <SelectItem key="auto-balanced">Auto Balanced (Recommended)</SelectItem>
+                                        <SelectItem key="single">Single Department</SelectItem>
+                                        <SelectItem key="two-alternate">Two-Department Alternate</SelectItem>
+                                    </Select>
+
+                                    {assignmentMode === 'single' && (
+                                        <Select aria-label="Primary Department" placeholder="Select Department" variant="bordered"
+                                            id="primary-dept-select-single" name="primaryDeptSingle"
+                                            selectedKeys={primaryDept ? [primaryDept] : []}
+                                            onSelectionChange={(k) => setPrimaryDept(Array.from(k)[0] as string || '')}
+                                            classNames={{
+                                                trigger: "relative pr-10 bg-white border border-slate-200 rounded-xl h-10 text-slate-800 text-[13px] font-semibold data-[hover=true]:border-emerald-400 transition-all",
+                                                value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-400",
+                                                selectorIcon: "text-slate-400 absolute w-4 right-3",
+                                                popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
+                                            }}>
+                                            {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={formatDeptLabel(d)} className="data-[hover=true]:bg-emerald-50 data-[hover=true]:text-emerald-700 font-semibold">{formatDeptLabel(d)} ({d.studentCount})</SelectItem>)}
+                                        </Select>
+                                    )}
+
                                     {assignmentMode === 'two-alternate' && (
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-1.5">
-                                                <span className="text-[11px] font-bold text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
-                                                    <ChevronRight size={13} className="text-slate-500" /> Primary Dept
-                                                </span>
-                                                <Select aria-label="Primary Department" placeholder="— None —" variant="bordered"
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-1">
+                                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Primary</span>
+                                                <Select aria-label="Primary Department" placeholder="None" variant="bordered"
                                                     id="primary-dept-select-dual" name="primaryDeptDual"
                                                     selectedKeys={primaryDept ? [primaryDept] : []}
                                                     onSelectionChange={(k) => setPrimaryDept(Array.from(k)[0] as string || '')}
                                                     classNames={{
-                                                        trigger: "relative pr-10 bg-white border-2 border-slate-200 shadow-sm rounded-xl data-[hover=true]:border-emerald-400 data-[hover=true]:bg-emerald-50 transition-all h-11 text-slate-800 text-[14px] font-semibold",
-                                                        value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-500", selectorIcon: "text-slate-500 absolute w-5 right-3", innerWrapper: "w-full text-slate-800",
+                                                        trigger: "relative pr-8 bg-white border border-slate-200 rounded-xl h-10 text-slate-800 text-[12px] font-semibold data-[hover=true]:border-emerald-400 transition-all",
+                                                        value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-400",
+                                                        selectorIcon: "text-slate-400 absolute w-4 right-2",
                                                         popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
                                                     }}>
                                                     {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={formatDeptLabel(d)} className="data-[hover=true]:bg-emerald-50 data-[hover=true]:text-emerald-700 font-semibold">{formatDeptLabel(d)} ({d.studentCount})</SelectItem>)}
                                                 </Select>
                                             </div>
-                                            <div className="space-y-1.5">
-                                                <span className="text-[11px] font-bold text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
-                                                    <ChevronRight size={13} className="rotate-180 text-slate-500" /> Secondary Dept
-                                                </span>
-                                                <Select aria-label="Secondary Department" placeholder="— None —" variant="bordered"
+                                            <div className="space-y-1">
+                                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Secondary</span>
+                                                <Select aria-label="Secondary Department" placeholder="None" variant="bordered"
                                                     id="secondary-dept-select-dual" name="secondaryDeptDual"
                                                     selectedKeys={secondaryDept ? [secondaryDept] : []}
                                                     onSelectionChange={(k) => setSecondaryDept(Array.from(k)[0] as string || '')}
                                                     classNames={{
-                                                        trigger: "relative pr-10 bg-white border-2 border-slate-200 shadow-sm rounded-xl data-[hover=true]:border-emerald-400 data-[hover=true]:bg-emerald-50 transition-all h-11 text-slate-800 text-[14px] font-semibold",
-                                                        value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-500", selectorIcon: "text-slate-500 absolute w-5 right-3", innerWrapper: "w-full text-slate-800",
+                                                        trigger: "relative pr-8 bg-white border border-slate-200 rounded-xl h-10 text-slate-800 text-[12px] font-semibold data-[hover=true]:border-emerald-400 transition-all",
+                                                        value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-400",
+                                                        selectorIcon: "text-slate-400 absolute w-4 right-2",
                                                         popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
                                                     }}>
                                                     {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={formatDeptLabel(d)} className="data-[hover=true]:bg-emerald-50 data-[hover=true]:text-emerald-700 font-semibold">{formatDeptLabel(d)} ({d.studentCount})</SelectItem>)}
@@ -1176,177 +1191,187 @@ const SeatingPlans: React.FC = () => {
                                             </div>
                                         </div>
                                     )}
-                                </div>
-                                <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 border border-slate-200">
-                                    <div className="text-[11px] text-slate-700 font-medium">Avoid same-department adjacency on a bench</div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setAvoidSameDeptBench(v => !v)}
-                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${avoidSameDeptBench ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                                        aria-pressed={avoidSameDeptBench}
-                                        title="Avoid same-department neighbors on each bench"
-                                    >
-                                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${avoidSameDeptBench ? 'translate-x-6' : 'translate-x-1'}`} />
-                                    </button>
-                                </div>
-                                <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 border border-slate-200">
-                                    <div className="text-[11px] text-slate-700 font-medium">Shuffle rooms randomly</div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShuffleRooms(v => !v)}
-                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${shuffleRooms ? 'bg-blue-500' : 'bg-slate-300'}`}
-                                        aria-pressed={shuffleRooms}
-                                        title="Randomize room assignment order to avoid continuous halls"
-                                    >
-                                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${shuffleRooms ? 'translate-x-6' : 'translate-x-1'}`} />
-                                    </button>
-                                </div>
-                                {assignmentMode === 'two-alternate' && primaryDept && secondaryDept && primaryDept === secondaryDept && (
-                                    <div className="px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-100 text-[10px] text-indigo-700 font-medium">
-                                        Same primary/secondary department selected. Students will still be split alternately.
-                                    </div>
-                                )}
 
-                                {/* Assignment preview */}
-                                {selectedDate && (
-                                    <div className={`px-3 py-2.5 rounded-xl border text-[11px] font-medium ${!hasPreviewInputs
-                                        ? 'bg-slate-50 border-slate-200 text-slate-600'
-                                        : projectedUnassigned === 0
-                                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                                            : selectedSeatCount === 0
-                                                ? 'bg-slate-50 border-slate-200 text-slate-600'
-                                                : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
-                                        <span className="font-bold">Assignment Preview:</span>{' '}
-                                        Eligible students: <span className="font-bold">{eligibleStudentCount}</span> · Selected seats: <span className="font-bold">{selectedSeatCount}</span> ·
-                                        Unassigned after run: <span className="font-bold">{projectedUnassigned}</span>
-                                        {!hasPreviewInputs && (
-                                            <span className="ml-1">· Select strategy/departments to preview a real assignment.</span>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* Hall selector — compact chip grid */}
-                                {hallSummary.length > 0 && (
-                                    <div className="space-y-2">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-[9px] font-semibold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                                                <Armchair size={10} className="text-slate-500" /> Halls
-                                                <span className="text-slate-500 normal-case font-normal tracking-normal">(empty = all)</span>
-                                            </span>
-                                            <div className="flex items-center gap-0.5 bg-slate-50 border border-slate-200 rounded-md p-0.5">
-                                                <button onClick={selectAllHalls} className="text-[9px] font-medium text-slate-600 hover:text-slate-800 px-2 py-0.5 rounded hover:bg-slate-200 transition-colors">All</button>
-                                                <span className="text-slate-600">|</span>
-                                                <button onClick={clearHallSelection} className="text-[9px] font-medium text-slate-500 hover:text-slate-700 px-2 py-0.5 rounded hover:bg-slate-200 transition-colors">None</button>
+                                    {/* Options row — compact toggles */}
+                                    <div className="flex flex-col gap-2">
+                                        {(([
+                                            { id: 'avoidSameDept', label: 'Avoid same-dept on bench', value: avoidSameDeptBench, color: 'bg-emerald-500', onChange: () => setAvoidSameDeptBench(v => !v) },
+                                            { id: 'shuffleRooms', label: 'Shuffle room order', value: shuffleRooms, color: 'bg-blue-500', onChange: () => setShuffleRooms(v => !v) },
+                                        ]) as const).map(opt => (
+                                            <div key={opt.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 border border-slate-200">
+                                                <span className="text-[11px] text-slate-600 font-medium">{opt.label}</span>
+                                                <button type="button" onClick={opt.onChange}
+                                                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${opt.value ? opt.color : 'bg-slate-300'}`}
+                                                    aria-pressed={opt.value}>
+                                                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${opt.value ? 'translate-x-4' : 'translate-x-[3px]'}`} />
+                                                </button>
                                             </div>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <Input name="custom-input" 
-                                                value={hallSearch}
-                                                onChange={(e) => setHallSearch(e.target.value)}
-                                                placeholder="Search hall code..."
-                                                size="sm"
-                                                variant="bordered"
-                                                className="flex-1"
-                                                classNames={{
-                                                    inputWrapper: "h-8 min-h-8 border border-slate-200 bg-white",
-                                                    input: "text-[11px] text-slate-700",
-                                                }}
+                                        ))}
+                                        {/* End Sem: per-room seat cap */}
+                                        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 border border-slate-200">
+                                            <span className="text-[11px] text-slate-600 font-medium">Room cap <span className="text-slate-400 text-[9px]">(End Sem)</span></span>
+                                            <input
+                                                type="number" min={1} max={200}
+                                                value={roomCapacityLimit}
+                                                onChange={e => setRoomCapacityLimit(Math.max(1, Number(e.target.value) || 40))}
+                                                className="w-14 h-6 text-center text-[11px] font-bold text-slate-700 border border-slate-300 rounded-md bg-white focus:outline-none focus:border-indigo-400"
                                             />
-                                            <Select
-                                                aria-label="Hall fill filter"
-                                                id="hall-fill-filter-select" name="hallFilter"
-                                                selectedKeys={[hallFilter]}
-                                                onSelectionChange={(k) => setHallFilter((Array.from(k)[0] as 'all' | 'empty' | 'partial' | 'full') || 'all')}
-                                                size="sm"
-                                                variant="bordered"
-                                                className="max-w-[128px]"
-                                                classNames={{ trigger: "h-8 min-h-8 border border-slate-200 bg-white", value: "text-[10px] font-semibold" }}
-                                            >
-                                                <SelectItem key="all">All</SelectItem>
-                                                <SelectItem key="empty">Empty</SelectItem>
-                                                <SelectItem key="partial">Partial</SelectItem>
-                                                <SelectItem key="full">Full</SelectItem>
-                                            </Select>
                                         </div>
-                                        <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto dark-scrollbar pr-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#94a3b8 #f1f5f9' }}>
+                                    </div>
+
+                                </div>
+
+                                <div className="h-px bg-slate-100" />
+
+                                {/* ─── STEP 3: Select Halls ─────────────── */}
+                                <div className={`space-y-2 transition-opacity ${!selectedDate ? 'opacity-40 pointer-events-none' : ''}`}>
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-5 h-5 rounded-full bg-amber-500 text-white text-[10px] font-extrabold flex items-center justify-center shrink-0">3</span>
+                                            <span className="text-[11px] font-bold text-slate-700 uppercase tracking-widest">Select Halls</span>
+                                            <span className="text-[10px] text-slate-400 normal-case">(empty = all)</span>
+                                        </div>
+                                        <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg p-0.5">
+                                            <button onClick={selectAllHalls} className="text-[9px] font-bold text-slate-600 hover:text-slate-900 px-2 py-0.5 rounded hover:bg-slate-100 transition-colors">All</button>
+                                            <span className="text-slate-300">|</span>
+                                            <button onClick={clearHallSelection} className="text-[9px] font-medium text-slate-500 hover:text-slate-700 px-2 py-0.5 rounded hover:bg-slate-100 transition-colors">None</button>
+                                        </div>
+                                    </div>
+
+                                    {/* Search + filter */}
+                                    <div className="flex items-center gap-2">
+                                        <Input name="hall-search"
+                                            value={hallSearch} onChange={(e) => setHallSearch(e.target.value)}
+                                            placeholder="Search hall…" size="sm" variant="bordered" className="flex-1"
+                                            classNames={{ inputWrapper: "h-8 min-h-8 border border-slate-200 bg-white rounded-lg", input: "text-[11px] text-slate-700" }} />
+                                        <Select aria-label="Hall filter" id="hall-fill-filter-select" name="hallFilter"
+                                            selectedKeys={[hallFilter]}
+                                            onSelectionChange={(k) => setHallFilter((Array.from(k)[0] as 'all' | 'empty' | 'partial' | 'full') || 'all')}
+                                            size="sm" variant="bordered" className="max-w-[110px]"
+                                            classNames={{ trigger: "h-8 min-h-8 border border-slate-200 bg-white rounded-lg", value: "text-[10px] font-semibold" }}>
+                                            <SelectItem key="all">All</SelectItem>
+                                            <SelectItem key="empty">Empty</SelectItem>
+                                            <SelectItem key="partial">Partial</SelectItem>
+                                            <SelectItem key="full">Full</SelectItem>
+                                        </Select>
+                                    </div>
+
+                                    {/* Hall chips */}
+                                    {hallSummary.length > 0 && (
+                                        <div className="flex flex-wrap gap-1.5 max-h-[110px] overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>
                                             {visibleHalls.map(h => {
                                                 const isSelected = selectedHallIds.has(h.hallId);
                                                 const pct = h.totalSeats > 0 ? Math.round((h.filledSeats / h.totalSeats) * 100) : 0;
                                                 return (
                                                     <button key={h.hallId} onClick={() => toggleHall(h.hallId)}
-                                                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all duration-200 border ${isSelected
-                                                            ? 'bg-indigo-500 text-white border-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.3)] scale-[1.02]'
-                                                            : pct >= 100
-                                                                ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:border-emerald-300 hover:bg-emerald-100'
-                                                                : pct > 0
-                                                                    ? 'bg-amber-50 text-amber-600 border-amber-200 hover:border-amber-300 hover:bg-amber-100'
-                                                                    : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:text-slate-700'
-                                                            }`}
-                                                    >
+                                                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all border ${isSelected ? 'bg-indigo-500 text-white border-indigo-500 shadow-sm'
+                                                                : pct >= 100 ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'
+                                                                    : pct > 0 ? 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100'
+                                                                        : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+                                                            }`}>
                                                         {h.hallCode}
-                                                        {pct > 0 && !isSelected && (
-                                                            <span className="text-[8px] font-mono opacity-80 bg-slate-100 px-1 py-0.5 rounded">{pct}%</span>
-                                                        )}
+                                                        {pct > 0 && !isSelected && <span className="text-[8px] font-mono opacity-75 bg-white/40 px-1 rounded">{pct}%</span>}
                                                     </button>
                                                 );
                                             })}
                                         </div>
-                                        <div className="text-[9px] text-indigo-600 font-semibold tracking-wide">
-                                            {selectedHallIds.size > 0
-                                                ? `${selectedHallIds.size} halls selected · ${selectedSeatCount} seats`
-                                                : `All halls · ${selectedSeatCount} seats`}
+                                    )}
+                                    <p className="text-[9px] text-indigo-600 font-semibold">
+                                        {selectedHallIds.size > 0 ? `${selectedHallIds.size} selected · ${selectedSeatCount} seats` : `All halls · ${selectedSeatCount} seats`}
+                                    </p>
+                                </div>
+
+                                <div className="h-px bg-slate-100" />
+
+                                {/* ─── STEP 4: Preview ──────────────────── */}
+                                {selectedDate && (
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-5 h-5 rounded-full bg-violet-600 text-white text-[10px] font-extrabold flex items-center justify-center shrink-0">4</span>
+                                            <span className="text-[11px] font-bold text-slate-700 uppercase tracking-widest">Preview</span>
+                                        </div>
+                                        <div className={`px-3 py-2.5 rounded-xl border text-[11px] font-medium ${!hasPreviewInputs ? 'bg-slate-50 border-slate-200 text-slate-500'
+                                                : projectedUnassigned === 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                                    : selectedSeatCount === 0 ? 'bg-slate-50 border-slate-200 text-slate-500'
+                                                        : 'bg-amber-50 border-amber-200 text-amber-700'
+                                            }`}>
+                                            <div className="flex items-center justify-between">
+                                                <span>Students</span><strong>{eligibleStudentCount}</strong>
+                                            </div>
+                                            <div className="flex items-center justify-between mt-1">
+                                                <span>Seats</span><strong>{selectedSeatCount}</strong>
+                                            </div>
+                                            <div className="flex items-center justify-between mt-1">
+                                                <span>Unassigned after run</span>
+                                                <strong className={projectedUnassigned > 0 ? 'text-amber-600' : 'text-emerald-600'}>{projectedUnassigned}</strong>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
 
-                                {/* Assign & Shuffle Buttons */}
-                                <div className="flex flex-col gap-3 mt-3">
-                                    <div className="flex gap-3">
+                                <div className="h-px bg-slate-100" />
+
+                                {/* ─── STEP 5: Generate / Shuffle ───────── */}
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-extrabold flex items-center justify-center shrink-0">5</span>
+                                        <span className="text-[11px] font-bold text-slate-700 uppercase tracking-widest">Generate / Shuffle</span>
+                                    </div>
+
+                                    <div className="flex gap-2">
                                         <Button onPress={handleBulkAssign} isLoading={assigning}
                                             isDisabled={!selectedDate || !canAssignByMode}
-                                            className="flex-1 font-bold text-white shadow-md bg-indigo-600 shadow-md shadow-indigo-200 hover:bg-indigo-700 rounded-xl h-11 border border-indigo-700 transition-all data-[disabled=true]:opacity-50 text-[15px]"
-                                            startContent={!assigning ? <Zap size={18} fill="currentColor" /> : undefined} size="lg"
-                                        >
-                                            {assigning ? 'Generating…' : `Generate Seating${selectedHallIds.size > 0 ? '' : ' (All Halls)'}`}
+                                            className="flex-1 font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl h-11 border border-indigo-700 transition-all data-[disabled=true]:opacity-50 text-[14px] shadow-md shadow-indigo-200"
+                                            startContent={!assigning ? <Zap size={16} fill="currentColor" /> : undefined} size="lg">
+                                            {assigning ? 'Generating…' : 'Generate Seating'}
                                         </Button>
-
                                         <Button onPress={handleShuffleGlobal} isLoading={shuffling}
                                             isDisabled={!selectedDate || totalFilled === 0}
-                                            className="font-bold text-white shadow-md bg-pink-600 shadow-md shadow-pink-200 hover:bg-pink-700 rounded-xl h-11 w-11 min-w-11 px-0 border border-pink-700 transition-all data-[disabled=true]:opacity-50 text-[15px]"
-                                            title="Shuffle Existing"
-                                        >
-                                            {!shuffling && <Shuffle size={18} />}
+                                            className="font-bold text-white bg-pink-600 hover:bg-pink-700 rounded-xl h-11 w-11 min-w-11 px-0 border border-pink-700 transition-all data-[disabled=true]:opacity-50 shadow-md shadow-pink-200"
+                                            title="Re-shuffle existing (chunk-safe)">
+                                            {!shuffling && <Shuffle size={16} />}
                                         </Button>
                                     </div>
+
+                                    {/* Post-run feedback */}
                                     {assignmentFeedback && (
                                         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
-                                            <p className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Last run</p>
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Last run</p>
+                                                <span className={`text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-full border ${lastExamType === 'EndSemester'
+                                                        ? 'bg-violet-50 text-violet-700 border-violet-200'
+                                                        : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                                    }`}>{lastExamType === 'EndSemester' ? 'End Semester' : 'Internal'}</span>
+                                            </div>
                                             <p className="text-[11px] text-slate-600">
-                                                Assigned <span className="font-bold text-emerald-700">{assignmentFeedback.assigned}</span> ·
-                                                Unassigned <span className="font-bold text-amber-700">{assignmentFeedback.unassigned}</span> ·
-                                                Halls used <span className="font-bold text-indigo-700">{assignmentFeedback.hallsUsed}</span>
+                                                Assigned <span className="font-bold text-emerald-700">{assignmentFeedback.assigned}</span> · Unassigned <span className="font-bold text-amber-700">{assignmentFeedback.unassigned}</span> · Halls <span className="font-bold text-indigo-700">{assignmentFeedback.hallsUsed}</span>
                                             </p>
+                                            {lastExamType === 'EndSemester' && lastSubjects.length > 0 && (
+                                                <div className="flex flex-wrap gap-1 pt-0.5">
+                                                    {lastSubjects.map(s => {
+                                                        const ss = getSubjectStyle(s);
+                                                        return <span key={s} className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: `${ss.glow}`, color: ss.text, border: `1px solid ${ss.text}40` }}>{s}</span>;
+                                                    })}
+                                                </div>
+                                            )}
                                             {assignmentFeedback.hallIds.length > 0 && (
-                                                <Button
-                                                    size="sm"
-                                                    onPress={handleViewAffectedHalls}
-                                                    className="h-8 text-[11px] font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200"
-                                                >
+                                                <Button size="sm" onPress={handleViewAffectedHalls}
+                                                    className="h-7 text-[11px] font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg">
                                                     View affected halls
                                                 </Button>
                                             )}
                                         </div>
                                     )}
                                 </div>
+
                             </CardBody>
                         </Card>
 
-                        {/* ── Stats Row (compact) ── */}
+                        {/* ── Compact stats bar ── */}
                         {selectedDate && hallSummary.length > 0 && (
-                            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-slate-200 shadow-sm backdrop-blur-xl">
+                            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-slate-200 shadow-sm">
                                 <Progress aria-label="Overall seating capacity" value={totalCapacity > 0 ? (totalFilled / totalCapacity) * 100 : 0} size="sm" className="flex-1"
-                                    classNames={{ indicator: `rounded-full transition-all duration-500 ${totalFilled >= totalCapacity ? 'bg-emerald-500' : 'bg-indigo-500'} shadow-sm`, track: "rounded-full bg-slate-100 border border-slate-200" }}
-                                />
+                                    classNames={{ indicator: `rounded-full transition-all duration-500 ${totalFilled >= totalCapacity ? 'bg-emerald-500' : 'bg-indigo-500'}`, track: "rounded-full bg-slate-100 border border-slate-200" }} />
                                 <div className="flex items-center gap-3 shrink-0">
                                     <div className="flex items-center gap-1">
                                         <LayoutGrid size={11} className="text-slate-500" />
@@ -1360,13 +1385,14 @@ const SeatingPlans: React.FC = () => {
                                         <AlertCircle size={11} className="text-amber-500" />
                                         <span className="text-[10px] font-bold text-amber-600">{totalCapacity - totalFilled}</span>
                                     </div>
-                                    <span className="text-[10px] font-mono font-bold text-slate-600">{totalFilled}<span className="text-slate-500">/{totalCapacity}</span></span>
+                                    <span className="text-[10px] font-mono font-bold text-slate-600">{totalFilled}<span className="text-slate-400">/{totalCapacity}</span></span>
                                 </div>
                             </div>
                         )}
                     </div>
 
                     {/* ═══════ RIGHT: HALL CARDS ═══════ */}
+
                     <div className="flex-1 min-w-0 z-10">
                         {selectedDate ? (
                             loadingSummary ? (
@@ -1450,6 +1476,19 @@ const SeatingPlans: React.FC = () => {
                                                     </DropdownItem>
                                                 </DropdownMenu>
                                             </Dropdown>
+
+                                            {/* ――― Clear All button ――― */}
+                                            {totalFilled > 0 && (
+                                                <Button size="sm"
+                                                    id="clear-all-allocations-btn"
+                                                    isLoading={clearingAll}
+                                                    isDisabled={clearingAll}
+                                                    onPress={() => setShowClearAllConfirm(true)}
+                                                    className="font-semibold text-[12px] bg-rose-100 hover:bg-rose-200 text-rose-700 border-2 border-rose-200 rounded-xl h-10 px-4 transition-all"
+                                                    startContent={!clearingAll ? <Trash2 size={14} /> : undefined}>
+                                                    {clearingAll ? 'Clearing…' : 'Clear All'}
+                                                </Button>
+                                            )}
 
                                             <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 shadow-sm">
                                                 <div className="text-right">
@@ -1560,7 +1599,7 @@ const SeatingPlans: React.FC = () => {
                             <Card className="border border-slate-200 shadow-[0_24px_80px_rgba(0,0,0,0.05)] bg-white/50 backdrop-blur-2xl rounded-[24px] min-h-[600px] overflow-hidden relative group">
                                 {/* Decorative background grid */}
                                 <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdHRoIGQ9Ik0gNDAgMCBMIDAgMCAwIDQwIiBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoMjU1LDI1NSwyNTUsMC4wNCkiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-60" />
-                                
+
                                 {/* Ambient interactive glowing orbs */}
                                 <div className="absolute top-[20%] left-[20%] w-72 h-72 bg-indigo-50 blur-[100px] rounded-full pointer-events-none group-hover:bg-indigo-100 transition-colors duration-1000" />
                                 <div className="absolute bottom-[20%] right-[20%] w-72 h-72 bg-emerald-50 blur-[100px] rounded-full pointer-events-none group-hover:bg-emerald-100 transition-colors duration-1000" />
@@ -1635,6 +1674,15 @@ const SeatingPlans: React.FC = () => {
                             `,
                             backgroundSize: '40px 40px'
                         }}>
+                            {/* Animation keyframes */}
+                            <style>{`
+                                @keyframes seatFadeIn {
+                                    from { opacity: 0; transform: translateY(8px) scale(0.96); }
+                                    to   { opacity: 1; transform: translateY(0) scale(1); }
+                                }
+                                .seat-anim { animation: seatFadeIn 0.28s ease both; }
+                                .bench-anim { animation: seatFadeIn 0.22s ease both; }
+                            `}</style>
                             {detailLoading ? (
                                 <div className="py-32 text-center">
                                     <RefreshCw size={28} className="text-amber-600 animate-spin mx-auto mb-4" />
@@ -1642,10 +1690,36 @@ const SeatingPlans: React.FC = () => {
                                 </div>
                             ) : (
                                 <div>
-                                    {/* Department Legend */}
+                                    {/* ── Legend + ExamType Badge + Subject Swatches ── */}
                                     {detailFilled > 0 && (
-                                        <div className="flex items-center gap-3 mb-8">
-                                            {(() => {
+                                        <div className="flex flex-wrap items-center gap-2 mb-8">
+                                            {/* ExamType badge */}
+                                            <span className={`text-[9px] font-extrabold uppercase tracking-widest px-2.5 py-1 rounded-full border mr-1 ${lastExamType === 'EndSemester'
+                                                    ? 'bg-violet-900/40 text-violet-300 border-violet-500/40'
+                                                    : 'bg-indigo-900/40 text-indigo-300 border-indigo-500/40'
+                                                }`}>
+                                                {lastExamType === 'EndSemester' ? '📚 End Semester' : '📝 Internal'}
+                                            </span>
+
+                                            {/* Subject swatches — shown for EndSem */}
+                                            {lastExamType === 'EndSemester' && (() => {
+                                                const subjects = new Set<string>();
+                                                Object.values(detailAssignments).forEach(a => { if (a.subjectCode) subjects.add(a.subjectCode); });
+                                                const codes = [...subjects].sort();
+                                                return codes.map(code => {
+                                                    const ss = getSubjectStyle(code);
+                                                    return (
+                                                        <div key={code} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold tracking-wide"
+                                                            style={{ background: `${ss.glow}`, color: ss.text, border: `1px solid ${ss.text}40` }}>
+                                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: ss.text, boxShadow: `0 0 6px ${ss.text}` }} />
+                                                            {code}
+                                                        </div>
+                                                    );
+                                                });
+                                            })()}
+
+                                            {/* Dept colour pills — always shown */}
+                                            {lastExamType === 'Internal' && (() => {
                                                 const depts = new Set<string>();
                                                 Object.values(detailAssignments).forEach(a => depts.add(a.deptCode));
                                                 return [...depts].map(d => {
@@ -1659,104 +1733,240 @@ const SeatingPlans: React.FC = () => {
                                                     );
                                                 });
                                             })()}
+
+                                            {/* Eligibility legend pills */}
+                                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-white border border-emerald-200" style={{ color: '#10b981' }}>
+                                                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                                                Eligible
+                                            </div>
+                                            {Object.values(detailAssignments).some(a => a.isBlocked) && (
+                                                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-white border border-red-200" style={{ color: '#ef4444' }}>
+                                                    <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                                                    Not Eligible
+                                                </div>
+                                            )}
+                                            {lastExamType === 'EndSemester' && (
+                                                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold bg-amber-900/30 border border-amber-500/30" style={{ color: '#fbbf24' }}>
+                                                    ⚠ Same-subject bench conflict
+                                                </div>
+                                            )}
+
+                                            {/* Hide Ineligible toggle */}
+                                            {Object.values(detailAssignments).some(a => a.isBlocked) && (
+                                                <div className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-slate-200">
+                                                    <span className="text-[10px] font-medium text-slate-600">Hide Ineligible</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setHideIneligible(v => !v)}
+                                                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${hideIneligible ? 'bg-red-500' : 'bg-slate-300'}`}
+                                                        aria-pressed={hideIneligible}
+                                                        id="hide-ineligible-toggle"
+                                                    >
+                                                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${hideIneligible ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 
-                                    {/* ── Bench Grid — Structure-style column layout ── */}
+                                    {/* ── Bench Grid ── */}
                                     <div
                                         className="grid gap-5 items-start"
                                         style={{ gridTemplateColumns: `repeat(${Math.max(detailBenchRows.length, 1)}, minmax(220px, 1fr))` }}
                                     >
-                                        {detailBenchRows.map((row) => (
-                                            <div key={row.rowLabel} className="space-y-4">
+                                        {detailBenchRows.map((row, rowIdx) => (
+                                            <div key={row.rowLabel} className="space-y-4" style={{ animationDelay: `${rowIdx * 40}ms` }}>
                                                 <div className="h-8 flex items-center justify-center">
                                                     <span className="w-9 h-9 rounded-full bg-[#22314a] border border-[#2f4364] text-[12px] font-extrabold text-slate-500 flex items-center justify-center">
                                                         {row.rowLabel}
                                                     </span>
                                                 </div>
-                                                {row.benches.map((bench) => {
-                                            const ls = bench.seats.find(s => s.SeatNumber === 1);
-                                            const rs = bench.seats.find(s => s.SeatNumber === 2);
-                                            const la = ls ? detailAssignments[ls.SeatID] : undefined;
-                                            const ra = rs ? detailAssignments[rs.SeatID] : undefined;
-                                            const lSt = la ? getDeptStyle(la.deptCode) : null;
-                                            const rSt = ra ? getDeptStyle(ra.deptCode) : null;
-                                            const ld = ls && !ls.IsActive;
-                                            const rd = rs && !rs.IsActive;
-                                            return (
-                                                <div key={`${bench.rowLabel}-${bench.benchNumber}`} className="group">
-                                                    {/* ─── DESK TOP (the shared desk/table) ─── */}
-                                                    <div className="bg-gradient-to-r from-[#2a3245] to-[#252d40] rounded-t-xl px-3 py-1.5 flex items-center justify-between border border-b-0 border-slate-200 group-hover:from-[#303a50] group-hover:to-[#2a3348] transition-all">
-                                                        <span className="text-[9px] font-extrabold text-slate-500 group-hover:text-slate-700 tracking-[0.2em] uppercase transition-colors">
-                                                            B{bench.benchNumber}
-                                                        </span>
-                                                        <span className="text-[8px] text-slate-500 font-mono">
-                                                            BENCH {bench.benchNumber}
-                                                        </span>
-                                                    </div>
+                                                {row.benches.map((bench, benchIdx) => {
+                                                    const ls = bench.seats.find(s => s.SeatNumber === 1);
+                                                    const rs = bench.seats.find(s => s.SeatNumber === 2);
+                                                    const la = ls ? detailAssignments[ls.SeatID] : undefined;
+                                                    const ra = rs ? detailAssignments[rs.SeatID] : undefined;
 
-                                                    {/* ─── TWO SEATS (chairs at the desk) ─── */}
-                                                    <div className="grid grid-cols-2 gap-[2px]">
-                                                        {/* Left Seat */}
-                                                        <Tooltip content={ld ? 'Disabled' : la ? `${la.registerNumber} — ${la.studentName}` : 'Empty'} delay={200} classNames={{ content: 'bg-white text-slate-800 text-[11px] font-medium rounded-lg border border-slate-200 shadow-2xl' }}>
-                                                            <div className={`relative rounded-bl-xl overflow-hidden cursor-default transition-all duration-200 ${ld ? '' : 'hover:brightness-110'}`}
-                                                                style={{
-                                                                    background: ld
-                                                                        ? 'repeating-linear-gradient(45deg, #1a1f2e, #1a1f2e 3px, #1e2436 3px, #1e2436 6px)'
-                                                                        : la ? 'linear-gradient(135deg, #10263b 0%, #151c2e 100%)' : '#131826',
-                                                                    borderLeft: lSt && !ld ? `3px solid ${lSt.text}` : '3px solid transparent',
-                                                                    borderBottom: `1px solid ${lSt && !ld ? lSt.text + '30' : '#253040'}`,
-                                                                    borderRight: '1px solid #253040'
-                                                                }}>
-                                                                <div className="px-3 py-4 min-h-[80px] flex flex-col items-center justify-center text-center">
-                                                                    {ld ? <Ban size={16} className="text-slate-600" />
-                                                                        : la ? (
-                                                                            <div className="flex flex-col items-center w-full gap-1.5">
-                                                                                <span className="text-[13px] font-bold font-mono tracking-wide w-full leading-none" style={{ color: lSt!.text }}>{la.registerNumber}</span>
-                                                                                <span className="text-[9px] text-slate-500 font-medium w-full truncate leading-none">{la.studentName}</span>
-                                                                            </div>
-                                                                        )
-                                                                            : (
-                                                                                <div className="flex flex-col items-center gap-1">
-                                                                                    <Armchair size={14} className="text-slate-700" />
-                                                                                    <span className="text-[8px] text-slate-600 font-medium">EMPTY</span>
-                                                                                </div>
-                                                                            )}
+                                                    // apply 'hide ineligible' filter
+                                                    const laVisible = la && !(hideIneligible && la.isBlocked) ? la : undefined;
+                                                    const raVisible = ra && !(hideIneligible && ra.isBlocked) ? ra : undefined;
+
+                                                    const lSt = laVisible ? getDeptStyle(laVisible.deptCode) : null;
+                                                    const rSt = raVisible ? getDeptStyle(raVisible.deptCode) : null;
+                                                    const lSub = laVisible?.subjectCode ? getSubjectStyle(laVisible.subjectCode) : null;
+                                                    const rSub = raVisible?.subjectCode ? getSubjectStyle(raVisible.subjectCode) : null;
+                                                    const isEndSem = lastExamType === 'EndSemester';
+
+                                                    const ld = ls && !ls.IsActive;
+                                                    const rd = rs && !rs.IsActive;
+
+                                                    const INELIG_BG = 'linear-gradient(135deg, #2d1010 0%, #1f0c0c 100%)';
+                                                    const INELIG_BORDER = '#ef4444';
+                                                    const INELIG_BORDER_SOFT = '#ef444430';
+
+                                                    const leftIsBlocked = !ld && !!laVisible?.isBlocked;
+                                                    const rightIsBlocked = !rd && !!raVisible?.isBlocked;
+
+                                                    // Bench conflict: both seats have same subject (EndSem only)
+                                                    const hasBenchConflict = isEndSem
+                                                        && !!laVisible?.subjectCode && !!raVisible?.subjectCode
+                                                        && laVisible.subjectCode === raVisible.subjectCode;
+
+                                                    // Seat accent: EndSem uses subject color; Internal uses dept color
+                                                    const lAccent = isEndSem && lSub ? lSub.text : lSt ? lSt.text : null;
+                                                    const rAccent = isEndSem && rSub ? rSub.text : rSt ? rSt.text : null;
+
+                                                    // Tooltip content helpers
+                                                    const leftTooltipContent = ld ? 'Disabled'
+                                                        : leftIsBlocked ? `${laVisible!.registerNumber} | ${laVisible!.deptCode} | ⛔ Not Eligible`
+                                                            : laVisible ? [
+                                                                laVisible.registerNumber,
+                                                                laVisible.subjectCode ? `📖 ${laVisible.subjectCode}` : '',
+                                                                laVisible.deptCode,
+                                                                '✅ Eligible',
+                                                            ].filter(Boolean).join('  ·  ')
+                                                                : 'Empty';
+                                                    const rightTooltipContent = rd ? 'Disabled'
+                                                        : rightIsBlocked ? `${raVisible!.registerNumber} | ${raVisible!.deptCode} | ⛔ Not Eligible`
+                                                            : raVisible ? [
+                                                                raVisible.registerNumber,
+                                                                raVisible.subjectCode ? `📖 ${raVisible.subjectCode}` : '',
+                                                                raVisible.deptCode,
+                                                                '✅ Eligible',
+                                                            ].filter(Boolean).join('  ·  ')
+                                                                : 'Empty';
+
+                                                    return (
+                                                        <div key={`${bench.rowLabel}-${bench.benchNumber}`} className="group bench-anim"
+                                                            style={{ animationDelay: `${(rowIdx * 8 + benchIdx) * 18}ms` }}>
+                                                            {/* DESK TOP */}
+                                                            <div className={`rounded-t-xl px-3 py-1.5 flex items-center justify-between border border-b-0 transition-all ${hasBenchConflict
+                                                                    ? 'bg-gradient-to-r from-amber-900/60 to-amber-800/40 border-amber-500/40'
+                                                                    : 'bg-gradient-to-r from-[#2a3245] to-[#252d40] border-slate-200 group-hover:from-[#303a50] group-hover:to-[#2a3348]'
+                                                                }`}>
+                                                                <span className="text-[9px] font-extrabold text-slate-500 group-hover:text-slate-700 tracking-[0.2em] uppercase transition-colors">
+                                                                    B{bench.benchNumber}
+                                                                </span>
+                                                                <div className="flex items-center gap-1.5">
+                                                                    {hasBenchConflict && (
+                                                                        <span title="Same subject on same bench!" className="text-amber-400 text-[11px] animate-pulse">⚠</span>
+                                                                    )}
+                                                                    <span className="text-[8px] text-slate-500 font-mono">BENCH {bench.benchNumber}</span>
                                                                 </div>
                                                             </div>
-                                                        </Tooltip>
 
-                                                        {/* Right Seat */}
-                                                        <Tooltip content={rd ? 'Disabled' : ra ? `${ra.registerNumber} — ${ra.studentName}` : 'Empty'} delay={200} classNames={{ content: 'bg-white text-slate-800 text-[11px] font-medium rounded-lg border border-slate-200 shadow-2xl' }}>
-                                                            <div className={`relative rounded-br-xl overflow-hidden cursor-default transition-all duration-200 ${rd ? '' : 'hover:brightness-110'}`}
-                                                                style={{
-                                                                    background: rd
-                                                                        ? 'repeating-linear-gradient(45deg, #1a1f2e, #1a1f2e 3px, #1e2436 3px, #1e2436 6px)'
-                                                                        : ra ? 'linear-gradient(135deg, #301730 0%, #1c1524 100%)' : '#19131d',
-                                                                    borderRight: rSt && !rd ? `3px solid ${rSt.text}` : '3px solid transparent',
-                                                                    borderBottom: `1px solid ${rSt && !rd ? rSt.text + '30' : '#253040'}`,
-                                                                    borderLeft: '1px solid #253040'
-                                                                }}>
-                                                                <div className="px-3 py-4 min-h-[80px] flex flex-col items-center justify-center text-center">
-                                                                    {rd ? <Ban size={16} className="text-slate-600" />
-                                                                        : ra ? (
-                                                                            <div className="flex flex-col items-center w-full gap-1.5">
-                                                                                <span className="text-[13px] font-bold font-mono tracking-wide w-full leading-none" style={{ color: rSt!.text }}>{ra.registerNumber}</span>
-                                                                                <span className="text-[9px] text-slate-500 font-medium w-full truncate leading-none">{ra.studentName}</span>
-                                                                            </div>
-                                                                        )
-                                                                            : (
-                                                                                <div className="flex flex-col items-center gap-1">
-                                                                                    <Armchair size={14} className="text-slate-700" />
-                                                                                    <span className="text-[8px] text-slate-600 font-medium">EMPTY</span>
-                                                                                </div>
-                                                                            )}
-                                                                </div>
+                                                            {/* TWO SEATS */}
+                                                            <div className="grid grid-cols-2 gap-[2px]">
+                                                                {/* Left Seat */}
+                                                                <Tooltip
+                                                                    content={leftTooltipContent}
+                                                                    delay={150}
+                                                                    classNames={{
+                                                                        content: `text-[11px] font-medium rounded-lg border shadow-2xl max-w-[240px] ${leftIsBlocked ? 'bg-red-50 text-red-700 border-red-200'
+                                                                                : 'bg-slate-900 text-slate-100 border-slate-700'
+                                                                            }`
+                                                                    }}
+                                                                >
+                                                                    <div
+                                                                        className={`relative rounded-bl-xl overflow-hidden cursor-default transition-all duration-200 seat-anim ${ld ? '' : leftIsBlocked ? 'opacity-90' : 'hover:brightness-110'}`}
+                                                                        style={{
+                                                                            animationDelay: `${(rowIdx * 8 + benchIdx) * 18 + 40}ms`,
+                                                                            background: ld ? 'repeating-linear-gradient(45deg, #1a1f2e, #1a1f2e 3px, #1e2436 3px, #1e2436 6px)'
+                                                                                : leftIsBlocked ? INELIG_BG
+                                                                                    : laVisible ? 'linear-gradient(135deg, #10263b 0%, #151c2e 100%)' : '#131826',
+                                                                            borderLeft: ld ? '3px solid transparent' : leftIsBlocked ? `3px solid ${INELIG_BORDER}` : lAccent ? `3px solid ${lAccent}` : '3px solid transparent',
+                                                                            borderBottom: `1px solid ${ld ? '#253040' : leftIsBlocked ? INELIG_BORDER_SOFT : lAccent ? lAccent + '30' : '#253040'}`,
+                                                                            borderRight: '1px solid #253040',
+                                                                            boxShadow: leftIsBlocked ? 'inset 0 0 20px rgba(239,68,68,0.08)'
+                                                                                : lAccent && laVisible ? `inset 0 0 12px ${lAccent}12` : 'none',
+                                                                        }}
+                                                                    >
+                                                                        <div className="px-3 py-4 min-h-[80px] flex flex-col items-center justify-center text-center">
+                                                                            {ld ? <Ban size={16} className="text-slate-600" />
+                                                                                : leftIsBlocked ? (
+                                                                                    <div className="flex flex-col items-center w-full gap-1">
+                                                                                        <XCircle size={13} className="text-red-500 mb-0.5" />
+                                                                                        <span className="text-[11px] font-bold font-mono tracking-wide w-full leading-none text-red-400 opacity-80">{laVisible!.registerNumber}</span>
+                                                                                        <span className="text-[8px] text-red-500/60 font-medium w-full truncate leading-none">{laVisible!.studentName}</span>
+                                                                                        <span className="mt-1 px-1.5 py-0.5 rounded text-[7px] font-bold tracking-widest uppercase bg-red-900/40 text-red-400 border border-red-700/40">Not Eligible</span>
+                                                                                    </div>
+                                                                                ) : laVisible ? (
+                                                                                    <div className="flex flex-col items-center w-full gap-1">
+                                                                                        <span className="text-[13px] font-bold font-mono tracking-wide w-full leading-none" style={{ color: lAccent || (lSt?.text ?? '#94a3b8') }}>{laVisible.registerNumber}</span>
+                                                                                        <span className="text-[9px] text-slate-500 font-medium w-full truncate leading-none">{laVisible.studentName}</span>
+                                                                                        {isEndSem && laVisible.subjectCode && (
+                                                                                            <span className="mt-0.5 px-1.5 py-0.5 rounded text-[7px] font-bold tracking-widest uppercase"
+                                                                                                style={{ background: `${lSub?.glow ?? '#334155'}`, color: lSub?.text ?? '#94a3b8', border: `1px solid ${lSub?.text ?? '#334155'}40` }}>
+                                                                                                {laVisible.subjectCode}
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <div className="flex flex-col items-center gap-1">
+                                                                                        <Armchair size={14} className="text-slate-700" />
+                                                                                        <span className="text-[8px] text-slate-600 font-medium">EMPTY</span>
+                                                                                    </div>
+                                                                                )}
+                                                                        </div>
+                                                                    </div>
+                                                                </Tooltip>
+
+                                                                {/* Right Seat */}
+                                                                <Tooltip
+                                                                    content={rightTooltipContent}
+                                                                    delay={150}
+                                                                    classNames={{
+                                                                        content: `text-[11px] font-medium rounded-lg border shadow-2xl max-w-[240px] ${rightIsBlocked ? 'bg-red-50 text-red-700 border-red-200'
+                                                                                : 'bg-slate-900 text-slate-100 border-slate-700'
+                                                                            }`
+                                                                    }}
+                                                                >
+                                                                    <div
+                                                                        className={`relative rounded-br-xl overflow-hidden cursor-default transition-all duration-200 seat-anim ${rd ? '' : rightIsBlocked ? 'opacity-90' : 'hover:brightness-110'}`}
+                                                                        style={{
+                                                                            animationDelay: `${(rowIdx * 8 + benchIdx) * 18 + 60}ms`,
+                                                                            background: rd ? 'repeating-linear-gradient(45deg, #1a1f2e, #1a1f2e 3px, #1e2436 3px, #1e2436 6px)'
+                                                                                : rightIsBlocked ? INELIG_BG
+                                                                                    : raVisible ? 'linear-gradient(135deg, #1c1530 0%, #14111e 100%)' : '#13111a',
+                                                                            borderRight: rd ? '3px solid transparent' : rightIsBlocked ? `3px solid ${INELIG_BORDER}` : rAccent ? `3px solid ${rAccent}` : '3px solid transparent',
+                                                                            borderBottom: `1px solid ${rd ? '#253040' : rightIsBlocked ? INELIG_BORDER_SOFT : rAccent ? rAccent + '30' : '#253040'}`,
+                                                                            borderLeft: '1px solid #253040',
+                                                                            boxShadow: rightIsBlocked ? 'inset 0 0 20px rgba(239,68,68,0.08)'
+                                                                                : rAccent && raVisible ? `inset 0 0 12px ${rAccent}12` : 'none',
+                                                                        }}
+                                                                    >
+                                                                        <div className="px-3 py-4 min-h-[80px] flex flex-col items-center justify-center text-center">
+                                                                            {rd ? <Ban size={16} className="text-slate-600" />
+                                                                                : rightIsBlocked ? (
+                                                                                    <div className="flex flex-col items-center w-full gap-1">
+                                                                                        <XCircle size={13} className="text-red-500 mb-0.5" />
+                                                                                        <span className="text-[11px] font-bold font-mono tracking-wide w-full leading-none text-red-400 opacity-80">{raVisible!.registerNumber}</span>
+                                                                                        <span className="text-[8px] text-red-500/60 font-medium w-full truncate leading-none">{raVisible!.studentName}</span>
+                                                                                        <span className="mt-1 px-1.5 py-0.5 rounded text-[7px] font-bold tracking-widest uppercase bg-red-900/40 text-red-400 border border-red-700/40">Not Eligible</span>
+                                                                                    </div>
+                                                                                ) : raVisible ? (
+                                                                                    <div className="flex flex-col items-center w-full gap-1">
+                                                                                        <span className="text-[13px] font-bold font-mono tracking-wide w-full leading-none" style={{ color: rAccent || (rSt?.text ?? '#94a3b8') }}>{raVisible.registerNumber}</span>
+                                                                                        <span className="text-[9px] text-slate-500 font-medium w-full truncate leading-none">{raVisible.studentName}</span>
+                                                                                        {isEndSem && raVisible.subjectCode && (
+                                                                                            <span className="mt-0.5 px-1.5 py-0.5 rounded text-[7px] font-bold tracking-widest uppercase"
+                                                                                                style={{ background: `${rSub?.glow ?? '#334155'}`, color: rSub?.text ?? '#94a3b8', border: `1px solid ${rSub?.text ?? '#334155'}40` }}>
+                                                                                                {raVisible.subjectCode}
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <div className="flex flex-col items-center gap-1">
+                                                                                        <Armchair size={14} className="text-slate-700" />
+                                                                                        <span className="text-[8px] text-slate-600 font-medium">EMPTY</span>
+                                                                                    </div>
+                                                                                )}
+                                                                        </div>
+                                                                    </div>
+                                                                </Tooltip>
                                                             </div>
-                                                        </Tooltip>
-                                                    </div>
-                                                </div>
-                                            );
+                                                        </div>
+                                                    );
                                                 })}
                                             </div>
                                         ))}
@@ -1891,6 +2101,90 @@ const SeatingPlans: React.FC = () => {
                             </ModalFooter>
                         </>
                     )}
+                </ModalContent>
+            </Modal>
+
+            {/* ═══ Clear All Allocations Confirmation Modal ═══ */}
+            <Modal
+                isOpen={showClearAllConfirm}
+                onOpenChange={setShowClearAllConfirm}
+                placement="center"
+                backdrop="blur"
+                classNames={{
+                    base: "bg-white border border-red-100 shadow-2xl overflow-hidden max-w-md",
+                    backdrop: "bg-slate-900/40 backdrop-blur-md",
+                }}
+            >
+                <ModalContent>
+                    {(onClose) => (<>
+                        {/* Decorative glow */}
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-rose-500/10 rounded-full blur-[50px] pointer-events-none" />
+
+                        <ModalHeader className="flex flex-col gap-1 border-b border-red-100 px-6 py-5 relative z-10">
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="p-2.5 bg-rose-100 border border-rose-200 rounded-xl">
+                                    <Trash2 size={20} className="text-rose-600" strokeWidth={2.5} />
+                                </div>
+                                <h3 className="text-[18px] font-bold text-slate-800 tracking-tight">Clear All Allocations</h3>
+                            </div>
+                            {/* Target session badge */}
+                            <div className="flex items-center gap-2 pl-1">
+                                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Target:</span>
+                                <span className="px-2.5 py-1 bg-slate-100 rounded-lg text-[11px] font-bold text-slate-700 border border-slate-200">
+                                    {selectedDate ? fmtDate(selectedDate) : ''} · {selectedSession === 'FN' ? 'Forenoon' : 'Afternoon'}
+                                </span>
+                            </div>
+                        </ModalHeader>
+
+                        <ModalBody className="px-6 py-5 relative z-10">
+                            <div className="space-y-4">
+                                {/* Stats row */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center">
+                                        <p className="text-[22px] font-extrabold text-rose-600">{hallSummary.filter(h => h.filledSeats > 0).length}</p>
+                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Halls</p>
+                                    </div>
+                                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center">
+                                        <p className="text-[22px] font-extrabold text-rose-600">{totalFilled}</p>
+                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Students</p>
+                                    </div>
+                                </div>
+
+                                {/* Warning list */}
+                                <div className="rounded-xl border border-rose-100 bg-rose-50/60 p-4 space-y-2.5">
+                                    <h4 className="text-[10px] font-bold text-rose-700 uppercase tracking-widest border-b border-rose-100 pb-2">What will happen:</h4>
+                                    <ul className="text-[12px] text-slate-600 space-y-2 font-medium">
+                                        <li className="flex items-start gap-2.5">
+                                            <AlertCircle size={14} className="text-rose-500 shrink-0 mt-0.5" />
+                                            All seat assignments across <strong>every hall</strong> for this session will be erased.
+                                        </li>
+                                        <li className="flex items-start gap-2.5">
+                                            <AlertCircle size={14} className="text-rose-500 shrink-0 mt-0.5" />
+                                            Student registrations and eligibility data are <strong>not affected</strong>.
+                                        </li>
+                                        <li className="flex items-start gap-2.5">
+                                            <AlertCircle size={14} className="text-rose-500 shrink-0 mt-0.5" />
+                                            <span className="text-rose-700 font-semibold">This action cannot be undone.</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </ModalBody>
+
+                        <ModalFooter className="border-t border-red-100 px-6 py-4 bg-slate-50 relative z-10 flex justify-end gap-3">
+                            <Button variant="light" className="font-semibold text-slate-600 hover:text-slate-800" onPress={onClose}>
+                                Cancel
+                            </Button>
+                            <Button
+                                id="confirm-clear-all-btn"
+                                className="font-bold text-white bg-rose-600 hover:bg-rose-700 border border-rose-700 shadow-md shadow-rose-200 px-6 rounded-xl"
+                                onPress={handleClearAllAllocations}
+                                startContent={<Trash2 size={15} />}
+                            >
+                                Yes, Clear All
+                            </Button>
+                        </ModalFooter>
+                    </>)}
                 </ModalContent>
             </Modal>
 

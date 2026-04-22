@@ -54,6 +54,7 @@ export const SeatingService = {
         secondaryDeptId?: number | null;
         avoidSameDeptBench?: boolean;
         shuffleRooms?: boolean;
+        roomCapacityLimit?: number;   // End Sem: per-room seat cap (default 40)
         leftDeptId?: number | null; // backward compatibility
         rightDeptId?: number | null; // backward compatibility
     }) => {
@@ -82,6 +83,12 @@ export const SeatingService = {
     /** Clear allocation for a hall */
     clearAllocation: async (examDate: string, session: string, hallId: number) => {
         const r = await api.delete(`${PREFIX}/allocation/${examDate}/${session}/${hallId}`);
+        return r.data;
+    },
+
+    /** Clear ALL allocations for an entire date + session (nuclear wipe) */
+    clearAllAllocations: async (examDate: string, session: string) => {
+        const r = await api.delete(`${PREFIX}/allocation/${examDate}/${session}`);
         return r.data;
     },
 

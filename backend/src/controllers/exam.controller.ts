@@ -1313,6 +1313,11 @@ export class ExamController {
             let updatedStudents = 0;
             let registrationsCreated = 0;
             let registrationsSkipped = 0;
+            let eligibleCount = 0;
+            let ineligibleCount = 0;
+
+            // Values that explicitly mark a student as NOT eligible
+            const INELIGIBLE_VALUES = new Set(['no', 'not eligible', '0', 'false', 'ineligible']);
 
             try {
                 for (let index = 0; index < rows.length; index++) {
@@ -1321,10 +1326,18 @@ export class ExamController {
 
                     const fullName = String(getEligibleCellValue(row, ['Name', 'Student Name', 'Full Name', 'FullName']) ?? '').trim();
                     const registerNumber = String(getEligibleCellValue(row, ['Register Number', 'RegisterNumber', 'Reg No', 'RegNo', 'University RegNo', 'University Registration No']) ?? '').trim();
-                    const isEligibleRaw = String(getEligibleCellValue(row, ['Eligible', 'IsEligible', 'isEligible', 'Eligibility']) ?? '').trim().toLowerCase();
 
-                    console.log(`[IMPORT DEBUG] Row ${rowNumber}:`, { fullName, registerNumber, isEligibleRaw, row });
+                    // ── STEP 1: Parse eligibility – default TRUE when column is absent or blank ──
+                    const isEligibleRaw = String(
+                        getEligibleCellValue(row, ['Is Eligible', 'IsEligible', 'Eligible', 'isEligible', 'Eligibility', 'Status']) ?? ''
+                    ).trim().toLowerCase();
+                    const isEligible: boolean = isEligibleRaw === ''
+                        ? true
+                        : !INELIGIBLE_VALUES.has(isEligibleRaw);
 
+                    console.log(`[IMPORT DEBUG] Row ${rowNumber}:`, { fullName, registerNumber, isEligibleRaw, isEligible, row });
+
+                    // ── STEP 2: Only skip rows missing required identity fields ──
                     if (!fullName || !registerNumber) {
                         console.log(`[IMPORT DEBUG] Row ${rowNumber} skipped: Missing required Name or Register Number`);
                         errors.push({ row: rowNumber, reason: 'Missing required Name or Register Number' });
@@ -1333,14 +1346,12 @@ export class ExamController {
 
                     const normalizedRegNo = registerNumber.toUpperCase();
                     if (seenRegNos.has(normalizedRegNo)) {
-                        continue;
+                        continue; // silently skip exact duplicates within the same sheet
                     }
                     seenRegNos.add(normalizedRegNo);
 
-                    // Only skip if explicitly marked as not eligible (treat missing/empty as eligible by default)
-                    if (isEligibleRaw && ['no', 'not eligible', '0', 'false'].includes(isEligibleRaw)) {
-                        continue;
-                    }
+                    // Track eligibility distribution
+                    if (isEligible) { eligibleCount++; } else { ineligibleCount++; }
 
                     let student = await Student.findOne({
                         where: { RegisterNumber: normalizedRegNo },
@@ -1348,7 +1359,7 @@ export class ExamController {
                     });
 
                     if (!student) {
-                        // Create a User first (required for Student.UserID)
+                        // ── Resolve / create Student (ALL students enter the system) ──
                         const email = buildEligibleStudentEmail(fullName, registerNumber);
                         const defaultPassword = await bcrypt.hash('12345678', 10);
                         
@@ -1386,6 +1397,7 @@ export class ExamController {
                         updatedStudents++;
                     }
 
+                    // ── STEP 3: Upsert ExamRegistration with IsEligible flag ──
                     const [registration, created] = await ExamRegistration.findOrCreate({
                         where: {
                             ExamID: examId,
@@ -1393,28 +1405,37 @@ export class ExamController {
                         },
                         defaults: {
                             ExamID: examId,
-                            StudentID: student.StudentID
-                        },
+                            StudentID: student.StudentID,
+                            IsEligible: isEligible
+                        } as any,
                         transaction
                     });
 
                     if (created) {
                         registrationsCreated++;
-                    } else if (registration) {
+                    } else {
+                        // Refresh eligibility flag if it changed since last import
+                        if ((registration as any).IsEligible !== isEligible) {
+                            await (registration as any).update({ IsEligible: isEligible }, { transaction });
+                        }
                         registrationsSkipped++;
                     }
                 }
 
                 await transaction.commit();
 
+                // ── STEP 4: Return enriched summary ──
                 return res.json({
-                    message: 'Eligible students imported successfully',
+                    message: 'Students imported successfully',
                     examId,
                     branch: {
                         DepartmentID: department.DepartmentID,
                         DepartmentCode: department.DepartmentCode,
                         DepartmentName: department.DepartmentName
                     },
+                    total: eligibleCount + ineligibleCount,
+                    eligibleCount,
+                    ineligibleCount,
                     createdUsers,
                     updatedUsers,
                     createdStudents,
