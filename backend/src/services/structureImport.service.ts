@@ -389,6 +389,208 @@ export class StructureImportService {
             throw error;
         }
     }
+
+    /**
+     * Import from pre-processed JSON data (frontend has already parsed the file)
+     * Uses per-room transactions to avoid MSSQL transaction doom issues
+     */
+    async importFromJSON(
+        data: { BlockName: string; FloorNumber: string; RoomCode: string; Capacity: string; IsExamUsable: string }[],
+        options?: { autoZone: boolean; zoneCount: number }
+    ): Promise<ImportResult> {
+        if (!data || data.length === 0) {
+            throw new Error("No data provided for import");
+        }
+
+        let blocksCreated = 0;
+        let floorsCreated = 0;
+        let roomsCreated = 0;
+        let roomsUpdated = 0;
+        const roomsToZone: number[] = [];
+        const blockCache = new Map<string, number>();
+        const floorCache = new Map<string, number>();
+        const seenRoomCodes = new Set<string>();
+        const errors: string[] = [];
+
+        for (const item of data) {
+            const blockName = (item.BlockName || 'MAIN').trim().toUpperCase();
+            const floorNum = parseInt(item.FloorNumber, 10) || 0;
+            const roomCode = (item.RoomCode || '').trim();
+            const totalCapacity = parseInt(item.Capacity, 10) || 0;
+            const isExamUsable = item.IsExamUsable?.toLowerCase() !== 'false';
+
+            if (!roomCode) {
+                console.warn('[JSON IMPORT] Skipping row with empty RoomCode');
+                continue;
+            }
+            if (totalCapacity <= 0) {
+                console.warn(`[JSON IMPORT] Skipping room ${roomCode} with zero capacity`);
+                continue;
+            }
+            // Skip duplicates within same import batch
+            if (seenRoomCodes.has(roomCode.toLowerCase())) {
+                console.warn(`[JSON IMPORT] Skipping duplicate room ${roomCode}`);
+                continue;
+            }
+            seenRoomCodes.add(roomCode.toLowerCase());
+
+            // Process each room in its own transaction to avoid MSSQL doom
+            const transaction = await sequelize.transaction();
+            try {
+                // --- Block ---
+                let blockId = blockCache.get(blockName.toLowerCase());
+                if (!blockId) {
+                    let block = await Block.findOne(
+                        { where: { BlockName: blockName }, transaction }
+                    );
+                    if (!block) {
+                        block = await Block.create(
+                            { BlockName: blockName, Status: 'Active' },
+                            { transaction }
+                        );
+                        blocksCreated++;
+                    }
+                    const blockData = (block as any).toJSON ? (block as any).toJSON() : block;
+                    blockId = blockData.BlockID;
+                    blockCache.set(blockName.toLowerCase(), blockId!);
+                }
+                if (!blockId) throw new Error("BlockID required");
+
+                // --- Floor ---
+                const floorKey = `${blockId}-${floorNum}`;
+                let floorId = floorCache.get(floorKey);
+                if (!floorId) {
+                    let floor = await Floor.findOne(
+                        { where: { BlockID: blockId, FloorNumber: floorNum }, transaction }
+                    );
+                    if (!floor) {
+                        floor = await Floor.create(
+                            { BlockID: blockId, FloorNumber: floorNum, Status: 'Active' },
+                            { transaction }
+                        );
+                        floorsCreated++;
+                    }
+                    const floorData = (floor as any).toJSON ? (floor as any).toJSON() : floor;
+                    floorId = floorData.FloorID;
+                    floorCache.set(floorKey, floorId!);
+                }
+                if (!floorId) throw new Error("FloorID required");
+
+                // --- Room ---
+                // Check by both RoomCode and FloorID (matches unique composite index)
+                let existingRoom = await Room.findOne(
+                    { where: { RoomCode: roomCode, FloorID: floorId }, transaction }
+                );
+                // Also check just by RoomCode in case it exists on another floor
+                if (!existingRoom) {
+                    existingRoom = await Room.findOne(
+                        { where: { RoomCode: roomCode }, transaction }
+                    );
+                }
+
+                const roomType = totalCapacity <= 80 ? 'ROOM' : 'HALL';
+                const seatsPerBench = 2;
+
+                // Compute a simple row layout from capacity
+                const totalBenches = Math.ceil(totalCapacity / seatsPerBench);
+                const numRows = Math.min(Math.max(Math.ceil(totalBenches / 8), 1), 6);
+                const rowLayout: number[] = [];
+                let remainingBenches = totalBenches;
+                for (let r = 0; r < numRows; r++) {
+                    const benchesThisRow = Math.min(
+                        Math.ceil(remainingBenches / (numRows - r)),
+                        remainingBenches
+                    );
+                    rowLayout.push(benchesThisRow);
+                    remainingBenches -= benchesThisRow;
+                }
+
+                if (!existingRoom) {
+                    const newRoom = await Room.create(
+                        {
+                            RoomCode: roomCode,
+                            BlockID: blockId,
+                            FloorID: floorId,
+                            TotalCapacity: totalCapacity,
+                            ExamUsable: isExamUsable,
+                            Status: 'Active',
+                            RoomType: roomType,
+                            LayoutType: 'CUSTOM',
+                            RowLayout: rowLayout,
+                            SeatsPerBench: seatsPerBench,
+                            IsLayoutLocked: false
+                        },
+                        { transaction }
+                    );
+
+                    // Commit room creation FIRST, then generate seats in a separate transaction
+                    await transaction.commit();
+
+                    // Generate seats outside the room-creation transaction
+                    const seatTx = await sequelize.transaction();
+                    try {
+                        await generateSeats(newRoom, seatTx);
+                        await seatTx.commit();
+                    } catch (seatErr: any) {
+                        await seatTx.rollback();
+                        console.error(`[JSON IMPORT] Seat generation failed for room ${roomCode}:`, seatErr.message);
+                    }
+
+                    roomsCreated++;
+                    if (options?.autoZone) roomsToZone.push(newRoom.RoomID);
+                } else {
+                    console.warn("[JSON IMPORT] Room already exists:", roomCode);
+                    let needsUpdate = false;
+
+                    if (existingRoom.TotalCapacity !== totalCapacity) {
+                        existingRoom.TotalCapacity = totalCapacity;
+                        needsUpdate = true;
+                    }
+                    if (existingRoom.RoomType !== roomType) {
+                        existingRoom.RoomType = roomType;
+                        needsUpdate = true;
+                    }
+
+                    if (needsUpdate) {
+                        await existingRoom.save({ transaction });
+                        roomsUpdated++;
+                    }
+
+                    await transaction.commit();
+
+                    if (options?.autoZone) roomsToZone.push(existingRoom.RoomID);
+                }
+            } catch (err: any) {
+                try { await transaction.rollback(); } catch (_) {}
+                console.error(`[JSON IMPORT] Error processing room ${roomCode}:`, err.message);
+                errors.push(`Room ${roomCode}: ${err.message}`);
+            }
+        }
+
+        // Auto-zone after all rooms are committed
+        if (options?.autoZone && roomsToZone.length > 0) {
+            const { RoomService } = await import('./room.service.js');
+            const roomService = new RoomService();
+            for (const rId of roomsToZone) {
+                try {
+                    await roomService.autoZoneRoom(rId, options.zoneCount);
+                } catch (err: any) {
+                    console.error(`[JSON IMPORT] AutoZoning failed for room ${rId}:`, err.message);
+                }
+            }
+        }
+
+        if (roomsCreated === 0 && roomsUpdated === 0 && errors.length > 0) {
+            throw new Error(`Import failed: ${errors[0]}`);
+        }
+
+        return {
+            blocksCreated,
+            floorsCreated,
+            roomsCreated,
+            roomsUpdated
+        };
+    }
 }
 
 

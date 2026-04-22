@@ -109,7 +109,22 @@ export const structureService = {
     },
 
     // --- IMPORT ---
-    importStructure: async (file: File, options?: { autoZone: boolean, zoneCount: number }) => {
+    importStructure: async (file: File, options?: { autoZone: boolean, zoneCount: number }, previewData?: { BlockName: string, FloorNumber: string, RoomCode: string, Capacity: string, IsExamUsable: string }[]) => {
+        // If pre-processed data is available, send as JSON to avoid backend re-parsing issues
+        if (previewData && previewData.length > 0) {
+            console.log('[DEBUG] Sending pre-processed JSON data:', { records: previewData.length, options });
+            const response = await api.post<{ blocksCreated: number, floorsCreated: number, roomsCreated: number, roomsUpdated?: number }>(
+                `/college-structure/import/json`,
+                {
+                    data: previewData,
+                    autoZone: options?.autoZone || false,
+                    zoneCount: options?.zoneCount || 2
+                }
+            );
+            return response.data;
+        }
+
+        // Fallback: send raw file via FormData
         const formData = new FormData();
         formData.append('file', file);
         if (options?.autoZone) formData.append('autoZone', 'true');

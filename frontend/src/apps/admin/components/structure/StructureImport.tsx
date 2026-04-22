@@ -191,7 +191,7 @@ const processRawData = (data: any[]): CSVData[] => {
         }, 400);
 
         try {
-            const result = await structureService.importStructure(file, { autoZone, zoneCount });
+            const result = await structureService.importStructure(file, { autoZone, zoneCount }, previewData);
             
             clearInterval(interval);
             setUploadProgress(100);
