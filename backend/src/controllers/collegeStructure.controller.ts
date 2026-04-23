@@ -419,9 +419,9 @@ export const updateRoom = async (req: Request, res: Response) => {
             if (newRowLayout !== undefined) room.RowLayout = newRowLayout;
             if (SeatsPerBench !== undefined) room.SeatsPerBench = SeatsPerBench;
 
-            // Recalculate capacity perfectly matched to layout
+            // Recalculate capacity using actual seatsPerBench
             let tLayout = newRowLayout !== undefined ? newRowLayout : room.RowLayout;
-            let tSeats = 2; // Fixed requirement
+            let tSeats = room.SeatsPerBench || 1;
             if (tLayout && Array.isArray(tLayout)) {
                 room.TotalCapacity = tLayout.reduce((a: number, b: number) => a + b, 0) * tSeats;
                 room.RoomType = room.TotalCapacity <= 80 ? 'ROOM' : 'HALL';
@@ -430,7 +430,7 @@ export const updateRoom = async (req: Request, res: Response) => {
             shouldRegenerateSeats = true;
         }
 
-        room.SeatsPerBench = 2;
+        // Persist seatsPerBench as-is (don't override)
         await room.save();
 
         if (shouldRegenerateSeats) {

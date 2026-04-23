@@ -36,7 +36,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
     // --- Configuration State ---
     const [config, setConfig] = useState({
         rowLayout: [] as number[],
-        seatsPerBench: 2,
+        seatsPerBench: 1,
         roomType: 'ROOM' as RoomType
     });
 
@@ -523,17 +523,18 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                                     <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Total Benches</span>
                                                     <span className="font-mono font-bold text-slate-800">{config.rowLayout.reduce((acc, curr) => acc + curr, 0)}</span>
                                                 </div>
-                                                <div className="flex justify-between items-center">
+                                                <div className="flex flex-col gap-2">
                                                     <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Seats Per Bench</span>
-                                                    <span className="font-bold text-slate-700">
-                                                        {config.seatsPerBench === 1 ? 'Single Seating' : config.seatsPerBench === 2 ? 'Dual Seating' : config.seatsPerBench}
-                                                    </span>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <button onClick={() => setConfig({...config, seatsPerBench: 1})} className={`py-2 rounded-lg text-xs font-bold border-2 transition-all ${config.seatsPerBench === 1 ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>Single (1)</button>
+                                                        <button onClick={() => setConfig({...config, seatsPerBench: 2})} className={`py-2 rounded-lg text-xs font-bold border-2 transition-all ${config.seatsPerBench === 2 ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>Dual (2)</button>
+                                                    </div>
                                                 </div>
                                                 <Divider className="my-1"/>
                                                 <div className="flex justify-between items-center">
                                                     <div className="flex flex-col">
                                                         <span className="text-xs font-bold uppercase tracking-widest text-indigo-600">Final Capacity</span>
-                                                        <span className="text-[10px] text-slate-400">Capacity is auto-calculated based on layout</span>
+                                                        <span className="text-[10px] text-slate-400">Auto-calculated from layout</span>
                                                     </div>
                                                     <span className="text-2xl font-black text-indigo-600">{capacityCount}</span>
                                                 </div>
@@ -588,83 +589,82 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                             </div>
                         ) : (
                             <div className="min-w-min mx-auto pb-24">
-                                <div className="flex flex-col items-center gap-4 mb-16">
-                                    <div className="w-80 h-20 bg-gradient-to-b from-slate-800 to-slate-900 border border-slate-700/50 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden">
+                                {/* Blackboard */}
+                                <div className="flex flex-col items-center mb-10">
+                                    <div className="w-full max-w-4xl h-14 bg-gradient-to-b from-slate-800 to-slate-900 border border-slate-700/50 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden">
                                         <div className="absolute top-0 inset-x-0 h-[1px] bg-indigo-500/50" />
                                         <span className="text-xs font-bold text-slate-500 uppercase tracking-[0.2em]">Front Blackboard</span>
                                     </div>
                                 </div>
 
-                                <div className="flex gap-12 justify-center">
+                                {/* Bench Pillars — one pill per column (A, B, C…) */}
+                                <div className="flex gap-8 justify-center items-start flex-wrap">
                                     {config.rowLayout.map((benches, r) => {
-                                        const colLabel = String.fromCharCode(65 + r);
+                                        const colLetter = String.fromCharCode(65 + r);
+                                        const colLetterLower = colLetter.toLowerCase();
+
                                         return (
-                                            <div key={r} className="flex flex-col gap-6 items-center">
-                                                <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 text-slate-400 text-xs font-bold shadow-xl flex items-center justify-center">{colLabel}</div>
-                                                
-                                                <div className="p-4 bg-white/[0.02] border border-white/5 rounded-[2rem] flex flex-col gap-4 shadow-xl shadow-black/50">
-                                                    {Array.from({ length: benches }).map((_, b) => (
-                                                        <div key={b} className="relative group/bench">
-                                                            <div className="bg-slate-800/80 border border-slate-700/50 rounded-2xl p-3 shadow-lg hover:border-indigo-500/30 transition-colors">
-                                                                <div className="h-1.5 w-full bg-slate-700 rounded-full mb-3 opacity-50" />
-                                                                
-                                                                <div className="flex gap-3 justify-center">
-                                                                    {Array.from({ length: config.seatsPerBench }).map((_, s) => {
-                                                                        const seatIndex = s + 1;
-                                                                        const seatId = `${colLabel}-${b + 1}-${seatIndex}`;
-                                                                        const isActive = !disabledSeatIds.has(seatId);
-                                                                        const zoneId = seatZoneMap.get(seatId);
-                                                                        
-                                                                        let seatCls = "w-10 h-10 rounded-lg border-2 flex items-center justify-center cursor-pointer transition-all duration-200 text-xs font-bold relative group/seat shadow-sm ";
+                                            <div key={r} className="flex flex-col items-center gap-3">
+                                                {/* Column header label */}
+                                                <div className="text-white font-black text-xl tracking-[0.25em] drop-shadow-lg">{colLetter}</div>
 
-                                                                        if (isActive) {
-                                                                            if (viewMode === 'PHYSICAL' && zoneId) {
-                                                                                if (zoneId) {
-                                                                                    const z = zones.find(zn => zn.ZoneID === zoneId);
-                                                                                    if (z) {
-                                                                                        switch(z.Color?.toLowerCase()) {
-                                                                                            case 'red': seatCls += "bg-red-500/20 border-red-500/50 text-red-300 hover:bg-red-500/30"; break;
-                                                                                            case 'green': seatCls += "bg-green-500/20 border-green-500/50 text-green-300 hover:bg-green-500/30"; break;
-                                                                                            case 'yellow': seatCls += "bg-yellow-500/20 border-yellow-500/50 text-yellow-300 hover:bg-yellow-500/30"; break;
-                                                                                            case 'purple': seatCls += "bg-purple-500/20 border-purple-500/50 text-purple-300 hover:bg-purple-500/30"; break;
-                                                                                            default: seatCls += "bg-blue-500/20 border-blue-500/50 text-blue-300 hover:bg-blue-500/30"; break;
-                                                                                        }
-                                                                                    } else {
-                                                                                        seatCls += "bg-slate-800 border-slate-700 text-slate-500";
-                                                                                    }
-                                                                                } else {
-                                                                                    seatCls += "bg-slate-800 border-slate-700 text-slate-500 hover:border-indigo-500";
-                                                                                }
-                                                                            } else if (viewMode === 'DISABLE') {
-                                                                                seatCls += "bg-indigo-900 border-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.2)]";
-                                                                            } else {
-                                                                                seatCls += "bg-slate-900 border-indigo-500/30 text-indigo-400 hover:bg-indigo-600 hover:text-white";
-                                                                            }
-                                                                        } else {
-                                                                            seatCls += "bg-slate-900/50 border-slate-800 text-slate-700 opacity-50 hover:border-red-500/50";
-                                                                        }
+                                                {/* Single pill containing all bench seats vertically */}
+                                                <div
+                                                    className="relative bg-slate-800/30 border-2 border-white/10 rounded-[2.5rem] px-5 py-6 flex flex-col gap-3 shadow-[0_20px_50px_rgba(0,0,0,0.35)] group transition-all duration-300 hover:border-indigo-500/30 hover:shadow-[0_20px_60px_rgba(99,102,241,0.12)]"
+                                                    style={{ minWidth: '72px' }}
+                                                >
+                                                    {/* Subtle gradient overlay on hover */}
+                                                    <div className="absolute inset-0 rounded-[2.5rem] bg-gradient-to-b from-indigo-500/5 via-transparent to-slate-900/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
 
-                                                                        return (
-                                                                            <Tooltip key={seatId} content={`${seatId} ${!isActive ? '(Disabled)' : ''}`}>
-                                                                                <div className={seatCls} onClick={() => toggleSeat(seatId)}>
-                                                                                    {isActive ? (
-                                                                                        zoneId ? (
-                                                                                            <span className="opacity-90">{zones.find(zn => zn.ZoneID === zoneId)?.ZoneCode}</span>
-                                                                                        ) : (
-                                                                                            <span>{seatIndex}</span>
-                                                                                        )
-                                                                                    ) : <Ban size={14}/>}
-                                                                                </div>
-                                                                            </Tooltip>
-                                                                        );
-                                                                    })}
+                                                    {Array.from({ length: benches }).map((_, b) => {
+                                                        // Always 1 seat per bench position — seatIndex fixed at 1
+                                                        const seatIndex = 1;
+                                                        const seatId = `${colLetter}-${b + 1}-${seatIndex}`;
+                                                        const isActive = !disabledSeatIds.has(seatId);
+                                                        const zoneId = seatZoneMap.get(seatId);
+
+                                                        // Label: a1, a2, a3 …
+                                                        const seatLabel = `${colLetterLower}${b + 1}`;
+
+                                                        // Seat cell classes
+                                                        let seatCls =
+                                                            "w-12 h-12 rounded-2xl border-2 flex items-center justify-center cursor-pointer " +
+                                                            "transition-all duration-200 text-[11px] font-bold shadow-md select-none ";
+
+                                                        if (!isActive) {
+                                                            seatCls += "bg-slate-900/40 border-white/5 text-slate-700 opacity-30";
+                                                            if (viewMode === 'DISABLE') seatCls += " hover:border-red-500/60 hover:opacity-60";
+                                                        } else if (viewMode === 'DISABLE') {
+                                                            seatCls += "bg-indigo-900/70 border-indigo-500 text-white shadow-[0_0_18px_rgba(99,102,241,0.4)] hover:scale-105";
+                                                        } else if (viewMode === 'PHYSICAL' && zoneId) {
+                                                            const z = zones.find(zn => zn.ZoneID === zoneId);
+                                                            if (z) {
+                                                                switch (z.Color?.toLowerCase()) {
+                                                                    case 'red':    seatCls += "bg-red-500/20 border-red-500/50 text-red-300 hover:bg-red-500/30 hover:scale-105"; break;
+                                                                    case 'green':  seatCls += "bg-green-500/20 border-green-500/50 text-green-300 hover:bg-green-500/30 hover:scale-105"; break;
+                                                                    case 'yellow': seatCls += "bg-yellow-500/20 border-yellow-500/50 text-yellow-300 hover:bg-yellow-500/30 hover:scale-105"; break;
+                                                                    case 'purple': seatCls += "bg-purple-500/20 border-purple-500/50 text-purple-300 hover:bg-purple-500/30 hover:scale-105"; break;
+                                                                    default:       seatCls += "bg-indigo-500/20 border-indigo-500/50 text-indigo-300 hover:bg-indigo-500/30 hover:scale-105"; break;
+                                                                }
+                                                            } else {
+                                                                seatCls += "bg-slate-800 border-slate-700 text-slate-400";
+                                                            }
+                                                        } else {
+                                                            seatCls += "bg-slate-900 border-white/10 text-indigo-300 hover:bg-indigo-600 hover:text-white hover:border-indigo-400 hover:scale-110 active:scale-95";
+                                                        }
+
+                                                        return (
+                                                            <Tooltip key={seatId} content={`${seatId}${!isActive ? ' (Disabled)' : ''}`}>
+                                                                <div className={seatCls} onClick={() => toggleSeat(seatId)}>
+                                                                    {isActive
+                                                                        ? zoneId
+                                                                            ? <span className="opacity-90">{zones.find(zn => zn.ZoneID === zoneId)?.ZoneCode}</span>
+                                                                            : <span>{seatLabel}</span>
+                                                                        : <Ban size={14} />}
                                                                 </div>
-                                                            </div>
-                                                            <div className="absolute -left-10 top-1/2 -translate-y-1/2 text-xs font-black text-white/50 tracking-wider">
-                                                                B{b + 1}
-                                                            </div>
-                                                        </div>
-                                                    ))}
+                                                            </Tooltip>
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
                                         );

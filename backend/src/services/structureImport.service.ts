@@ -489,20 +489,17 @@ export class StructureImportService {
                 }
 
                 const roomType = totalCapacity <= 80 ? 'ROOM' : 'HALL';
-                const seatsPerBench = 2;
+                const seatsPerBench = 1; // New layout model: 1 student per bench
 
-                // Compute a simple row layout from capacity
-                const totalBenches = Math.ceil(totalCapacity / seatsPerBench);
-                const numRows = Math.min(Math.max(Math.ceil(totalBenches / 8), 1), 6);
+                // Compute rowLayout: distribute totalCapacity benches across columns (A-E = 5 cols default)
+                // Each element in rowLayout = number of benches in that column (pill)
+                const totalBenches = totalCapacity; // 1 seat per bench → capacity = total bench count
+                const numCols = 5; // Default to 5 columns (A, B, C, D, E)
+                const benchesPerCol = Math.floor(totalBenches / numCols);
+                const remainder = totalBenches % numCols;
                 const rowLayout: number[] = [];
-                let remainingBenches = totalBenches;
-                for (let r = 0; r < numRows; r++) {
-                    const benchesThisRow = Math.min(
-                        Math.ceil(remainingBenches / (numRows - r)),
-                        remainingBenches
-                    );
-                    rowLayout.push(benchesThisRow);
-                    remainingBenches -= benchesThisRow;
+                for (let c = 0; c < numCols; c++) {
+                    rowLayout.push(benchesPerCol + (c < remainder ? 1 : 0));
                 }
 
                 if (!existingRoom) {

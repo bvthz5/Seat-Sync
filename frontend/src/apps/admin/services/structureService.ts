@@ -129,11 +129,11 @@ export const structureService = {
         formData.append('file', file);
         if (options?.autoZone) formData.append('autoZone', 'true');
         if (options?.zoneCount) formData.append('zoneCount', options.zoneCount.toString());
-        
+
         console.log('[DEBUG] Uploading file:', { fileName: file.name, fileSize: file.size, options });
-        
+
         const response = await api.post<{ blocksCreated: number, floorsCreated: number, roomsCreated: number, roomsUpdated?: number }>(
-            `/college-structure/import/csv`, 
+            `/college-structure/import/csv`,
             formData
         );
         return response.data;

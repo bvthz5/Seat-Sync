@@ -2208,225 +2208,148 @@ const SeatingPlans: React.FC = () => {
                                         </div>
                                     )}
 
-                                    {/* ── Bench Grid ── */}
-                                    <div
-                                        className="grid gap-5 items-start"
-                                        style={{ gridTemplateColumns: `repeat(${Math.max(detailBenchRows.length, 1)}, minmax(220px, 1fr))` }}
-                                    >
+                                    {/* ── Pill-Column Layout (mirrors College Structure 3D Visual Map) ── */}
+
+                                    {/* Front Blackboard */}
+                                    <div className="flex flex-col items-center mb-8">
+                                        <div className="w-full max-w-5xl h-14 bg-gradient-to-b from-slate-800 to-slate-900 border border-slate-700/50 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden">
+                                            <div className="absolute top-0 inset-x-0 h-[1px] bg-indigo-500/50" />
+                                            <span className="text-xs font-bold text-slate-500 uppercase tracking-[0.2em]">Front Blackboard</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Columns flex */}
+                                    <div className="flex gap-6 justify-center items-start flex-wrap pb-8">
                                         {detailBenchRows.map((row, rowIdx) => {
-                                            const isEndSemGlobal = lastExamType === 'EndSemester';
+                                            const isEndSem = lastExamType === 'EndSemester';
                                             return (
-                                            <div key={row.rowLabel} className="space-y-4" style={{ animationDelay: `${rowIdx * 40}ms` }}>
-                                                <div className="h-8 flex flex-row items-center justify-center w-full min-w-max shrink-0">
-                                                    <span className="w-9 h-9 rounded-full bg-[#22314a] border border-[#2f4364] text-[12px] font-extrabold text-slate-500 flex items-center justify-center shadow-sm">
-                                                        {row.rowLabel}
-                                                    </span>
+                                                <div key={row.rowLabel} className="flex flex-col items-center gap-3" style={{ animationDelay: `${rowIdx * 40}ms` }}>
+                                                    {/* Column header */}
+                                                    <div className="text-white font-black text-xl tracking-[0.25em] drop-shadow-lg">{row.rowLabel.toUpperCase()}</div>
+
+                                                    {/* Pill container */}
+                                                    <div
+                                                        className="relative bg-slate-800/30 border-2 border-white/10 rounded-[2.5rem] px-4 py-5 flex flex-col gap-3 shadow-[0_20px_50px_rgba(0,0,0,0.35)] group transition-all duration-300 hover:border-indigo-500/30 hover:shadow-[0_20px_60px_rgba(99,102,241,0.12)]"
+                                                        style={{ minWidth: '120px' }}
+                                                    >
+                                                        {/* Gradient overlay on hover */}
+                                                        <div className="absolute inset-0 rounded-[2.5rem] bg-gradient-to-b from-indigo-500/5 via-transparent to-slate-900/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+
+                                                        {row.benches.map((bench, benchIdx) => {
+                                                            // Primary seat: SeatNumber=1 (single-bench model); fallback to seat 2 if multi-seat
+                                                            const primarySeat = bench.seats.find(s => s.SeatNumber === 1) ?? bench.seats[0];
+                                                            const secondarySeat = bench.seats.find(s => s.SeatNumber === 2);
+                                                            const pa = primarySeat ? detailAssignments[primarySeat.SeatID] : undefined;
+                                                            const sa = secondarySeat ? detailAssignments[secondarySeat.SeatID] : undefined;
+
+                                                            const paVisible = pa && !(hideIneligible && pa.isBlocked) ? pa : undefined;
+                                                            const saVisible = sa && !(hideIneligible && sa.isBlocked) ? sa : undefined;
+
+                                                            const isDisabled = primarySeat && !primarySeat.IsActive;
+                                                            const isBlocked = !isDisabled && !!paVisible?.isBlocked;
+
+                                                            const pSt = paVisible ? getDeptStyle(paVisible.deptCode) : null;
+                                                            const pSub = paVisible?.subjectCode ? getSubjectStyle(paVisible.subjectCode) : null;
+                                                            const accent = isEndSem && pSub ? pSub.text : pSt ? pSt.text : null;
+
+                                                            // For dual-seat benches, check subject conflict
+                                                            const hasDualConflict = isEndSem && !!paVisible?.subjectCode && !!saVisible?.subjectCode && paVisible.subjectCode === saVisible.subjectCode;
+
+                                                            const tooltipContent = isDisabled ? 'Disabled'
+                                                                : isBlocked ? `${paVisible!.registerNumber} | ${paVisible!.deptCode} | Not Eligible`
+                                                                : paVisible ? [paVisible.registerNumber, paVisible.subjectCode, paVisible.deptCode, 'Eligible'].filter(Boolean).join(' · ')
+                                                                : 'Empty';
+
+                                                            // Seat cell styling
+                                                            let cellBg = '#131826';
+                                                            let borderAccent = 'transparent';
+                                                            if (isDisabled) {
+                                                                cellBg = 'repeating-linear-gradient(45deg,#1a1f2e,#1a1f2e 3px,#1e2436 3px,#1e2436 6px)';
+                                                            } else if (isBlocked) {
+                                                                cellBg = 'linear-gradient(135deg,#2d1010 0%,#1f0c0c 100%)';
+                                                                borderAccent = '#ef4444';
+                                                            } else if (paVisible) {
+                                                                cellBg = 'linear-gradient(135deg,#10263b 0%,#151c2e 100%)';
+                                                                borderAccent = accent || 'transparent';
+                                                            }
+
+                                                            return (
+                                                                <Tooltip
+                                                                    key={`${bench.rowLabel}-${bench.benchNumber}`}
+                                                                    content={tooltipContent}
+                                                                    delay={150}
+                                                                    classNames={{ content: `text-[11px] font-medium rounded-lg border shadow-2xl max-w-[220px] ${isBlocked ? 'bg-red-50 text-red-700 border-red-200' : 'bg-slate-900 text-slate-100 border-slate-700'}` }}
+                                                                >
+                                                                    <div
+                                                                        className="relative w-24 rounded-2xl border-2 overflow-hidden cursor-default transition-all duration-200 seat-anim hover:brightness-110"
+                                                                        style={{
+                                                                            animationDelay: `${(rowIdx * 8 + benchIdx) * 15}ms`,
+                                                                            background: cellBg,
+                                                                            borderColor: hasDualConflict ? '#f59e0b' : borderAccent,
+                                                                            boxShadow: isBlocked ? 'inset 0 0 16px rgba(239,68,68,0.1)'
+                                                                                : accent && paVisible ? `inset 0 0 10px ${accent}15` : 'none',
+                                                                        }}
+                                                                    >
+                                                                        {/* Bench label top-bar */}
+                                                                        <div className="px-2 py-0.5 bg-slate-900/50 flex items-center justify-between border-b border-white/5">
+                                                                            <span className="text-[8px] font-bold text-slate-600 uppercase tracking-widest">
+                                                                                {row.rowLabel.toLowerCase()}{bench.benchNumber}
+                                                                            </span>
+                                                                            {hasDualConflict && <span className="text-amber-400 text-[10px] animate-pulse">!</span>}
+                                                                        </div>
+
+                                                                        {/* Seat content */}
+                                                                        <div className="px-2 py-3 min-h-[72px] flex flex-col items-center justify-center text-center gap-1">
+                                                                            {isDisabled ? (
+                                                                                <Ban size={14} className="text-slate-600" />
+                                                                            ) : isBlocked ? (
+                                                                                <>
+                                                                                    <XCircle size={12} className="text-red-500" />
+                                                                                    <span className="text-[10px] font-bold font-mono text-red-400 leading-none w-full truncate">{paVisible!.registerNumber}</span>
+                                                                                    <span className="text-[7px] text-red-400/60 leading-none w-full truncate">{paVisible!.studentName}</span>
+                                                                                    <span className="px-1 py-0.5 rounded text-[6px] font-bold uppercase bg-red-900/40 text-red-400 border border-red-700/40 mt-0.5">Not Eligible</span>
+                                                                                </>
+                                                                            ) : paVisible ? (
+                                                                                <>
+                                                                                    <span className="text-[11px] font-bold font-mono leading-none w-full truncate" style={{ color: accent || '#94a3b8' }}>
+                                                                                        {paVisible.registerNumber}
+                                                                                    </span>
+                                                                                    <span className="text-[8px] text-slate-500 leading-none w-full truncate">{paVisible.studentName}</span>
+                                                                                    {isEndSem && paVisible.subjectCode ? (
+                                                                                        <span className="px-1 py-0.5 rounded text-[7px] font-extrabold uppercase truncate max-w-full mt-0.5"
+                                                                                            style={{ background: pSub?.glow ?? '#334155', color: pSub?.text ?? '#94a3b8', border: `1px solid ${pSub?.text ?? '#334155'}40` }}>
+                                                                                            {paVisible.subjectCode}
+                                                                                        </span>
+                                                                                    ) : !isEndSem && paVisible.deptCode ? (
+                                                                                        <span className="text-[7px] font-bold mt-0.5" style={{ color: accent || '#94a3b8' }}>{paVisible.deptCode}</span>
+                                                                                    ) : null}
+                                                                                    {/* Second seat student (dual-bench) */}
+                                                                                    {saVisible && (
+                                                                                        <div className="w-full border-t border-white/10 mt-1 pt-1 flex flex-col items-center gap-0.5">
+                                                                                            <span className="text-[10px] font-bold font-mono leading-none w-full truncate" style={{ color: isEndSem && saVisible.subjectCode ? getSubjectStyle(saVisible.subjectCode).text : getDeptStyle(saVisible.deptCode).text }}>
+                                                                                                {saVisible.registerNumber}
+                                                                                            </span>
+                                                                                            <span className="text-[7px] text-slate-500 leading-none w-full truncate">{saVisible.studentName}</span>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <Armchair size={13} className="text-slate-700" />
+                                                                                    <span className="text-[7px] text-slate-600">EMPTY</span>
+                                                                                </>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </Tooltip>
+                                                            );
+                                                        })}
+                                                    </div>
                                                 </div>
-                                                {row.benches.map((bench, benchIdx) => {
-                                                    const ls = bench.seats.find(s => s.SeatNumber === 1);
-                                                    const rs = bench.seats.find(s => s.SeatNumber === 2);
-                                                    const la = ls ? detailAssignments[ls.SeatID] : undefined;
-                                                    const ra = rs ? detailAssignments[rs.SeatID] : undefined;
-
-                                                    // apply 'hide ineligible' filter
-                                                    const laVisible = la && !(hideIneligible && la.isBlocked) ? la : undefined;
-                                                    const raVisible = ra && !(hideIneligible && ra.isBlocked) ? ra : undefined;
-
-                                                    const lSt = laVisible ? getDeptStyle(laVisible.deptCode) : null;
-                                                    const rSt = raVisible ? getDeptStyle(raVisible.deptCode) : null;
-                                                    const lSub = laVisible?.subjectCode ? getSubjectStyle(laVisible.subjectCode!) : null;
-                                                    const rSub = raVisible?.subjectCode ? getSubjectStyle(raVisible.subjectCode!) : null;
-                                                    const isEndSem = lastExamType === 'EndSemester';
-
-                                                    const ld = ls && !ls.IsActive;
-                                                    const rd = rs && !rs.IsActive;
-
-                                                    const INELIG_BG = 'linear-gradient(135deg, #2d1010 0%, #1f0c0c 100%)';
-                                                    const INELIG_BORDER = '#ef4444';
-                                                    const INELIG_BORDER_SOFT = '#ef444430';
-
-                                                    const leftIsBlocked = !ld && !!laVisible?.isBlocked;
-                                                    const rightIsBlocked = !rd && !!raVisible?.isBlocked;
-
-                                                    // Bench conflict: both seats have same subject (EndSem only)
-                                                    const hasBenchConflict = isEndSem
-                                                        && !!laVisible?.subjectCode && !!raVisible?.subjectCode
-                                                        && laVisible.subjectCode === raVisible.subjectCode;
-
-                                                    // Seat accent: EndSem uses subject color; Internal uses dept color
-                                                    const lAccent = isEndSem && lSub ? lSub.text : lSt ? lSt.text : null;
-                                                    const rAccent = isEndSem && rSub ? rSub.text : rSt ? rSt.text : null;
-
-                                                    // Tooltip content helpers
-                                                    const leftTooltipContent = ld ? 'Disabled'
-                                                        : leftIsBlocked ? `${laVisible!.registerNumber} | ${laVisible!.deptCode} | Not Eligible`
-                                                            : laVisible ? [
-                                                                laVisible.registerNumber,
-                                                                laVisible.subjectCode ? `${laVisible.subjectCode}` : '',
-                                                                laVisible.deptCode,
-                                                                'Eligible',
-                                                            ].filter(Boolean).join('  ·  ')
-                                                                : 'Empty';
-                                                    const rightTooltipContent = rd ? 'Disabled'
-                                                        : rightIsBlocked ? `${raVisible!.registerNumber} | ${raVisible!.deptCode} | Not Eligible`
-                                                            : raVisible ? [
-                                                                raVisible.registerNumber,
-                                                                raVisible.subjectCode ? `${raVisible.subjectCode}` : '',
-                                                                raVisible.deptCode,
-                                                                'Eligible',
-                                                            ].filter(Boolean).join('  ·  ')
-                                                                : 'Empty';
-
-                                                    return (
-                                                        <div key={`${bench.rowLabel}-${bench.benchNumber}`} className="group bench-anim"
-                                                            style={{ animationDelay: `${(rowIdx * 8 + benchIdx) * 18}ms` }}>
-                                                            {/* DESK TOP */}
-                                                            <div className={`rounded-t-xl px-3 py-1.5 flex items-center justify-between border border-b-0 transition-all ${hasBenchConflict
-                                                                    ? 'bg-gradient-to-r from-amber-900/60 to-amber-800/40 border-amber-500/40'
-                                                                    : 'bg-gradient-to-r from-[#2a3245] to-[#252d40] border-slate-200 group-hover:from-[#303a50] group-hover:to-[#2a3348]'
-                                                                }`}>
-                                                                <span className="text-[9px] font-extrabold text-slate-500 group-hover:text-slate-700 tracking-[0.2em] uppercase transition-colors">
-                                                                    B{bench.benchNumber}
-                                                                </span>
-                                                                <div className="flex items-center gap-1.5">
-                                                                    {hasBenchConflict && (
-                                                                        <span title="Same subject on same bench!" className="text-amber-400 text-[11px] animate-pulse">!</span>
-                                                                    )}
-                                                                    <span className="text-[8px] text-slate-500 font-mono">BENCH {bench.benchNumber}</span>
-                                                                </div>
-                                                            </div>
-
-                                                            {/* TWO SEATS */}
-                                                            <div className="grid grid-cols-2 gap-[2px]">
-                                                                {/* Left Seat */}
-                                                                <Tooltip
-                                                                    content={leftTooltipContent}
-                                                                    delay={150}
-                                                                    classNames={{
-                                                                        content: `text-[11px] font-medium rounded-lg border shadow-2xl max-w-[240px] ${leftIsBlocked ? 'bg-red-50 text-red-700 border-red-200'
-                                                                                : 'bg-slate-900 text-slate-100 border-slate-700'
-                                                                            }`
-                                                                    }}
-                                                                >
-                                                                    <div
-                                                                        className={`relative rounded-bl-xl overflow-hidden cursor-default transition-all duration-200 seat-anim ${ld ? '' : leftIsBlocked ? 'opacity-90' : 'hover:brightness-110'}`}
-                                                                        style={{
-                                                                            animationDelay: `${(rowIdx * 8 + benchIdx) * 18 + 40}ms`,
-                                                                            background: ld ? 'repeating-linear-gradient(45deg, #1a1f2e, #1a1f2e 3px, #1e2436 3px, #1e2436 6px)'
-                                                                                : leftIsBlocked ? INELIG_BG
-                                                                                    : laVisible ? 'linear-gradient(135deg, #10263b 0%, #151c2e 100%)' : '#131826',
-                                                                            borderLeft: ld ? '3px solid transparent' : leftIsBlocked ? `3px solid ${INELIG_BORDER}` : lAccent ? `3px solid ${lAccent}` : '3px solid transparent',
-                                                                            borderBottom: `1px solid ${ld ? '#253040' : leftIsBlocked ? INELIG_BORDER_SOFT : lAccent ? lAccent + '30' : '#253040'}`,
-                                                                            borderRight: '1px solid #253040',
-                                                                            boxShadow: leftIsBlocked ? 'inset 0 0 20px rgba(239,68,68,0.08)'
-                                                                                : lAccent && laVisible ? `inset 0 0 12px ${lAccent}12` : 'none',
-                                                                        }}
-                                                                    >
-                                                                        <div className="px-3 py-4 min-h-[80px] flex flex-col items-center justify-center text-center">
-                                                                            {ld ? <Ban size={16} className="text-slate-600" />
-                                                                                : leftIsBlocked ? (
-                                                                                    <div className="flex flex-col items-center w-full gap-1">
-                                                                                        <XCircle size={13} className="text-red-500 mb-0.5" />
-                                                                                        <span className="text-[11px] font-bold font-mono tracking-wide w-full leading-none text-red-400 opacity-80">{laVisible!.registerNumber}</span>
-                                                                                        <span className="text-[8px] text-red-500/60 font-medium w-full truncate leading-none">{laVisible!.studentName}</span>
-                                                                                        <span className="mt-1 px-1.5 py-0.5 rounded text-[7px] font-bold tracking-widest uppercase bg-red-900/40 text-red-400 border border-red-700/40">Not Eligible</span>
-                                                                                    </div>
-                                                                                ) : laVisible ? (
-                                                                                    <div className="flex flex-col items-center w-full gap-1">
-                                                                                        <span className="text-[13px] font-bold font-mono tracking-wide w-full leading-none" style={{ color: lAccent || (lSt?.text ?? '#94a3b8') }}>{laVisible.registerNumber}</span>
-                                                                                        <span className="text-[9px] text-slate-500 font-medium w-full truncate leading-none">{laVisible.studentName}</span>
-                                                                                        {isEndSem && laVisible.subjectCode && (
-                                                                                            <div className="flex flex-col items-center mt-1 w-full flex-1 justify-center">
-                                                                                                <span className="px-1.5 py-0.5 rounded-[4px] text-[8px] font-extrabold tracking-widest uppercase truncate max-w-full"
-                                                                                                    style={{ background: `${lSub?.glow ?? '#334155'}`, color: lSub?.text ?? '#94a3b8', border: `1px solid ${lSub?.text ?? '#334155'}40` }}>
-                                                                                                    {laVisible.subjectCode}
-                                                                                                </span>
-                                                                                                {laVisible.subjectName && (
-                                                                                                    <span className="text-[6.5px] leading-tight text-slate-400 mt-1 uppercase tracking-wider w-full text-center truncate opacity-80" title={laVisible.subjectName}>
-                                                                                                        {laVisible.subjectName}
-                                                                                                    </span>
-                                                                                                )}
-                                                                                            </div>
-                                                                                        )}
-                                                                                    </div>
-                                                                                ) : (
-                                                                                    <div className="flex flex-col items-center gap-1">
-                                                                                        <Armchair size={14} className="text-slate-700" />
-                                                                                        <span className="text-[8px] text-slate-600 font-medium">EMPTY</span>
-                                                                                    </div>
-                                                                                )}
-                                                                        </div>
-                                                                    </div>
-                                                                </Tooltip>
-
-                                                                {/* Right Seat */}
-                                                                <Tooltip
-                                                                    content={rightTooltipContent}
-                                                                    delay={150}
-                                                                    classNames={{
-                                                                        content: `text-[11px] font-medium rounded-lg border shadow-2xl max-w-[240px] ${rightIsBlocked ? 'bg-red-50 text-red-700 border-red-200'
-                                                                                : 'bg-slate-900 text-slate-100 border-slate-700'
-                                                                            }`
-                                                                    }}
-                                                                >
-                                                                    <div
-                                                                        className={`relative rounded-br-xl overflow-hidden cursor-default transition-all duration-200 seat-anim ${rd ? '' : rightIsBlocked ? 'opacity-90' : 'hover:brightness-110'}`}
-                                                                        style={{
-                                                                            animationDelay: `${(rowIdx * 8 + benchIdx) * 18 + 60}ms`,
-                                                                            background: rd ? 'repeating-linear-gradient(45deg, #1a1f2e, #1a1f2e 3px, #1e2436 3px, #1e2436 6px)'
-                                                                                : rightIsBlocked ? INELIG_BG
-                                                                                    : raVisible ? 'linear-gradient(135deg, #1c1530 0%, #14111e 100%)' : '#13111a',
-                                                                            borderRight: rd ? '3px solid transparent' : rightIsBlocked ? `3px solid ${INELIG_BORDER}` : rAccent ? `3px solid ${rAccent}` : '3px solid transparent',
-                                                                            borderBottom: `1px solid ${rd ? '#253040' : rightIsBlocked ? INELIG_BORDER_SOFT : rAccent ? rAccent + '30' : '#253040'}`,
-                                                                            borderLeft: '1px solid #253040',
-                                                                            boxShadow: rightIsBlocked ? 'inset 0 0 20px rgba(239,68,68,0.08)'
-                                                                                : rAccent && raVisible ? `inset 0 0 12px ${rAccent}12` : 'none',
-                                                                        }}
-                                                                    >
-                                                                        <div className="px-3 py-4 min-h-[80px] flex flex-col items-center justify-center text-center">
-                                                                            {rd ? <Ban size={16} className="text-slate-600" />
-                                                                                : rightIsBlocked ? (
-                                                                                    <div className="flex flex-col items-center w-full gap-1">
-                                                                                        <XCircle size={13} className="text-red-500 mb-0.5" />
-                                                                                        <span className="text-[11px] font-bold font-mono tracking-wide w-full leading-none text-red-400 opacity-80">{raVisible!.registerNumber}</span>
-                                                                                        <span className="text-[8px] text-red-500/60 font-medium w-full truncate leading-none">{raVisible!.studentName}</span>
-                                                                                        <span className="mt-1 px-1.5 py-0.5 rounded text-[7px] font-bold tracking-widest uppercase bg-red-900/40 text-red-400 border border-red-700/40">Not Eligible</span>
-                                                                                    </div>
-                                                                                ) : raVisible ? (
-                                                                                    <div className="flex flex-col items-center w-full gap-1">
-                                                                                        <span className="text-[13px] font-bold font-mono tracking-wide w-full leading-none" style={{ color: rAccent || (rSt?.text ?? '#94a3b8') }}>{raVisible.registerNumber}</span>
-                                                                                        <span className="text-[9px] text-slate-500 font-medium w-full truncate leading-none">{raVisible.studentName}</span>
-                                                                                        {isEndSem && raVisible.subjectCode && (
-                                                                                            <div className="flex flex-col items-center mt-1 w-full flex-1 justify-center">
-                                                                                                <span className="px-1.5 py-0.5 rounded-[4px] text-[8px] font-extrabold tracking-widest uppercase truncate max-w-full"
-                                                                                                    style={{ background: `${rSub?.glow ?? '#334155'}`, color: rSub?.text ?? '#94a3b8', border: `1px solid ${rSub?.text ?? '#334155'}40` }}>
-                                                                                                    {raVisible.subjectCode}
-                                                                                                </span>
-                                                                                                {raVisible.subjectName && (
-                                                                                                    <span className="text-[6.5px] leading-tight text-slate-400 mt-1 uppercase tracking-wider w-full text-center truncate opacity-80" title={raVisible.subjectName}>
-                                                                                                        {raVisible.subjectName}
-                                                                                                    </span>
-                                                                                                )}
-                                                                                            </div>
-                                                                                        )}
-                                                                                    </div>
-                                                                                ) : (
-                                                                                    <div className="flex flex-col items-center gap-1">
-                                                                                        <Armchair size={14} className="text-slate-700" />
-                                                                                        <span className="text-[8px] text-slate-600 font-medium">EMPTY</span>
-                                                                                    </div>
-                                                                                )}
-                                                                        </div>
-                                                                    </div>
-                                                                </Tooltip>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
                                             );
                                         })}
                                     </div>
+
                                 </div>
                             )}
                         </ModalBody>
