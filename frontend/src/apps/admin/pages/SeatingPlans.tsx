@@ -766,32 +766,50 @@ const SeatingPlans: React.FC = () => {
     const buildGlobalRows = async () => {
         const active = [...hallSummary].sort((a, b) => a.hallCode.localeCompare(b.hallCode));
         const rows: { slNo: number; hallCode: string; regRanges: string; count: number; total: number; isFirstRow: boolean; rowSpan: number }[] = [];
+        const globalSubjects = new Set<string>();
+
         await Promise.all(active.map(async (hall) => {
             if (!selectedDate) return;
             let assignments: Record<number, Assignment> = {};
             try { const alloc = await SeatingService.getAllocationForHall(selectedDate, selectedSession, hall.hallId); assignments = alloc?.assignments ?? {}; } catch { }
-            const deptMap: Record<string, string[]> = {};
+            
+            const subjMap: Record<string, { code: string, name: string, regs: string[] }> = {};
             Object.values(assignments).forEach(a => {
-                if (!deptMap[a.deptCode]) deptMap[a.deptCode] = [];
-                deptMap[a.deptCode].push(a.registerNumber);
+                if (a.subjectName) globalSubjects.add(a.subjectName);
+                
+                const subCode = a.subjectCode || "Unknown";
+                if (!subjMap[subCode]) subjMap[subCode] = { code: subCode, name: a.subjectName || "", regs: [] };
+                subjMap[subCode].regs.push(a.registerNumber);
             });
-            (hall as any).__deptMap = deptMap;
+            (hall as any).__subjMap = subjMap;
             (hall as any).__total = Object.keys(assignments).length;
         }));
+        
         const allocatedOnly = active.filter(hall => (((hall as any).__total ?? 0) > 0));
         let slNo = 1;
+        
         allocatedOnly.forEach(hall => {
-            const deptMap: Record<string, string[]> = (hall as any).__deptMap ?? {};
+            const subjMap: Record<string, { code: string, name: string, regs: string[] }> = (hall as any).__subjMap ?? {};
             const total: number = (hall as any).__total ?? 0;
-            const depts = Object.entries(deptMap).sort(([a], [b]) => a.localeCompare(b));
-            depts.forEach(([, regs], idx) => {
-                const ranges = buildRegRanges(regs);
-                const rangeStr = ranges.join(', ');
-                rows.push({ slNo, hallCode: hall.hallCode, regRanges: rangeStr, count: regs.length, total, isFirstRow: idx === 0, rowSpan: depts.length });
+            const subjs = Object.values(subjMap).sort((a, b) => a.code.localeCompare(b.code));
+            
+            subjs.forEach((sub, idx) => {
+                const ranges = buildRegRanges(sub.regs);
+                rows.push({
+                    slNo,
+                    hallCode: hall.hallCode,
+                    regRanges: ranges.join(', '),
+                    count: sub.regs.length,
+                    total: total,
+                    isFirstRow: idx === 0,
+                    rowSpan: subjs.length
+                });
             });
             slNo++;
         });
-        return rows;
+        
+        const examNameString = Array.from(globalSubjects).join(' / ') || 'Examinations';
+        return { rows, examNameString };
     };
 
     const downloadGlobalExcel = async () => {
@@ -799,7 +817,7 @@ const SeatingPlans: React.FC = () => {
         setGlobalDownloading(true);
         try {
             const XLSX = await import('xlsx');
-            const rows = await buildGlobalRows();
+            const { rows } = await buildGlobalRows();
             const header = ['Sl.No', 'Hall / Room No.', 'Register Numbers', 'Count', 'Total'];
             const wsData: any[][] = [
                 [`CONSOLIDATED SEATING ARRANGEMENT`],
@@ -824,14 +842,14 @@ const SeatingPlans: React.FC = () => {
         try {
             const { default: jsPDF } = await import('jspdf');
             const { default: autoTable } = await import('jspdf-autotable');
-            const rows = await buildGlobalRows();
+            const { rows, examNameString } = await buildGlobalRows();
             const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
             const pageW = doc.internal.pageSize.getWidth();
             const sessionLabel = selectedSession === 'FN' ? 'Forenoon' : 'Afternoon';
 
             // ── Header block ──
             doc.setFillColor(15, 23, 42);
-            doc.rect(0, 0, pageW, 36, 'F');
+            doc.rect(0, 0, pageW, 42, 'F');
             doc.setTextColor(255, 255, 255);
             doc.setFontSize(11); doc.setFont('helvetica', 'bold');
             doc.text("St. Joseph's College of Engineering And Technology, Palai", pageW / 2, 10, { align: 'center' });
@@ -839,37 +857,81 @@ const SeatingPlans: React.FC = () => {
             doc.text('Examination Control Division', pageW / 2, 16, { align: 'center' });
             doc.setFillColor(99, 102, 241);
             doc.rect(14, 20, pageW - 28, 0.4, 'F');
+            
             doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-            doc.text('CONSOLIDATED SEATING ARRANGEMENT', pageW / 2, 28, { align: 'center' });
+            doc.text('CONSOLIDATED SEATING ARRANGEMENT', pageW / 2, 26, { align: 'center' });
+            
+            let truncatedExamName = examNameString;
+            if (truncatedExamName.length > 90) truncatedExamName = truncatedExamName.substring(0, 87) + '...';
+            doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(200, 200, 200);
+            doc.text(truncatedExamName, pageW / 2, 32, { align: 'center' });
+            
             doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(148, 163, 184);
-            doc.text(`${fmtDate(selectedDate)}  \u00b7  ${sessionLabel}`, pageW / 2, 34, { align: 'center' });
+            doc.text(`${fmtDate(selectedDate)}  \u00b7  ${sessionLabel}`, pageW / 2, 38, { align: 'center' });
 
             // ── Table ──
-            // Pre-process rows to handle row-spanning look (same Sl.No + Hall for merged groups)
             const bodyRows: any[] = [];
             rows.forEach(r => {
-                bodyRows.push([
-                    r.isFirstRow ? String(r.slNo) : '',
-                    r.isFirstRow ? r.hallCode : '',
-                    r.regRanges,
-                    String(r.count),
-                    r.isFirstRow ? String(r.total) : '',
-                ]);
+                if (r.isFirstRow) {
+                    bodyRows.push([
+                        { content: String(r.slNo), rowSpan: r.rowSpan },
+                        { content: r.hallCode, rowSpan: r.rowSpan },
+                        r.regRanges,
+                        String(r.count),
+                        { content: String(r.total), rowSpan: r.rowSpan },
+                    ]);
+                } else {
+                    bodyRows.push([
+                        r.regRanges,
+                        String(r.count),
+                    ]);
+                }
             });
 
+            // Build lookup: which bodyRow indices are "first row" or "last row" of a room group
+            const firstRowIndices = new Set<number>();
+            const lastRowIndices = new Set<number>();
+            let bIdx = 0;
+            rows.forEach(r => {
+                if (r.isFirstRow) firstRowIndices.add(bIdx);
+                if (bIdx > 0 && r.isFirstRow) lastRowIndices.add(bIdx - 1);
+                bIdx++;
+            });
+            // Last row in the entire table is always a "last row"
+            if (bIdx > 0) lastRowIndices.add(bIdx - 1);
+
             autoTable(doc, {
-                startY: 40,
+                startY: 46,
                 head: [['Sl.\nNo.', 'HALL /\nROOM No.', 'REGISTER NUMBERS', 'COUNT', 'TOTAL']],
                 body: bodyRows,
-                styles: { fontSize: 8, cellPadding: 2.5, font: 'helvetica', textColor: [15, 23, 42], lineColor: [203, 213, 225], lineWidth: 0.3 },
-                headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8, halign: 'center', valign: 'middle' },
+                styles: { fontSize: 8.5, cellPadding: 3, font: 'helvetica', textColor: [30, 41, 59], lineColor: [226, 232, 240], lineWidth: 0.1, valign: 'middle' },
+                headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5, halign: 'center', valign: 'middle' },
                 alternateRowStyles: { fillColor: [248, 250, 252] },
                 columnStyles: {
-                    0: { cellWidth: 10, halign: 'center', fontStyle: 'bold' },
-                    1: { cellWidth: 22, halign: 'center', fontStyle: 'bold' },
-                    2: { cellWidth: 'auto' },
-                    3: { cellWidth: 14, halign: 'center' },
-                    4: { cellWidth: 14, halign: 'center', fontStyle: 'bold' },
+                    0: { cellWidth: 12, halign: 'center', fontStyle: 'bold' },
+                    1: { cellWidth: 26, halign: 'center', fontStyle: 'bold' },
+                    2: { cellWidth: 105, halign: 'left' },
+                    3: { cellWidth: 18, halign: 'center' },
+                    4: { cellWidth: 18, halign: 'center', fontStyle: 'bold' },
+                },
+                willDrawCell: (data: any) => {
+                    if (data.section !== 'body') return;
+                    const rowIdx: number = data.row.index;
+                    const cell = data.cell;
+                    const isFirst = firstRowIndices.has(rowIdx);
+                    const isLast = lastRowIndices.has(rowIdx);
+                    if (isFirst || isLast) {
+                        doc.setDrawColor(15, 23, 42);   // dark navy
+                        doc.setLineWidth(0.6);           // thick border
+                        if (isFirst) {
+                            doc.line(cell.x, cell.y, cell.x + cell.width, cell.y);
+                        }
+                        if (isLast) {
+                            doc.line(cell.x, cell.y + cell.height, cell.x + cell.width, cell.y + cell.height);
+                        }
+                        doc.setDrawColor(226, 232, 240); // reset to default
+                        doc.setLineWidth(0.1);
+                    }
                 },
                 didDrawPage: (data: any) => {
                     const pCount = (doc as any).internal.getNumberOfPages();
@@ -1763,7 +1825,7 @@ const SeatingPlans: React.FC = () => {
                                                     <Button size="sm" isDisabled={globalDownloading || totalFilled === 0}
                                                         className="font-semibold text-[12px] bg-indigo-100 hover:bg-indigo-200 text-indigo-800 border-2 border-indigo-200 rounded-xl h-10 px-4 transition-all"
                                                         startContent={globalDownloading ? <RefreshCw size={14} className="animate-spin" /> : <FileDown size={15} />}>
-                                                        {globalDownloading ? 'Generating…' : 'Download Report'}
+                                                        {globalDownloading ? 'Generating…' : 'CONSOLIDATED SEATING'}
                                                     </Button>
                                                 </DropdownTrigger>
                                                 <DropdownMenu aria-label="Download format"
