@@ -39,7 +39,7 @@ export const SeatingService = {
     },
 
     /** Auto-assign students to a single hall */
-    autoAssign: async (payload: { examDate: string; session: string; hallId: number; leftDeptId?: number | null; rightDeptId?: number | null }) => {
+    autoAssign: async (payload: { examDate: string; session: string; hallId: number; leftDeptId?: number | null; rightDeptId?: number | null; seriesId?: number }) => {
         const r = await api.post(`${PREFIX}/auto-assign`, payload);
         return r.data;
     },
@@ -49,6 +49,7 @@ export const SeatingService = {
         examDate: string;
         session: string;
         hallIds: number[];
+        seriesId?: number;
         mode?: 'single' | 'two-alternate' | 'auto-balanced';
         primaryDeptId?: number | null;
         secondaryDeptId?: number | null;

@@ -283,7 +283,7 @@ const ExamSeriesList: React.FC = () => {
                                             {exam.Status}
                                         </span>
                                         <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
-                                            {exam.Session === 'FN' ? '☀️ Morning' : '🌙 Afternoon'}
+                                            {exam.Session === 'FN' ? 'Morning' : 'Afternoon'}
                                         </span>
                                     </div>
                                     

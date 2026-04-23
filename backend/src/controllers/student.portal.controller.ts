@@ -188,9 +188,9 @@ export const getStudentDashboard = async (req: Request, res: Response) => {
                 const room = seat?.Room;
                 seating = {
                     examId: targetExamId,
-                    seatNumber: seat?.SeatNumber ?? null,
-                    benchNumber: seat?.BenchNumber ?? null,
-                    rowLabel: seat?.RowLabel ?? null,
+                    seatNumber: seat?.SeatIndex ?? null,
+                    benchNumber: seat?.BenchIndex ?? null,
+                    rowLabel: seat?.RowIndex ?? null,
                     roomCode: room?.RoomCode ?? null,
                     capacity: room?.Capacity ?? null,
                     blockName: room?.Block?.BlockName ?? null,
@@ -309,9 +309,9 @@ export const getStudentSeating = async (req: Request, res: Response) => {
             .filter((item: any) => item.Seat?.RoomID === roomId)
             .map((item: any) => ({
                 studentId: item.StudentID,
-                seatNumber: item.Seat?.SeatNumber,
-                rowLabel: item.Seat?.RowLabel,
-                benchNumber: item.Seat?.BenchNumber,
+                seatNumber: item.Seat?.SeatIndex,
+                rowLabel: item.Seat?.RowIndex,
+                benchNumber: item.Seat?.BenchIndex,
                 studentName: item.Student?.User?.FullName ?? item.Student?.User?.Email ?? null,
             }));
 
@@ -320,9 +320,9 @@ export const getStudentSeating = async (req: Request, res: Response) => {
             data: {
                 exam: mapExam(targetExam as any, today),
                 assignment: {
-                    seatNumber: (assignment as any).Seat?.SeatNumber ?? null,
-                    benchNumber: (assignment as any).Seat?.BenchNumber ?? null,
-                    rowLabel: (assignment as any).Seat?.RowLabel ?? null,
+                    seatNumber: (assignment as any).Seat?.SeatIndex ?? null,
+                    benchNumber: (assignment as any).Seat?.BenchIndex ?? null,
+                    rowLabel: (assignment as any).Seat?.RowIndex ?? null,
                     roomCode: (assignment as any).Seat?.Room?.RoomCode ?? null,
                     blockName: (assignment as any).Seat?.Room?.Block?.BlockName ?? null,
                     floorName: (assignment as any).Seat?.Room?.Floor?.FloorName ?? null,

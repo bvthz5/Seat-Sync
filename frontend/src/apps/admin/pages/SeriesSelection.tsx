@@ -74,7 +74,7 @@ const SeriesSelection: React.FC = () => {
                 SeriesName: newSeriesName.trim(),
                 ExamType: newSeriesType
             });
-            toast.success("✨ Series created successfully!");
+            toast.success("Series created successfully!");
             setNewSeriesName('');
             setNewSeriesType('Internal');
             setIsModalOpen(false);
@@ -283,7 +283,7 @@ const SeriesSelection: React.FC = () => {
                             const isInternal = s.ExamType === 'Internal';
                             const badgeBg = isInternal ? 'bg-indigo-50/80 text-indigo-700' : 'bg-purple-50/80 text-purple-700';
 
-                            // 🐛 Fix: Tailwind needs full class names, string interpolation breaks the compiler.
+                            // Fix: Tailwind needs full class names, string interpolation breaks the compiler.
                             const hoverTitleColor = isInternal ? 'group-hover:text-indigo-600' : 'group-hover:text-purple-600';
                             const hoverIconBg = isInternal ? 'group-hover:bg-indigo-600' : 'group-hover:bg-purple-600';
                             const hoverShadow = isInternal ? 'group-hover:shadow-indigo-200' : 'group-hover:shadow-purple-200';

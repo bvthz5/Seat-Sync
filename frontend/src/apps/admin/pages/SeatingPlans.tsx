@@ -264,7 +264,7 @@ const SeatingPlans: React.FC = () => {
     useEffect(() => {
         (async () => {
             try { setSeriesList(await SeatingService.getSeries().then(r => Array.isArray(r) ? r : [])); } catch { }
-            try { setExamDates(await SeatingService.getExamDates().then(r => Array.isArray(r) ? r : [])); } catch { toast.error('Failed to load exam dates'); }
+
             try { setHalls(await SeatingService.getHalls().then(r => Array.isArray(r) ? r : [])); } catch { toast.error('Failed to load halls'); }
             try { setDepartments(await SeatingService.getDepartments().then(r => Array.isArray(r) ? r : [])); } catch { toast.error('Failed to load departments'); }
         })();
@@ -282,7 +282,7 @@ const SeatingPlans: React.FC = () => {
         // Fetch exams for the selected date/session
         (async () => {
             try {
-                const examList = await ExamService.getAll({ startDate: selectedDate, endDate: selectedDate, session: selectedSession });
+                const examList = await ExamService.getAll({ startDate: selectedDate, endDate: selectedDate, session: selectedSession, seriesId: selectedSeries ? Number(selectedSeries) : undefined });
                 setExams(Array.isArray(examList) ? examList : []);
                 const deptMap: Record<number, Dept> = {};
                 let totalExamStudents = 0;
@@ -322,7 +322,12 @@ const SeatingPlans: React.FC = () => {
     }, [selectedDate, selectedSession, selectedSeries]);
 
     useEffect(() => {
-        SeatingService.getExamDates(selectedSeries ? Number(selectedSeries) : undefined)
+        if (!selectedSeries) {
+            setExamDates([]);
+            setSelectedDate('');
+            return;
+        }
+        SeatingService.getExamDates(Number(selectedSeries))
             .then(r => { setExamDates(Array.isArray(r) ? r : []); setSelectedDate(''); })
             .catch(() => { });
     }, [selectedSeries]);
@@ -431,6 +436,7 @@ const SeatingPlans: React.FC = () => {
                 avoidSameDeptBench,
                 shuffleRooms,
                 roomCapacityLimit,
+                seriesId: selectedSeries ? Number(selectedSeries) : undefined,
             });
             // Support both Internal (totalLeft/RightAssigned) and EndSem (assignedCount) response shapes
             const examType: string = r.examType || 'Internal';
@@ -514,6 +520,7 @@ const SeatingPlans: React.FC = () => {
                     avoidSameDeptBench,
                     shuffleRooms,
                     roomCapacityLimit,
+                    seriesId: selectedSeries ? Number(selectedSeries) : undefined,
                 });
                 
                 let assigned = 0;
@@ -925,15 +932,20 @@ const SeatingPlans: React.FC = () => {
                 return;
             }
 
+            const JSZip = (await import('jszip')).default;
             const { default: jsPDF } = await import('jspdf');
-            const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-            const pageW = doc.internal.pageSize.getWidth();
-            const pageH = doc.internal.pageSize.getHeight();
-            const sessionLabel = selectedSession === 'FN' ? 'Forenoon' : 'Afternoon';
+            const zip = new JSZip();
+
+            // Exam Title:
+            const filteredExams = exams.filter((e: any) => String(e.ExamDate).split('T')[0] === selectedDate && String(e.Session).toUpperCase() === selectedSession);
+            const uniqueExamNames = Array.from(new Set(filteredExams.map((e: any) => e.ExamName)));
+            const examTitle = uniqueExamNames.join(' / ') || 'Exam';
 
             for (let i = 0; i < allocatedHalls.length; i++) {
                 const hall = allocatedHalls[i];
-                if (i > 0) doc.addPage();
+                const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+                const pageW = doc.internal.pageSize.getWidth(); // 297
+                const pageH = doc.internal.pageSize.getHeight(); // 210
 
                 const [layout, alloc] = await Promise.all([
                     SeatingService.getHallLayout(hall.hallId),
@@ -941,93 +953,344 @@ const SeatingPlans: React.FC = () => {
                 ]);
                 const benches: Bench[] = layout?.benches || [];
                 const assignments: Record<number, Assignment> = alloc?.assignments || {};
-                const rowLabels = [...new Set(benches.map(b => b.rowLabel))].sort();
+
+                // Find active columns and active row numbers (bench numbers)
+                const activeCols = new Set<string>();
+                const activeRows = new Set<number>();
+
+                benches.forEach(b => {
+                    const lSeat = b.seats.find(s => s.SeatNumber === 1);
+                    const rSeat = b.seats.find(s => s.SeatNumber === 2);
+                    const hasLeft = lSeat && assignments[lSeat.SeatID];
+                    const hasRight = rSeat && assignments[rSeat.SeatID];
+                    
+                    if (hasLeft || hasRight) {
+                        activeCols.add(b.rowLabel);
+                        activeRows.add(b.benchNumber);
+                    }
+                });
+
+                // Filtered column labels (e.g. A, B, C)
+                const rowLabels = Array.from(activeCols).sort();
+                
+                // Filtered bench numbers (e.g. 1, 3, 5)
+                const benchNumbers = Array.from(activeRows).sort((a, b) => a - b);
+
                 const benchesByRow = new Map<string, Bench[]>();
                 rowLabels.forEach((rowLabel) => {
                     benchesByRow.set(
                         rowLabel,
-                        benches
-                            .filter(b => b.rowLabel === rowLabel)
-                            .sort((a, b) => a.benchNumber - b.benchNumber)
+                        benches.filter(b => b.rowLabel === rowLabel && activeRows.has(b.benchNumber))
                     );
                 });
 
-                const drawHeader = () => {
-                    doc.setFillColor(255, 255, 255);
-                    doc.rect(0, 0, pageW, pageH, 'F');
-                    doc.setFillColor(248, 250, 252);
-                    doc.rect(0, 0, pageW, 18, 'F');
-                    doc.setDrawColor(226, 232, 240);
-                    doc.line(0, 18, pageW, 18);
+                doc.setFillColor(255, 255, 255);
+                doc.rect(0, 0, pageW, pageH, 'F');
+                
+                // Collect statistics
+                const subjectCounts = new Map<string, number>();
+                const deptCounts = new Map<string, number>();
+                const roomSubjectNames = new Set<string>();
+                
+                Object.values(assignments).forEach(ass => {
+                    if (ass.subjectCode) subjectCounts.set(ass.subjectCode, (subjectCounts.get(ass.subjectCode) || 0) + 1);
+                    if (ass.subjectName) roomSubjectNames.add(ass.subjectName);
+                    
+                    // If DB deptCode is empty, try to extract from Register Number (e.g., SJC24EE001 -> EE)
+                    let dept = ass.deptCode;
+                    if (!dept && ass.registerNumber) {
+                        const match = ass.registerNumber.match(/[A-Z]{3}\d{2}([A-Z]+)\d+/);
+                        if (match && match[1]) dept = match[1];
+                        else dept = "Unknown";
+                    } else if (!dept) {
+                        dept = "Unknown";
+                    }
+                    deptCounts.set(dept, (deptCounts.get(dept) || 0) + 1);
+                });
 
-                    doc.setTextColor(71, 85, 105);
-                    doc.setFontSize(8);
-                    doc.setFont('helvetica', 'bold');
-                    doc.text('SEATING LAYOUT', 9, 6.5);
-                    doc.setTextColor(15, 23, 42);
-                    doc.setFontSize(11);
-                    doc.text(`Hall ${hall.hallCode}`, 9, 11.5);
-                    doc.setFontSize(7.5);
-                    doc.setTextColor(100, 116, 139);
-                    doc.text(`${fmtDate(selectedDate)}  ·  ${sessionLabel}  ·  ${hall.filledSeats}/${hall.totalSeats}`, 9, 16);
-                };
+                // Extract only subjects relevant to THIS ROOM
+                let roomSubjectTitle = Array.from(roomSubjectNames).join(' / ') || 'Exam';
+                if (roomSubjectTitle.length > 100) {
+                    roomSubjectTitle = roomSubjectTitle.substring(0, 97) + '...';
+                }
 
-                const marginX = 8;
-                const gapX = 2.5;
-                const gapY = 2.5;
-                const startY = 21;
-                const bottomMargin = 6;
-                const availableW = pageW - marginX * 2;
-                const availableH = pageH - startY - bottomMargin;
+                // Draw headers as requested
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(13);
+                doc.setTextColor(0, 0, 0);
+                doc.text("ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI (Autonomous)", pageW / 2, 12, { align: 'center' });
+                
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(10);
+                doc.text(roomSubjectTitle, pageW / 2, 17, { align: 'center' });
+                
+                doc.setFontSize(11);
+                doc.setFont('helvetica', 'bold');
+                doc.text(`SEATING ARRANGEMENT - ${selectedDate} (${selectedSession})`, pageW / 2, 22, { align: 'center' });
+                
+                doc.setFontSize(12);
+                doc.text(`Room: ${hall.hallCode}`, pageW / 2, 28, { align: 'center' });
+
+                // --- SECTION 1: AUTO-SCALING ENGINE ---
                 const cols = Math.max(rowLabels.length, 1);
-                const rowsNeeded = Math.max(
-                    rowLabels.reduce((max, rowLabel) => Math.max(max, benchesByRow.get(rowLabel)?.length ?? 0), 0),
-                    1
-                );
-                const cardW = (availableW - (cols - 1) * gapX) / cols;
-                const cardH = (availableH - (rowsNeeded - 1) * gapY) / rowsNeeded;
-                const labelFont = Math.max(5.2, Math.min(7, cardH * 0.28));
-                const regFont = Math.max(5.8, Math.min(10, cardH * 0.45));
+                const rowsNeeded = Math.max(benchNumbers.length, 1);
+                
+                // Base values (SMALL HALL: Rows <= 6)
+                let gapX = 3;
+                let gapY = 3.0;
+                let maxCardH = 18;
+                let regFont = 9.5;
+                let nameFont = 7.5;
+                let benchLabelFont = 7.5; // VERY SMALL
+                let emptyFont = 7.5;
+                
+                let tableScaleW = 1.0;
+                let tableFontSize = 8.5;
+                let tablePadding = 1.5;
 
-                drawHeader();
+                // Scaling Levels
+                if (rowsNeeded > 10) {
+                    // LARGE HALL: Reduce bench height (-20%), font (-2px), padding (-30%)
+                    maxCardH = 14.4; 
+                    regFont = 7.5;   
+                    nameFont = 5.5;  
+                    benchLabelFont = 6;
+                    emptyFont = 6;
+                    gapY = 1.5;
+                    tableScaleW = 0.75; 
+                    tableFontSize = 7.0;
+                    tablePadding = 1.0;
+                } else if (rowsNeeded >= 7) {
+                    // MEDIUM HALL: Reduce bench height (-10%), font (-1px)
+                    maxCardH = 16.2; 
+                    regFont = 8.5;   
+                    nameFont = 6.5;  
+                    benchLabelFont = 7;
+                    emptyFont = 6.5;
+                    gapY = 2.0;
+                    tableScaleW = 0.85; 
+                    tableFontSize = 7.5;
+                    tablePadding = 1.2;
+                }
 
+                // Grid position
+                const startY = 44; // Increased to ensure safe clearance below the room header
+                const bottomMargin = 8;
+                
+                // Dynamic height calculations to fit on one page
+                const summaryRows = Math.max(deptCounts.size, subjectCounts.size, 1);
+                const summaryRowHeight = tablePadding * 2 + tableFontSize * 0.35;
+                const summaryHeight = 10 + (summaryRows * summaryRowHeight) + 10;
+                
+                const gridTableGap = 12; // 12mm clear gap below grid
+                const availableH = pageH - startY - summaryHeight - bottomMargin - gridTableGap;
+                
+                // SECTION 6: GRID HEIGHT CONTROL (max 65% of page)
+                const maxGridH = pageH * 0.65;
+                const allowedH = Math.min(availableH, maxGridH);
+                
+                // SECTION 7: COLUMN WIDTH BALANCING
+                const maxCardW = 48; 
+                let cardW = (pageW - 16 - (cols - 1) * gapX) / cols; 
+                if (cardW > maxCardW) cardW = maxCardW;
+                
+                const gridTotalW = (cols * cardW) + ((cols - 1) * gapX);
+                const marginX = (pageW - gridTotalW) / 2; // Center horizontally
+                
+                const rawCardH = (allowedH - (rowsNeeded - 1) * gapY) / rowsNeeded;
+                const cardH = Math.min(rawCardH, maxCardH);
+
+                // Draw Column Headers
                 rowLabels.forEach((rowLabel, colIdx) => {
-                    const rowBenches = benchesByRow.get(rowLabel) ?? [];
-                    rowBenches.forEach((bench, benchIdx) => {
+                    const x = marginX + colIdx * (cardW + gapX);
+                    
+                    // Column Header (e.g. A)
+                    doc.setFontSize(14);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(0, 0, 0);
+                    doc.text(`${rowLabel}`, x + cardW / 2, startY - 7, { align: 'center' });
+
+                    // Subject Subheader (grey box) -> showing Subject Code only
+                    const rowSubjects = new Set<string>();
+                    benches.filter(b => b.rowLabel === rowLabel).forEach(b => {
+                        const lSeat = b.seats.find(s => s.SeatNumber === 1);
+                        const rSeat = b.seats.find(s => s.SeatNumber === 2);
+                        const lCode = lSeat ? assignments[lSeat.SeatID]?.subjectCode : null;
+                        const rCode = rSeat ? assignments[rSeat.SeatID]?.subjectCode : null;
+                        if (lCode) rowSubjects.add(lCode as string);
+                        if (rCode) rowSubjects.add(rCode as string);
+                    });
+                    const subjectStr = Array.from(rowSubjects).join('/') || '-';
+
+                    doc.setFillColor(235, 235, 235);
+                    doc.rect(x, startY - 5.5, cardW, 4.5, 'F');
+                    doc.setFontSize(8);
+                    doc.setTextColor(30, 30, 30);
+                    // Ellipsis if too long
+                    const truncSubj = doc.getTextWidth(subjectStr) > cardW - 2 ? subjectStr.substring(0, 20) + "..." : subjectStr;
+                    doc.text(truncSubj, x + cardW / 2, startY - 2.5, { align: 'center' });
+                });
+
+                // Draw Bench Grid
+                rowLabels.forEach((rowLabel, colIdx) => {
+                    benchNumbers.forEach((bNumber, benchIdx) => {
+                        // Find the bench for this exact cell
+                        const bench = benches.find(b => b.rowLabel === rowLabel && b.benchNumber === bNumber);
+                        
+                        const leftSeat = bench ? bench.seats.find(s => s.SeatNumber === 1) : null;
+                        const rightSeat = bench ? bench.seats.find(s => s.SeatNumber === 2) : null;
+                        const leftAss = leftSeat ? assignments[leftSeat.SeatID] : null;
+                        const rightAss = rightSeat ? assignments[rightSeat.SeatID] : null;
+
+                        // DO NOT RENDER if bench is completely empty or doesn't exist
+                        if (!bench || (!leftAss && !rightAss)) {
+                            return;
+                        }
+
                         const x = marginX + colIdx * (cardW + gapX);
                         const y = startY + benchIdx * (cardH + gapY);
 
-                        const leftSeat = bench.seats.find(s => s.SeatNumber === 1);
-                        const rightSeat = bench.seats.find(s => s.SeatNumber === 2);
-                        const leftReg = leftSeat ? (assignments[leftSeat.SeatID]?.registerNumber ?? '—') : '—';
-                        const rightReg = rightSeat ? (assignments[rightSeat.SeatID]?.registerNumber ?? '—') : '—';
-
+                        // Card Background
                         doc.setFillColor(255, 255, 255);
-                        doc.setDrawColor(203, 213, 225);
-                        doc.setLineWidth(0.65);
-                        doc.roundedRect(x, y, cardW, cardH, 2.5, 2.5, 'FD');
-                        doc.setFillColor(241, 245, 249);
-                        doc.rect(x, y, cardW, Math.min(4, cardH * 0.34), 'F');
-                        doc.setDrawColor(148, 163, 184);
-                        doc.setLineWidth(0.45);
-                        doc.line(x + cardW / 2, y + Math.min(4, cardH * 0.34), x + cardW / 2, y + cardH);
+                        doc.setDrawColor(200, 200, 200);
+                        doc.setLineWidth(0.2);
+                        doc.roundedRect(x, y, cardW, cardH, 1, 1, 'FD');
 
-                        doc.setFont('helvetica', 'bold');
-                        doc.setFontSize(labelFont);
-                        doc.setTextColor(71, 85, 105);
-                        doc.text(`${rowLabel}${bench.benchNumber}`, x + 1.8, y + Math.min(2.8, cardH * 0.25));
+                        // SECTION 1: BENCH LABEL (VERY SMALL, TOP-LEFT, NO BACKGROUND)
+                        doc.setFont('helvetica', 'normal');
+                        doc.setFontSize(benchLabelFont);
+                        doc.setTextColor(150, 150, 150);
+                        doc.text(`${rowLabel}${bench.benchNumber}`, x + 1.5, y + 2.5);
 
-                        doc.setFont('courier', 'bold');
-                        doc.setFontSize(regFont);
-                        doc.setTextColor(15, 23, 42);
-                        doc.text(leftReg, x + cardW * 0.25, y + cardH * 0.67, { align: 'center' });
-                        doc.text(rightReg, x + cardW * 0.75, y + cardH * 0.67, { align: 'center' });
+                        // Center separator
+                        doc.setDrawColor(220, 220, 220);
+                        doc.line(x + cardW / 2, y + 2, x + cardW / 2, y + cardH - 2);
+
+                        const printSeat = (ass: Assignment | null, offsetX: number) => {
+                            const cx = x + offsetX;
+                            const halfW = cardW / 2;
+                            
+                            if (!ass) {
+                                // EMPTY SEAT (small placeholder)
+                                doc.setFillColor(245, 245, 245);
+                                doc.rect(cx - halfW/2 + 0.5, y + 4, halfW - 1, cardH - 4.5, 'F');
+                                doc.setFont('helvetica', 'bold');
+                                doc.setFontSize(emptyFont);
+                                doc.setTextColor(170, 170, 170);
+                                doc.text("EMPTY", cx, y + (cardH / 2) + 1.5, { align: 'center' });
+                                return;
+                            }
+
+                            if (!ass.isEligible || ass.isBlocked) {
+                                // NOT ELIGIBLE
+                                doc.setFillColor(255, 235, 235);
+                                doc.rect(cx - halfW/2 + 0.5, y + 4, halfW - 1, cardH - 4.5, 'F');
+                                
+                                doc.setFont('helvetica', 'bold');
+                                doc.setFontSize(emptyFont - 0.5);
+                                doc.setTextColor(200, 50, 50);
+                                doc.text("NOT ELIGIBLE", cx, y + (cardH / 2) - 0.5, { align: 'center' });
+                                
+                                doc.setFontSize(regFont - 1.5);
+                                doc.setTextColor(0, 0, 0);
+                                doc.text(ass.registerNumber || '', cx, y + (cardH / 2) + 3.5, { align: 'center' });
+                                return;
+                            }
+                            
+                            // SECTION 2: BENCH CARD TEXT FIX (strict layout & spacing)
+                            doc.setFont('helvetica', 'bold');
+                            doc.setFontSize(regFont); 
+                            doc.setTextColor(0, 0, 0);
+                            
+                            // Center horizontally, move slightly up from exact center
+                            const textY = y + (cardH / 2) - 0.2; 
+                            doc.text(ass.registerNumber || '', cx, textY, { align: 'center' });
+
+                            doc.setFont('helvetica', 'normal');
+                            doc.setFontSize(nameFont); 
+                            doc.setTextColor(60, 60, 60);
+                            
+                            // Add gap below the register number
+                            const nameOffset = rowsNeeded > 10 ? 2.5 : (rowsNeeded >= 7 ? 2.8 : 3.2);
+                            const nameY = textY + nameOffset; 
+                            
+                            let truncName = ass.studentName || '';
+                            if (doc.getTextWidth(truncName) > halfW - 2) {
+                                truncName = truncName.substring(0, 14) + "...";
+                            }
+                            doc.text(truncName, cx, nameY, { align: 'center' });
+                        };
+
+                        printSeat(leftAss, cardW * 0.25);
+                        printSeat(rightAss, cardW * 0.75);
                     });
                 });
+
+                // SECTION 7: GRID vs TABLE SEPARATION
+                let currentY = startY + rowsNeeded * (cardH + gapY) + gridTableGap; 
+                
+                // SECTION 3/4/8: SUMMARY TABLE SIZE REDUCTION & POSITIONING
+                // Reduced table width to ~60-70% of previous default
+                const baseTableW = 75; 
+                const tableW = baseTableW * tableScaleW;
+                const tableGap = 15; // 15mm gap between tables
+                const totalTablesW = (tableW * 2) + tableGap;
+                const tableStartX = (pageW - totalTablesW) / 2;
+                
+                const autoTable = (await import('jspdf-autotable')).default;
+
+                // Left Table (Departments)
+                const deptData = Array.from(deptCounts.entries());
+                autoTable(doc, {
+                    startY: currentY,
+                    head: [['Departments', 'Count']],
+                    body: deptData,
+                    theme: 'grid',
+                    styles: { fontSize: tableFontSize, cellPadding: tablePadding, textColor: [30, 30, 30], font: 'helvetica' },
+                    headStyles: { fillColor: [240, 245, 250], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, lineColor: [200, 200, 200] },
+                    bodyStyles: { lineWidth: 0.1, lineColor: [220, 220, 220] },
+                    margin: { left: tableStartX },
+                    tableWidth: tableW
+                });
+                const leftTableY = (doc as any).lastAutoTable?.finalY || currentY;
+
+                // Right Table (Subjects)
+                const subjData = Array.from(subjectCounts.entries());
+                autoTable(doc, {
+                    startY: currentY,
+                    head: [['Subjects', 'Count']],
+                    body: subjData,
+                    theme: 'grid',
+                    styles: { fontSize: tableFontSize, cellPadding: tablePadding, textColor: [30, 30, 30], font: 'helvetica' },
+                    headStyles: { fillColor: [240, 245, 250], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 9, lineWidth: 0.1, lineColor: [200, 200, 200] },
+                    bodyStyles: { lineWidth: 0.1, lineColor: [220, 220, 220] },
+                    margin: { left: tableStartX + tableW + tableGap },
+                    tableWidth: tableW
+                });
+                const rightTableY = (doc as any).lastAutoTable?.finalY || currentY;
+
+                // Total Students
+                const maxTableY = Math.max(leftTableY, rightTableY);
+                const finalY = Math.max(maxTableY, currentY + 5);
+                doc.setFontSize(10.5);
+                doc.setFont('helvetica', 'bold');
+                doc.text(`Total Students Assigned: ${[...deptCounts.values()].reduce((a, b) => a + b, 0)}`, pageW / 2, finalY + 8, { align: 'center' });
+
+                const pdfBlob = doc.output('blob');
+                zip.file(`${hall.hallCode}_Seating.pdf`, pdfBlob);
             }
 
-            doc.save(`Seating_${selectedDate}_${selectedSession}.pdf`);
-            toast.success('Seating PDF downloaded');
+            const zipContent = await zip.generateAsync({ type: 'blob' });
+            const url = window.URL.createObjectURL(zipContent);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `Room_Wise_Seating_PDFs_${selectedDate}_${selectedSession}.zip`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            
+            toast.success('Room Wise Seating downloaded as ZIP');
         } catch (err: any) {
             console.error('downloadSeatingPDF error:', err);
             toast.error('Failed to generate PDF: ' + (err?.message || 'Unknown error'));
@@ -1153,8 +1416,8 @@ const SeatingPlans: React.FC = () => {
                                         <span className="text-[11px] font-bold text-slate-700 uppercase tracking-widest">Select Exam</span>
                                     </div>
 
-                                    {/* Series (optional) */}
-                                    <Select aria-label="Exam Series" placeholder="All Series (optional)" variant="bordered"
+                                    {/* Series */}
+                                    <Select aria-label="Exam Series" placeholder="Select Exam Series" variant="bordered"
                                         id="exam-series-select" name="examSeries"
                                         selectedKeys={selectedSeries ? [selectedSeries] : []}
                                         onSelectionChange={(k) => setSelectedSeries(Array.from(k)[0] as string || '')}
@@ -1182,11 +1445,11 @@ const SeatingPlans: React.FC = () => {
                                     </div>
 
                                     {/* Date */}
-                                    <Select aria-label="Exam Date" placeholder={availableDates.length > 0 ? 'Select Date' : 'No dates for this session'} variant="bordered"
+                                    <Select aria-label="Exam Date" placeholder={!selectedSeries ? 'Select Series first' : availableDates.length > 0 ? 'Select Date' : 'No dates for this session'} variant="bordered"
                                         id="exam-date-select" name="examDate"
                                         selectedKeys={selectedDate ? new Set([selectedDate]) : new Set([])}
                                         onSelectionChange={(k) => setSelectedDate(Array.from(k)[0] as string || '')}
-                                        isDisabled={availableDates.length === 0}
+                                        isDisabled={!selectedSeries || availableDates.length === 0}
                                         classNames={{
                                             trigger: "relative pr-10 bg-white border border-slate-200 rounded-xl h-10 text-slate-800 text-[13px] font-semibold data-[hover=true]:border-indigo-400 transition-all",
                                             value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-400",
@@ -1246,6 +1509,8 @@ const SeatingPlans: React.FC = () => {
                                         <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 border border-slate-200">
                                             <span className="text-[11px] text-slate-600 font-medium">Room cap <span className="text-slate-400 text-[9px]">(End Sem)</span></span>
                                             <input
+                                                id="room-capacity-limit-wizard"
+                                                name="roomCapacityLimitWizard"
                                                 type="number" min={1} max={200}
                                                 value={roomCapacityLimit}
                                                 onChange={e => setRoomCapacityLimit(Math.max(1, Number(e.target.value) || 40))}
@@ -1469,7 +1734,7 @@ const SeatingPlans: React.FC = () => {
                                                     <Button size="sm" isDisabled={seatingDownloading || totalFilled === 0}
                                                         className="font-semibold text-[12px] bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border-2 border-emerald-200 rounded-xl h-10 px-4 transition-all"
                                                         startContent={seatingDownloading ? <RefreshCw size={14} className="animate-spin" /> : <FileSpreadsheet size={15} />}>
-                                                        {seatingDownloading ? 'Generating…' : 'Download Seating'}
+                                                        {seatingDownloading ? 'Generating…' : 'Room Wise Seating'}
                                                     </Button>
                                                 </DropdownTrigger>
                                                 <DropdownMenu aria-label="Seating download format"
@@ -1760,21 +2025,25 @@ const SeatingPlans: React.FC = () => {
                                                     ? 'bg-violet-900/40 text-violet-300 border-violet-500/40'
                                                     : 'bg-indigo-900/40 text-indigo-300 border-indigo-500/40'
                                                 }`}>
-                                                {lastExamType === 'EndSemester' ? '📚 End Semester' : '📝 Internal'}
+                                                {lastExamType === 'EndSemester' ? 'End Semester' : 'Internal'}
                                             </span>
 
                                             {/* Subject swatches — shown for EndSem */}
                                             {lastExamType === 'EndSemester' && (() => {
-                                                const subjects = new Set<string>();
-                                                Object.values(detailAssignments).forEach(a => { if (a.subjectCode) subjects.add(a.subjectCode); });
-                                                const codes = [...subjects].sort();
+                                                const subjectCounts = new Map<string, number>();
+                                                Object.values(detailAssignments).forEach(a => {
+                                                    if (a.subjectCode) {
+                                                        subjectCounts.set(a.subjectCode, (subjectCounts.get(a.subjectCode) || 0) + 1);
+                                                    }
+                                                });
+                                                const codes = [...subjectCounts.keys()].sort();
                                                 return codes.map(code => {
                                                     const ss = getSubjectStyle(code);
                                                     return (
                                                         <div key={code} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold tracking-wide"
                                                             style={{ background: `${ss.glow}`, color: ss.text, border: `1px solid ${ss.text}40` }}>
                                                             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: ss.text, boxShadow: `0 0 6px ${ss.text}` }} />
-                                                            {code}
+                                                            {code} <span className="opacity-80 ml-0.5">({subjectCounts.get(code)})</span>
                                                         </div>
                                                     );
                                                 });
@@ -1782,15 +2051,20 @@ const SeatingPlans: React.FC = () => {
 
                                             {/* Dept colour pills — always shown */}
                                             {lastExamType === 'Internal' && (() => {
-                                                const depts = new Set<string>();
-                                                Object.values(detailAssignments).forEach(a => depts.add(a.deptCode));
-                                                return [...depts].map(d => {
+                                                const deptCounts = new Map<string, number>();
+                                                Object.values(detailAssignments).forEach(a => {
+                                                    if (a.deptCode) {
+                                                        deptCounts.set(a.deptCode, (deptCounts.get(a.deptCode) || 0) + 1);
+                                                    }
+                                                });
+                                                const depts = [...deptCounts.keys()].sort();
+                                                return depts.map(d => {
                                                     const st = getDeptStyle(d);
                                                     return (
                                                         <div key={d} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-bold tracking-wide bg-white border border-slate-200"
                                                             style={{ color: st.text }}>
                                                             <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: st.text, boxShadow: `0 0 8px ${st.text}50` }} />
-                                                            {d}
+                                                            {d} <span className="opacity-80 ml-0.5">({deptCounts.get(d)})</span>
                                                         </div>
                                                     );
                                                 });
@@ -1851,21 +2125,21 @@ const SeatingPlans: React.FC = () => {
 
                                                     // Tooltip content helpers
                                                     const leftTooltipContent = ld ? 'Disabled'
-                                                        : leftIsBlocked ? `${laVisible!.registerNumber} | ${laVisible!.deptCode} | ⛔ Not Eligible`
+                                                        : leftIsBlocked ? `${laVisible!.registerNumber} | ${laVisible!.deptCode} | Not Eligible`
                                                             : laVisible ? [
                                                                 laVisible.registerNumber,
-                                                                laVisible.subjectCode ? `📖 ${laVisible.subjectCode}` : '',
+                                                                laVisible.subjectCode ? `${laVisible.subjectCode}` : '',
                                                                 laVisible.deptCode,
-                                                                '✅ Eligible',
+                                                                'Eligible',
                                                             ].filter(Boolean).join('  ·  ')
                                                                 : 'Empty';
                                                     const rightTooltipContent = rd ? 'Disabled'
-                                                        : rightIsBlocked ? `${raVisible!.registerNumber} | ${raVisible!.deptCode} | ⛔ Not Eligible`
+                                                        : rightIsBlocked ? `${raVisible!.registerNumber} | ${raVisible!.deptCode} | Not Eligible`
                                                             : raVisible ? [
                                                                 raVisible.registerNumber,
-                                                                raVisible.subjectCode ? `📖 ${raVisible.subjectCode}` : '',
+                                                                raVisible.subjectCode ? `${raVisible.subjectCode}` : '',
                                                                 raVisible.deptCode,
-                                                                '✅ Eligible',
+                                                                'Eligible',
                                                             ].filter(Boolean).join('  ·  ')
                                                                 : 'Empty';
 
@@ -1882,7 +2156,7 @@ const SeatingPlans: React.FC = () => {
                                                                 </span>
                                                                 <div className="flex items-center gap-1.5">
                                                                     {hasBenchConflict && (
-                                                                        <span title="Same subject on same bench!" className="text-amber-400 text-[11px] animate-pulse">⚠</span>
+                                                                        <span title="Same subject on same bench!" className="text-amber-400 text-[11px] animate-pulse">!</span>
                                                                     )}
                                                                     <span className="text-[8px] text-slate-500 font-mono">BENCH {bench.benchNumber}</span>
                                                                 </div>
@@ -2276,6 +2550,8 @@ const SeatingPlans: React.FC = () => {
                                             <div className="flex items-center px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 gap-2">
                                                 <span className="text-[11px] text-slate-600 font-medium whitespace-nowrap">Room cap <span className="text-slate-400 text-[9px]">(End Sem)</span></span>
                                                 <input
+                                                    id="room-capacity-limit-series"
+                                                    name="roomCapacityLimitSeries"
                                                     type="number" min={1} max={200}
                                                     value={roomCapacityLimit}
                                                     onChange={e => setRoomCapacityLimit(Math.max(1, Number(e.target.value) || 40))}

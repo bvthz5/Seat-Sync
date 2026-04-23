@@ -680,7 +680,7 @@ const Reports: React.FC = () => {
                                             <span className="text-sm font-bold text-slate-800">{inv.students}</span>
                                             <span className={`text-sm font-bold ${inv.absent > 15 ? 'text-rose-500' : 'text-slate-600'}`}>{inv.absent > 0 ? inv.absent : '—'}</span>
                                             <div className="flex items-center gap-1">
-                                                <span className="text-amber-400 font-black text-sm">★</span>
+                                                <span className="text-amber-400 font-black text-sm">*</span>
                                                 <span className="text-sm font-bold text-slate-700">{inv.rating}</span>
                                             </div>
                                         </div>

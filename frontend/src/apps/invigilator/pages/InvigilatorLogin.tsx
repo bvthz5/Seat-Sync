@@ -4,7 +4,7 @@ import { Button, Link } from '@heroui/react'; // Ensure correct import
 import { motion, AnimatePresence, Variants, useMotionValue, useSpring, useTransform, useMotionTemplate } from 'framer-motion';
 import { useAuth } from '../../../hooks/useAuth';
 import { AuthService } from '../../../services/auth.service';
-import { ShieldCheck, UserCheck, Lock, Mail, Eye, EyeOff, FileCheck } from 'lucide-react';
+import { ShieldCheck, UserCheck, Lock, Mail, Eye, EyeOff, FileCheck, AlertTriangle } from 'lucide-react';
 import { Spinner } from '../../../components/GlobalLoader';
 import { InvigilatorHeroSVG } from './InvigilatorHeroSVG';
 
@@ -385,7 +385,7 @@ const InvigilatorLogin = () => {
                                 exit={{ opacity: 0, height: 0 }}
                                 className="bg-red-50 border-l-4 border-red-500 text-red-700 px-4 py-3 rounded shadow-sm text-sm font-medium flex items-center gap-2"
                             >
-                                <span className="flex-shrink-0">⚠️</span>
+                                <span className="flex-shrink-0"><AlertTriangle className="w-4 h-4" /></span>
                                 {formError}
                             </motion.div>
                         )}

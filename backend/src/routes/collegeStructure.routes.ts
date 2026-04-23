@@ -382,11 +382,11 @@ router.get("/rooms", getRooms);
  *                     properties:
  *                       SeatID:
  *                         type: integer
- *                       RowLabel:
+ *                       RowIndex:
  *                         type: string
- *                       BenchNumber:
+ *                       BenchIndex:
  *                         type: integer
- *                       SeatNumber:
+ *                       SeatIndex:
  *                         type: integer
  *                 seatCount:
  *                   type: integer

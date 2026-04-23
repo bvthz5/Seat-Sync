@@ -55,7 +55,8 @@
     "tedious": "^19.2.0",
     "tesseract.js": "^6.0.1",
     "word-extractor": "^1.0.4",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "xlsx-js-style": "^1.2.0"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",

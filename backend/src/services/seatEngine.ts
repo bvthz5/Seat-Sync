@@ -38,7 +38,7 @@ export async function generateSeats(room: Room | any, transaction?: any) {
     const expectedSeats: any[] = [];
     const expectedSeatMap = new Map<string, { IsActive: boolean }>();
 
-    const seatsPerBench = 2; // Enforce rule: always 2
+    const seatsPerBench = Number(room.SeatsPerBench) > 0 ? Number(room.SeatsPerBench) : 2;
     let seatSerial = 0;
 
     // Excel maps exactly to:
@@ -76,9 +76,12 @@ export async function generateSeats(room: Room | any, transaction?: any) {
     const existingSeatKeys = new Set<string>();
     const seatsToUpdateActiveState: Array<{ seat: any; isActive: boolean }> = [];
 
-    for (const seat of existingSeats) {
-        // Assume seat has RowIndex, BenchIndex, SeatIndex as attributes
-        const key = `${seat.RowIndex}-${seat.BenchIndex}-${seat.SeatIndex}`;
+    for (const seat of existingSeats as any[]) {
+        // Handle both Sequelize aliases and raw DB column names
+        const rIndex = seat.RowIndex ?? seat.RowLabel;
+        const bIndex = seat.BenchIndex ?? seat.BenchNumber;
+        const sIndex = seat.SeatIndex ?? seat.SeatNumber;
+        const key = `${rIndex}-${bIndex}-${sIndex}`;
         existingSeatKeys.add(key);
 
         // If seat no longer exists physically in the new layout
@@ -86,7 +89,9 @@ export async function generateSeats(room: Room | any, transaction?: any) {
             seatIdsToRemove.push(seat.SeatID);
         } else {
             const expected = expectedSeatMap.get(key);
-            if (expected && Boolean(seat.IsActive) !== expected.IsActive) {
+            // Handle both boolean true/false and 1/0
+            const currentActive = Boolean(seat.IsActive);
+            if (expected && currentActive !== expected.IsActive) {
                 seatsToUpdateActiveState.push({ seat, isActive: expected.IsActive });
             }
         }
@@ -106,9 +111,9 @@ export async function generateSeats(room: Room | any, transaction?: any) {
 
     if (seatsToUpdateActiveState.length > 0) {
         for (const item of seatsToUpdateActiveState) {
-            const updateOptions: any = {};
+            const updateOptions: any = { where: { SeatID: item.seat.SeatID } };
             if (transaction) updateOptions.transaction = transaction;
-            await item.seat.update({ IsActive: item.isActive }, updateOptions);
+            await Seat.update({ IsActive: item.isActive }, updateOptions);
         }
     }
 

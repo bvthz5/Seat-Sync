@@ -91,10 +91,10 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
         }
 
         if (hasPdf) {
-            toast('PDF import is best-effort. Please verify the result after import.', { icon: 'ℹ️' });
+            toast('PDF import is best-effort. Please verify the result after import.');
         }
         if (hasWordRtf) {
-            toast('Word/RTF import is best-effort. Please verify the result after import.', { icon: 'ℹ️' });
+            toast('Word/RTF import is best-effort. Please verify the result after import.');
         }
 
         setSelectedFiles(validFiles);
@@ -185,7 +185,7 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
             if (totalCreated > 0 || totalUpdated > 0) {
                 toast.success(`Complete: ${totalCreated} created, ${totalUpdated} updated`);
             } else {
-                toast('No changes made', { icon: 'ℹ️' });
+                toast('No changes made');
             }
             if (totalRowErrors > 0 || fileFailures > 0) {
                 toast.error(`Completed with issues: ${totalRowErrors} row errors, ${fileFailures} file failures`);

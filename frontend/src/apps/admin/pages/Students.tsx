@@ -1119,7 +1119,7 @@ const Students: React.FC = () => {
                                                     onPress={handleCopyPassword}
                                                     title="Copy password"
                                                 >
-                                                    📋
+                                                    Copy
                                                 </Button>
                                             </div>
                                         </div>
@@ -1127,7 +1127,7 @@ const Students: React.FC = () => {
                                 )}
 
                                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
-                                    <p className="text-xs font-semibold text-blue-900">⚡ Important Notes:</p>
+                                    <p className="text-xs font-semibold text-blue-900">Important Notes:</p>
                                     <ul className="text-xs text-blue-800 space-y-1">
                                         <li>• Student must change this password on first login</li>
                                         <li>• Share this password securely with the student</li>
