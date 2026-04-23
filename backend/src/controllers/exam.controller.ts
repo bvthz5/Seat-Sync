@@ -1598,14 +1598,15 @@ export class ExamController {
                 return res.status(404).json({ message: 'Exam not found' });
             }
 
-            // Use raw query to get students with ExamRegistration data
-            const students = await sequelize.query(`
+            // Fetch ALL registrations for this exam (eligible + ineligible)
+            const rows = await sequelize.query(`
                 SELECT 
                     s.StudentID,
                     s.RegisterNumber,
                     s.FullName,
                     s.Status,
-                    u.Email
+                    u.Email,
+                    er.IsEligible
                 FROM Students s
                 LEFT JOIN Users u ON s.UserID = u.UserID
                 INNER JOIN ExamRegistrations er ON s.StudentID = er.StudentID
@@ -1616,20 +1617,28 @@ export class ExamController {
                 type: QueryTypes.SELECT
             });
 
-            const studentList = students.map((row: any) => ({
+            const allStudents = (rows as any[]).map((row: any) => ({
                 StudentID: row.StudentID,
                 RegisterNumber: row.RegisterNumber,
                 FullName: row.FullName,
                 Email: row.Email || 'N/A',
                 Status: row.Status,
-                CreatedAt: null
+                IsEligible: row.IsEligible === 1 || row.IsEligible === true,
             }));
+
+            const eligibleStudents   = allStudents.filter(s => s.IsEligible);
+            const ineligibleStudents = allStudents.filter(s => !s.IsEligible);
 
             res.json({
                 success: true,
                 examId,
-                totalStudents: studentList.length,
-                students: studentList
+                totalStudents: allStudents.length,
+                eligibleCount: eligibleStudents.length,
+                ineligibleCount: ineligibleStudents.length,
+                // Keep legacy `students` key pointing to eligible only for backward compat
+                students: eligibleStudents,
+                eligibleStudents,
+                ineligibleStudents,
             });
         } catch (error: any) {
             console.error("Error fetching eligible students:", error);

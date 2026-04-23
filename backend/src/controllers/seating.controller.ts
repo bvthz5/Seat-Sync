@@ -1068,26 +1068,27 @@ const fetchEndSemStudentsBySubject = async (
             { model: User,       attributes: ['FullName'] },
             { model: Department, attributes: ['DepartmentCode', 'DepartmentID'] },
         ],
-        order: [['StudentID', 'ASC']], // Crucial: Exact spreadsheet import order!
+        order: [['RegisterNumber', 'ASC']], // Strict register-number order for continuity
         ...(transaction ? { transaction } : {}),
     }) as any[];
 
     const subjectMap: Record<string, any[]> = {};
     for (const s of students) {
         const stu = typeof s.toJSON === 'function' ? s.toJSON() : { ...s };
-        stu._isEligible   = eligibilityMap.get(Number(stu.StudentID)) ?? true;
+        stu._isEligible  = eligibilityMap.get(Number(stu.StudentID)) ?? true;
         const examDetails = studentExamMap.get(Number(stu.StudentID)) ?? null;
         if (!examDetails) continue;
-        
-        stu._subjectCode  = examDetails.code;
-        stu._subjectName  = examDetails.name;
-        
+
+        stu._subjectCode = examDetails.code;
+        stu._subjectName = examDetails.name;
+
         const code = stu._subjectCode;
+        if (!code) continue; // guard: skip if subject code is empty/null
         if (!subjectMap[code]) subjectMap[code] = [];
         subjectMap[code].push(stu);
     }
 
-    const subjectQueue = Object.keys(subjectMap).sort(); 
+    const subjectQueue = Object.keys(subjectMap).sort();
     return { subjectQueue, subjectMap, examIdBySubjectCode };
 };
 
@@ -1157,8 +1158,8 @@ export const bulkAssign = async (req: Request, res: Response) => {
          * END-SEMESTER BRANCH — returns early
          * ══════════════════════════════════════════════════════ */
         if (examType === 'EndSemester') {
-            const capLimit = roomCapacityLimit ? Number(roomCapacityLimit) : 40;
-            const CHUNK    = 4;
+            const rawCap = Number(roomCapacityLimit);
+            const capLimit = roomCapacityLimit && !isNaN(rawCap) && rawCap > 0 ? rawCap : 40;
 
             // ── Already-allocated excludes ──
             const selectedHallSetES = new Set<number>((hallIds as number[]).map((id: number) => Number(id)));
@@ -1190,19 +1191,35 @@ export const bulkAssign = async (req: Request, res: Response) => {
             }
 
             const totalEndSemStudents = Object.values(subjectMap).reduce((s, a) => s + a.length, 0);
-            console.log(`[EndSem] Subjects: ${subjectQueue.join(', ')} | Total students: ${totalEndSemStudents}`);
+            console.log(`[EndSem] Subjects: ${subjectQueue.join(', ')} | Total: ${totalEndSemStudents}`);
 
-            // ── Prepare Subject Pools ──
-            const pools: Array<{ code: string, students: any[] }> = subjectQueue.map(c => ({
-                code: c,
-                students: subjectMap[c] || []
+            /* ═══════════════════════════════════════════════════════
+             * SORT SUBJECTS: largest pool → primary (index 0)
+             * SINGLE_SUBJECT    (1)  → all rows use pool[0]
+             * STRIPED_2_SUBJECT (2)  → even rows=pool[0], odd=pool[1]
+             * MULTI_SUBJECT     (3+) → cyclic: row i → pool[i % N]
+             * ═══════════════════════════════════════════════════════ */
+            const sortedSubjectCodes = [...subjectQueue].sort(
+                (a, b) => (subjectMap[b]?.length ?? 0) - (subjectMap[a]?.length ?? 0)
+            );
+
+            // Subject pools — mutable queues; consumed globally across ALL halls (no reset)
+            const subjectPools: Array<{ code: string; students: any[] }> = sortedSubjectCodes.map(code => ({
+                code,
+                students: [...(subjectMap[code] ?? [])], // already sorted by RegisterNumber ASC
             }));
+            const subjectCount = subjectPools.length;
 
-            // ── Fetch and cap seats ──
-            let allActiveSeatsES: any[] = await sequelize.query(`
+            // ── Fetch and cap seats (sanitise hallIds to safe integers first) ──
+            const safeHallIds = (hallIds as any[]).map(Number).filter(n => Number.isFinite(n) && n > 0);
+            if (safeHallIds.length === 0) {
+                await transaction.rollback();
+                return res.status(400).json({ message: 'No valid hall IDs provided.', examType });
+            }
+            const allActiveSeatsES: any[] = await sequelize.query(`
                 SELECT SeatID, RoomID, RowIndex, BenchIndex, SeatIndex
                 FROM   Seats
-                WHERE  RoomID IN (${(hallIds as number[]).map(Number).join(',')})
+                WHERE  RoomID IN (${safeHallIds.join(',')})
                 AND    IsActive = 1
                 ORDER BY RoomID ASC, RowIndex ASC, BenchIndex ASC, SeatIndex ASC
             `, { type: QueryTypes.SELECT, raw: true, transaction }) as any[];
@@ -1236,7 +1253,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
             // ── Assign seats: room → row → bench → seatIndex ──
             const hallResultsES: any[] = [];
             const allNewAllocsES: { ExamID: number; SeatID: number; StudentID: number; IsEligible: boolean; IsBlocked: boolean }[] = [];
-            
+
             const cappedByRoom = new Map<number, any[]>();
             for (const seat of cappedSeatsES) {
                 const rid = Number(seat.RoomID);
@@ -1255,6 +1272,28 @@ export const bulkAssign = async (req: Request, res: Response) => {
 
             const rowPrimarySubjectMap: Record<number, Record<string, string>> = {};
 
+            /** Pick the pool for globalRowCounter (0-based). Falls back to next non-empty pool. */
+            const pickPoolForRow = (rowIndex: number): { code: string; students: any[] } | null => {
+                if (subjectCount === 1) {
+                    return subjectPools[0]!.students.length > 0 ? subjectPools[0]! : null;
+                }
+                if (subjectCount === 2) {
+                    const preferred = rowIndex % 2 === 0 ? 0 : 1;
+                    const fallback  = 1 - preferred;
+                    if ((subjectPools[preferred]?.students.length ?? 0) > 0) return subjectPools[preferred]!;
+                    if ((subjectPools[fallback]?.students.length  ?? 0) > 0) return subjectPools[fallback]!;
+                    return null;
+                }
+                // 3+ subjects: cyclic with fallback scan
+                for (let attempt = 0; attempt < subjectCount; attempt++) {
+                    const idx = (rowIndex + attempt) % subjectCount;
+                    if ((subjectPools[idx]?.students.length ?? 0) > 0) return subjectPools[idx]!;
+                }
+                return null;
+            };
+
+            let globalRowCounter = 0; // persists across all halls
+
             for (const hallIdNum of hallIdsToUseES) {
                 const hall = targetHallsES.find(h => h.RoomID === hallIdNum);
                 if (!hall) continue;
@@ -1266,65 +1305,64 @@ export const bulkAssign = async (req: Request, res: Response) => {
                     continue;
                 }
 
-                // Build bench map for this hall
-                const benchMapES: Record<string, Record<number, any[]>> = {};
+                // Build row → bench → [seats] map (skip malformed seat records)
+                const rowBenchMap: Record<string, Record<number, any[]>> = {};
                 for (const seat of seats) {
-                    const row = getRowLabel(seat);
+                    const row   = getRowLabel(seat);
                     const bench = getBenchNumber(seat);
-                    if (!benchMapES[row]) benchMapES[row] = {};
-                    if (!benchMapES[row]![bench]) benchMapES[row]![bench] = [];
-                    benchMapES[row]![bench]!.push(seat);
+                    if (!row) { console.warn(`[EndSem] Seat ${seat.SeatID} has no RowIndex — skipped`); continue; }
+                    if (!bench) { console.warn(`[EndSem] Seat ${seat.SeatID} has no BenchIndex — skipped`); continue; }
+                    if (!rowBenchMap[row]) rowBenchMap[row] = {};
+                    if (!rowBenchMap[row]![bench]) rowBenchMap[row]![bench] = [];
+                    rowBenchMap[row]![bench]!.push(seat);
                 }
 
-                const allRowsES = Object.keys(benchMapES).sort();
-                const allBenchNums = [...new Set(allRowsES.flatMap(r => Object.keys(benchMapES[r]!).map(Number)))].sort((a,b) => a-b);
+                const allRowsES = Object.keys(rowBenchMap).sort();
                 let hallFilledES = 0;
+                let allPoolsEmpty = false;
 
                 for (const row of allRowsES) {
-                    let rowSubjectSet = false;
+                    if (allPoolsEmpty) break;
 
-                    for (const bench of allBenchNums) {
-                        const benchSeats = (benchMapES[row]?.[bench] || []).sort(sortSeatsByPosition);
-                        const seat1 = benchSeats.find(s => getSeatNumber(s) === 1);
-                        const seat2 = benchSeats.find(s => getSeatNumber(s) === 2);
+                    // One subject pool owns this entire row
+                    const rowPool = pickPoolForRow(globalRowCounter);
+                    globalRowCounter++;
 
-                        let seat1Code: string | null = null;
-                        
-                        if (seat1) {
-                            const p1Idx = pools.findIndex(p => p.students.length > 0);
-                            if (p1Idx !== -1) {
-                                const stu = pools[p1Idx]!.students.shift();
-                                seat1Code = stu._subjectCode;
-                                
-                                if (!rowSubjectSet) {
-                                    rowPrimarySubjectMap[hallIdNum][row] = `${stu._subjectName} (${seat1Code})`;
-                                    rowSubjectSet = true;
-                                }
+                    if (!rowPool) { allPoolsEmpty = true; break; }
 
-                                const subjExamId = examIdBySubjectCode[seat1Code!] ?? primaryExamId;
-                                pushAllocation(allNewAllocsES, subjExamId, seat1, stu);
-                                hallFilledES++;
-                            }
-                        }
+                    // Record row label for UI
+                    const sample = rowPool.students[0];
+                    rowPrimarySubjectMap[hallIdNum][row] = sample
+                        ? `${sample._subjectName ?? ''} (${rowPool.code})`
+                        : rowPool.code;
 
-                        if (seat2 && seat1Code) {
-                            const p2Idx = pools.findIndex(p => p.students.length > 0 && p.code !== seat1Code);
-                            if (p2Idx !== -1) {
-                                const stu = pools[p2Idx]!.students.shift();
-                                const subjExamId = examIdBySubjectCode[stu._subjectCode] ?? primaryExamId;
-                                pushAllocation(allNewAllocsES, subjExamId, seat2, stu);
-                                hallFilledES++;
-                            } // else: leave seat EMPTY
+                    const lookedUpExamId = examIdBySubjectCode[rowPool.code];
+                    if (lookedUpExamId === undefined) {
+                        console.warn(`[EndSem] No ExamID mapped for subject "${rowPool.code}" — skipping row ${row} in hall ${hallIdNum}`);
+                        continue; // safer to skip than to misassign to wrong exam
+                    }
+                    const subjExamId = lookedUpExamId;
+
+                    // Fill all benches → all seat positions in this row from SAME pool
+                    const benchNums = Object.keys(rowBenchMap[row]!).map(Number).sort((a, b) => a - b);
+                    outerBench: for (const benchNum of benchNums) {
+                        const benchSeats = (rowBenchMap[row]![benchNum] ?? []).sort(sortSeatsByPosition);
+                        for (const seat of benchSeats) {
+                            if (rowPool.students.length === 0) break outerBench;
+                            const stu = rowPool.students.shift();
+                            if (!stu) break outerBench; // defensive double-guard
+                            pushAllocation(allNewAllocsES, subjExamId, seat, stu);
+                            hallFilledES++;
                         }
                     }
                 }
 
                 hallResultsES.push({
-                    hallId: hallIdNum,
-                    hallCode: (hall as any).RoomCode,
+                    hallId:     hallIdNum,
+                    hallCode:   (hall as any).RoomCode,
                     totalSeats: seats.length,
-                    filled: hallFilledES,
-                    cappedAt: capLimit,
+                    filled:     hallFilledES,
+                    cappedAt:   capLimit,
                 });
             }
 
@@ -1333,16 +1371,20 @@ export const bulkAssign = async (req: Request, res: Response) => {
             }
 
             await transaction.commit();
-            console.log(`[EndSem] Assigned ${allNewAllocsES.length} seats across ${hallResultsES.length} halls`);
+            const modeLabel = subjectCount === 1 ? 'SINGLE_SUBJECT'
+                            : subjectCount === 2 ? 'STRIPED_2_SUBJECT'
+                            : 'MULTI_SUBJECT_BALANCED';
+            console.log(`[EndSem:RowEngine] Assigned ${allNewAllocsES.length} seats | Mode: ${modeLabel}`);
             return res.json({
-                success: true,
+                success:           true,
                 examType,
-                studentCount: totalEndSemStudents,
-                assignedCount: allNewAllocsES.length,
-                hallResults: hallResultsES,
-                subjects: subjectQueue,
-                rowSubjects: rowPrimarySubjectMap,
+                studentCount:      totalEndSemStudents,
+                assignedCount:     allNewAllocsES.length,
+                hallResults:       hallResultsES,
+                subjects:          sortedSubjectCodes,
+                rowSubjects:       rowPrimarySubjectMap,
                 roomCapacityLimit: capLimit,
+                distributionMode:  modeLabel,
             });
         }
         /* ══════════════════════════════════════════════════════

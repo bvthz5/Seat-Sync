@@ -106,13 +106,8 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
         const fetchRoomDetails = async () => {
             if (selectedRoomId) {
                 try {
-                    
-        const calculatedCapacity = config.rowLayout.reduce((acc, curr) => acc + (curr * config.seatsPerBench), 0);
-        if (capacityCount !== calculatedCapacity) {
-             toast.error("Capacity mismatch");
-             return;
-        }
-   setLoading(true);
+                    setLoading(true);
+
                     const data = await structureService.getRoomLayout(Number(selectedRoomId));
                     const room = data.room;
                     
@@ -617,53 +612,66 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                                     <div className="absolute inset-0 rounded-[2.5rem] bg-gradient-to-b from-indigo-500/5 via-transparent to-slate-900/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
 
                                                     {Array.from({ length: benches }).map((_, b) => {
-                                                        // Always 1 seat per bench position — seatIndex fixed at 1
-                                                        const seatIndex = 1;
-                                                        const seatId = `${colLetter}-${b + 1}-${seatIndex}`;
-                                                        const isActive = !disabledSeatIds.has(seatId);
-                                                        const zoneId = seatZoneMap.get(seatId);
+                                                        const benchNum = b + 1;
+                                                        const isDual = config.seatsPerBench === 2;
 
-                                                        // Label: a1, a2, a3 …
-                                                        const seatLabel = `${colLetterLower}${b + 1}`;
+                                                        const makeSeatCell = (seatIndex: number) => {
+                                                            const seatId = `${colLetter}-${benchNum}-${seatIndex}`;
+                                                            const isActive = !disabledSeatIds.has(seatId);
+                                                            const zoneId = seatZoneMap.get(seatId);
+                                                            const seatLabel = isDual
+                                                                ? `${colLetterLower}${benchNum}${seatIndex === 1 ? 'l' : 'r'}`
+                                                                : `${colLetterLower}${benchNum}`;
 
-                                                        // Seat cell classes
-                                                        let seatCls =
-                                                            "w-12 h-12 rounded-2xl border-2 flex items-center justify-center cursor-pointer " +
-                                                            "transition-all duration-200 text-[11px] font-bold shadow-md select-none ";
+                                                            let seatCls = isDual
+                                                                ? "w-10 h-10 rounded-xl border-2 flex items-center justify-center cursor-pointer transition-all duration-200 text-[10px] font-bold shadow-md select-none "
+                                                                : "w-12 h-12 rounded-2xl border-2 flex items-center justify-center cursor-pointer transition-all duration-200 text-[11px] font-bold shadow-md select-none ";
 
-                                                        if (!isActive) {
-                                                            seatCls += "bg-slate-900/40 border-white/5 text-slate-700 opacity-30";
-                                                            if (viewMode === 'DISABLE') seatCls += " hover:border-red-500/60 hover:opacity-60";
-                                                        } else if (viewMode === 'DISABLE') {
-                                                            seatCls += "bg-indigo-900/70 border-indigo-500 text-white shadow-[0_0_18px_rgba(99,102,241,0.4)] hover:scale-105";
-                                                        } else if (viewMode === 'PHYSICAL' && zoneId) {
-                                                            const z = zones.find(zn => zn.ZoneID === zoneId);
-                                                            if (z) {
-                                                                switch (z.Color?.toLowerCase()) {
-                                                                    case 'red':    seatCls += "bg-red-500/20 border-red-500/50 text-red-300 hover:bg-red-500/30 hover:scale-105"; break;
-                                                                    case 'green':  seatCls += "bg-green-500/20 border-green-500/50 text-green-300 hover:bg-green-500/30 hover:scale-105"; break;
-                                                                    case 'yellow': seatCls += "bg-yellow-500/20 border-yellow-500/50 text-yellow-300 hover:bg-yellow-500/30 hover:scale-105"; break;
-                                                                    case 'purple': seatCls += "bg-purple-500/20 border-purple-500/50 text-purple-300 hover:bg-purple-500/30 hover:scale-105"; break;
-                                                                    default:       seatCls += "bg-indigo-500/20 border-indigo-500/50 text-indigo-300 hover:bg-indigo-500/30 hover:scale-105"; break;
+                                                            if (!isActive) {
+                                                                seatCls += "bg-slate-900/40 border-white/5 text-slate-700 opacity-30";
+                                                                if (viewMode === 'DISABLE') seatCls += " hover:border-red-500/60 hover:opacity-60";
+                                                            } else if (viewMode === 'DISABLE') {
+                                                                seatCls += "bg-indigo-900/70 border-indigo-500 text-white shadow-[0_0_18px_rgba(99,102,241,0.4)] hover:scale-105";
+                                                            } else if (viewMode === 'PHYSICAL' && zoneId) {
+                                                                const z = zones.find(zn => zn.ZoneID === zoneId);
+                                                                if (z) {
+                                                                    switch (z.Color?.toLowerCase()) {
+                                                                        case 'red':    seatCls += "bg-red-500/20 border-red-500/50 text-red-300 hover:bg-red-500/30 hover:scale-105"; break;
+                                                                        case 'green':  seatCls += "bg-green-500/20 border-green-500/50 text-green-300 hover:bg-green-500/30 hover:scale-105"; break;
+                                                                        case 'yellow': seatCls += "bg-yellow-500/20 border-yellow-500/50 text-yellow-300 hover:bg-yellow-500/30 hover:scale-105"; break;
+                                                                        case 'purple': seatCls += "bg-purple-500/20 border-purple-500/50 text-purple-300 hover:bg-purple-500/30 hover:scale-105"; break;
+                                                                        default:       seatCls += "bg-indigo-500/20 border-indigo-500/50 text-indigo-300 hover:bg-indigo-500/30 hover:scale-105"; break;
+                                                                    }
+                                                                } else {
+                                                                    seatCls += "bg-slate-800 border-slate-700 text-slate-400";
                                                                 }
                                                             } else {
-                                                                seatCls += "bg-slate-800 border-slate-700 text-slate-400";
+                                                                seatCls += "bg-slate-900 border-white/10 text-indigo-300 hover:bg-indigo-600 hover:text-white hover:border-indigo-400 hover:scale-110 active:scale-95";
                                                             }
-                                                        } else {
-                                                            seatCls += "bg-slate-900 border-white/10 text-indigo-300 hover:bg-indigo-600 hover:text-white hover:border-indigo-400 hover:scale-110 active:scale-95";
-                                                        }
 
-                                                        return (
-                                                            <Tooltip key={seatId} content={`${seatId}${!isActive ? ' (Disabled)' : ''}`}>
-                                                                <div className={seatCls} onClick={() => toggleSeat(seatId)}>
-                                                                    {isActive
-                                                                        ? zoneId
-                                                                            ? <span className="opacity-90">{zones.find(zn => zn.ZoneID === zoneId)?.ZoneCode}</span>
-                                                                            : <span>{seatLabel}</span>
-                                                                        : <Ban size={14} />}
+                                                            return (
+                                                                <Tooltip key={seatId} content={`${seatId}${!isActive ? ' (Disabled)' : ''}`}>
+                                                                    <div className={seatCls} onClick={() => toggleSeat(seatId)}>
+                                                                        {isActive
+                                                                            ? zoneId
+                                                                                ? <span className="opacity-90">{zones.find(zn => zn.ZoneID === zoneId)?.ZoneCode}</span>
+                                                                                : <span>{seatLabel}</span>
+                                                                            : <Ban size={12} />}
+                                                                    </div>
+                                                                </Tooltip>
+                                                            );
+                                                        };
+
+                                                        if (isDual) {
+                                                            return (
+                                                                <div key={benchNum} className="flex gap-1 items-center">
+                                                                    {makeSeatCell(1)}
+                                                                    <div className="w-px h-5 bg-white/10 rounded-full shrink-0" />
+                                                                    {makeSeatCell(2)}
                                                                 </div>
-                                                            </Tooltip>
-                                                        );
+                                                            );
+                                                        }
+                                                        return <React.Fragment key={benchNum}>{makeSeatCell(1)}</React.Fragment>;
                                                     })}
                                                 </div>
                                             </div>

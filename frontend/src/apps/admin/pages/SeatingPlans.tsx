@@ -66,27 +66,19 @@ const getDeptStyle = (code: string) => {
     return DARK_DEPT_COLORS[keys[hash % keys.length]] || { bg: 'rgba(148, 163, 184, 0.05)', text: '#94a3b8', border: 'rgba(148, 163, 184, 0.3)' };
 };
 
-/* ─── Subject Color Palette (hue wheel, 12 distinct hues) ── */
+/* ─── Subject Color Palette — 2 distinct light colors (blue + purple) ── */
 const SUBJECT_HUE_PALETTE = [
-    { h: 220, text: '#60a5fa', glow: 'rgba(96,165,250,0.35)' },   // blue
-    { h: 280, text: '#c084fc', glow: 'rgba(192,132,252,0.35)' },  // violet
-    { h: 160, text: '#34d399', glow: 'rgba(52,211,153,0.35)' },   // emerald
-    { h: 30, text: '#fb923c', glow: 'rgba(251,146,60,0.35)' },   // orange
-    { h: 340, text: '#f472b6', glow: 'rgba(244,114,182,0.35)' },  // pink
-    { h: 200, text: '#22d3ee', glow: 'rgba(34,211,238,0.35)' },   // cyan
-    { h: 50, text: '#fbbf24', glow: 'rgba(251,191,36,0.35)' },   // amber
-    { h: 120, text: '#4ade80', glow: 'rgba(74,222,128,0.35)' },   // green
-    { h: 260, text: '#818cf8', glow: 'rgba(129,140,248,0.35)' },  // indigo
-    { h: 0, text: '#f87171', glow: 'rgba(248,113,113,0.35)' },  // red (non-error)
-    { h: 310, text: '#e879f9', glow: 'rgba(232,121,249,0.35)' },  // fuchsia
-    { h: 170, text: '#2dd4bf', glow: 'rgba(45,212,191,0.35)' },   // teal
+    { h: 205, text: '#7dd3fc', glow: 'rgba(125,211,252,0.30)' },  // sky-blue  (subject A)
+    { h: 268, text: '#c4b5fd', glow: 'rgba(196,181,253,0.30)' },  // soft-violet (subject B)
 ];
 const subjectColorCache = new Map<string, typeof SUBJECT_HUE_PALETTE[0]>();
+/* Sequential assignment: first new code → blue, second → violet, etc.
+   Guarantees NO two different codes ever share the same color. */
 const getSubjectStyle = (code: string): typeof SUBJECT_HUE_PALETTE[0] => {
     if (!code) return SUBJECT_HUE_PALETTE[0]!;
     if (subjectColorCache.has(code)) return subjectColorCache.get(code)!;
-    const hash = [...code].reduce((a, c) => a * 31 + c.charCodeAt(0), 0);
-    const style = SUBJECT_HUE_PALETTE[Math.abs(hash) % SUBJECT_HUE_PALETTE.length]!;
+    const nextIdx = subjectColorCache.size % SUBJECT_HUE_PALETTE.length;
+    const style = SUBJECT_HUE_PALETTE[nextIdx]!;
     subjectColorCache.set(code, style);
     return style;
 };
@@ -130,7 +122,7 @@ const SeatingPlans: React.FC = () => {
     const [secondaryDept, setSecondaryDept] = useState<string>('');
     const [avoidSameDeptBench, setAvoidSameDeptBench] = useState(true);
     const [shuffleRooms, setShuffleRooms] = useState(false);
-    const [roomCapacityLimit, setRoomCapacityLimit] = useState<number>(40);
+    const [roomCapacityLimit, setRoomCapacityLimit] = useState<string>('');
     const [selectedHallIds, setSelectedHallIds] = useState<Set<number>>(new Set());
     const [hallSearch, setHallSearch] = useState('');
     const [hallFilter, setHallFilter] = useState<'all' | 'empty' | 'partial' | 'full'>('all');
@@ -191,7 +183,7 @@ const SeatingPlans: React.FC = () => {
                 benches: (rows[rowLabel] || []).sort((a, b) => a.benchNumber - b.benchNumber),
             }));
     }, [detailBenches]);
-    
+
     // We strictly use the independently counted total across all queries
     const eligibleStudentCount = totalEligibleStudents;
 
@@ -292,7 +284,7 @@ const SeatingPlans: React.FC = () => {
                         const res = await ExamService.getEligibleStudents(exam.ExamID);
                         studentCount = res?.students && Array.isArray(res.students) ? res.students.length : (Array.isArray(res) ? res.length : 0);
                     } catch { studentCount = 0; }
-                    
+
                     totalExamStudents += studentCount;
 
                     const dept = exam?.Subject?.Department;
@@ -435,7 +427,7 @@ const SeatingPlans: React.FC = () => {
                 secondaryDeptId: secondaryDept ? Number(secondaryDept) : null,
                 avoidSameDeptBench,
                 shuffleRooms,
-                roomCapacityLimit,
+                roomCapacityLimit: roomCapacityLimit !== '' ? Number(roomCapacityLimit) : undefined,
                 seriesId: selectedSeries ? Number(selectedSeries) : undefined,
             });
             // Support both Internal (totalLeft/RightAssigned) and EndSem (assignedCount) response shapes
@@ -479,18 +471,18 @@ const SeatingPlans: React.FC = () => {
     /* auto assign series */
     const openSeriesModal = () => {
         if (!selectedSeries) return;
-        
+
         if (examDates.length === 0) {
             toast.error("No valid exams found in this series.");
             return;
         }
-        
+
         const tasks: SeriesTask[] = examDates.map(d => ({
             date: String(d.examDate).split('T')[0],
             session: d.session as 'FN' | 'AN',
             status: 'pending'
         }));
-        
+
         setSeriesTasks(tasks);
         setShowSeriesModal(true);
     };
@@ -498,31 +490,31 @@ const SeatingPlans: React.FC = () => {
     const runSeriesAllocation = async () => {
         setSeriesRunning(true);
         let ids = selectedHallIds.size > 0 ? [...selectedHallIds] : halls.map(h => h.RoomID);
-        
+
         const tasks = [...seriesTasks];
         let hasError = false;
-        
+
         for (let i = 0; i < tasks.length; i++) {
             const task = tasks[i];
             if (task.status === 'success') continue;
-            
+
             task.status = 'running';
             setSeriesTasks([...tasks]);
-            
+
             try {
                 const r = await SeatingService.bulkAssign({
-                    examDate: task.date, 
-                    session: task.session, 
+                    examDate: task.date,
+                    session: task.session,
                     hallIds: ids,
                     mode: assignmentMode,
                     primaryDeptId: primaryDept ? Number(primaryDept) : null,
                     secondaryDeptId: secondaryDept ? Number(secondaryDept) : null,
                     avoidSameDeptBench,
                     shuffleRooms,
-                    roomCapacityLimit,
+                    roomCapacityLimit: roomCapacityLimit !== '' ? Number(roomCapacityLimit) : undefined,
                     seriesId: selectedSeries ? Number(selectedSeries) : undefined,
                 });
-                
+
                 let assigned = 0;
                 const examType: string = r.examType || 'Internal';
                 if (examType === 'EndSemester') {
@@ -530,7 +522,7 @@ const SeatingPlans: React.FC = () => {
                 } else {
                     assigned = Number(r.totalLeftAssigned || 0) + Number(r.totalRightAssigned || 0);
                 }
-                
+
                 task.status = 'success';
                 task.assigned = assigned;
             } catch (err: any) {
@@ -543,7 +535,7 @@ const SeatingPlans: React.FC = () => {
         setSeriesRunning(false);
         if (hasError) toast.error("Completed with some errors");
         else toast.success("Successfully assigned entire series");
-        
+
         if (selectedDate && selectedSession) {
             loadSummary();
         }
@@ -772,11 +764,11 @@ const SeatingPlans: React.FC = () => {
             if (!selectedDate) return;
             let assignments: Record<number, Assignment> = {};
             try { const alloc = await SeatingService.getAllocationForHall(selectedDate, selectedSession, hall.hallId); assignments = alloc?.assignments ?? {}; } catch { }
-            
+
             const subjMap: Record<string, { code: string, name: string, regs: string[] }> = {};
             Object.values(assignments).forEach(a => {
                 if (a.subjectName) globalSubjects.add(a.subjectName);
-                
+
                 const subCode = a.subjectCode || "Unknown";
                 if (!subjMap[subCode]) subjMap[subCode] = { code: subCode, name: a.subjectName || "", regs: [] };
                 subjMap[subCode].regs.push(a.registerNumber);
@@ -784,15 +776,15 @@ const SeatingPlans: React.FC = () => {
             (hall as any).__subjMap = subjMap;
             (hall as any).__total = Object.keys(assignments).length;
         }));
-        
+
         const allocatedOnly = active.filter(hall => (((hall as any).__total ?? 0) > 0));
         let slNo = 1;
-        
+
         allocatedOnly.forEach(hall => {
             const subjMap: Record<string, { code: string, name: string, regs: string[] }> = (hall as any).__subjMap ?? {};
             const total: number = (hall as any).__total ?? 0;
             const subjs = Object.values(subjMap).sort((a, b) => a.code.localeCompare(b.code));
-            
+
             subjs.forEach((sub, idx) => {
                 const ranges = buildRegRanges(sub.regs);
                 rows.push({
@@ -807,7 +799,7 @@ const SeatingPlans: React.FC = () => {
             });
             slNo++;
         });
-        
+
         const examNameString = Array.from(globalSubjects).join(' / ') || 'Examinations';
         return { rows, examNameString };
     };
@@ -821,26 +813,26 @@ const SeatingPlans: React.FC = () => {
             const sessionLabel = selectedSession === 'FN' ? 'Forenoon' : 'Afternoon';
 
             // ── Define reusable styles ──
-            const headerFill   = { patternType: 'solid', fgColor: { rgb: '0F172A' } };
-            const headerFont   = { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 };
-            const whiteFill    = { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } };
-            const blueFill     = { patternType: 'solid', fgColor: { rgb: 'ECF6FF' } };
-            const bodyFont     = { sz: 9, color: { rgb: '1E293B' } };
-            const boldFont     = { sz: 9, bold: true, color: { rgb: '1E293B' } };
-            const thinBorder   = { style: 'thin', color: { rgb: 'B4C3D7' } };
-            const thickBorder  = { style: 'medium', color: { rgb: '0F172A' } };
-            const allThin      = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder };
+            const headerFill = { patternType: 'solid', fgColor: { rgb: '0F172A' } };
+            const headerFont = { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 };
+            const whiteFill = { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } };
+            const blueFill = { patternType: 'solid', fgColor: { rgb: 'ECF6FF' } };
+            const bodyFont = { sz: 9, color: { rgb: '1E293B' } };
+            const boldFont = { sz: 9, bold: true, color: { rgb: '1E293B' } };
+            const thinBorder = { style: 'thin', color: { rgb: 'B4C3D7' } };
+            const thickBorder = { style: 'medium', color: { rgb: '0F172A' } };
+            const allThin = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder };
             const mkBorder = (isFirst: boolean, isLast: boolean) => ({
-                top:    isFirst ? thickBorder : thinBorder,
-                bottom: isLast  ? thickBorder : thinBorder,
-                left:   thinBorder,
-                right:  thinBorder,
+                top: isFirst ? thickBorder : thinBorder,
+                bottom: isLast ? thickBorder : thinBorder,
+                left: thinBorder,
+                right: thinBorder,
             });
 
             // ── Build first/last row index sets and group map ──
-            const firstRowSet  = new Set<number>();
-            const lastRowSet   = new Set<number>();
-            const groupMap     = new Map<number, number>();
+            const firstRowSet = new Set<number>();
+            const lastRowSet = new Set<number>();
+            const groupMap = new Map<number, number>();
             let rIdx = 0; let grp = -1;
             rows.forEach(r => {
                 if (r.isFirstRow) { firstRowSet.add(rIdx); if (rIdx > 0) lastRowSet.add(rIdx - 1); grp++; }
@@ -854,7 +846,7 @@ const SeatingPlans: React.FC = () => {
 
             // Title rows (plain)
             const titleStyle = { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center' } };
-            const subStyle   = { font: { sz: 9 }, alignment: { horizontal: 'center' } };
+            const subStyle = { font: { sz: 9 }, alignment: { horizontal: 'center' } };
             DATA.push([{ v: "ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI", s: titleStyle }, '', '', '', '']);
             DATA.push([{ v: 'CONSOLIDATED SEATING ARRANGEMENT', s: { font: { bold: true, sz: 11 }, alignment: { horizontal: 'center' } } }, '', '', '', '']);
             let truncExam = examNameString; if (truncExam.length > 80) truncExam = truncExam.substring(0, 77) + '...';
@@ -870,14 +862,14 @@ const SeatingPlans: React.FC = () => {
             rows.forEach((r, i) => {
                 const fill = (groupMap.get(i) ?? 0) % 2 === 0 ? whiteFill : blueFill;
                 const isFirst = firstRowSet.has(i);
-                const isLast  = lastRowSet.has(i);
-                const border  = mkBorder(isFirst, isLast);
-                const base    = { fill, border };
+                const isLast = lastRowSet.has(i);
+                const border = mkBorder(isFirst, isLast);
+                const base = { fill, border };
                 DATA.push([
-                    { v: r.isFirstRow ? r.slNo   : '', s: { ...base, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
-                    { v: r.isFirstRow ? r.hallCode: '', s: { ...base, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
-                    { v: r.regRanges,  s: { ...base, font: bodyFont, alignment: { horizontal: 'left',   vertical: 'center', wrapText: true } } },
-                    { v: r.count,      s: { ...base, font: bodyFont, alignment: { horizontal: 'center', vertical: 'center' } } },
+                    { v: r.isFirstRow ? r.slNo : '', s: { ...base, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
+                    { v: r.isFirstRow ? r.hallCode : '', s: { ...base, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
+                    { v: r.regRanges, s: { ...base, font: bodyFont, alignment: { horizontal: 'left', vertical: 'center', wrapText: true } } },
+                    { v: r.count, s: { ...base, font: bodyFont, alignment: { horizontal: 'center', vertical: 'center' } } },
                     { v: r.isFirstRow ? r.total : '', s: { ...base, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
                 ]);
             });
@@ -920,15 +912,15 @@ const SeatingPlans: React.FC = () => {
             doc.text('Examination Control Division', pageW / 2, 16, { align: 'center' });
             doc.setFillColor(99, 102, 241);
             doc.rect(14, 20, pageW - 28, 0.4, 'F');
-            
+
             doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
             doc.text('CONSOLIDATED SEATING ARRANGEMENT', pageW / 2, 26, { align: 'center' });
-            
+
             let truncatedExamName = examNameString;
             if (truncatedExamName.length > 90) truncatedExamName = truncatedExamName.substring(0, 87) + '...';
             doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(200, 200, 200);
             doc.text(truncatedExamName, pageW / 2, 32, { align: 'center' });
-            
+
             doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(148, 163, 184);
             doc.text(`${fmtDate(selectedDate)}  \u00b7  ${sessionLabel}`, pageW / 2, 38, { align: 'center' });
 
@@ -1097,7 +1089,7 @@ const SeatingPlans: React.FC = () => {
                     const rSeat = b.seats.find(s => s.SeatNumber === 2);
                     const hasLeft = lSeat && assignments[lSeat.SeatID];
                     const hasRight = rSeat && assignments[rSeat.SeatID];
-                    
+
                     if (hasLeft || hasRight) {
                         activeCols.add(b.rowLabel);
                         activeRows.add(b.benchNumber);
@@ -1106,7 +1098,7 @@ const SeatingPlans: React.FC = () => {
 
                 // Filtered column labels (e.g. A, B, C)
                 const rowLabels = Array.from(activeCols).sort();
-                
+
                 // Filtered bench numbers (e.g. 1, 3, 5)
                 const benchNumbers = Array.from(activeRows).sort((a, b) => a - b);
 
@@ -1120,16 +1112,16 @@ const SeatingPlans: React.FC = () => {
 
                 doc.setFillColor(255, 255, 255);
                 doc.rect(0, 0, pageW, pageH, 'F');
-                
+
                 // Collect statistics
                 const subjectCounts = new Map<string, number>();
                 const deptCounts = new Map<string, number>();
                 const roomSubjectNames = new Set<string>();
-                
+
                 Object.values(assignments).forEach(ass => {
                     if (ass.subjectCode) subjectCounts.set(ass.subjectCode, (subjectCounts.get(ass.subjectCode) || 0) + 1);
                     if (ass.subjectName) roomSubjectNames.add(ass.subjectName);
-                    
+
                     // If DB deptCode is empty, try to extract from Register Number (e.g., SJC24EE001 -> EE)
                     let dept = ass.deptCode;
                     if (!dept && ass.registerNumber) {
@@ -1153,22 +1145,22 @@ const SeatingPlans: React.FC = () => {
                 doc.setFontSize(13);
                 doc.setTextColor(0, 0, 0);
                 doc.text("ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI (Autonomous)", pageW / 2, 12, { align: 'center' });
-                
+
                 doc.setFont('helvetica', 'normal');
                 doc.setFontSize(10);
                 doc.text(roomSubjectTitle, pageW / 2, 17, { align: 'center' });
-                
+
                 doc.setFontSize(11);
                 doc.setFont('helvetica', 'bold');
                 doc.text(`SEATING ARRANGEMENT - ${selectedDate} (${selectedSession})`, pageW / 2, 22, { align: 'center' });
-                
+
                 doc.setFontSize(12);
                 doc.text(`Room: ${hall.hallCode}`, pageW / 2, 28, { align: 'center' });
 
                 // --- SECTION 1: AUTO-SCALING ENGINE ---
                 const cols = Math.max(rowLabels.length, 1);
                 const rowsNeeded = Math.max(benchNumbers.length, 1);
-                
+
                 // Base values (SMALL HALL: Rows <= 6)
                 let gapX = 3;
                 let gapY = 3.0;
@@ -1177,7 +1169,7 @@ const SeatingPlans: React.FC = () => {
                 let nameFont = 7.5;
                 let benchLabelFont = 7.5; // VERY SMALL
                 let emptyFont = 7.5;
-                
+
                 let tableScaleW = 1.0;
                 let tableFontSize = 8.5;
                 let tablePadding = 1.5;
@@ -1185,24 +1177,24 @@ const SeatingPlans: React.FC = () => {
                 // Scaling Levels
                 if (rowsNeeded > 10) {
                     // LARGE HALL: Reduce bench height (-20%), font (-2px), padding (-30%)
-                    maxCardH = 14.4; 
-                    regFont = 7.5;   
-                    nameFont = 5.5;  
+                    maxCardH = 14.4;
+                    regFont = 7.5;
+                    nameFont = 5.5;
                     benchLabelFont = 6;
                     emptyFont = 6;
                     gapY = 1.5;
-                    tableScaleW = 0.75; 
+                    tableScaleW = 0.75;
                     tableFontSize = 7.0;
                     tablePadding = 1.0;
                 } else if (rowsNeeded >= 7) {
                     // MEDIUM HALL: Reduce bench height (-10%), font (-1px)
-                    maxCardH = 16.2; 
-                    regFont = 8.5;   
-                    nameFont = 6.5;  
+                    maxCardH = 16.2;
+                    regFont = 8.5;
+                    nameFont = 6.5;
                     benchLabelFont = 7;
                     emptyFont = 6.5;
                     gapY = 2.0;
-                    tableScaleW = 0.85; 
+                    tableScaleW = 0.85;
                     tableFontSize = 7.5;
                     tablePadding = 1.2;
                 }
@@ -1210,34 +1202,34 @@ const SeatingPlans: React.FC = () => {
                 // Grid position
                 const startY = 44; // Increased to ensure safe clearance below the room header
                 const bottomMargin = 8;
-                
+
                 // Dynamic height calculations to fit on one page
                 const summaryRows = Math.max(deptCounts.size, subjectCounts.size, 1);
                 const summaryRowHeight = tablePadding * 2 + tableFontSize * 0.35;
                 const summaryHeight = 10 + (summaryRows * summaryRowHeight) + 10;
-                
+
                 const gridTableGap = 12; // 12mm clear gap below grid
                 const availableH = pageH - startY - summaryHeight - bottomMargin - gridTableGap;
-                
+
                 // SECTION 6: GRID HEIGHT CONTROL (max 65% of page)
                 const maxGridH = pageH * 0.65;
                 const allowedH = Math.min(availableH, maxGridH);
-                
+
                 // SECTION 7: COLUMN WIDTH BALANCING
-                const maxCardW = 48; 
-                let cardW = (pageW - 16 - (cols - 1) * gapX) / cols; 
+                const maxCardW = 48;
+                let cardW = (pageW - 16 - (cols - 1) * gapX) / cols;
                 if (cardW > maxCardW) cardW = maxCardW;
-                
+
                 const gridTotalW = (cols * cardW) + ((cols - 1) * gapX);
                 const marginX = (pageW - gridTotalW) / 2; // Center horizontally
-                
+
                 const rawCardH = (allowedH - (rowsNeeded - 1) * gapY) / rowsNeeded;
                 const cardH = Math.min(rawCardH, maxCardH);
 
                 // Draw Column Headers
                 rowLabels.forEach((rowLabel, colIdx) => {
                     const x = marginX + colIdx * (cardW + gapX);
-                    
+
                     // Column Header (e.g. A)
                     doc.setFontSize(14);
                     doc.setFont('helvetica', 'bold');
@@ -1270,7 +1262,7 @@ const SeatingPlans: React.FC = () => {
                     benchNumbers.forEach((bNumber, benchIdx) => {
                         // Find the bench for this exact cell
                         const bench = benches.find(b => b.rowLabel === rowLabel && b.benchNumber === bNumber);
-                        
+
                         const leftSeat = bench ? bench.seats.find(s => s.SeatNumber === 1) : null;
                         const rightSeat = bench ? bench.seats.find(s => s.SeatNumber === 2) : null;
                         const leftAss = leftSeat ? assignments[leftSeat.SeatID] : null;
@@ -1303,11 +1295,11 @@ const SeatingPlans: React.FC = () => {
                         const printSeat = (ass: Assignment | null, offsetX: number) => {
                             const cx = x + offsetX;
                             const halfW = cardW / 2;
-                            
+
                             if (!ass) {
                                 // EMPTY SEAT (small placeholder)
                                 doc.setFillColor(245, 245, 245);
-                                doc.rect(cx - halfW/2 + 0.5, y + 4, halfW - 1, cardH - 4.5, 'F');
+                                doc.rect(cx - halfW / 2 + 0.5, y + 4, halfW - 1, cardH - 4.5, 'F');
                                 doc.setFont('helvetica', 'bold');
                                 doc.setFontSize(emptyFont);
                                 doc.setTextColor(170, 170, 170);
@@ -1318,36 +1310,36 @@ const SeatingPlans: React.FC = () => {
                             if (!ass.isEligible || ass.isBlocked) {
                                 // NOT ELIGIBLE
                                 doc.setFillColor(255, 235, 235);
-                                doc.rect(cx - halfW/2 + 0.5, y + 4, halfW - 1, cardH - 4.5, 'F');
-                                
+                                doc.rect(cx - halfW / 2 + 0.5, y + 4, halfW - 1, cardH - 4.5, 'F');
+
                                 doc.setFont('helvetica', 'bold');
                                 doc.setFontSize(emptyFont - 0.5);
                                 doc.setTextColor(200, 50, 50);
                                 doc.text("NOT ELIGIBLE", cx, y + (cardH / 2) - 0.5, { align: 'center' });
-                                
+
                                 doc.setFontSize(regFont - 1.5);
                                 doc.setTextColor(0, 0, 0);
                                 doc.text(ass.registerNumber || '', cx, y + (cardH / 2) + 3.5, { align: 'center' });
                                 return;
                             }
-                            
+
                             // SECTION 2: BENCH CARD TEXT FIX (strict layout & spacing)
                             doc.setFont('helvetica', 'bold');
-                            doc.setFontSize(regFont); 
+                            doc.setFontSize(regFont);
                             doc.setTextColor(0, 0, 0);
-                            
+
                             // Center horizontally, move slightly up from exact center
-                            const textY = y + (cardH / 2) - 0.2; 
+                            const textY = y + (cardH / 2) - 0.2;
                             doc.text(ass.registerNumber || '', cx, textY, { align: 'center' });
 
                             doc.setFont('helvetica', 'normal');
-                            doc.setFontSize(nameFont); 
+                            doc.setFontSize(nameFont);
                             doc.setTextColor(60, 60, 60);
-                            
+
                             // Add gap below the register number
                             const nameOffset = rowsNeeded > 10 ? 2.5 : (rowsNeeded >= 7 ? 2.8 : 3.2);
-                            const nameY = textY + nameOffset; 
-                            
+                            const nameY = textY + nameOffset;
+
                             let truncName = ass.studentName || '';
                             if (doc.getTextWidth(truncName) > halfW - 2) {
                                 truncName = truncName.substring(0, 14) + "...";
@@ -1361,16 +1353,16 @@ const SeatingPlans: React.FC = () => {
                 });
 
                 // SECTION 7: GRID vs TABLE SEPARATION
-                let currentY = startY + rowsNeeded * (cardH + gapY) + gridTableGap; 
-                
+                let currentY = startY + rowsNeeded * (cardH + gapY) + gridTableGap;
+
                 // SECTION 3/4/8: SUMMARY TABLE SIZE REDUCTION & POSITIONING
                 // Reduced table width to ~60-70% of previous default
-                const baseTableW = 75; 
+                const baseTableW = 75;
                 const tableW = baseTableW * tableScaleW;
                 const tableGap = 15; // 15mm gap between tables
                 const totalTablesW = (tableW * 2) + tableGap;
                 const tableStartX = (pageW - totalTablesW) / 2;
-                
+
                 const autoTable = (await import('jspdf-autotable')).default;
 
                 // Left Table (Departments)
@@ -1423,7 +1415,7 @@ const SeatingPlans: React.FC = () => {
             link.click();
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
-            
+
             toast.success('Room Wise Seating downloaded as ZIP');
         } catch (err: any) {
             console.error('downloadSeatingPDF error:', err);
@@ -1569,8 +1561,8 @@ const SeatingPlans: React.FC = () => {
                                         {(['FN', 'AN'] as const).map(s => (
                                             <button key={s} onClick={() => { setSelectedSession(s); setSelectedDate(''); }}
                                                 className={`flex items-center justify-center gap-2 py-2 rounded-xl text-[13px] font-bold transition-all border-2 ${selectedSession === s
-                                                        ? s === 'FN' ? 'bg-indigo-50 text-indigo-700 border-indigo-300' : 'bg-orange-50 text-orange-700 border-orange-300'
-                                                        : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+                                                    ? s === 'FN' ? 'bg-indigo-50 text-indigo-700 border-indigo-300' : 'bg-orange-50 text-orange-700 border-orange-300'
+                                                    : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
                                                     }`}>
                                                 {s === 'FN' ? <Sun size={14} className={selectedSession === s ? 'text-indigo-600' : 'text-slate-400'} /> : <Moon size={14} className={selectedSession === s ? 'text-orange-600' : 'text-slate-400'} />}
                                                 {s === 'FN' ? 'Forenoon' : 'Afternoon'}
@@ -1618,7 +1610,7 @@ const SeatingPlans: React.FC = () => {
                                             {lastExamType === 'EndSemester' ? 'Subject-Based Auto Alignment' : 'Auto Balanced Allocation'}
                                         </span>
                                         <span className="text-[10px] text-slate-500 font-medium leading-relaxed">
-                                            {lastExamType === 'EndSemester' 
+                                            {lastExamType === 'EndSemester'
                                                 ? 'Strict contiguous subject assignments natively applied to avoid bench conflicts.'
                                                 : 'Intelligent multi-department distribution matching capacity perfectly.'}
                                         </span>
@@ -1641,15 +1633,33 @@ const SeatingPlans: React.FC = () => {
                                         ))}
                                         {/* End Sem: per-room seat cap */}
                                         <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 border border-slate-200">
-                                            <span className="text-[11px] text-slate-600 font-medium">Room cap <span className="text-slate-400 text-[9px]">(End Sem)</span></span>
-                                            <input
-                                                id="room-capacity-limit-wizard"
-                                                name="roomCapacityLimitWizard"
-                                                type="number" min={1} max={200}
-                                                value={roomCapacityLimit}
-                                                onChange={e => setRoomCapacityLimit(Math.max(1, Number(e.target.value) || 40))}
-                                                className="w-14 h-6 text-center text-[11px] font-bold text-slate-700 border border-slate-300 rounded-md bg-white focus:outline-none focus:border-indigo-400"
-                                            />
+                                            <div className="flex flex-col">
+                                                <span className="text-[11px] text-slate-600 font-medium leading-tight">Room cap</span>
+                                                <span className="text-[9px] text-slate-400 leading-tight">seats per hall (End Sem)</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setRoomCapacityLimit(v => String(Math.max(1, (Number(v) || 0) - 1)))}
+                                                    className="w-6 h-6 rounded-md bg-white border border-slate-300 text-slate-500 hover:bg-slate-100 hover:border-slate-400 flex items-center justify-center text-sm font-bold transition-colors"
+                                                    aria-label="Decrease room cap"
+                                                >−</button>
+                                                <input
+                                                    id="room-capacity-limit-wizard"
+                                                    name="roomCapacityLimitWizard"
+                                                    type="number" min={1} max={200}
+                                                    value={roomCapacityLimit}
+                                                    placeholder="40"
+                                                    onChange={e => setRoomCapacityLimit(e.target.value)}
+                                                    className="w-12 h-6 text-center text-[12px] font-bold text-indigo-700 border border-indigo-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400/50 focus:border-indigo-500 placeholder:text-slate-400 placeholder:font-normal [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setRoomCapacityLimit(v => String(Math.min(200, (Number(v) || 0) + 1)))}
+                                                    className="w-6 h-6 rounded-md bg-white border border-slate-300 text-slate-500 hover:bg-slate-100 hover:border-slate-400 flex items-center justify-center text-sm font-bold transition-colors"
+                                                    aria-label="Increase room cap"
+                                                >+</button>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -1699,9 +1709,9 @@ const SeatingPlans: React.FC = () => {
                                                 return (
                                                     <button key={h.hallId} onClick={() => toggleHall(h.hallId)}
                                                         className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all border ${isSelected ? 'bg-indigo-500 text-white border-indigo-500 shadow-sm'
-                                                                : pct >= 100 ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'
-                                                                    : pct > 0 ? 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100'
-                                                                        : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+                                                            : pct >= 100 ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'
+                                                                : pct > 0 ? 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100'
+                                                                    : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
                                                             }`}>
                                                         {h.hallCode}
                                                         {pct > 0 && !isSelected && <span className="text-[8px] font-mono opacity-75 bg-white/40 px-1 rounded">{pct}%</span>}
@@ -1725,9 +1735,9 @@ const SeatingPlans: React.FC = () => {
                                             <span className="text-[11px] font-bold text-slate-700 uppercase tracking-widest">Preview</span>
                                         </div>
                                         <div className={`px-3 py-2.5 rounded-xl border text-[11px] font-medium ${!hasPreviewInputs ? 'bg-slate-50 border-slate-200 text-slate-500'
-                                                : projectedUnassigned === 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                                                    : selectedSeatCount === 0 ? 'bg-slate-50 border-slate-200 text-slate-500'
-                                                        : 'bg-amber-50 border-amber-200 text-amber-700'
+                                            : projectedUnassigned === 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                                : selectedSeatCount === 0 ? 'bg-slate-50 border-slate-200 text-slate-500'
+                                                    : 'bg-amber-50 border-amber-200 text-amber-700'
                                             }`}>
                                             <div className="flex items-center justify-between">
                                                 <span>Students</span><strong>{eligibleStudentCount}</strong>
@@ -1759,16 +1769,15 @@ const SeatingPlans: React.FC = () => {
                                             startContent={!assigning ? <Zap size={16} fill="currentColor" /> : undefined} size="lg">
                                             {assigning ? 'Generating…' : 'Generate Seating'}
                                         </Button>
-                                        
+
                                         <Tooltip content={!selectedSeries ? "Select an Exam Series in Step 1 first" : "Assign seating for all valid sessions in the selected series"} placement="bottom" showArrow classNames={{ content: "font-semibold text-[11px]" }}>
                                             <div className="w-full">
-                                                <Button onPress={openSeriesModal} 
+                                                <Button onPress={openSeriesModal}
                                                     isDisabled={!selectedSeries}
-                                                    className={`w-full font-bold text-white rounded-xl h-11 border transition-all ${
-                                                        !selectedSeries 
-                                                        ? 'bg-slate-300 border-slate-300 opacity-60 cursor-not-allowed' 
-                                                        : 'bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 border-fuchsia-500/50 shadow-[0_0_20px_rgba(217,70,239,0.2)]'
-                                                    }`}
+                                                    className={`w-full font-bold text-white rounded-xl h-11 border transition-all ${!selectedSeries
+                                                            ? 'bg-slate-300 border-slate-300 opacity-60 cursor-not-allowed'
+                                                            : 'bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 border-fuchsia-500/50 shadow-[0_0_20px_rgba(217,70,239,0.2)]'
+                                                        }`}
                                                     startContent={<Rocket size={16} fill="currentColor" />}>
                                                     Auto-Assign Full Series
                                                 </Button>
@@ -1782,8 +1791,8 @@ const SeatingPlans: React.FC = () => {
                                             <div className="flex items-center justify-between">
                                                 <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Last run</p>
                                                 <span className={`text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-full border ${lastExamType === 'EndSemester'
-                                                        ? 'bg-violet-50 text-violet-700 border-violet-200'
-                                                        : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                                    ? 'bg-violet-50 text-violet-700 border-violet-200'
+                                                    : 'bg-indigo-50 text-indigo-700 border-indigo-200'
                                                     }`}>{lastExamType === 'EndSemester' ? 'End Semester' : 'Internal'}</span>
                                             </div>
                                             <p className="text-[11px] text-slate-600">
@@ -1793,7 +1802,21 @@ const SeatingPlans: React.FC = () => {
                                                 <div className="flex flex-wrap gap-1 pt-0.5">
                                                     {lastSubjects.map(s => {
                                                         const ss = getSubjectStyle(s);
-                                                        return <span key={s} className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: `${ss.glow}`, color: ss.text, border: `1px solid ${ss.text}40` }}>{s}</span>;
+                                                        return (
+                                                            <span
+                                                                key={s}
+                                                                className="inline-flex items-center gap-1.5 text-[9px] font-extrabold px-2 py-1 rounded-lg"
+                                                                style={{
+                                                                    background: `linear-gradient(135deg, ${ss.text}20 0%, ${ss.text}0a 100%)`,
+                                                                    color: ss.text,
+                                                                    border: `1.5px solid ${ss.text}60`,
+                                                                    boxShadow: `0 0 6px ${ss.text}20`,
+                                                                }}
+                                                            >
+                                                                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: ss.text, boxShadow: `0 0 4px ${ss.text}` }} />
+                                                                {s}
+                                                            </span>
+                                                        );
                                                     })}
                                                 </div>
                                             )}
@@ -2107,21 +2130,21 @@ const SeatingPlans: React.FC = () => {
                                     <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full shadow-[0_0_8px_#ef4444] bg-red-500"></span><span className="text-slate-300">Not Eligible</span></div>
                                 </div>
                                 <div className="flex items-center gap-2 bg-[#101520]/60 px-3 py-1.5 rounded-xl border border-slate-700/50 shadow-inner">
-                                    <Switch size="sm" isSelected={hideIneligible} onValueChange={setHideIneligible} 
-                                            classNames={{ wrapper: "group-data-[selected=true]:bg-indigo-500" }} />
+                                    <Switch size="sm" isSelected={hideIneligible} onValueChange={setHideIneligible}
+                                        classNames={{ wrapper: "group-data-[selected=true]:bg-indigo-500" }} />
                                     <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-300">Hide Ineligible</span>
                                 </div>
 
                                 {/* ACTIONS */}
                                 <div className="flex items-center gap-2">
-                                {detailFilled > 0 && (<>
-                                    <Button size="sm" variant="flat" onPress={handleSaveHall}
-                                        className="font-semibold text-[11px] text-teal-300 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/25 rounded-lg h-8 px-4 transition-all" startContent={<Save size={13} />}>Save</Button>
-                                    <Button size="sm" variant="flat" onPress={() => setShowPrintModal(true)}
-                                        className="font-semibold text-[11px] text-slate-600 bg-slate-500/10 hover:bg-slate-500/15 border border-slate-500/20 rounded-lg h-8 px-4 transition-all" startContent={<Printer size={13} />}>Print</Button>
-                                    <Button size="sm" variant="flat" onPress={handleClearHall}
-                                        className="font-semibold text-[11px] text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-lg h-8 px-4 transition-all" startContent={<Trash2 size={13} />}>Clear</Button>
-                                </>)}
+                                    {detailFilled > 0 && (<>
+                                        <Button size="sm" variant="flat" onPress={handleSaveHall}
+                                            className="font-semibold text-[11px] text-teal-300 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/25 rounded-lg h-8 px-4 transition-all" startContent={<Save size={13} />}>Save</Button>
+                                        <Button size="sm" variant="flat" onPress={() => setShowPrintModal(true)}
+                                            className="font-semibold text-[11px] text-slate-600 bg-slate-500/10 hover:bg-slate-500/15 border border-slate-500/20 rounded-lg h-8 px-4 transition-all" startContent={<Printer size={13} />}>Print</Button>
+                                        <Button size="sm" variant="flat" onPress={handleClearHall}
+                                            className="font-semibold text-[11px] text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-lg h-8 px-4 transition-all" startContent={<Trash2 size={13} />}>Clear</Button>
+                                    </>)}
                                 </div>
                             </div>
                         </ModalHeader>
@@ -2156,8 +2179,8 @@ const SeatingPlans: React.FC = () => {
                                         <div className="flex flex-wrap items-center gap-2 mb-8">
                                             {/* ExamType badge */}
                                             <span className={`text-[9px] font-extrabold uppercase tracking-widest px-2.5 py-1 rounded-full border mr-1 ${lastExamType === 'EndSemester'
-                                                    ? 'bg-violet-900/40 text-violet-300 border-violet-500/40'
-                                                    : 'bg-indigo-900/40 text-indigo-300 border-indigo-500/40'
+                                                ? 'bg-violet-900/40 text-violet-300 border-violet-500/40'
+                                                : 'bg-indigo-900/40 text-indigo-300 border-indigo-500/40'
                                                 }`}>
                                                 {lastExamType === 'EndSemester' ? 'End Semester' : 'Internal'}
                                             </span>
@@ -2171,13 +2194,36 @@ const SeatingPlans: React.FC = () => {
                                                     }
                                                 });
                                                 const codes = [...subjectCounts.keys()].sort();
-                                                return codes.map(code => {
+                                                return codes.map((code, idx) => {
                                                     const ss = getSubjectStyle(code);
+                                                    const count = subjectCounts.get(code) ?? 0;
                                                     return (
-                                                        <div key={code} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold tracking-wide"
-                                                            style={{ background: `${ss.glow}`, color: ss.text, border: `1px solid ${ss.text}40` }}>
-                                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: ss.text, boxShadow: `0 0 6px ${ss.text}` }} />
-                                                            {code} <span className="opacity-80 ml-0.5">({subjectCounts.get(code)})</span>
+                                                        <div
+                                                            key={code}
+                                                            className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-extrabold tracking-wide transition-transform hover:scale-105"
+                                                            style={{
+                                                                background: `linear-gradient(135deg, ${ss.text}22 0%, ${ss.text}0e 100%)`,
+                                                                color: ss.text,
+                                                                border: `1.5px solid ${ss.text}70`,
+                                                                boxShadow: `0 0 10px ${ss.text}25, inset 0 0 8px ${ss.text}10`,
+                                                            }}
+                                                        >
+                                                            {/* Glowing dot */}
+                                                            <span
+                                                                className="w-2.5 h-2.5 rounded-full shrink-0 animate-pulse"
+                                                                style={{ backgroundColor: ss.text, boxShadow: `0 0 8px ${ss.text}, 0 0 4px ${ss.text}` }}
+                                                            />
+                                                            {/* Code */}
+                                                            <span className="font-mono" style={{ textShadow: `0 0 8px ${ss.text}80` }}>{code}</span>
+                                                            {/* Count badge */}
+                                                            <span
+                                                                className="text-[9px] font-black px-1.5 py-0.5 rounded-full ml-0.5"
+                                                                style={{
+                                                                    background: `${ss.text}30`,
+                                                                    color: ss.text,
+                                                                    border: `1px solid ${ss.text}50`,
+                                                                }}
+                                                            >{count}</span>
                                                         </div>
                                                     );
                                                 });
@@ -2257,8 +2303,8 @@ const SeatingPlans: React.FC = () => {
 
                                                             const tooltipContent = isDisabled ? 'Disabled'
                                                                 : isBlocked ? `${paVisible!.registerNumber} | ${paVisible!.deptCode} | Not Eligible`
-                                                                : paVisible ? [paVisible.registerNumber, paVisible.subjectCode, paVisible.deptCode, 'Eligible'].filter(Boolean).join(' · ')
-                                                                : 'Empty';
+                                                                    : paVisible ? [paVisible.registerNumber, paVisible.subjectCode, paVisible.deptCode, 'Eligible'].filter(Boolean).join(' · ')
+                                                                        : 'Empty';
 
                                                             // Seat cell styling
                                                             let cellBg = '#131826';
@@ -2604,35 +2650,53 @@ const SeatingPlans: React.FC = () => {
                                                 </button>
                                             </div>
                                             {/* Room cap */}
-                                            <div className="flex items-center px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 gap-2">
-                                                <span className="text-[11px] text-slate-600 font-medium whitespace-nowrap">Room cap <span className="text-slate-400 text-[9px]">(End Sem)</span></span>
-                                                <input
-                                                    id="room-capacity-limit-series"
-                                                    name="roomCapacityLimitSeries"
-                                                    type="number" min={1} max={200}
-                                                    value={roomCapacityLimit}
-                                                    onChange={e => setRoomCapacityLimit(Math.max(1, Number(e.target.value) || 40))}
-                                                    className="w-12 h-6 text-center text-[11px] font-bold text-slate-700 border border-slate-300 rounded-md bg-white focus:outline-none focus:border-indigo-400"
-                                                    disabled={seriesRunning}
-                                                />
+                                            <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 border border-slate-200">
+                                                <div className="flex flex-col">
+                                                    <span className="text-[11px] text-slate-600 font-medium leading-tight">Room cap</span>
+                                                    <span className="text-[9px] text-slate-400 leading-tight">seats per hall (End Sem)</span>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setRoomCapacityLimit(v => String(Math.max(1, (Number(v) || 0) - 1)))}
+                                                        disabled={seriesRunning}
+                                                        className="w-6 h-6 rounded-md bg-white border border-slate-300 text-slate-500 hover:bg-slate-100 hover:border-slate-400 flex items-center justify-center text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                                        aria-label="Decrease room cap"
+                                                    >−</button>
+                                                    <input
+                                                        id="room-capacity-limit-series"
+                                                        name="roomCapacityLimitSeries"
+                                                        type="number" min={1} max={200}
+                                                        value={roomCapacityLimit}
+                                                        placeholder="40"
+                                                        onChange={e => setRoomCapacityLimit(e.target.value)}
+                                                        disabled={seriesRunning}
+                                                        className="w-12 h-6 text-center text-[12px] font-bold text-indigo-700 border border-indigo-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400/50 focus:border-indigo-500 placeholder:text-slate-400 placeholder:font-normal [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setRoomCapacityLimit(v => String(Math.min(200, (Number(v) || 0) + 1)))}
+                                                        disabled={seriesRunning}
+                                                        className="w-6 h-6 rounded-md bg-white border border-slate-300 text-slate-500 hover:bg-slate-100 hover:border-slate-400 flex items-center justify-center text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                                        aria-label="Increase room cap"
+                                                    >+</button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 )}
                                 <div className="max-h-[60vh] overflow-y-auto px-6 py-5 space-y-3 bg-slate-50/50" style={{ scrollbarWidth: 'thin' }}>
                                     {seriesTasks.map((t, i) => (
-                                        <div key={i} className={`flex items-center justify-between p-3 rounded-xl border bg-white shadow-sm transition-all ${
-                                            t.status === 'running' ? 'border-indigo-400 ring-2 ring-indigo-500/20' 
-                                            : t.status === 'success' ? 'border-emerald-200 bg-emerald-50/30' 
-                                            : t.status === 'failed' ? 'border-rose-200 bg-rose-50/30'
-                                            : 'border-slate-200'
-                                        }`}>
+                                        <div key={i} className={`flex items-center justify-between p-3 rounded-xl border bg-white shadow-sm transition-all ${t.status === 'running' ? 'border-indigo-400 ring-2 ring-indigo-500/20'
+                                                : t.status === 'success' ? 'border-emerald-200 bg-emerald-50/30'
+                                                    : t.status === 'failed' ? 'border-rose-200 bg-rose-50/30'
+                                                        : 'border-slate-200'
+                                            }`}>
                                             <div className="flex items-center gap-3">
                                                 <div className="flex flex-col">
                                                     <span className="text-[13px] font-bold text-slate-700">{t.date}</span>
-                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded mt-1 w-fit uppercase tracking-widest ${
-                                                        t.session === 'FN' ? 'bg-indigo-50 text-indigo-600' : 'bg-orange-50 text-orange-600'
-                                                    }`}>{t.session === 'FN' ? 'Forenoon' : 'Afternoon'}</span>
+                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded mt-1 w-fit uppercase tracking-widest ${t.session === 'FN' ? 'bg-indigo-50 text-indigo-600' : 'bg-orange-50 text-orange-600'
+                                                        }`}>{t.session === 'FN' ? 'Forenoon' : 'Afternoon'}</span>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-2 text-right">
