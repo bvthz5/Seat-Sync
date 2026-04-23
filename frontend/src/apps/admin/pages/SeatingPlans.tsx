@@ -66,14 +66,34 @@ const getDeptStyle = (code: string) => {
     return DARK_DEPT_COLORS[keys[hash % keys.length]] || { bg: 'rgba(148, 163, 184, 0.05)', text: '#94a3b8', border: 'rgba(148, 163, 184, 0.3)' };
 };
 
-/* ─── Subject Color Palette — 2 distinct light colors (blue + purple) ── */
+/* ─── Subject Color Palette — 16 visually distinct colors ──────────────
+   Colors are hand-picked across the full hue wheel, spaced ~22° apart,
+   all light/bright enough to read on the dark blueprint background.
+   Sequential assignment (first-seen order) guarantees:
+     • Same code → always same color (cache is stable per session)
+     • Different codes → always different color (no hash collisions)
+   Supports up to 16 simultaneous subject codes with zero collisions.      */
 const SUBJECT_HUE_PALETTE = [
-    { h: 205, text: '#7dd3fc', glow: 'rgba(125,211,252,0.30)' },  // sky-blue  (subject A)
-    { h: 268, text: '#c4b5fd', glow: 'rgba(196,181,253,0.30)' },  // soft-violet (subject B)
+    { h:  200, text: '#67e8f9', glow: 'rgba(103,232,249,0.28)' },  //  0  cyan
+    { h:  262, text: '#c4b5fd', glow: 'rgba(196,181,253,0.28)' },  //  1  violet
+    { h:  142, text: '#6ee7b7', glow: 'rgba(110,231,183,0.28)' },  //  2  emerald
+    { h:   24, text: '#fdba74', glow: 'rgba(253,186,116,0.28)' },  //  3  orange
+    { h:  340, text: '#f9a8d4', glow: 'rgba(249,168,212,0.28)' },  //  4  pink
+    { h:  213, text: '#93c5fd', glow: 'rgba(147,197,253,0.28)' },  //  5  sky-blue
+    { h:   50, text: '#fde68a', glow: 'rgba(253,230,138,0.28)' },  //  6  amber
+    { h:  168, text: '#5eead4', glow: 'rgba(94,234,212,0.28)' },   //  7  teal
+    { h:  280, text: '#e879f9', glow: 'rgba(232,121,249,0.28)' },  //  8  fuchsia
+    { h:  104, text: '#a3e635', glow: 'rgba(163,230,53,0.28)'  },  //  9  lime
+    { h:    4, text: '#fca5a5', glow: 'rgba(252,165,165,0.28)' },  // 10  rose
+    { h:  246, text: '#a5b4fc', glow: 'rgba(165,180,252,0.28)' },  // 11  indigo
+    { h:  183, text: '#67e8f9', glow: 'rgba(103,232,249,0.22)' },  // 12  light-cyan
+    { h:   76, text: '#d9f99d', glow: 'rgba(217,249,157,0.28)' },  // 13  yellow-green
+    { h:  316, text: '#f0abfc', glow: 'rgba(240,171,252,0.28)' },  // 14  orchid
+    { h:  228, text: '#bfdbfe', glow: 'rgba(191,219,254,0.28)' },  // 15  pale-blue
 ];
 const subjectColorCache = new Map<string, typeof SUBJECT_HUE_PALETTE[0]>();
-/* Sequential assignment: first new code → blue, second → violet, etc.
-   Guarantees NO two different codes ever share the same color. */
+/* Sequential assignment: first new code gets slot 0, second gets slot 1, etc.
+   Wraps around after 16 subjects (extremely rare in practice).             */
 const getSubjectStyle = (code: string): typeof SUBJECT_HUE_PALETTE[0] => {
     if (!code) return SUBJECT_HUE_PALETTE[0]!;
     if (subjectColorCache.has(code)) return subjectColorCache.get(code)!;
@@ -2341,7 +2361,16 @@ const SeatingPlans: React.FC = () => {
                                                                             <span className="text-[8px] font-bold text-slate-600 uppercase tracking-widest">
                                                                                 {row.rowLabel.toLowerCase()}{bench.benchNumber}
                                                                             </span>
-                                                                            {hasDualConflict && <span className="text-amber-400 text-[10px] animate-pulse">!</span>}
+                                                                            <span className="flex items-center gap-1">
+                                                                                {hasDualConflict && <span className="text-amber-400 text-[10px] animate-pulse">!</span>}
+                                                                                {/* MIXED ROW indicator: backfill switched subject mid-row */}
+                                                                                {isEndSem && paVisible?.subjectCode && saVisible?.subjectCode && paVisible.subjectCode !== saVisible.subjectCode && (
+                                                                                    <Tooltip content={`Mixed: ${paVisible.subjectCode} + ${saVisible.subjectCode} (backfilled)`} delay={100}
+                                                                                        classNames={{ content: 'text-[10px] font-semibold bg-amber-950 text-amber-300 border border-amber-700/50 rounded-lg px-2 py-1' }}>
+                                                                                        <span className="text-[7px] font-black text-amber-400 bg-amber-900/40 border border-amber-600/40 rounded px-0.5 leading-none cursor-help" style={{ boxShadow: '0 0 4px rgba(251,191,36,0.3)' }}>MIX</span>
+                                                                                    </Tooltip>
+                                                                                )}
+                                                                            </span>
                                                                         </div>
 
                                                                         {/* Seat content */}

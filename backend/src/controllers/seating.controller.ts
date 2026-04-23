@@ -1272,27 +1272,42 @@ export const bulkAssign = async (req: Request, res: Response) => {
 
             const rowPrimarySubjectMap: Record<number, Record<string, string>> = {};
 
-            /** Pick the pool for globalRowCounter (0-based). Falls back to next non-empty pool. */
-            const pickPoolForRow = (rowIndex: number): { code: string; students: any[] } | null => {
+            /* ═══════════════════════════════════════════════════════════════
+             * HELPER: Pick primary pool for a given localRowCounter.
+             * Uses per-hall local counter so striping is clean for each hall.
+             * Cross-hall continuity is provided by the shared pool pointers.
+             * ═══════════════════════════════════════════════════════════════ */
+            const pickPoolForRow = (localRow: number): { code: string; students: any[] } | null => {
                 if (subjectCount === 1) {
                     return subjectPools[0]!.students.length > 0 ? subjectPools[0]! : null;
                 }
                 if (subjectCount === 2) {
-                    const preferred = rowIndex % 2 === 0 ? 0 : 1;
+                    const preferred = localRow % 2 === 0 ? 0 : 1;
                     const fallback  = 1 - preferred;
                     if ((subjectPools[preferred]?.students.length ?? 0) > 0) return subjectPools[preferred]!;
                     if ((subjectPools[fallback]?.students.length  ?? 0) > 0) return subjectPools[fallback]!;
                     return null;
                 }
-                // 3+ subjects: cyclic with fallback scan
+                // 3+ subjects: cyclic assignment with full fallback scan
                 for (let attempt = 0; attempt < subjectCount; attempt++) {
-                    const idx = (rowIndex + attempt) % subjectCount;
+                    const idx = (localRow + attempt) % subjectCount;
                     if ((subjectPools[idx]?.students.length ?? 0) > 0) return subjectPools[idx]!;
                 }
                 return null;
             };
 
-            let globalRowCounter = 0; // persists across all halls
+            /* SOFT_BACKFILL: pick next non-empty pool, preferring largest remaining count. */
+            const pickBackfillPool = (excludeCode: string): { code: string; students: any[] } | null =>
+                subjectPools
+                    .filter(p => p.code !== excludeCode && p.students.length > 0)
+                    .sort((a, b) => b.students.length - a.students.length)[0] ?? null;
+
+            /* EXHAUST_MODE check: ≤1 pool still has students. */
+            const nonEmptyPools = () => subjectPools.filter(p => p.students.length > 0);
+            const isExhaustMode = () => nonEmptyPools().length <= 1;
+
+            /* Total remaining students across all pools. */
+            const totalRemaining = () => subjectPools.reduce((s, p) => s + p.students.length, 0);
 
             for (const hallIdNum of hallIdsToUseES) {
                 const hall = targetHallsES.find(h => h.RoomID === hallIdNum);
@@ -1305,55 +1320,102 @@ export const bulkAssign = async (req: Request, res: Response) => {
                     continue;
                 }
 
+                /* ── Cause 4 guard: skip hall entirely if all pools are empty ── */
+                if (totalRemaining() === 0) {
+                    hallResultsES.push({
+                        hallId:     hallIdNum,
+                        hallCode:   (hall as any).RoomCode,
+                        totalSeats: seats.length,
+                        filled:     0,
+                        cappedAt:   capLimit,
+                        skipped:    true,
+                    });
+                    console.log(`[EndSem] Hall ${hallIdNum} skipped — no students remaining.`);
+                    continue;
+                }
+
                 // Build row → bench → [seats] map (skip malformed seat records)
                 const rowBenchMap: Record<string, Record<number, any[]>> = {};
                 for (const seat of seats) {
                     const row   = getRowLabel(seat);
                     const bench = getBenchNumber(seat);
-                    if (!row) { console.warn(`[EndSem] Seat ${seat.SeatID} has no RowIndex — skipped`); continue; }
+                    if (!row)   { console.warn(`[EndSem] Seat ${seat.SeatID} has no RowIndex — skipped`); continue; }
                     if (!bench) { console.warn(`[EndSem] Seat ${seat.SeatID} has no BenchIndex — skipped`); continue; }
                     if (!rowBenchMap[row]) rowBenchMap[row] = {};
                     if (!rowBenchMap[row]![bench]) rowBenchMap[row]![bench] = [];
                     rowBenchMap[row]![bench]!.push(seat);
                 }
 
-                const allRowsES = Object.keys(rowBenchMap).sort();
-                let hallFilledES = 0;
-                let allPoolsEmpty = false;
+                const allRowsES    = Object.keys(rowBenchMap).sort();
+                let   hallFilledES = 0;
+                let   localRowCounter = 0; // ← resets per hall; pool pointers maintain cross-hall continuity
 
                 for (const row of allRowsES) {
-                    if (allPoolsEmpty) break;
+                    if (totalRemaining() === 0) break; // all students seated
 
-                    // One subject pool owns this entire row
-                    const rowPool = pickPoolForRow(globalRowCounter);
-                    globalRowCounter++;
+                    /* ── Determine mode for this row ── */
+                    const exhaust = isExhaustMode();
 
-                    if (!rowPool) { allPoolsEmpty = true; break; }
+                    /* Pick the primary pool (STRICT_ROW or EXHAUST_MODE) */
+                    let rowPool = pickPoolForRow(localRowCounter);
+                    localRowCounter++;
 
-                    // Record row label for UI
+                    if (!rowPool) break; // all pools truly empty
+
+                    let isMixedRow    = false;
+                    const primaryCode = rowPool.code;
+
+                    /* Record primary subject for UI (will append backfill codes if mixed) */
                     const sample = rowPool.students[0];
                     rowPrimarySubjectMap[hallIdNum][row] = sample
                         ? `${sample._subjectName ?? ''} (${rowPool.code})`
                         : rowPool.code;
 
-                    const lookedUpExamId = examIdBySubjectCode[rowPool.code];
-                    if (lookedUpExamId === undefined) {
-                        console.warn(`[EndSem] No ExamID mapped for subject "${rowPool.code}" — skipping row ${row} in hall ${hallIdNum}`);
-                        continue; // safer to skip than to misassign to wrong exam
-                    }
-                    const subjExamId = lookedUpExamId;
-
-                    // Fill all benches → all seat positions in this row from SAME pool
+                    /* ── Seat-level fill loop ── */
                     const benchNums = Object.keys(rowBenchMap[row]!).map(Number).sort((a, b) => a - b);
                     outerBench: for (const benchNum of benchNums) {
                         const benchSeats = (rowBenchMap[row]![benchNum] ?? []).sort(sortSeatsByPosition);
                         for (const seat of benchSeats) {
-                            if (rowPool.students.length === 0) break outerBench;
+
+                            /* ── Pool exhausted mid-seat: switch mode ── */
+                            if (rowPool.students.length === 0) {
+                                let next: { code: string; students: any[] } | null = null;
+
+                                if (exhaust) {
+                                    /* EXHAUST_MODE: grab the only remaining pool */
+                                    next = nonEmptyPools()[0] ?? null;
+                                } else {
+                                    /* SOFT_BACKFILL_MODE: pick next largest non-empty pool */
+                                    next = pickBackfillPool(primaryCode);
+                                }
+
+                                if (!next) break outerBench; // nothing left anywhere
+                                rowPool    = next;
+                                isMixedRow = true;
+
+                                /* Annotate row label to show backfill */
+                                rowPrimarySubjectMap[hallIdNum][row] += ` +${rowPool.code}`;
+                                console.log(`[EndSem][BACKFILL] Hall ${hallIdNum} row ${row}: switching to ${rowPool.code}`);
+                            }
+
+                            /* Resolve ExamID for current (possibly switched) pool */
+                            const subjExamId = examIdBySubjectCode[rowPool.code];
+                            if (subjExamId === undefined) {
+                                console.warn(`[EndSem] No ExamID for "${rowPool.code}" — student discarded`);
+                                rowPool.students.shift(); // prevent infinite loop
+                                continue;
+                            }
+
                             const stu = rowPool.students.shift();
-                            if (!stu) break outerBench; // defensive double-guard
+                            if (!stu) break outerBench; // defensive guard
+
                             pushAllocation(allNewAllocsES, subjExamId, seat, stu);
                             hallFilledES++;
                         }
+                    }
+
+                    if (isMixedRow) {
+                        console.log(`[EndSem][MIXED ROW] Hall ${hallIdNum} row ${row}: ${rowPrimarySubjectMap[hallIdNum][row]}`);
                     }
                 }
 
