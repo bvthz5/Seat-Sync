@@ -206,7 +206,7 @@ const ExamDateDetail: React.FC = () => {
                         isIconOnly
                         variant="light"
                         className="bg-slate-50 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-2xl shadow-sm border border-slate-100 transition-all w-12 h-12"
-                        onPress={() => navigate(`/admin/exams/series/${seriesId}`)}
+                        onPress={() => navigate(`/admin/exams/series/${seriesId}/dates`)}
                     >
                         <ArrowLeft size={20} className="stroke-[2.5]" />
                     </Button>

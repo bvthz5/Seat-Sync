@@ -816,23 +816,86 @@ const SeatingPlans: React.FC = () => {
         if (!selectedDate) return;
         setGlobalDownloading(true);
         try {
-            const XLSX = await import('xlsx');
-            const { rows } = await buildGlobalRows();
-            const header = ['Sl.No', 'Hall / Room No.', 'Register Numbers', 'Count', 'Total'];
-            const wsData: any[][] = [
-                [`CONSOLIDATED SEATING ARRANGEMENT`],
-                [`Date: ${fmtDate(selectedDate)}   Session: ${selectedSession === 'FN' ? 'Forenoon' : 'Afternoon'}`],
-                [],
-                header,
-                ...rows.map(r => [r.isFirstRow ? r.slNo : '', r.isFirstRow ? r.hallCode : '', r.regRanges, r.count, r.isFirstRow ? r.total : '']),
+            const XLSXStyle = (await import('xlsx-js-style')).default;
+            const { rows, examNameString } = await buildGlobalRows();
+            const sessionLabel = selectedSession === 'FN' ? 'Forenoon' : 'Afternoon';
+
+            // ── Define reusable styles ──
+            const headerFill   = { patternType: 'solid', fgColor: { rgb: '0F172A' } };
+            const headerFont   = { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 };
+            const whiteFill    = { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } };
+            const blueFill     = { patternType: 'solid', fgColor: { rgb: 'ECF6FF' } };
+            const bodyFont     = { sz: 9, color: { rgb: '1E293B' } };
+            const boldFont     = { sz: 9, bold: true, color: { rgb: '1E293B' } };
+            const thinBorder   = { style: 'thin', color: { rgb: 'B4C3D7' } };
+            const thickBorder  = { style: 'medium', color: { rgb: '0F172A' } };
+            const allThin      = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder };
+            const mkBorder = (isFirst: boolean, isLast: boolean) => ({
+                top:    isFirst ? thickBorder : thinBorder,
+                bottom: isLast  ? thickBorder : thinBorder,
+                left:   thinBorder,
+                right:  thinBorder,
+            });
+
+            // ── Build first/last row index sets and group map ──
+            const firstRowSet  = new Set<number>();
+            const lastRowSet   = new Set<number>();
+            const groupMap     = new Map<number, number>();
+            let rIdx = 0; let grp = -1;
+            rows.forEach(r => {
+                if (r.isFirstRow) { firstRowSet.add(rIdx); if (rIdx > 0) lastRowSet.add(rIdx - 1); grp++; }
+                groupMap.set(rIdx, grp);
+                rIdx++;
+            });
+            if (rIdx > 0) lastRowSet.add(rIdx - 1);
+
+            // ── Build sheet data (row arrays of styled cell objects) ──
+            const DATA: any[][] = [];
+
+            // Title rows (plain)
+            const titleStyle = { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center' } };
+            const subStyle   = { font: { sz: 9 }, alignment: { horizontal: 'center' } };
+            DATA.push([{ v: "ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI", s: titleStyle }, '', '', '', '']);
+            DATA.push([{ v: 'CONSOLIDATED SEATING ARRANGEMENT', s: { font: { bold: true, sz: 11 }, alignment: { horizontal: 'center' } } }, '', '', '', '']);
+            let truncExam = examNameString; if (truncExam.length > 80) truncExam = truncExam.substring(0, 77) + '...';
+            DATA.push([{ v: truncExam, s: subStyle }, '', '', '', '']);
+            DATA.push([{ v: `${fmtDate(selectedDate)}   ·   ${sessionLabel}`, s: subStyle }, '', '', '', '']);
+            DATA.push(['', '', '', '', '']); // blank spacer
+
+            // Header row
+            const hCols = ['Sl. No.', 'Hall / Room No.', 'Register Numbers', 'Count', 'Total'];
+            DATA.push(hCols.map(v => ({ v, s: { fill: headerFill, font: headerFont, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border: allThin } })));
+
+            // Body rows
+            rows.forEach((r, i) => {
+                const fill = (groupMap.get(i) ?? 0) % 2 === 0 ? whiteFill : blueFill;
+                const isFirst = firstRowSet.has(i);
+                const isLast  = lastRowSet.has(i);
+                const border  = mkBorder(isFirst, isLast);
+                const base    = { fill, border };
+                DATA.push([
+                    { v: r.isFirstRow ? r.slNo   : '', s: { ...base, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
+                    { v: r.isFirstRow ? r.hallCode: '', s: { ...base, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
+                    { v: r.regRanges,  s: { ...base, font: bodyFont, alignment: { horizontal: 'left',   vertical: 'center', wrapText: true } } },
+                    { v: r.count,      s: { ...base, font: bodyFont, alignment: { horizontal: 'center', vertical: 'center' } } },
+                    { v: r.isFirstRow ? r.total : '', s: { ...base, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
+                ]);
+            });
+
+            const ws = XLSXStyle.utils.aoa_to_sheet(DATA);
+            ws['!cols'] = [{ wch: 8 }, { wch: 16 }, { wch: 52 }, { wch: 9 }, { wch: 9 }];
+            // Merge title rows across all 5 cols
+            ws['!merges'] = [
+                { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
+                { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } },
+                { s: { r: 2, c: 0 }, e: { r: 2, c: 4 } },
+                { s: { r: 3, c: 0 }, e: { r: 3, c: 4 } },
             ];
-            const ws = XLSX.utils.aoa_to_sheet(wsData);
-            ws['!cols'] = [{ wch: 7 }, { wch: 14 }, { wch: 50 }, { wch: 8 }, { wch: 8 }];
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'Consolidated');
-            XLSX.writeFile(wb, `Consolidated_Seating_${selectedDate}_${selectedSession}.xlsx`);
+            const wb = XLSXStyle.utils.book_new();
+            XLSXStyle.utils.book_append_sheet(wb, ws, 'Consolidated');
+            XLSXStyle.writeFile(wb, `Consolidated_Seating_${selectedDate}_${selectedSession}.xlsx`);
             toast.success('Excel downloaded');
-        } catch { toast.error('Failed to generate Excel'); }
+        } catch (e) { console.error(e); toast.error('Failed to generate Excel'); }
         finally { setGlobalDownloading(false); }
     };
 
@@ -888,31 +951,44 @@ const SeatingPlans: React.FC = () => {
                 }
             });
 
-            // Build lookup: which bodyRow indices are "first row" or "last row" of a room group
+            // Build room-group lookup maps
             const firstRowIndices = new Set<number>();
             const lastRowIndices = new Set<number>();
+            const rowGroupMap = new Map<number, number>(); // bodyRowIndex → groupIndex
             let bIdx = 0;
+            let gIdx = -1;
             rows.forEach(r => {
-                if (r.isFirstRow) firstRowIndices.add(bIdx);
-                if (bIdx > 0 && r.isFirstRow) lastRowIndices.add(bIdx - 1);
+                if (r.isFirstRow) {
+                    firstRowIndices.add(bIdx);
+                    if (bIdx > 0) lastRowIndices.add(bIdx - 1);
+                    gIdx++;
+                }
+                rowGroupMap.set(bIdx, gIdx);
                 bIdx++;
             });
-            // Last row in the entire table is always a "last row"
             if (bIdx > 0) lastRowIndices.add(bIdx - 1);
 
             autoTable(doc, {
                 startY: 46,
                 head: [['Sl.\nNo.', 'HALL /\nROOM No.', 'REGISTER NUMBERS', 'COUNT', 'TOTAL']],
                 body: bodyRows,
-                styles: { fontSize: 8.5, cellPadding: 3, font: 'helvetica', textColor: [30, 41, 59], lineColor: [226, 232, 240], lineWidth: 0.1, valign: 'middle' },
-                headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5, halign: 'center', valign: 'middle' },
-                alternateRowStyles: { fillColor: [248, 250, 252] },
+                theme: 'grid',
+                styles: { fontSize: 8.5, cellPadding: 3, font: 'helvetica', textColor: [30, 41, 59], lineColor: [180, 195, 215], lineWidth: 0.2, valign: 'middle' },
+                headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5, halign: 'center', valign: 'middle', lineColor: [255, 255, 255], lineWidth: 0.3 },
                 columnStyles: {
                     0: { cellWidth: 12, halign: 'center', fontStyle: 'bold' },
                     1: { cellWidth: 26, halign: 'center', fontStyle: 'bold' },
                     2: { cellWidth: 105, halign: 'left' },
                     3: { cellWidth: 18, halign: 'center' },
                     4: { cellWidth: 18, halign: 'center', fontStyle: 'bold' },
+                },
+                didParseCell: (data: any) => {
+                    if (data.section !== 'body') return;
+                    const groupIndex = rowGroupMap.get(data.row.index) ?? 0;
+                    // Alternate room group background: white vs soft ice-blue
+                    data.cell.styles.fillColor = groupIndex % 2 === 0
+                        ? [255, 255, 255]
+                        : [236, 246, 255];
                 },
                 willDrawCell: (data: any) => {
                     if (data.section !== 'body') return;
@@ -921,16 +997,12 @@ const SeatingPlans: React.FC = () => {
                     const isFirst = firstRowIndices.has(rowIdx);
                     const isLast = lastRowIndices.has(rowIdx);
                     if (isFirst || isLast) {
-                        doc.setDrawColor(15, 23, 42);   // dark navy
-                        doc.setLineWidth(0.6);           // thick border
-                        if (isFirst) {
-                            doc.line(cell.x, cell.y, cell.x + cell.width, cell.y);
-                        }
-                        if (isLast) {
-                            doc.line(cell.x, cell.y + cell.height, cell.x + cell.width, cell.y + cell.height);
-                        }
-                        doc.setDrawColor(226, 232, 240); // reset to default
-                        doc.setLineWidth(0.1);
+                        doc.setDrawColor(15, 23, 42);
+                        doc.setLineWidth(0.75);
+                        if (isFirst) doc.line(cell.x, cell.y, cell.x + cell.width, cell.y);
+                        if (isLast) doc.line(cell.x, cell.y + cell.height, cell.x + cell.width, cell.y + cell.height);
+                        doc.setDrawColor(180, 195, 215);
+                        doc.setLineWidth(0.2);
                     }
                 },
                 didDrawPage: (data: any) => {

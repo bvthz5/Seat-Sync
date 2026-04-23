@@ -1,17 +1,18 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Card, Button, Select, SelectItem, Input } from "@heroui/react";
-import { ArrowLeft, CalendarDays, Filter, CalendarCheck2, ArrowRight, Search } from "lucide-react";
+import { ArrowLeft, CalendarDays, Filter, CalendarCheck2, ArrowRight, Search, X } from "lucide-react";
 import { toast } from 'react-hot-toast';
 import { ExamService } from '../services/examService';
 
 const ExamDates: React.FC = () => {
     const navigate = useNavigate();
     const { seriesId } = useParams<{ seriesId: string }>();
-    const [dates, setDates] = useState<{ date: string; count: number }[]>([]);
+    const [dates, setDates] = useState<{ date: string; count: number; subjects: { name: string; code: string }[] }[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedMonth, setSelectedMonth] = useState<string>('All');
     const [exactDate, setExactDate] = useState<string>('');
+    const [subjectSearch, setSubjectSearch] = useState<string>('');
 
     useEffect(() => {
         if (seriesId) fetchDates();
@@ -22,15 +23,22 @@ const ExamDates: React.FC = () => {
         try {
             const response = await ExamService.getAll({ seriesId });
             const exams = response || [];
-            const groups: Record<string, Set<string>> = {};
+            const groups: Record<string, { sessions: Set<string>; subjects: Map<string, string> }> = {};
             exams.forEach((ex: any) => {
                 const d = new Date(ex.ExamDate).toISOString().split('T')[0];
-                if (!groups[d]) groups[d] = new Set();
-                groups[d].add(`${String(ex.ExamName || '').trim()}::${String(ex.Session || '').trim().toUpperCase()}`);
+                if (!groups[d]) groups[d] = { sessions: new Set(), subjects: new Map() };
+                groups[d].sessions.add(`${String(ex.ExamName || '').trim()}::${String(ex.Session || '').trim().toUpperCase()}`);
+                const code = String(ex.SubjectCode || ex.ExamCode || '').trim();
+                const name = String(ex.ExamName || ex.SubjectName || '').trim();
+                if (name) groups[d].subjects.set(code || name, name);
             });
             const entries = Object.keys(groups)
                 .sort()
-                .map(k => ({ date: k, count: groups[k].size }));
+                .map(k => ({
+                    date: k,
+                    count: groups[k].sessions.size,
+                    subjects: Array.from(groups[k].subjects.entries()).map(([code, name]) => ({ code, name }))
+                }));
             setDates(entries);
         } catch (e: any) {
             console.error("Failed to load dates", e);
@@ -61,8 +69,16 @@ const ExamDates: React.FC = () => {
         if (exactDate) {
             result = result.filter(d => d.date === exactDate);
         }
+        if (subjectSearch.trim()) {
+            const q = subjectSearch.trim().toLowerCase();
+            result = result.filter(d =>
+                d.subjects.some(s =>
+                    s.name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q)
+                )
+            );
+        }
         return result;
-    }, [dates, selectedMonth, exactDate]);
+    }, [dates, selectedMonth, exactDate, subjectSearch]);
 
     const getLoadInfo = (count: number) => {
         // Updated colors for a softer, more ultra-premium enterprise appearance
@@ -114,11 +130,27 @@ const ExamDates: React.FC = () => {
                     
                     {/* UI Only Filters */}
                     {!loading && dates.length > 0 && (
-                        <div className="flex flex-col sm:flex-row items-center gap-4 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm w-full sm:w-auto">
+                        <div className="flex flex-col sm:flex-row items-center gap-3 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm w-full sm:w-auto">
                             <div className="hidden sm:flex items-center justify-center p-2 rounded-xl bg-slate-50 text-slate-400">
                                 <Filter size={18} className="stroke-[2.5]" />
                             </div>
                             
+                            {/* Subject Search */}
+                            <div className="w-full sm:w-56">
+                                <Input
+                                    aria-label="Search by course name or code"
+                                    placeholder="Search course name / code…"
+                                    value={subjectSearch}
+                                    onValueChange={(val) => setSubjectSearch(val)}
+                                    startContent={<Search size={14} className="text-slate-400 shrink-0" />}
+                                    isClearable
+                                    onClear={() => setSubjectSearch('')}
+                                    classNames={{
+                                        inputWrapper: "bg-slate-50 hover:bg-white border border-slate-200 shadow-none h-10 transition-colors"
+                                    }}
+                                />
+                            </div>
+
                             <div className="flex gap-2 w-full sm:w-auto">
                                 <div className="w-full sm:w-44">
                                     <Input
@@ -128,7 +160,7 @@ const ExamDates: React.FC = () => {
                                         value={exactDate}
                                         onValueChange={(val) => {
                                             setExactDate(val);
-                                            if (val) setSelectedMonth('All'); // Reset month if explicit date selected
+                                            if (val) setSelectedMonth('All');
                                         }}
                                         classNames={{
                                             inputWrapper: "bg-white hover:bg-slate-50 border-slate-200 shadow-none h-10 transition-colors"
@@ -146,7 +178,7 @@ const ExamDates: React.FC = () => {
                                         selectedKeys={[selectedMonth]}
                                         onChange={(e) => {
                                             setSelectedMonth(e.target.value);
-                                            if (e.target.value !== 'All') setExactDate(''); // Reset date if month selected
+                                            if (e.target.value !== 'All') setExactDate('');
                                         }}
                                         disallowEmptySelection
                                     >
@@ -169,6 +201,17 @@ const ExamDates: React.FC = () => {
                                     </Select>
                                 </div>
                             </div>
+
+                            {/* Clear All Filters */}
+                            {(subjectSearch.trim() || exactDate || selectedMonth !== 'All') && (
+                                <button
+                                    onClick={() => { setSubjectSearch(''); setExactDate(''); setSelectedMonth('All'); }}
+                                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-500 bg-rose-50 hover:bg-rose-100 border border-rose-100 transition-all whitespace-nowrap shrink-0"
+                                >
+                                    <X size={13} className="stroke-[3]" />
+                                    Clear All
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>
@@ -195,10 +238,10 @@ const ExamDates: React.FC = () => {
                             <Search size={28} />
                         </div>
                         <h2 className="text-slate-900 font-extrabold text-xl mb-2 tracking-tight">No matching dates</h2>
-                        <p className="text-slate-500 font-medium text-sm">Try clearing your date or month filters.</p>
+                        <p className="text-slate-500 font-medium text-sm">Try clearing your filters or searching a different course name.</p>
                         <Button 
                             color="primary" variant="flat" size="sm" className="mt-5 font-bold" 
-                            onPress={() => { setSelectedMonth('All'); setExactDate(''); }}
+                            onPress={() => { setSelectedMonth('All'); setExactDate(''); setSubjectSearch(''); }}
                         >
                             Clear Filters
                         </Button>
