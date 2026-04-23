@@ -1183,8 +1183,9 @@ export class ExamController {
                                 defaults: {
                                     SubjectCode: cleanCode,
                                     SubjectName: subjectName,
-                                    DepartmentID: departmentID
-                                }
+                                    DepartmentID: departmentID,
+                                    SemesterID: defaultSemesterID
+                                } as any
                             });
                             subjectID = subj.SubjectID;
                             subjectCache.set(subjectKey, subjectID);

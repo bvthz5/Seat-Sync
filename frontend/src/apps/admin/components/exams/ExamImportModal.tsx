@@ -17,6 +17,8 @@ interface ExamImportModalProps {
 const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: ExamImportModalProps) => {
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [importing, setImporting] = useState(false);
+    const [importProgress, setImportProgress] = useState(0);
+    const [importLabel, setImportLabel] = useState('');
     const [examTitle, setExamTitle] = useState('');
     const [series, setSeries] = useState<any[]>([]);
     const [selectedSeriesId, setSelectedSeriesId] = useState<string>('');
@@ -148,6 +150,8 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
         }
 
         setImporting(true);
+        setImportProgress(0);
+        setImportLabel('Preparing import…');
         try {
             let totalCreated = 0;
             let totalUpdated = 0;
@@ -156,7 +160,10 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
             const fileFailureMessages: string[] = [];
             const rowIssueMessages: string[] = [];
 
-            for (const file of selectedFiles) {
+            for (let i = 0; i < selectedFiles.length; i++) {
+                const file = selectedFiles[i];
+                setImportLabel(`Processing ${file.name}…`);
+                setImportProgress(Math.round((i / selectedFiles.length) * 90));
                 try {
                     const result = await ExamService.importTimetable(
                         file,
@@ -181,6 +188,10 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                     fileFailureMessages.push(`${file.name}: ${serverMessage}`);
                 }
             }
+
+            setImportProgress(100);
+            setImportLabel('Import complete!');
+            await new Promise(r => setTimeout(r, 600));
 
             if (totalCreated > 0 || totalUpdated > 0) {
                 toast.success(`Complete: ${totalCreated} created, ${totalUpdated} updated`);
@@ -218,6 +229,8 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
     const handleClose = () => {
         setSelectedFiles([]);
         setShowPreview(false);
+        setImportProgress(0);
+        setImportLabel('');
         setPreviewData(null);
         onClose();
     };
@@ -273,15 +286,29 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                             <Select
                                                 id="import-series-select"
                                                 name="seriesSelect"
+                                                aria-label="Target Exam Series"
                                                 placeholder="Select an exam series"
-                                                label="Target Exam Series"
-                                                  selectedKeys={selectedSeriesId && series.some(s => String(s.ExamSeriesID) === String(selectedSeriesId)) ? [selectedSeriesId] : []}
+                                                selectedKeys={selectedSeriesId && series.some(s => String(s.ExamSeriesID) === String(selectedSeriesId)) ? [selectedSeriesId] : []}
                                                 onChange={(e) => setSelectedSeriesId(e.target.value)}
                                                 variant="bordered"
                                                 isDisabled={loadingSeries}
-                                                className="w-full"                                                  disableAnimation                                            >
+                                                className="w-full"
+                                                disableAnimation
+                                                classNames={{
+                                                    trigger: "bg-white border border-slate-300 hover:border-purple-400 rounded-lg shadow-sm h-11 flex justify-between items-center px-3",
+                                                    value: "text-slate-800 font-medium",
+                                                    selectorIcon: "right-3 absolute text-slate-500",
+                                                    popoverContent: "bg-white border border-slate-200 shadow-xl rounded-xl z-[9999] p-1",
+                                                    listboxWrapper: "bg-white",
+                                                    listbox: "bg-white p-0",
+                                                }}
+                                            >
                                                 {series.map((s) => (
-                                                    <SelectItem key={String(s.ExamSeriesID)} textValue={s.SeriesName}>
+                                                    <SelectItem
+                                                        key={String(s.ExamSeriesID)}
+                                                        textValue={s.SeriesName}
+                                                        className="rounded-lg text-slate-700 data-[hover=true]:bg-purple-50 data-[hover=true]:text-purple-700 data-[selected=true]:bg-purple-50 data-[selected=true]:text-purple-700 font-medium"
+                                                    >
                                                         {s.SeriesName} ({s.AcademicYear?.YearName || 'Unknown Year'})
                                                     </SelectItem>
                                                 ))}
@@ -377,6 +404,41 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                     </label>
                                 </div>
                             </div>
+
+                            {/* ── Import Progress Bar ── */}
+                            {importing && (
+                                <div className="mt-2 bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            {importProgress === 100 ? (
+                                                <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
+                                            ) : (
+                                                <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin shrink-0" />
+                                            )}
+                                            <span className={`text-sm font-semibold truncate max-w-[280px] ${importProgress === 100 ? 'text-emerald-600' : 'text-slate-700'}`}>
+                                                {importLabel}
+                                            </span>
+                                        </div>
+                                        <span className={`text-sm font-black tabular-nums ${importProgress === 100 ? 'text-emerald-600' : 'text-purple-600'}`}>
+                                            {importProgress}%
+                                        </span>
+                                    </div>
+
+                                    {/* Bar track */}
+                                    <div className="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden">
+                                        <div
+                                            className={`h-full rounded-full transition-all duration-500 ease-out ${importProgress === 100 ? 'bg-emerald-500' : 'bg-purple-600'}`}
+                                            style={{ width: `${importProgress}%` }}
+                                        />
+                                    </div>
+
+                                    {selectedFiles.length > 1 && (
+                                        <p className="text-[11px] text-slate-400 font-medium">
+                                            Processing {Math.min(Math.ceil((importProgress / 90) * selectedFiles.length) + 1, selectedFiles.length)} of {selectedFiles.length} file(s)
+                                        </p>
+                                    )}
+                                </div>
+                            )}
                         </ModalBody>
                         <ModalFooter className="border-t pt-4">
                             <Button variant="light" onPress={onClose}>

@@ -327,9 +327,8 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
             // 1. Update Layout Structure
             await structureService.updateRoomLayout(Number(selectedRoomId), { ...room, RowLayout: config.rowLayout as any,
                 SeatsPerBench: config.seatsPerBench,
-                TotalRows: config.rowLayout.length, // Include this to prevent breaking backend logic if it needs it temporarily
-                BenchesPerRow: config.rowLayout.length > 0 ? config.rowLayout[0] : 0,
-                RoomType: config.roomType
+                TotalRows: config.rowLayout.length,
+                BenchesPerRow: config.rowLayout.length > 0 ? config.rowLayout[0] : 0
               } as any);
 
             // 2. Sent Seat Updates
@@ -409,7 +408,6 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
         if (!initialConfig) return false;
         if (JSON.stringify(config.rowLayout) !== JSON.stringify(initialConfig.rowLayout) ||
             config.seatsPerBench !== initialConfig.seatsPerBench ||
-            config.roomType !== initialConfig.roomType ||
             disabledSeatIds.size > 0) return true;
 
         if (!initialSeatZoneMap) return seatZoneMap.size > 0;
@@ -497,18 +495,6 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                 <div className="space-y-6">
                                     {/* Auto Zone removed ZONE_EDIT branch, just showing generic config now */}
                                         <div className="space-y-6">
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div className="flex flex-col gap-2">
-                                                    <div className="text-sm font-semibold text-slate-700 flex items-center gap-2 px-1">
-                                                        <Box size={16} className="text-indigo-500" /> Room Type
-                                                    </div>
-                                                    <Select id="select-room-type" aria-label="Room Type" placeholder="Select Type..." size="md" variant="bordered" selectedKeys={[config.roomType]} onChange={(e) => setConfig({ ...config, roomType: e.target.value as RoomType })} classNames={{ trigger: "bg-white hover:bg-slate-50 transition-colors shadow-sm", popoverContent: "bg-white border border-slate-200 shadow-xl rounded-xl z-50 p-1" }}>
-                                                        <SelectItem key="ROOM" className="text-slate-700 data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700">Classroom</SelectItem>
-                                                        <SelectItem key="HALL" className="text-slate-700 data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700">Exam Hall</SelectItem>
-                                                    </Select>
-                                                </div>
-                                                
-                                            </div>
                                             
                                             <div className="flex flex-col gap-3">
                                                 <div className="flex items-center justify-between">
