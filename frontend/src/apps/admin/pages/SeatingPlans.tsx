@@ -2371,12 +2371,8 @@ const SeatingPlans: React.FC = () => {
 
                                                         {row.benches.map((bench, benchIdx) => {
                                                             // Primary seat: SeatNumber=1 (single-bench model); fallback to seat 2 if multi-seat
-                                                            const seatsPerBench = Number(detailHall?.seatsPerBench) || 1;
-                                                            const primarySeat = bench.seats.find(s => s.SeatNumber === 1 && s.IsActive) 
-                                                                ?? bench.seats.find(s => s.SeatNumber === 1)
-                                                                ?? bench.seats[0];
-                                                            const secondarySeat = seatsPerBench > 1 ? (bench.seats.find(s => s.SeatNumber === 2 && s.IsActive) 
-                                                                ?? bench.seats.find(s => s.SeatNumber === 2)) : null;
+                                                            const primarySeat = bench.seats.find(s => s.SeatNumber === 1) ?? bench.seats[0];
+                                                            const secondarySeat = bench.seats.find(s => s.SeatNumber === 2);
                                                             const pa = primarySeat ? detailAssignments[primarySeat.SeatID] : undefined;
                                                             const sa = secondarySeat ? detailAssignments[secondarySeat.SeatID] : undefined;
 
@@ -2481,18 +2477,10 @@ const SeatingPlans: React.FC = () => {
                                                                                     )}
                                                                                 </>
                                                                             ) : (
-                                                                                <div className={`flex flex-col items-center justify-center gap-1.5 ${seatsPerBench > 1 ? 'flex-row' : ''}`}>
-                                                                                    <div className="flex flex-col items-center">
-                                                                                        <Armchair size={seatsPerBench > 1 ? 11 : 14} className="text-slate-700" />
-                                                                                        {seatsPerBench === 1 && <span className="text-[7px] text-slate-600 mt-1">EMPTY</span>}
-                                                                                    </div>
-                                                                                    {seatsPerBench > 1 && (
-                                                                                        <div className="flex flex-col items-center">
-                                                                                            <Armchair size={11} className="text-slate-700" />
-                                                                                            <span className="text-[7px] text-slate-600 mt-1">EMPTY</span>
-                                                                                        </div>
-                                                                                    )}
-                                                                                </div>
+                                                                                <>
+                                                                                    <Armchair size={13} className="text-slate-700" />
+                                                                                    <span className="text-[7px] text-slate-600">EMPTY</span>
+                                                                                </>
                                                                             )}
                                                                         </div>
                                                                     </div>

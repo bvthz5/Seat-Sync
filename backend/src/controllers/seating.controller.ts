@@ -259,6 +259,13 @@ const ensureSeatsExist = async (room: Room, transaction?: any): Promise<void> =>
 
         const queryOptions: any = {
             where: { RoomID: Number(room.RoomID) },
+            attributes: [
+                "SeatID",
+                "RowIndex",
+                "BenchIndex",
+                "SeatIndex"
+            ],
+            raw: true
         };
         if (transaction) queryOptions.transaction = transaction;
 
