@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Card, Button, Select, SelectItem, Input } from "@heroui/react";
-import { ArrowLeft, CalendarDays, Filter, CalendarCheck2, ArrowRight, Search, X } from "lucide-react";
+import { Card, Button, Select, SelectItem, Input, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/react";
+import { ArrowLeft, CalendarDays, Filter, CalendarCheck2, ArrowRight, Search, X, Trash2, AlertTriangle } from "lucide-react";
 import { toast } from 'react-hot-toast';
 import { ExamService } from '../services/examService';
+import BulkEligibleImportModal from '../components/exams/BulkEligibleImportModal';
+import { Upload } from 'lucide-react';
 
 const ExamDates: React.FC = () => {
     const navigate = useNavigate();
@@ -13,6 +15,9 @@ const ExamDates: React.FC = () => {
     const [selectedMonth, setSelectedMonth] = useState<string>('All');
     const [exactDate, setExactDate] = useState<string>('');
     const [subjectSearch, setSubjectSearch] = useState<string>('');
+    const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+    const [isClearing, setIsClearing] = useState(false);
+    const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
 
     useEffect(() => {
         if (seriesId) fetchDates();
@@ -45,6 +50,21 @@ const ExamDates: React.FC = () => {
             toast.error("Failed to load date-wise schedule");
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleClearEligibility = async () => {
+        setIsClearing(true);
+        try {
+            await ExamService.clearEligibility(Number(seriesId));
+            toast.success('Successfully cleared all eligibility data');
+            fetchDates(); // Refresh to update any necessary state
+            setIsClearConfirmOpen(false);
+        } catch (error: any) {
+            console.error('Failed to clear eligibility', error);
+            toast.error(error.response?.data?.message || 'Failed to clear eligibility data');
+        } finally {
+            setIsClearing(false);
         }
     };
 
@@ -110,12 +130,13 @@ const ExamDates: React.FC = () => {
             {/* Header Area */}
             <div className="bg-white border-b border-slate-200/80 px-8 py-8 md:py-10 mb-8 shadow-sm relative overflow-hidden">
                 <div className="absolute right-0 top-0 w-64 h-64 bg-indigo-50 rounded-full blur-3xl opacity-60 -translate-y-1/2 translate-x-1/3"></div>
-                <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
+                <div className="max-w-[1600px] mx-auto flex flex-col gap-6 relative z-10">
+                    {/* Top Row: Title */}
                     <div className="flex items-center gap-5">
                         <Button
                             isIconOnly
                             variant="light"
-                            className="bg-slate-50 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-2xl shadow-sm border border-slate-100 transition-all w-12 h-12"
+                            className="bg-slate-50 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-2xl shadow-sm border border-slate-100 transition-all w-12 h-12 shrink-0"
                             onPress={() => navigate(`/admin/exams/series/${seriesId}`)}
                         >
                             <ArrowLeft size={20} className="stroke-[2.5]" />
@@ -127,10 +148,29 @@ const ExamDates: React.FC = () => {
                             <p className="text-slate-500 mt-1.5 font-medium text-sm">Visually monitor your daily exam load and density.</p>
                         </div>
                     </div>
-                    
-                    {/* UI Only Filters */}
-                    {!loading && dates.length > 0 && (
-                        <div className="flex flex-col sm:flex-row items-center gap-3 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm w-full sm:w-auto">
+
+                    {/* Bottom Row: Actions & Filters */}
+                    <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 w-full">
+                        <div className="flex items-center gap-3 shrink-0">
+                            <Button
+                                className="bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 font-bold rounded-xl px-5 hover:-translate-y-0.5 transition-all"
+                                startContent={<Trash2 size={16} className="stroke-[2.5]" />}
+                                onPress={() => setIsClearConfirmOpen(true)}
+                            >
+                                Clear Eligibility
+                            </Button>
+                            <Button
+                                className="bg-indigo-600 text-white font-bold rounded-xl shadow-md px-5 hover:-translate-y-0.5 transition-transform"
+                                startContent={<Upload size={16} className="stroke-[2.5]" />}
+                                onPress={() => setIsBulkImportOpen(true)}
+                            >
+                                Bulk Import
+                            </Button>
+                        </div>
+                        
+                        {/* UI Only Filters */}
+                        {!loading && dates.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-3 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm shrink-0">
                             <div className="hidden sm:flex items-center justify-center p-2 rounded-xl bg-slate-50 text-slate-400">
                                 <Filter size={18} className="stroke-[2.5]" />
                             </div>
@@ -214,6 +254,7 @@ const ExamDates: React.FC = () => {
                             )}
                         </div>
                     )}
+                    </div>
                 </div>
             </div>
 
@@ -307,6 +348,55 @@ const ExamDates: React.FC = () => {
                     </div>
                 )}
             </div>
+
+            <Modal 
+                isOpen={isClearConfirmOpen} 
+                onClose={() => setIsClearConfirmOpen(false)} 
+                size="md"
+                backdrop="blur"
+                classNames={{
+                    base: "bg-white rounded-[24px] shadow-2xl border border-slate-100",
+                    backdrop: "bg-slate-900/30 backdrop-blur-md"
+                }}
+            >
+                <ModalContent>
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-500 shrink-0">
+                                <AlertTriangle size={20} className="stroke-[2.5]" />
+                            </div>
+                            <h2 className="text-xl font-bold text-slate-800">Clear Eligibility Data</h2>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="px-6 py-4">
+                        <p className="text-slate-600 font-medium leading-relaxed">
+                            Are you sure you want to completely clear <strong className="text-red-500">ALL imported eligibility lists</strong> for this series?
+                        </p>
+                        <p className="text-slate-500 text-sm mt-1 leading-relaxed">
+                            This action is permanent. All mapped students will be wiped from these exams.
+                        </p>
+                    </ModalBody>
+                    <ModalFooter className="px-6 pb-6 pt-2">
+                        <Button variant="light" onPress={() => setIsClearConfirmOpen(false)} className="font-bold text-slate-500">
+                            Cancel
+                        </Button>
+                        <Button 
+                            color="danger" 
+                            onPress={handleClearEligibility} 
+                            isLoading={isClearing} 
+                            className="font-bold shadow-md shadow-red-200"
+                        >
+                            Yes, Clear All
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            <BulkEligibleImportModal
+                isOpen={isBulkImportOpen}
+                onClose={() => setIsBulkImportOpen(false)}
+                onSuccess={fetchDates}
+            />
         </div>
     );
 };

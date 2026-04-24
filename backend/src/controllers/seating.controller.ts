@@ -141,8 +141,41 @@ const getStudentsForExamSession = async (
     )];
 
     if (studentIds.length === 0) {
-        console.log("DEBUG: No registered students found for these exams");
-        return [];
+        console.log("DEBUG: No registered students found in ExamRegistration. Falling back to department-based implicit registration.");
+        const examSubjectRows = await sequelize.query<{ DepartmentID: number }>(
+            `
+            SELECT DISTINCT sub.DepartmentID
+            FROM Exams e
+            INNER JOIN Subjects sub ON sub.SubjectID = e.SubjectID
+            WHERE e.ExamID IN (${examIds.map((_, i) => `:examId${i}`).join(",")})
+            `,
+            {
+                type: QueryTypes.SELECT,
+                replacements: examIds.reduce((acc, id, i) => ({ ...acc, [`examId${i}`]: id }), {} as Record<string, number>),
+                ...(transaction ? { transaction } : {}),
+            }
+        );
+        const slotDeptIds = [...new Set(examSubjectRows.map(r => Number(r.DepartmentID)).filter(Boolean))];
+        if (slotDeptIds.length === 0) return [];
+
+        const allSlotStudents = await Student.findAll({
+            where: { DepartmentID: { [Op.in]: slotDeptIds } },
+            include: [
+                { model: User, attributes: ["FullName"] },
+                { model: Department, attributes: ["DepartmentCode", "DepartmentID"] },
+            ],
+            order: [["RegisterNumber", "ASC"]],
+            ...(transaction ? { transaction } : {}),
+        });
+
+        const excluded = new Set<number>(excludeStudentIds.map(Number));
+        const finalStudents = allSlotStudents.filter((s: any) => !excluded.has(Number(s.StudentID)));
+        
+        return finalStudents.map((s: any) => {
+            const jsonStu = typeof s.toJSON === 'function' ? s.toJSON() : { ...s };
+            jsonStu._isEligible = true; // Implicitly eligible
+            return jsonStu;
+        });
     }
 
     // Filter out excluded students
@@ -434,10 +467,28 @@ export const getHallLayout = async (req: Request, res: Response) => {
         const activeSeats = seats.filter(s => s.IsActive).length;
 
         const benchMap: Record<string, Record<number, any[]>> = {};
+        
+        // Parse row layout to enforce physical bounds
+        let parsedLayout: number[] = [];
+        if (hall.RowLayout) {
+            try { parsedLayout = typeof hall.RowLayout === 'string' ? JSON.parse(hall.RowLayout) : hall.RowLayout; }
+            catch { parsedLayout = []; }
+        }
+        const seatsPerBench = Number(hall.SeatsPerBench) || 1;
+
         for (const seat of seats) {
             const rowLabel = getRowLabel(seat);
             const benchNumber = getBenchNumber(seat);
             const seatNumber = getSeatNumber(seat);
+            
+            // BOUNDARY CHECK: Ensure seat is physically within the current Room Layout
+            // RowIndex is A, B, C... (0, 1, 2)
+            const rowNumericIndex = rowLabel.toUpperCase().charCodeAt(0) - 65;
+            
+            if (rowNumericIndex >= parsedLayout.length || rowNumericIndex < 0) continue; // Out of column bounds
+            if (benchNumber > (parsedLayout[rowNumericIndex] ?? 0)) continue; // Out of bench bounds for this column
+            if (seatNumber > seatsPerBench) continue; // Out of seat bounds for this bench
+
             const normalizedSeat = {
                 ...(typeof (seat as any).toJSON === "function" ? (seat as any).toJSON() : seat),
                 RowLabel: rowLabel,
@@ -1068,26 +1119,27 @@ const fetchEndSemStudentsBySubject = async (
             { model: User,       attributes: ['FullName'] },
             { model: Department, attributes: ['DepartmentCode', 'DepartmentID'] },
         ],
-        order: [['StudentID', 'ASC']], // Crucial: Exact spreadsheet import order!
+        order: [['RegisterNumber', 'ASC']], // Strict register-number order for continuity
         ...(transaction ? { transaction } : {}),
     }) as any[];
 
     const subjectMap: Record<string, any[]> = {};
     for (const s of students) {
         const stu = typeof s.toJSON === 'function' ? s.toJSON() : { ...s };
-        stu._isEligible   = eligibilityMap.get(Number(stu.StudentID)) ?? true;
+        stu._isEligible  = eligibilityMap.get(Number(stu.StudentID)) ?? true;
         const examDetails = studentExamMap.get(Number(stu.StudentID)) ?? null;
         if (!examDetails) continue;
-        
-        stu._subjectCode  = examDetails.code;
-        stu._subjectName  = examDetails.name;
-        
+
+        stu._subjectCode = examDetails.code;
+        stu._subjectName = examDetails.name;
+
         const code = stu._subjectCode;
+        if (!code) continue; // guard: skip if subject code is empty/null
         if (!subjectMap[code]) subjectMap[code] = [];
         subjectMap[code].push(stu);
     }
 
-    const subjectQueue = Object.keys(subjectMap).sort(); 
+    const subjectQueue = Object.keys(subjectMap).sort();
     return { subjectQueue, subjectMap, examIdBySubjectCode };
 };
 
@@ -1157,8 +1209,8 @@ export const bulkAssign = async (req: Request, res: Response) => {
          * END-SEMESTER BRANCH — returns early
          * ══════════════════════════════════════════════════════ */
         if (examType === 'EndSemester') {
-            const capLimit = roomCapacityLimit ? Number(roomCapacityLimit) : 40;
-            const CHUNK    = 4;
+            const rawCap = Number(roomCapacityLimit);
+            const capLimit = roomCapacityLimit && !isNaN(rawCap) && rawCap > 0 ? rawCap : 40;
 
             // ── Already-allocated excludes ──
             const selectedHallSetES = new Set<number>((hallIds as number[]).map((id: number) => Number(id)));
@@ -1190,21 +1242,37 @@ export const bulkAssign = async (req: Request, res: Response) => {
             }
 
             const totalEndSemStudents = Object.values(subjectMap).reduce((s, a) => s + a.length, 0);
-            console.log(`[EndSem] Subjects: ${subjectQueue.join(', ')} | Total students: ${totalEndSemStudents}`);
+            console.log(`[EndSem] Subjects: ${subjectQueue.join(', ')} | Total: ${totalEndSemStudents}`);
 
-            // ── Prepare Subject Pools ──
-            const pools: Array<{ code: string, students: any[] }> = subjectQueue.map(c => ({
-                code: c,
-                students: subjectMap[c] || []
+            /* ═══════════════════════════════════════════════════════
+             * SORT SUBJECTS: largest pool → primary (index 0)
+             * SINGLE_SUBJECT    (1)  → all rows use pool[0]
+             * STRIPED_2_SUBJECT (2)  → even rows=pool[0], odd=pool[1]
+             * MULTI_SUBJECT     (3+) → cyclic: row i → pool[i % N]
+             * ═══════════════════════════════════════════════════════ */
+            const sortedSubjectCodes = [...subjectQueue].sort(
+                (a, b) => (subjectMap[b]?.length ?? 0) - (subjectMap[a]?.length ?? 0)
+            );
+
+            // Subject pools — mutable queues; consumed globally across ALL halls (no reset)
+            const subjectPools: Array<{ code: string; students: any[] }> = sortedSubjectCodes.map(code => ({
+                code,
+                students: [...(subjectMap[code] ?? [])], // already sorted by RegisterNumber ASC
             }));
+            const subjectCount = subjectPools.length;
 
-            // ── Fetch and cap seats ──
-            let allActiveSeatsES: any[] = await sequelize.query(`
-                SELECT SeatID, RoomID, RowLabel AS RowIndex, BenchNumber AS BenchIndex, SeatNumber AS SeatIndex
+            // ── Fetch and cap seats (sanitise hallIds to safe integers first) ──
+            const safeHallIds = (hallIds as any[]).map(Number).filter(n => Number.isFinite(n) && n > 0);
+            if (safeHallIds.length === 0) {
+                await transaction.rollback();
+                return res.status(400).json({ message: 'No valid hall IDs provided.', examType });
+            }
+            const allActiveSeatsES: any[] = await sequelize.query(`
+                SELECT SeatID, RoomID, RowIndex, BenchIndex, SeatIndex
                 FROM   Seats
-                WHERE  RoomID IN (${(hallIds as number[]).map(Number).join(',')})
+                WHERE  RoomID IN (${safeHallIds.join(',')})
                 AND    IsActive = 1
-                ORDER BY RoomID ASC, RowLabel ASC, BenchNumber ASC, SeatNumber ASC
+                ORDER BY RoomID ASC, RowIndex ASC, BenchIndex ASC, SeatIndex ASC
             `, { type: QueryTypes.SELECT, raw: true, transaction }) as any[];
 
             if (allActiveSeatsES.length === 0) {
@@ -1236,7 +1304,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
             // ── Assign seats: room → row → bench → seatIndex ──
             const hallResultsES: any[] = [];
             const allNewAllocsES: { ExamID: number; SeatID: number; StudentID: number; IsEligible: boolean; IsBlocked: boolean }[] = [];
-            
+
             const cappedByRoom = new Map<number, any[]>();
             for (const seat of cappedSeatsES) {
                 const rid = Number(seat.RoomID);
@@ -1255,6 +1323,43 @@ export const bulkAssign = async (req: Request, res: Response) => {
 
             const rowPrimarySubjectMap: Record<number, Record<string, string>> = {};
 
+            /* ═══════════════════════════════════════════════════════════════
+             * HELPER: Pick primary pool for a given localRowCounter.
+             * Uses per-hall local counter so striping is clean for each hall.
+             * Cross-hall continuity is provided by the shared pool pointers.
+             * ═══════════════════════════════════════════════════════════════ */
+            const pickPoolForRow = (localRow: number): { code: string; students: any[] } | null => {
+                if (subjectCount === 1) {
+                    return subjectPools[0]!.students.length > 0 ? subjectPools[0]! : null;
+                }
+                if (subjectCount === 2) {
+                    const preferred = localRow % 2 === 0 ? 0 : 1;
+                    const fallback  = 1 - preferred;
+                    if ((subjectPools[preferred]?.students.length ?? 0) > 0) return subjectPools[preferred]!;
+                    if ((subjectPools[fallback]?.students.length  ?? 0) > 0) return subjectPools[fallback]!;
+                    return null;
+                }
+                // 3+ subjects: cyclic assignment with full fallback scan
+                for (let attempt = 0; attempt < subjectCount; attempt++) {
+                    const idx = (localRow + attempt) % subjectCount;
+                    if ((subjectPools[idx]?.students.length ?? 0) > 0) return subjectPools[idx]!;
+                }
+                return null;
+            };
+
+            /* SOFT_BACKFILL: pick next non-empty pool, preferring largest remaining count. */
+            const pickBackfillPool = (excludeCode: string): { code: string; students: any[] } | null =>
+                subjectPools
+                    .filter(p => p.code !== excludeCode && p.students.length > 0)
+                    .sort((a, b) => b.students.length - a.students.length)[0] ?? null;
+
+            /* EXHAUST_MODE check: ≤1 pool still has students. */
+            const nonEmptyPools = () => subjectPools.filter(p => p.students.length > 0);
+            const isExhaustMode = () => nonEmptyPools().length <= 1;
+
+            /* Total remaining students across all pools. */
+            const totalRemaining = () => subjectPools.reduce((s, p) => s + p.students.length, 0);
+
             for (const hallIdNum of hallIdsToUseES) {
                 const hall = targetHallsES.find(h => h.RoomID === hallIdNum);
                 if (!hall) continue;
@@ -1266,65 +1371,111 @@ export const bulkAssign = async (req: Request, res: Response) => {
                     continue;
                 }
 
-                // Build bench map for this hall
-                const benchMapES: Record<string, Record<number, any[]>> = {};
-                for (const seat of seats) {
-                    const row = getRowLabel(seat);
-                    const bench = getBenchNumber(seat);
-                    if (!benchMapES[row]) benchMapES[row] = {};
-                    if (!benchMapES[row]![bench]) benchMapES[row]![bench] = [];
-                    benchMapES[row]![bench]!.push(seat);
+                /* ── Cause 4 guard: skip hall entirely if all pools are empty ── */
+                if (totalRemaining() === 0) {
+                    hallResultsES.push({
+                        hallId:     hallIdNum,
+                        hallCode:   (hall as any).RoomCode,
+                        totalSeats: seats.length,
+                        filled:     0,
+                        cappedAt:   capLimit,
+                        skipped:    true,
+                    });
+                    console.log(`[EndSem] Hall ${hallIdNum} skipped — no students remaining.`);
+                    continue;
                 }
 
-                const allRowsES = Object.keys(benchMapES).sort();
-                const allBenchNums = [...new Set(allRowsES.flatMap(r => Object.keys(benchMapES[r]!).map(Number)))].sort((a,b) => a-b);
-                let hallFilledES = 0;
+                // Build row → bench → [seats] map (skip malformed seat records)
+                const rowBenchMap: Record<string, Record<number, any[]>> = {};
+                for (const seat of seats) {
+                    const row   = getRowLabel(seat);
+                    const bench = getBenchNumber(seat);
+                    if (!row)   { console.warn(`[EndSem] Seat ${seat.SeatID} has no RowIndex — skipped`); continue; }
+                    if (!bench) { console.warn(`[EndSem] Seat ${seat.SeatID} has no BenchIndex — skipped`); continue; }
+                    if (!rowBenchMap[row]) rowBenchMap[row] = {};
+                    if (!rowBenchMap[row]![bench]) rowBenchMap[row]![bench] = [];
+                    rowBenchMap[row]![bench]!.push(seat);
+                }
+
+                const allRowsES    = Object.keys(rowBenchMap).sort();
+                let   hallFilledES = 0;
+                let   localRowCounter = 0; // ← resets per hall; pool pointers maintain cross-hall continuity
 
                 for (const row of allRowsES) {
-                    let rowSubjectSet = false;
+                    if (totalRemaining() === 0) break; // all students seated
 
-                    for (const bench of allBenchNums) {
-                        const benchSeats = (benchMapES[row]?.[bench] || []).sort(sortSeatsByPosition);
-                        const seat1 = benchSeats.find(s => getSeatNumber(s) === 1);
-                        const seat2 = benchSeats.find(s => getSeatNumber(s) === 2);
+                    /* ── Determine mode for this row ── */
+                    const exhaust = isExhaustMode();
 
-                        let seat1Code: string | null = null;
-                        
-                        if (seat1) {
-                            const p1Idx = pools.findIndex(p => p.students.length > 0);
-                            if (p1Idx !== -1) {
-                                const stu = pools[p1Idx]!.students.shift();
-                                seat1Code = stu._subjectCode;
-                                
-                                if (!rowSubjectSet) {
-                                    rowPrimarySubjectMap[hallIdNum][row] = `${stu._subjectName} (${seat1Code})`;
-                                    rowSubjectSet = true;
+                    /* Pick the primary pool (STRICT_ROW or EXHAUST_MODE) */
+                    let rowPool = pickPoolForRow(localRowCounter);
+                    localRowCounter++;
+
+                    if (!rowPool) break; // all pools truly empty
+
+                    let isMixedRow    = false;
+                    const primaryCode = rowPool.code;
+
+                    /* Record primary subject for UI (will append backfill codes if mixed) */
+                    const sample = rowPool.students[0];
+                    rowPrimarySubjectMap[hallIdNum][row] = sample
+                        ? `${sample._subjectName ?? ''} (${rowPool.code})`
+                        : rowPool.code;
+
+                    /* ── Seat-level fill loop ── */
+                    const benchNums = Object.keys(rowBenchMap[row]!).map(Number).sort((a, b) => a - b);
+                    outerBench: for (const benchNum of benchNums) {
+                        const benchSeats = (rowBenchMap[row]![benchNum] ?? []).sort(sortSeatsByPosition);
+                        for (const seat of benchSeats) {
+
+                            /* ── Pool exhausted mid-seat: switch mode ── */
+                            if (rowPool.students.length === 0) {
+                                let next: { code: string; students: any[] } | null = null;
+
+                                if (exhaust) {
+                                    /* EXHAUST_MODE: grab the only remaining pool */
+                                    next = nonEmptyPools()[0] ?? null;
+                                } else {
+                                    /* SOFT_BACKFILL_MODE: pick next largest non-empty pool */
+                                    next = pickBackfillPool(primaryCode);
                                 }
 
-                                const subjExamId = examIdBySubjectCode[seat1Code!] ?? primaryExamId;
-                                pushAllocation(allNewAllocsES, subjExamId, seat1, stu);
-                                hallFilledES++;
-                            }
-                        }
+                                if (!next) break outerBench; // nothing left anywhere
+                                rowPool    = next;
+                                isMixedRow = true;
 
-                        if (seat2 && seat1Code) {
-                            const p2Idx = pools.findIndex(p => p.students.length > 0 && p.code !== seat1Code);
-                            if (p2Idx !== -1) {
-                                const stu = pools[p2Idx]!.students.shift();
-                                const subjExamId = examIdBySubjectCode[stu._subjectCode] ?? primaryExamId;
-                                pushAllocation(allNewAllocsES, subjExamId, seat2, stu);
-                                hallFilledES++;
-                            } // else: leave seat EMPTY
+                                /* Annotate row label to show backfill */
+                                rowPrimarySubjectMap[hallIdNum][row] += ` +${rowPool.code}`;
+                                console.log(`[EndSem][BACKFILL] Hall ${hallIdNum} row ${row}: switching to ${rowPool.code}`);
+                            }
+
+                            /* Resolve ExamID for current (possibly switched) pool */
+                            const subjExamId = examIdBySubjectCode[rowPool.code];
+                            if (subjExamId === undefined) {
+                                console.warn(`[EndSem] No ExamID for "${rowPool.code}" — student discarded`);
+                                rowPool.students.shift(); // prevent infinite loop
+                                continue;
+                            }
+
+                            const stu = rowPool.students.shift();
+                            if (!stu) break outerBench; // defensive guard
+
+                            pushAllocation(allNewAllocsES, subjExamId, seat, stu);
+                            hallFilledES++;
                         }
+                    }
+
+                    if (isMixedRow) {
+                        console.log(`[EndSem][MIXED ROW] Hall ${hallIdNum} row ${row}: ${rowPrimarySubjectMap[hallIdNum][row]}`);
                     }
                 }
 
                 hallResultsES.push({
-                    hallId: hallIdNum,
-                    hallCode: (hall as any).RoomCode,
+                    hallId:     hallIdNum,
+                    hallCode:   (hall as any).RoomCode,
                     totalSeats: seats.length,
-                    filled: hallFilledES,
-                    cappedAt: capLimit,
+                    filled:     hallFilledES,
+                    cappedAt:   capLimit,
                 });
             }
 
@@ -1333,16 +1484,20 @@ export const bulkAssign = async (req: Request, res: Response) => {
             }
 
             await transaction.commit();
-            console.log(`[EndSem] Assigned ${allNewAllocsES.length} seats across ${hallResultsES.length} halls`);
+            const modeLabel = subjectCount === 1 ? 'SINGLE_SUBJECT'
+                            : subjectCount === 2 ? 'STRIPED_2_SUBJECT'
+                            : 'MULTI_SUBJECT_BALANCED';
+            console.log(`[EndSem:RowEngine] Assigned ${allNewAllocsES.length} seats | Mode: ${modeLabel}`);
             return res.json({
-                success: true,
+                success:           true,
                 examType,
-                studentCount: totalEndSemStudents,
-                assignedCount: allNewAllocsES.length,
-                hallResults: hallResultsES,
-                subjects: subjectQueue,
-                rowSubjects: rowPrimarySubjectMap,
+                studentCount:      totalEndSemStudents,
+                assignedCount:     allNewAllocsES.length,
+                hallResults:       hallResultsES,
+                subjects:          sortedSubjectCodes,
+                rowSubjects:       rowPrimarySubjectMap,
                 roomCapacityLimit: capLimit,
+                distributionMode:  modeLabel,
             });
         }
         /* ══════════════════════════════════════════════════════
@@ -1462,11 +1617,11 @@ export const bulkAssign = async (req: Request, res: Response) => {
         let allActiveSeats: any[] = [];
         try {
             allActiveSeats = await sequelize.query(`
-                SELECT SeatID, RoomID, RowLabel AS RowIndex, BenchNumber AS BenchIndex, SeatNumber AS SeatIndex
+                SELECT SeatID, RoomID, RowIndex, BenchIndex, SeatIndex
                 FROM Seats
                 WHERE RoomID IN (${hallIds.map((id: any) => Number(id)).join(',')})
                 AND IsActive = 1
-                ORDER BY RoomID ASC, RowLabel ASC, BenchNumber ASC, SeatNumber ASC
+                ORDER BY RoomID ASC, RowIndex ASC, BenchIndex ASC, SeatIndex ASC
             `, {
                 type: QueryTypes.SELECT,
                 raw: true,
@@ -2233,7 +2388,7 @@ export const searchStudent = async (req: Request, res: Response) => {
                 StudentID: number; SeatID: number; RowLabel: string;
                 BenchNumber: number; SeatNumber: number; RoomID: number; RoomCode: string;
             }>(
-                `SELECT sa.StudentID, sa.SeatID, st.RowLabel AS RowLabel, st.BenchNumber AS BenchNumber, st.SeatNumber AS SeatNumber,
+                `SELECT sa.StudentID, sa.SeatID, st.RowIndex AS RowLabel, st.BenchIndex AS BenchNumber, st.SeatIndex AS SeatNumber,
                         r.RoomID, r.RoomName AS RoomCode
                  FROM SeatAllocations sa
                  JOIN Seats st ON sa.SeatID = st.SeatID

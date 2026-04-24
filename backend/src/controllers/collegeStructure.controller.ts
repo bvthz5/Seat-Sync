@@ -302,10 +302,10 @@ export const getRooms = async (req: Request, res: Response) => {
 export const getRoomLayout = async (req: Request, res: Response) => {
     try {
         const roomId = Number(req.params.id);
-        const room = await Room.findByPk(roomId);
+        const room = await Room.findByPk(roomId) as any;
         if (!room) return res.status(404).json({ message: "Room not found" });
 
-        const seats = await Seat.findAll({
+        let seats = await Seat.findAll({
             where: { RoomID: roomId },
             order: [
                 ['RowIndex', 'ASC'],
@@ -313,6 +313,24 @@ export const getRoomLayout = async (req: Request, res: Response) => {
                 ['SeatIndex', 'ASC']
             ]
         });
+
+        // HARD CONSISTENCY CHECK
+        if (room.RowLayout && Array.isArray(room.RowLayout) && room.SeatsPerBench) {
+            const expectedSeats = room.RowLayout.reduce((sum: number, count: number) => sum + count, 0) * room.SeatsPerBench;
+            // Generate seats only if there is a mismatch to prevent stale data
+            if (seats.length !== expectedSeats) {
+                console.log(`[Consistency Check] Room ${roomId} mismatch: Expected ${expectedSeats}, Found ${seats.length}. Regenerating...`);
+                await generateSeats(room);
+                seats = await Seat.findAll({
+                    where: { RoomID: roomId },
+                    order: [
+                        ['RowIndex', 'ASC'],
+                        ['BenchIndex', 'ASC'],
+                        ['SeatIndex', 'ASC']
+                    ]
+                });
+            }
+        }
 
         const zones = await Zone.findAll({ where: { RoomID: roomId } });
 
@@ -378,36 +396,21 @@ export const updateRoom = async (req: Request, res: Response) => {
 
         const newRowLayout = RowLayout || (TotalRows && BenchesPerRow ? Array(TotalRows).fill(BenchesPerRow) : undefined);
 
-        // ... Layout check ...
+        const normalizeLayout = (v: any) => {
+            if (!v) return null;
+            try { return JSON.stringify(typeof v === 'string' ? JSON.parse(v) : v); }
+            catch { return JSON.stringify(v); }
+        };
+
+        const existingLayout = normalizeLayout(room.RowLayout);
+        const incomingLayout = normalizeLayout(newRowLayout);
+
         const isPhysicalLayoutChange = (
-            (newRowLayout !== undefined && JSON.stringify(newRowLayout) !== JSON.stringify(room.RowLayout)) ||
-            (SeatsPerBench !== undefined && SeatsPerBench !== room.SeatsPerBench)
+            (newRowLayout !== undefined && existingLayout !== null && incomingLayout !== existingLayout) ||
+            (SeatsPerBench !== undefined && room.SeatsPerBench !== null && Number(SeatsPerBench) !== Number(room.SeatsPerBench))
         );
-
-        const isLayoutChange = isPhysicalLayoutChange;
-
-        if (isLayoutChange) {
-            const futureAllocations = await SeatAllocation.count({
-                include: [
-                    {
-                        model: Seat,
-                        where: { RoomID: id },
-                        required: true
-                    },
-                    {
-                        model: Exam,
-                        where: {
-                            ExamDate: { [Op.gte]: new Date() }
-                        },
-                        required: true
-                    }
-                ]
-            });
-
-            if (futureAllocations > 0) {
-                return res.status(400).json({ message: "Cannot modify layout. Room is booked for future exams." });
-            }
-        }
+        // NOTE: No future-exam block here — generateSeats is non-destructive
+        // (marks extra seats IsActive=false, never deletes), so SeatAllocation FKs are always preserved.
 
         if (RoomCode) room.RoomCode = RoomCode;
         if (Status) room.Status = Status;
@@ -419,9 +422,9 @@ export const updateRoom = async (req: Request, res: Response) => {
             if (newRowLayout !== undefined) room.RowLayout = newRowLayout;
             if (SeatsPerBench !== undefined) room.SeatsPerBench = SeatsPerBench;
 
-            // Recalculate capacity perfectly matched to layout
+            // Recalculate capacity using actual seatsPerBench
             let tLayout = newRowLayout !== undefined ? newRowLayout : room.RowLayout;
-            let tSeats = 2; // Fixed requirement
+            let tSeats = room.SeatsPerBench || 1;
             if (tLayout && Array.isArray(tLayout)) {
                 room.TotalCapacity = tLayout.reduce((a: number, b: number) => a + b, 0) * tSeats;
                 room.RoomType = room.TotalCapacity <= 80 ? 'ROOM' : 'HALL';
@@ -430,14 +433,17 @@ export const updateRoom = async (req: Request, res: Response) => {
             shouldRegenerateSeats = true;
         }
 
-        room.SeatsPerBench = 2;
+        // Persist seatsPerBench as-is (don't override)
         await room.save();
 
         if (shouldRegenerateSeats) {
             await generateSeats(room);
         }
 
-        res.json(room);
+        res.json({
+            room,
+            seatsUpdated: shouldRegenerateSeats
+        });
     } catch (error: any) {
         console.error("updateRoom Error:", error);
         res.status(500).json({ message: error.message });

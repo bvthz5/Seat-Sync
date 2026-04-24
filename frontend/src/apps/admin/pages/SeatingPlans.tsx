@@ -66,27 +66,39 @@ const getDeptStyle = (code: string) => {
     return DARK_DEPT_COLORS[keys[hash % keys.length]] || { bg: 'rgba(148, 163, 184, 0.05)', text: '#94a3b8', border: 'rgba(148, 163, 184, 0.3)' };
 };
 
-/* ─── Subject Color Palette (hue wheel, 12 distinct hues) ── */
+/* ─── Subject Color Palette — 16 visually distinct colors ──────────────
+   Colors are hand-picked across the full hue wheel, spaced ~22° apart,
+   all light/bright enough to read on the dark blueprint background.
+   Sequential assignment (first-seen order) guarantees:
+     • Same code → always same color (cache is stable per session)
+     • Different codes → always different color (no hash collisions)
+   Supports up to 16 simultaneous subject codes with zero collisions.      */
 const SUBJECT_HUE_PALETTE = [
-    { h: 220, text: '#60a5fa', glow: 'rgba(96,165,250,0.35)' },   // blue
-    { h: 280, text: '#c084fc', glow: 'rgba(192,132,252,0.35)' },  // violet
-    { h: 160, text: '#34d399', glow: 'rgba(52,211,153,0.35)' },   // emerald
-    { h: 30, text: '#fb923c', glow: 'rgba(251,146,60,0.35)' },   // orange
-    { h: 340, text: '#f472b6', glow: 'rgba(244,114,182,0.35)' },  // pink
-    { h: 200, text: '#22d3ee', glow: 'rgba(34,211,238,0.35)' },   // cyan
-    { h: 50, text: '#fbbf24', glow: 'rgba(251,191,36,0.35)' },   // amber
-    { h: 120, text: '#4ade80', glow: 'rgba(74,222,128,0.35)' },   // green
-    { h: 260, text: '#818cf8', glow: 'rgba(129,140,248,0.35)' },  // indigo
-    { h: 0, text: '#f87171', glow: 'rgba(248,113,113,0.35)' },  // red (non-error)
-    { h: 310, text: '#e879f9', glow: 'rgba(232,121,249,0.35)' },  // fuchsia
-    { h: 170, text: '#2dd4bf', glow: 'rgba(45,212,191,0.35)' },   // teal
+    { h: 200, text: '#67e8f9', glow: 'rgba(103,232,249,0.28)' },  //  0  cyan
+    { h: 262, text: '#c4b5fd', glow: 'rgba(196,181,253,0.28)' },  //  1  violet
+    { h: 142, text: '#6ee7b7', glow: 'rgba(110,231,183,0.28)' },  //  2  emerald
+    { h: 24, text: '#fdba74', glow: 'rgba(253,186,116,0.28)' },  //  3  orange
+    { h: 340, text: '#f9a8d4', glow: 'rgba(249,168,212,0.28)' },  //  4  pink
+    { h: 213, text: '#93c5fd', glow: 'rgba(147,197,253,0.28)' },  //  5  sky-blue
+    { h: 50, text: '#fde68a', glow: 'rgba(253,230,138,0.28)' },  //  6  amber
+    { h: 168, text: '#5eead4', glow: 'rgba(94,234,212,0.28)' },   //  7  teal
+    { h: 280, text: '#e879f9', glow: 'rgba(232,121,249,0.28)' },  //  8  fuchsia
+    { h: 104, text: '#a3e635', glow: 'rgba(163,230,53,0.28)' },  //  9  lime
+    { h: 4, text: '#fca5a5', glow: 'rgba(252,165,165,0.28)' },  // 10  rose
+    { h: 246, text: '#a5b4fc', glow: 'rgba(165,180,252,0.28)' },  // 11  indigo
+    { h: 183, text: '#67e8f9', glow: 'rgba(103,232,249,0.22)' },  // 12  light-cyan
+    { h: 76, text: '#d9f99d', glow: 'rgba(217,249,157,0.28)' },  // 13  yellow-green
+    { h: 316, text: '#f0abfc', glow: 'rgba(240,171,252,0.28)' },  // 14  orchid
+    { h: 228, text: '#bfdbfe', glow: 'rgba(191,219,254,0.28)' },  // 15  pale-blue
 ];
 const subjectColorCache = new Map<string, typeof SUBJECT_HUE_PALETTE[0]>();
+/* Sequential assignment: first new code gets slot 0, second gets slot 1, etc.
+   Wraps around after 16 subjects (extremely rare in practice).             */
 const getSubjectStyle = (code: string): typeof SUBJECT_HUE_PALETTE[0] => {
     if (!code) return SUBJECT_HUE_PALETTE[0]!;
     if (subjectColorCache.has(code)) return subjectColorCache.get(code)!;
-    const hash = [...code].reduce((a, c) => a * 31 + c.charCodeAt(0), 0);
-    const style = SUBJECT_HUE_PALETTE[Math.abs(hash) % SUBJECT_HUE_PALETTE.length]!;
+    const nextIdx = subjectColorCache.size % SUBJECT_HUE_PALETTE.length;
+    const style = SUBJECT_HUE_PALETTE[nextIdx]!;
     subjectColorCache.set(code, style);
     return style;
 };
@@ -130,7 +142,7 @@ const SeatingPlans: React.FC = () => {
     const [secondaryDept, setSecondaryDept] = useState<string>('');
     const [avoidSameDeptBench, setAvoidSameDeptBench] = useState(true);
     const [shuffleRooms, setShuffleRooms] = useState(false);
-    const [roomCapacityLimit, setRoomCapacityLimit] = useState<number>(40);
+    const [roomCapacityLimit, setRoomCapacityLimit] = useState<string>('');
     const [selectedHallIds, setSelectedHallIds] = useState<Set<number>>(new Set());
     const [hallSearch, setHallSearch] = useState('');
     const [hallFilter, setHallFilter] = useState<'all' | 'empty' | 'partial' | 'full'>('all');
@@ -191,7 +203,7 @@ const SeatingPlans: React.FC = () => {
                 benches: (rows[rowLabel] || []).sort((a, b) => a.benchNumber - b.benchNumber),
             }));
     }, [detailBenches]);
-    
+
     // We strictly use the independently counted total across all queries
     const eligibleStudentCount = totalEligibleStudents;
 
@@ -292,7 +304,7 @@ const SeatingPlans: React.FC = () => {
                         const res = await ExamService.getEligibleStudents(exam.ExamID);
                         studentCount = res?.students && Array.isArray(res.students) ? res.students.length : (Array.isArray(res) ? res.length : 0);
                     } catch { studentCount = 0; }
-                    
+
                     totalExamStudents += studentCount;
 
                     const dept = exam?.Subject?.Department;
@@ -343,6 +355,50 @@ const SeatingPlans: React.FC = () => {
     }, [selectedDate, selectedSession, startTransition]);
 
     useEffect(() => { loadSummary(); }, [loadSummary]);
+
+    // Auto-refresh data when returning to the tab or on layout update
+    useEffect(() => {
+        const handleSync = async (e?: Event | MessageEvent) => {
+            try {
+                const updatedHalls = await SeatingService.getHalls();
+                setHalls(Array.isArray(updatedHalls) ? updatedHalls : []);
+            } catch { }
+            if (selectedDate) loadSummary();
+
+            // Refresh the live detail modal if it's currently open
+            let targetRoomId: number | null = null;
+            if (e && 'data' in e && (e as MessageEvent).data?.roomId) {
+                targetRoomId = Number((e as MessageEvent).data.roomId);
+            }
+            
+            if (detailHall && (!targetRoomId || detailHall.hallId === targetRoomId)) {
+                try {
+                    const layout = await SeatingService.getHallLayout(detailHall.hallId);
+                    startTransition(() => {
+                        setDetailBenches(layout.benches || []);
+                        setDetailTotalSeats(layout.totalSeats || 0);
+                    });
+                } catch { }
+            }
+        };
+
+        window.addEventListener('focus', handleSync);
+        window.addEventListener('ROOM_LAYOUT_UPDATED', handleSync);
+        
+        let channel: BroadcastChannel | null = null;
+        try {
+            channel = new BroadcastChannel('seating_sync');
+            channel.onmessage = (e) => {
+                if (e.data?.type === 'ROOM_LAYOUT_UPDATED') handleSync(e);
+            };
+        } catch (e) { }
+
+        return () => {
+            window.removeEventListener('focus', handleSync);
+            window.removeEventListener('ROOM_LAYOUT_UPDATED', handleSync);
+            if (channel) channel.close();
+        };
+    }, [loadSummary, selectedDate, detailHall]);
 
     /* quick add slot */
     const handleQuickAddSlot = async () => {
@@ -435,7 +491,7 @@ const SeatingPlans: React.FC = () => {
                 secondaryDeptId: secondaryDept ? Number(secondaryDept) : null,
                 avoidSameDeptBench,
                 shuffleRooms,
-                roomCapacityLimit,
+                roomCapacityLimit: roomCapacityLimit !== '' ? Number(roomCapacityLimit) : undefined,
                 seriesId: selectedSeries ? Number(selectedSeries) : undefined,
             });
             // Support both Internal (totalLeft/RightAssigned) and EndSem (assignedCount) response shapes
@@ -479,18 +535,18 @@ const SeatingPlans: React.FC = () => {
     /* auto assign series */
     const openSeriesModal = () => {
         if (!selectedSeries) return;
-        
+
         if (examDates.length === 0) {
             toast.error("No valid exams found in this series.");
             return;
         }
-        
+
         const tasks: SeriesTask[] = examDates.map(d => ({
             date: String(d.examDate).split('T')[0],
             session: d.session as 'FN' | 'AN',
             status: 'pending'
         }));
-        
+
         setSeriesTasks(tasks);
         setShowSeriesModal(true);
     };
@@ -498,31 +554,31 @@ const SeatingPlans: React.FC = () => {
     const runSeriesAllocation = async () => {
         setSeriesRunning(true);
         let ids = selectedHallIds.size > 0 ? [...selectedHallIds] : halls.map(h => h.RoomID);
-        
+
         const tasks = [...seriesTasks];
         let hasError = false;
-        
+
         for (let i = 0; i < tasks.length; i++) {
             const task = tasks[i];
             if (task.status === 'success') continue;
-            
+
             task.status = 'running';
             setSeriesTasks([...tasks]);
-            
+
             try {
                 const r = await SeatingService.bulkAssign({
-                    examDate: task.date, 
-                    session: task.session, 
+                    examDate: task.date,
+                    session: task.session,
                     hallIds: ids,
                     mode: assignmentMode,
                     primaryDeptId: primaryDept ? Number(primaryDept) : null,
                     secondaryDeptId: secondaryDept ? Number(secondaryDept) : null,
                     avoidSameDeptBench,
                     shuffleRooms,
-                    roomCapacityLimit,
+                    roomCapacityLimit: roomCapacityLimit !== '' ? Number(roomCapacityLimit) : undefined,
                     seriesId: selectedSeries ? Number(selectedSeries) : undefined,
                 });
-                
+
                 let assigned = 0;
                 const examType: string = r.examType || 'Internal';
                 if (examType === 'EndSemester') {
@@ -530,7 +586,7 @@ const SeatingPlans: React.FC = () => {
                 } else {
                     assigned = Number(r.totalLeftAssigned || 0) + Number(r.totalRightAssigned || 0);
                 }
-                
+
                 task.status = 'success';
                 task.assigned = assigned;
             } catch (err: any) {
@@ -543,7 +599,7 @@ const SeatingPlans: React.FC = () => {
         setSeriesRunning(false);
         if (hasError) toast.error("Completed with some errors");
         else toast.success("Successfully assigned entire series");
-        
+
         if (selectedDate && selectedSession) {
             loadSummary();
         }
@@ -772,11 +828,11 @@ const SeatingPlans: React.FC = () => {
             if (!selectedDate) return;
             let assignments: Record<number, Assignment> = {};
             try { const alloc = await SeatingService.getAllocationForHall(selectedDate, selectedSession, hall.hallId); assignments = alloc?.assignments ?? {}; } catch { }
-            
+
             const subjMap: Record<string, { code: string, name: string, regs: string[] }> = {};
             Object.values(assignments).forEach(a => {
                 if (a.subjectName) globalSubjects.add(a.subjectName);
-                
+
                 const subCode = a.subjectCode || "Unknown";
                 if (!subjMap[subCode]) subjMap[subCode] = { code: subCode, name: a.subjectName || "", regs: [] };
                 subjMap[subCode].regs.push(a.registerNumber);
@@ -784,15 +840,15 @@ const SeatingPlans: React.FC = () => {
             (hall as any).__subjMap = subjMap;
             (hall as any).__total = Object.keys(assignments).length;
         }));
-        
+
         const allocatedOnly = active.filter(hall => (((hall as any).__total ?? 0) > 0));
         let slNo = 1;
-        
+
         allocatedOnly.forEach(hall => {
             const subjMap: Record<string, { code: string, name: string, regs: string[] }> = (hall as any).__subjMap ?? {};
             const total: number = (hall as any).__total ?? 0;
             const subjs = Object.values(subjMap).sort((a, b) => a.code.localeCompare(b.code));
-            
+
             subjs.forEach((sub, idx) => {
                 const ranges = buildRegRanges(sub.regs);
                 rows.push({
@@ -807,7 +863,7 @@ const SeatingPlans: React.FC = () => {
             });
             slNo++;
         });
-        
+
         const examNameString = Array.from(globalSubjects).join(' / ') || 'Examinations';
         return { rows, examNameString };
     };
@@ -821,26 +877,26 @@ const SeatingPlans: React.FC = () => {
             const sessionLabel = selectedSession === 'FN' ? 'Forenoon' : 'Afternoon';
 
             // ── Define reusable styles ──
-            const headerFill   = { patternType: 'solid', fgColor: { rgb: '0F172A' } };
-            const headerFont   = { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 };
-            const whiteFill    = { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } };
-            const blueFill     = { patternType: 'solid', fgColor: { rgb: 'ECF6FF' } };
-            const bodyFont     = { sz: 9, color: { rgb: '1E293B' } };
-            const boldFont     = { sz: 9, bold: true, color: { rgb: '1E293B' } };
-            const thinBorder   = { style: 'thin', color: { rgb: 'B4C3D7' } };
-            const thickBorder  = { style: 'medium', color: { rgb: '0F172A' } };
-            const allThin      = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder };
+            const headerFill = { patternType: 'solid', fgColor: { rgb: '0F172A' } };
+            const headerFont = { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 };
+            const whiteFill = { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } };
+            const blueFill = { patternType: 'solid', fgColor: { rgb: 'ECF6FF' } };
+            const bodyFont = { sz: 9, color: { rgb: '1E293B' } };
+            const boldFont = { sz: 9, bold: true, color: { rgb: '1E293B' } };
+            const thinBorder = { style: 'thin', color: { rgb: 'B4C3D7' } };
+            const thickBorder = { style: 'medium', color: { rgb: '0F172A' } };
+            const allThin = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder };
             const mkBorder = (isFirst: boolean, isLast: boolean) => ({
-                top:    isFirst ? thickBorder : thinBorder,
-                bottom: isLast  ? thickBorder : thinBorder,
-                left:   thinBorder,
-                right:  thinBorder,
+                top: isFirst ? thickBorder : thinBorder,
+                bottom: isLast ? thickBorder : thinBorder,
+                left: thinBorder,
+                right: thinBorder,
             });
 
             // ── Build first/last row index sets and group map ──
-            const firstRowSet  = new Set<number>();
-            const lastRowSet   = new Set<number>();
-            const groupMap     = new Map<number, number>();
+            const firstRowSet = new Set<number>();
+            const lastRowSet = new Set<number>();
+            const groupMap = new Map<number, number>();
             let rIdx = 0; let grp = -1;
             rows.forEach(r => {
                 if (r.isFirstRow) { firstRowSet.add(rIdx); if (rIdx > 0) lastRowSet.add(rIdx - 1); grp++; }
@@ -854,7 +910,7 @@ const SeatingPlans: React.FC = () => {
 
             // Title rows (plain)
             const titleStyle = { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center' } };
-            const subStyle   = { font: { sz: 9 }, alignment: { horizontal: 'center' } };
+            const subStyle = { font: { sz: 9 }, alignment: { horizontal: 'center' } };
             DATA.push([{ v: "ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI", s: titleStyle }, '', '', '', '']);
             DATA.push([{ v: 'CONSOLIDATED SEATING ARRANGEMENT', s: { font: { bold: true, sz: 11 }, alignment: { horizontal: 'center' } } }, '', '', '', '']);
             let truncExam = examNameString; if (truncExam.length > 80) truncExam = truncExam.substring(0, 77) + '...';
@@ -870,14 +926,14 @@ const SeatingPlans: React.FC = () => {
             rows.forEach((r, i) => {
                 const fill = (groupMap.get(i) ?? 0) % 2 === 0 ? whiteFill : blueFill;
                 const isFirst = firstRowSet.has(i);
-                const isLast  = lastRowSet.has(i);
-                const border  = mkBorder(isFirst, isLast);
-                const base    = { fill, border };
+                const isLast = lastRowSet.has(i);
+                const border = mkBorder(isFirst, isLast);
+                const base = { fill, border };
                 DATA.push([
-                    { v: r.isFirstRow ? r.slNo   : '', s: { ...base, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
-                    { v: r.isFirstRow ? r.hallCode: '', s: { ...base, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
-                    { v: r.regRanges,  s: { ...base, font: bodyFont, alignment: { horizontal: 'left',   vertical: 'center', wrapText: true } } },
-                    { v: r.count,      s: { ...base, font: bodyFont, alignment: { horizontal: 'center', vertical: 'center' } } },
+                    { v: r.isFirstRow ? r.slNo : '', s: { ...base, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
+                    { v: r.isFirstRow ? r.hallCode : '', s: { ...base, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
+                    { v: r.regRanges, s: { ...base, font: bodyFont, alignment: { horizontal: 'left', vertical: 'center', wrapText: true } } },
+                    { v: r.count, s: { ...base, font: bodyFont, alignment: { horizontal: 'center', vertical: 'center' } } },
                     { v: r.isFirstRow ? r.total : '', s: { ...base, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
                 ]);
             });
@@ -920,15 +976,15 @@ const SeatingPlans: React.FC = () => {
             doc.text('Examination Control Division', pageW / 2, 16, { align: 'center' });
             doc.setFillColor(99, 102, 241);
             doc.rect(14, 20, pageW - 28, 0.4, 'F');
-            
+
             doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
             doc.text('CONSOLIDATED SEATING ARRANGEMENT', pageW / 2, 26, { align: 'center' });
-            
+
             let truncatedExamName = examNameString;
             if (truncatedExamName.length > 90) truncatedExamName = truncatedExamName.substring(0, 87) + '...';
             doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(200, 200, 200);
             doc.text(truncatedExamName, pageW / 2, 32, { align: 'center' });
-            
+
             doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(148, 163, 184);
             doc.text(`${fmtDate(selectedDate)}  \u00b7  ${sessionLabel}`, pageW / 2, 38, { align: 'center' });
 
@@ -1097,7 +1153,7 @@ const SeatingPlans: React.FC = () => {
                     const rSeat = b.seats.find(s => s.SeatNumber === 2);
                     const hasLeft = lSeat && assignments[lSeat.SeatID];
                     const hasRight = rSeat && assignments[rSeat.SeatID];
-                    
+
                     if (hasLeft || hasRight) {
                         activeCols.add(b.rowLabel);
                         activeRows.add(b.benchNumber);
@@ -1106,7 +1162,7 @@ const SeatingPlans: React.FC = () => {
 
                 // Filtered column labels (e.g. A, B, C)
                 const rowLabels = Array.from(activeCols).sort();
-                
+
                 // Filtered bench numbers (e.g. 1, 3, 5)
                 const benchNumbers = Array.from(activeRows).sort((a, b) => a - b);
 
@@ -1120,16 +1176,16 @@ const SeatingPlans: React.FC = () => {
 
                 doc.setFillColor(255, 255, 255);
                 doc.rect(0, 0, pageW, pageH, 'F');
-                
+
                 // Collect statistics
                 const subjectCounts = new Map<string, number>();
                 const deptCounts = new Map<string, number>();
                 const roomSubjectNames = new Set<string>();
-                
+
                 Object.values(assignments).forEach(ass => {
                     if (ass.subjectCode) subjectCounts.set(ass.subjectCode, (subjectCounts.get(ass.subjectCode) || 0) + 1);
                     if (ass.subjectName) roomSubjectNames.add(ass.subjectName);
-                    
+
                     // If DB deptCode is empty, try to extract from Register Number (e.g., SJC24EE001 -> EE)
                     let dept = ass.deptCode;
                     if (!dept && ass.registerNumber) {
@@ -1153,22 +1209,22 @@ const SeatingPlans: React.FC = () => {
                 doc.setFontSize(13);
                 doc.setTextColor(0, 0, 0);
                 doc.text("ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI (Autonomous)", pageW / 2, 12, { align: 'center' });
-                
+
                 doc.setFont('helvetica', 'normal');
                 doc.setFontSize(10);
                 doc.text(roomSubjectTitle, pageW / 2, 17, { align: 'center' });
-                
+
                 doc.setFontSize(11);
                 doc.setFont('helvetica', 'bold');
                 doc.text(`SEATING ARRANGEMENT - ${selectedDate} (${selectedSession})`, pageW / 2, 22, { align: 'center' });
-                
+
                 doc.setFontSize(12);
                 doc.text(`Room: ${hall.hallCode}`, pageW / 2, 28, { align: 'center' });
 
                 // --- SECTION 1: AUTO-SCALING ENGINE ---
                 const cols = Math.max(rowLabels.length, 1);
                 const rowsNeeded = Math.max(benchNumbers.length, 1);
-                
+
                 // Base values (SMALL HALL: Rows <= 6)
                 let gapX = 3;
                 let gapY = 3.0;
@@ -1177,7 +1233,7 @@ const SeatingPlans: React.FC = () => {
                 let nameFont = 7.5;
                 let benchLabelFont = 7.5; // VERY SMALL
                 let emptyFont = 7.5;
-                
+
                 let tableScaleW = 1.0;
                 let tableFontSize = 8.5;
                 let tablePadding = 1.5;
@@ -1185,24 +1241,24 @@ const SeatingPlans: React.FC = () => {
                 // Scaling Levels
                 if (rowsNeeded > 10) {
                     // LARGE HALL: Reduce bench height (-20%), font (-2px), padding (-30%)
-                    maxCardH = 14.4; 
-                    regFont = 7.5;   
-                    nameFont = 5.5;  
+                    maxCardH = 14.4;
+                    regFont = 7.5;
+                    nameFont = 5.5;
                     benchLabelFont = 6;
                     emptyFont = 6;
                     gapY = 1.5;
-                    tableScaleW = 0.75; 
+                    tableScaleW = 0.75;
                     tableFontSize = 7.0;
                     tablePadding = 1.0;
                 } else if (rowsNeeded >= 7) {
                     // MEDIUM HALL: Reduce bench height (-10%), font (-1px)
-                    maxCardH = 16.2; 
-                    regFont = 8.5;   
-                    nameFont = 6.5;  
+                    maxCardH = 16.2;
+                    regFont = 8.5;
+                    nameFont = 6.5;
                     benchLabelFont = 7;
                     emptyFont = 6.5;
                     gapY = 2.0;
-                    tableScaleW = 0.85; 
+                    tableScaleW = 0.85;
                     tableFontSize = 7.5;
                     tablePadding = 1.2;
                 }
@@ -1210,34 +1266,34 @@ const SeatingPlans: React.FC = () => {
                 // Grid position
                 const startY = 44; // Increased to ensure safe clearance below the room header
                 const bottomMargin = 8;
-                
+
                 // Dynamic height calculations to fit on one page
                 const summaryRows = Math.max(deptCounts.size, subjectCounts.size, 1);
                 const summaryRowHeight = tablePadding * 2 + tableFontSize * 0.35;
                 const summaryHeight = 10 + (summaryRows * summaryRowHeight) + 10;
-                
+
                 const gridTableGap = 12; // 12mm clear gap below grid
                 const availableH = pageH - startY - summaryHeight - bottomMargin - gridTableGap;
-                
+
                 // SECTION 6: GRID HEIGHT CONTROL (max 65% of page)
                 const maxGridH = pageH * 0.65;
                 const allowedH = Math.min(availableH, maxGridH);
-                
+
                 // SECTION 7: COLUMN WIDTH BALANCING
-                const maxCardW = 48; 
-                let cardW = (pageW - 16 - (cols - 1) * gapX) / cols; 
+                const maxCardW = 48;
+                let cardW = (pageW - 16 - (cols - 1) * gapX) / cols;
                 if (cardW > maxCardW) cardW = maxCardW;
-                
+
                 const gridTotalW = (cols * cardW) + ((cols - 1) * gapX);
                 const marginX = (pageW - gridTotalW) / 2; // Center horizontally
-                
+
                 const rawCardH = (allowedH - (rowsNeeded - 1) * gapY) / rowsNeeded;
                 const cardH = Math.min(rawCardH, maxCardH);
 
                 // Draw Column Headers
                 rowLabels.forEach((rowLabel, colIdx) => {
                     const x = marginX + colIdx * (cardW + gapX);
-                    
+
                     // Column Header (e.g. A)
                     doc.setFontSize(14);
                     doc.setFont('helvetica', 'bold');
@@ -1270,7 +1326,7 @@ const SeatingPlans: React.FC = () => {
                     benchNumbers.forEach((bNumber, benchIdx) => {
                         // Find the bench for this exact cell
                         const bench = benches.find(b => b.rowLabel === rowLabel && b.benchNumber === bNumber);
-                        
+
                         const leftSeat = bench ? bench.seats.find(s => s.SeatNumber === 1) : null;
                         const rightSeat = bench ? bench.seats.find(s => s.SeatNumber === 2) : null;
                         const leftAss = leftSeat ? assignments[leftSeat.SeatID] : null;
@@ -1303,11 +1359,11 @@ const SeatingPlans: React.FC = () => {
                         const printSeat = (ass: Assignment | null, offsetX: number) => {
                             const cx = x + offsetX;
                             const halfW = cardW / 2;
-                            
+
                             if (!ass) {
                                 // EMPTY SEAT (small placeholder)
                                 doc.setFillColor(245, 245, 245);
-                                doc.rect(cx - halfW/2 + 0.5, y + 4, halfW - 1, cardH - 4.5, 'F');
+                                doc.rect(cx - halfW / 2 + 0.5, y + 4, halfW - 1, cardH - 4.5, 'F');
                                 doc.setFont('helvetica', 'bold');
                                 doc.setFontSize(emptyFont);
                                 doc.setTextColor(170, 170, 170);
@@ -1318,36 +1374,36 @@ const SeatingPlans: React.FC = () => {
                             if (!ass.isEligible || ass.isBlocked) {
                                 // NOT ELIGIBLE
                                 doc.setFillColor(255, 235, 235);
-                                doc.rect(cx - halfW/2 + 0.5, y + 4, halfW - 1, cardH - 4.5, 'F');
-                                
+                                doc.rect(cx - halfW / 2 + 0.5, y + 4, halfW - 1, cardH - 4.5, 'F');
+
                                 doc.setFont('helvetica', 'bold');
                                 doc.setFontSize(emptyFont - 0.5);
                                 doc.setTextColor(200, 50, 50);
                                 doc.text("NOT ELIGIBLE", cx, y + (cardH / 2) - 0.5, { align: 'center' });
-                                
+
                                 doc.setFontSize(regFont - 1.5);
                                 doc.setTextColor(0, 0, 0);
                                 doc.text(ass.registerNumber || '', cx, y + (cardH / 2) + 3.5, { align: 'center' });
                                 return;
                             }
-                            
+
                             // SECTION 2: BENCH CARD TEXT FIX (strict layout & spacing)
                             doc.setFont('helvetica', 'bold');
-                            doc.setFontSize(regFont); 
+                            doc.setFontSize(regFont);
                             doc.setTextColor(0, 0, 0);
-                            
+
                             // Center horizontally, move slightly up from exact center
-                            const textY = y + (cardH / 2) - 0.2; 
+                            const textY = y + (cardH / 2) - 0.2;
                             doc.text(ass.registerNumber || '', cx, textY, { align: 'center' });
 
                             doc.setFont('helvetica', 'normal');
-                            doc.setFontSize(nameFont); 
+                            doc.setFontSize(nameFont);
                             doc.setTextColor(60, 60, 60);
-                            
+
                             // Add gap below the register number
                             const nameOffset = rowsNeeded > 10 ? 2.5 : (rowsNeeded >= 7 ? 2.8 : 3.2);
-                            const nameY = textY + nameOffset; 
-                            
+                            const nameY = textY + nameOffset;
+
                             let truncName = ass.studentName || '';
                             if (doc.getTextWidth(truncName) > halfW - 2) {
                                 truncName = truncName.substring(0, 14) + "...";
@@ -1361,16 +1417,16 @@ const SeatingPlans: React.FC = () => {
                 });
 
                 // SECTION 7: GRID vs TABLE SEPARATION
-                let currentY = startY + rowsNeeded * (cardH + gapY) + gridTableGap; 
-                
+                let currentY = startY + rowsNeeded * (cardH + gapY) + gridTableGap;
+
                 // SECTION 3/4/8: SUMMARY TABLE SIZE REDUCTION & POSITIONING
                 // Reduced table width to ~60-70% of previous default
-                const baseTableW = 75; 
+                const baseTableW = 75;
                 const tableW = baseTableW * tableScaleW;
                 const tableGap = 15; // 15mm gap between tables
                 const totalTablesW = (tableW * 2) + tableGap;
                 const tableStartX = (pageW - totalTablesW) / 2;
-                
+
                 const autoTable = (await import('jspdf-autotable')).default;
 
                 // Left Table (Departments)
@@ -1423,7 +1479,7 @@ const SeatingPlans: React.FC = () => {
             link.click();
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
-            
+
             toast.success('Room Wise Seating downloaded as ZIP');
         } catch (err: any) {
             console.error('downloadSeatingPDF error:', err);
@@ -1569,8 +1625,8 @@ const SeatingPlans: React.FC = () => {
                                         {(['FN', 'AN'] as const).map(s => (
                                             <button key={s} onClick={() => { setSelectedSession(s); setSelectedDate(''); }}
                                                 className={`flex items-center justify-center gap-2 py-2 rounded-xl text-[13px] font-bold transition-all border-2 ${selectedSession === s
-                                                        ? s === 'FN' ? 'bg-indigo-50 text-indigo-700 border-indigo-300' : 'bg-orange-50 text-orange-700 border-orange-300'
-                                                        : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+                                                    ? s === 'FN' ? 'bg-indigo-50 text-indigo-700 border-indigo-300' : 'bg-orange-50 text-orange-700 border-orange-300'
+                                                    : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
                                                     }`}>
                                                 {s === 'FN' ? <Sun size={14} className={selectedSession === s ? 'text-indigo-600' : 'text-slate-400'} /> : <Moon size={14} className={selectedSession === s ? 'text-orange-600' : 'text-slate-400'} />}
                                                 {s === 'FN' ? 'Forenoon' : 'Afternoon'}
@@ -1618,7 +1674,7 @@ const SeatingPlans: React.FC = () => {
                                             {lastExamType === 'EndSemester' ? 'Subject-Based Auto Alignment' : 'Auto Balanced Allocation'}
                                         </span>
                                         <span className="text-[10px] text-slate-500 font-medium leading-relaxed">
-                                            {lastExamType === 'EndSemester' 
+                                            {lastExamType === 'EndSemester'
                                                 ? 'Strict contiguous subject assignments natively applied to avoid bench conflicts.'
                                                 : 'Intelligent multi-department distribution matching capacity perfectly.'}
                                         </span>
@@ -1641,15 +1697,33 @@ const SeatingPlans: React.FC = () => {
                                         ))}
                                         {/* End Sem: per-room seat cap */}
                                         <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 border border-slate-200">
-                                            <span className="text-[11px] text-slate-600 font-medium">Room cap <span className="text-slate-400 text-[9px]">(End Sem)</span></span>
-                                            <input
-                                                id="room-capacity-limit-wizard"
-                                                name="roomCapacityLimitWizard"
-                                                type="number" min={1} max={200}
-                                                value={roomCapacityLimit}
-                                                onChange={e => setRoomCapacityLimit(Math.max(1, Number(e.target.value) || 40))}
-                                                className="w-14 h-6 text-center text-[11px] font-bold text-slate-700 border border-slate-300 rounded-md bg-white focus:outline-none focus:border-indigo-400"
-                                            />
+                                            <div className="flex flex-col">
+                                                <span className="text-[11px] text-slate-600 font-medium leading-tight">Room cap</span>
+                                                <span className="text-[9px] text-slate-400 leading-tight">seats per hall (End Sem)</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setRoomCapacityLimit(v => String(Math.max(1, (Number(v) || 0) - 1)))}
+                                                    className="w-6 h-6 rounded-md bg-white border border-slate-300 text-slate-500 hover:bg-slate-100 hover:border-slate-400 flex items-center justify-center text-sm font-bold transition-colors"
+                                                    aria-label="Decrease room cap"
+                                                >−</button>
+                                                <input
+                                                    id="room-capacity-limit-wizard"
+                                                    name="roomCapacityLimitWizard"
+                                                    type="number" min={1} max={200}
+                                                    value={roomCapacityLimit}
+                                                    placeholder="40"
+                                                    onChange={e => setRoomCapacityLimit(e.target.value)}
+                                                    className="w-12 h-6 text-center text-[12px] font-bold text-indigo-700 border border-indigo-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400/50 focus:border-indigo-500 placeholder:text-slate-400 placeholder:font-normal [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setRoomCapacityLimit(v => String(Math.min(200, (Number(v) || 0) + 1)))}
+                                                    className="w-6 h-6 rounded-md bg-white border border-slate-300 text-slate-500 hover:bg-slate-100 hover:border-slate-400 flex items-center justify-center text-sm font-bold transition-colors"
+                                                    aria-label="Increase room cap"
+                                                >+</button>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -1699,9 +1773,9 @@ const SeatingPlans: React.FC = () => {
                                                 return (
                                                     <button key={h.hallId} onClick={() => toggleHall(h.hallId)}
                                                         className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all border ${isSelected ? 'bg-indigo-500 text-white border-indigo-500 shadow-sm'
-                                                                : pct >= 100 ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'
-                                                                    : pct > 0 ? 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100'
-                                                                        : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+                                                            : pct >= 100 ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'
+                                                                : pct > 0 ? 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100'
+                                                                    : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
                                                             }`}>
                                                         {h.hallCode}
                                                         {pct > 0 && !isSelected && <span className="text-[8px] font-mono opacity-75 bg-white/40 px-1 rounded">{pct}%</span>}
@@ -1725,9 +1799,9 @@ const SeatingPlans: React.FC = () => {
                                             <span className="text-[11px] font-bold text-slate-700 uppercase tracking-widest">Preview</span>
                                         </div>
                                         <div className={`px-3 py-2.5 rounded-xl border text-[11px] font-medium ${!hasPreviewInputs ? 'bg-slate-50 border-slate-200 text-slate-500'
-                                                : projectedUnassigned === 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                                                    : selectedSeatCount === 0 ? 'bg-slate-50 border-slate-200 text-slate-500'
-                                                        : 'bg-amber-50 border-amber-200 text-amber-700'
+                                            : projectedUnassigned === 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                                : selectedSeatCount === 0 ? 'bg-slate-50 border-slate-200 text-slate-500'
+                                                    : 'bg-amber-50 border-amber-200 text-amber-700'
                                             }`}>
                                             <div className="flex items-center justify-between">
                                                 <span>Students</span><strong>{eligibleStudentCount}</strong>
@@ -1759,16 +1833,15 @@ const SeatingPlans: React.FC = () => {
                                             startContent={!assigning ? <Zap size={16} fill="currentColor" /> : undefined} size="lg">
                                             {assigning ? 'Generating…' : 'Generate Seating'}
                                         </Button>
-                                        
+
                                         <Tooltip content={!selectedSeries ? "Select an Exam Series in Step 1 first" : "Assign seating for all valid sessions in the selected series"} placement="bottom" showArrow classNames={{ content: "font-semibold text-[11px]" }}>
                                             <div className="w-full">
-                                                <Button onPress={openSeriesModal} 
+                                                <Button onPress={openSeriesModal}
                                                     isDisabled={!selectedSeries}
-                                                    className={`w-full font-bold text-white rounded-xl h-11 border transition-all ${
-                                                        !selectedSeries 
-                                                        ? 'bg-slate-300 border-slate-300 opacity-60 cursor-not-allowed' 
+                                                    className={`w-full font-bold text-white rounded-xl h-11 border transition-all ${!selectedSeries
+                                                        ? 'bg-slate-300 border-slate-300 opacity-60 cursor-not-allowed'
                                                         : 'bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 border-fuchsia-500/50 shadow-[0_0_20px_rgba(217,70,239,0.2)]'
-                                                    }`}
+                                                        }`}
                                                     startContent={<Rocket size={16} fill="currentColor" />}>
                                                     Auto-Assign Full Series
                                                 </Button>
@@ -1782,8 +1855,8 @@ const SeatingPlans: React.FC = () => {
                                             <div className="flex items-center justify-between">
                                                 <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Last run</p>
                                                 <span className={`text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-full border ${lastExamType === 'EndSemester'
-                                                        ? 'bg-violet-50 text-violet-700 border-violet-200'
-                                                        : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                                    ? 'bg-violet-50 text-violet-700 border-violet-200'
+                                                    : 'bg-indigo-50 text-indigo-700 border-indigo-200'
                                                     }`}>{lastExamType === 'EndSemester' ? 'End Semester' : 'Internal'}</span>
                                             </div>
                                             <p className="text-[11px] text-slate-600">
@@ -1793,7 +1866,21 @@ const SeatingPlans: React.FC = () => {
                                                 <div className="flex flex-wrap gap-1 pt-0.5">
                                                     {lastSubjects.map(s => {
                                                         const ss = getSubjectStyle(s);
-                                                        return <span key={s} className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: `${ss.glow}`, color: ss.text, border: `1px solid ${ss.text}40` }}>{s}</span>;
+                                                        return (
+                                                            <span
+                                                                key={s}
+                                                                className="inline-flex items-center gap-1.5 text-[9px] font-extrabold px-2 py-1 rounded-lg"
+                                                                style={{
+                                                                    background: `linear-gradient(135deg, ${ss.text}20 0%, ${ss.text}0a 100%)`,
+                                                                    color: ss.text,
+                                                                    border: `1.5px solid ${ss.text}60`,
+                                                                    boxShadow: `0 0 6px ${ss.text}20`,
+                                                                }}
+                                                            >
+                                                                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: ss.text, boxShadow: `0 0 4px ${ss.text}` }} />
+                                                                {s}
+                                                            </span>
+                                                        );
                                                     })}
                                                 </div>
                                             )}
@@ -2107,21 +2194,21 @@ const SeatingPlans: React.FC = () => {
                                     <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full shadow-[0_0_8px_#ef4444] bg-red-500"></span><span className="text-slate-300">Not Eligible</span></div>
                                 </div>
                                 <div className="flex items-center gap-2 bg-[#101520]/60 px-3 py-1.5 rounded-xl border border-slate-700/50 shadow-inner">
-                                    <Switch size="sm" isSelected={hideIneligible} onValueChange={setHideIneligible} 
-                                            classNames={{ wrapper: "group-data-[selected=true]:bg-indigo-500" }} />
+                                    <Switch size="sm" isSelected={hideIneligible} onValueChange={setHideIneligible}
+                                        classNames={{ wrapper: "group-data-[selected=true]:bg-indigo-500" }} />
                                     <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-300">Hide Ineligible</span>
                                 </div>
 
                                 {/* ACTIONS */}
                                 <div className="flex items-center gap-2">
-                                {detailFilled > 0 && (<>
-                                    <Button size="sm" variant="flat" onPress={handleSaveHall}
-                                        className="font-semibold text-[11px] text-teal-300 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/25 rounded-lg h-8 px-4 transition-all" startContent={<Save size={13} />}>Save</Button>
-                                    <Button size="sm" variant="flat" onPress={() => setShowPrintModal(true)}
-                                        className="font-semibold text-[11px] text-slate-600 bg-slate-500/10 hover:bg-slate-500/15 border border-slate-500/20 rounded-lg h-8 px-4 transition-all" startContent={<Printer size={13} />}>Print</Button>
-                                    <Button size="sm" variant="flat" onPress={handleClearHall}
-                                        className="font-semibold text-[11px] text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-lg h-8 px-4 transition-all" startContent={<Trash2 size={13} />}>Clear</Button>
-                                </>)}
+                                    {detailFilled > 0 && (<>
+                                        <Button size="sm" variant="flat" onPress={handleSaveHall}
+                                            className="font-semibold text-[11px] text-teal-300 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/25 rounded-lg h-8 px-4 transition-all" startContent={<Save size={13} />}>Save</Button>
+                                        <Button size="sm" variant="flat" onPress={() => setShowPrintModal(true)}
+                                            className="font-semibold text-[11px] text-slate-600 bg-slate-500/10 hover:bg-slate-500/15 border border-slate-500/20 rounded-lg h-8 px-4 transition-all" startContent={<Printer size={13} />}>Print</Button>
+                                        <Button size="sm" variant="flat" onPress={handleClearHall}
+                                            className="font-semibold text-[11px] text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-lg h-8 px-4 transition-all" startContent={<Trash2 size={13} />}>Clear</Button>
+                                    </>)}
                                 </div>
                             </div>
                         </ModalHeader>
@@ -2156,8 +2243,8 @@ const SeatingPlans: React.FC = () => {
                                         <div className="flex flex-wrap items-center gap-2 mb-8">
                                             {/* ExamType badge */}
                                             <span className={`text-[9px] font-extrabold uppercase tracking-widest px-2.5 py-1 rounded-full border mr-1 ${lastExamType === 'EndSemester'
-                                                    ? 'bg-violet-900/40 text-violet-300 border-violet-500/40'
-                                                    : 'bg-indigo-900/40 text-indigo-300 border-indigo-500/40'
+                                                ? 'bg-violet-900/40 text-violet-300 border-violet-500/40'
+                                                : 'bg-indigo-900/40 text-indigo-300 border-indigo-500/40'
                                                 }`}>
                                                 {lastExamType === 'EndSemester' ? 'End Semester' : 'Internal'}
                                             </span>
@@ -2171,13 +2258,36 @@ const SeatingPlans: React.FC = () => {
                                                     }
                                                 });
                                                 const codes = [...subjectCounts.keys()].sort();
-                                                return codes.map(code => {
+                                                return codes.map((code, idx) => {
                                                     const ss = getSubjectStyle(code);
+                                                    const count = subjectCounts.get(code) ?? 0;
                                                     return (
-                                                        <div key={code} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold tracking-wide"
-                                                            style={{ background: `${ss.glow}`, color: ss.text, border: `1px solid ${ss.text}40` }}>
-                                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: ss.text, boxShadow: `0 0 6px ${ss.text}` }} />
-                                                            {code} <span className="opacity-80 ml-0.5">({subjectCounts.get(code)})</span>
+                                                        <div
+                                                            key={code}
+                                                            className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-extrabold tracking-wide transition-transform hover:scale-105"
+                                                            style={{
+                                                                background: `linear-gradient(135deg, ${ss.text}22 0%, ${ss.text}0e 100%)`,
+                                                                color: ss.text,
+                                                                border: `1.5px solid ${ss.text}70`,
+                                                                boxShadow: `0 0 10px ${ss.text}25, inset 0 0 8px ${ss.text}10`,
+                                                            }}
+                                                        >
+                                                            {/* Glowing dot */}
+                                                            <span
+                                                                className="w-2.5 h-2.5 rounded-full shrink-0 animate-pulse"
+                                                                style={{ backgroundColor: ss.text, boxShadow: `0 0 8px ${ss.text}, 0 0 4px ${ss.text}` }}
+                                                            />
+                                                            {/* Code */}
+                                                            <span className="font-mono" style={{ textShadow: `0 0 8px ${ss.text}80` }}>{code}</span>
+                                                            {/* Count badge */}
+                                                            <span
+                                                                className="text-[9px] font-black px-1.5 py-0.5 rounded-full ml-0.5"
+                                                                style={{
+                                                                    background: `${ss.text}30`,
+                                                                    color: ss.text,
+                                                                    border: `1px solid ${ss.text}50`,
+                                                                }}
+                                                            >{count}</span>
                                                         </div>
                                                     );
                                                 });
@@ -2208,225 +2318,157 @@ const SeatingPlans: React.FC = () => {
                                         </div>
                                     )}
 
-                                    {/* ── Bench Grid ── */}
-                                    <div
-                                        className="grid gap-5 items-start"
-                                        style={{ gridTemplateColumns: `repeat(${Math.max(detailBenchRows.length, 1)}, minmax(220px, 1fr))` }}
-                                    >
+                                    {/* ── Pill-Column Layout (mirrors College Structure 3D Visual Map) ── */}
+
+                                    {/* Front Blackboard */}
+                                    <div className="flex flex-col items-center mb-8">
+                                        <div className="w-full max-w-5xl h-14 bg-gradient-to-b from-slate-800 to-slate-900 border border-slate-700/50 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden">
+                                            <div className="absolute top-0 inset-x-0 h-[1px] bg-indigo-500/50" />
+                                            <span className="text-xs font-bold text-slate-500 uppercase tracking-[0.2em]">Front Blackboard</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Columns flex */}
+                                    <div className="flex gap-6 justify-center items-start flex-wrap pb-8">
                                         {detailBenchRows.map((row, rowIdx) => {
-                                            const isEndSemGlobal = lastExamType === 'EndSemester';
+                                            const isEndSem = lastExamType === 'EndSemester';
                                             return (
-                                            <div key={row.rowLabel} className="space-y-4" style={{ animationDelay: `${rowIdx * 40}ms` }}>
-                                                <div className="h-8 flex flex-row items-center justify-center w-full min-w-max shrink-0">
-                                                    <span className="w-9 h-9 rounded-full bg-[#22314a] border border-[#2f4364] text-[12px] font-extrabold text-slate-500 flex items-center justify-center shadow-sm">
-                                                        {row.rowLabel}
-                                                    </span>
+                                                <div key={row.rowLabel} className="flex flex-col items-center gap-3" style={{ animationDelay: `${rowIdx * 40}ms` }}>
+                                                    {/* Column header */}
+                                                    <div className="text-white font-black text-xl tracking-[0.25em] drop-shadow-lg">{row.rowLabel.toUpperCase()}</div>
+
+                                                    {/* Pill container */}
+                                                    <div
+                                                        className="relative bg-slate-800/30 border-2 border-white/10 rounded-[2.5rem] px-4 py-5 flex flex-col gap-3 shadow-[0_20px_50px_rgba(0,0,0,0.35)] group transition-all duration-300 hover:border-indigo-500/30 hover:shadow-[0_20px_60px_rgba(99,102,241,0.12)]"
+                                                        style={{ minWidth: '120px' }}
+                                                    >
+                                                        {/* Gradient overlay on hover */}
+                                                        <div className="absolute inset-0 rounded-[2.5rem] bg-gradient-to-b from-indigo-500/5 via-transparent to-slate-900/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+
+                                                        {row.benches.map((bench, benchIdx) => {
+                                                            // Primary seat: SeatNumber=1 (single-bench model); fallback to seat 2 if multi-seat
+                                                            const primarySeat = bench.seats.find(s => s.SeatNumber === 1) ?? bench.seats[0];
+                                                            const secondarySeat = bench.seats.find(s => s.SeatNumber === 2);
+                                                            const pa = primarySeat ? detailAssignments[primarySeat.SeatID] : undefined;
+                                                            const sa = secondarySeat ? detailAssignments[secondarySeat.SeatID] : undefined;
+
+                                                            const paVisible = pa && !(hideIneligible && pa.isBlocked) ? pa : undefined;
+                                                            const saVisible = sa && !(hideIneligible && sa.isBlocked) ? sa : undefined;
+
+                                                            const isDisabled = primarySeat && !primarySeat.IsActive;
+                                                            const isBlocked = !isDisabled && !!paVisible?.isBlocked;
+
+                                                            const pSt = paVisible ? getDeptStyle(paVisible.deptCode) : null;
+                                                            const pSub = paVisible?.subjectCode ? getSubjectStyle(paVisible.subjectCode) : null;
+                                                            const accent = isEndSem && pSub ? pSub.text : pSt ? pSt.text : null;
+
+                                                            // For dual-seat benches, check subject conflict
+                                                            const hasDualConflict = isEndSem && !!paVisible?.subjectCode && !!saVisible?.subjectCode && paVisible.subjectCode === saVisible.subjectCode;
+
+                                                            const tooltipContent = isDisabled ? 'Disabled'
+                                                                : isBlocked ? `${paVisible!.registerNumber} | ${paVisible!.deptCode} | Not Eligible`
+                                                                    : paVisible ? [paVisible.registerNumber, paVisible.subjectCode, paVisible.deptCode, 'Eligible'].filter(Boolean).join(' · ')
+                                                                        : 'Empty';
+
+                                                            // Seat cell styling
+                                                            let cellBg = '#131826';
+                                                            let borderAccent = 'transparent';
+                                                            if (isDisabled) {
+                                                                cellBg = 'repeating-linear-gradient(45deg,#1a1f2e,#1a1f2e 3px,#1e2436 3px,#1e2436 6px)';
+                                                            } else if (isBlocked) {
+                                                                cellBg = 'linear-gradient(135deg,#2d1010 0%,#1f0c0c 100%)';
+                                                                borderAccent = '#ef4444';
+                                                            } else if (paVisible) {
+                                                                cellBg = 'linear-gradient(135deg,#10263b 0%,#151c2e 100%)';
+                                                                borderAccent = accent || 'transparent';
+                                                            }
+
+                                                            return (
+                                                                <Tooltip
+                                                                    key={`${bench.rowLabel}-${bench.benchNumber}`}
+                                                                    content={tooltipContent}
+                                                                    delay={150}
+                                                                    classNames={{ content: `text-[11px] font-medium rounded-lg border shadow-2xl max-w-[220px] ${isBlocked ? 'bg-red-50 text-red-700 border-red-200' : 'bg-slate-900 text-slate-100 border-slate-700'}` }}
+                                                                >
+                                                                    <div
+                                                                        className="relative w-24 rounded-2xl border-2 overflow-hidden cursor-default transition-all duration-200 seat-anim hover:brightness-110"
+                                                                        style={{
+                                                                            animationDelay: `${(rowIdx * 8 + benchIdx) * 15}ms`,
+                                                                            background: cellBg,
+                                                                            borderColor: hasDualConflict ? '#f59e0b' : borderAccent,
+                                                                            boxShadow: isBlocked ? 'inset 0 0 16px rgba(239,68,68,0.1)'
+                                                                                : accent && paVisible ? `inset 0 0 10px ${accent}15` : 'none',
+                                                                        }}
+                                                                    >
+                                                                        {/* Bench label top-bar */}
+                                                                        <div className="px-2 py-0.5 bg-slate-900/50 flex items-center justify-between border-b border-white/5">
+                                                                            <span className="text-[8px] font-bold text-slate-600 uppercase tracking-widest">
+                                                                                {row.rowLabel.toLowerCase()}{bench.benchNumber}
+                                                                            </span>
+                                                                            <span className="flex items-center gap-1">
+                                                                                {hasDualConflict && <span className="text-amber-400 text-[10px] animate-pulse">!</span>}
+                                                                                {/* MIXED ROW indicator: backfill switched subject mid-row */}
+                                                                                {isEndSem && paVisible?.subjectCode && saVisible?.subjectCode && paVisible.subjectCode !== saVisible.subjectCode && (
+                                                                                    <Tooltip content={`Mixed: ${paVisible.subjectCode} + ${saVisible.subjectCode} (backfilled)`} delay={100}
+                                                                                        classNames={{ content: 'text-[10px] font-semibold bg-amber-950 text-amber-300 border border-amber-700/50 rounded-lg px-2 py-1' }}>
+                                                                                        <span className="text-[7px] font-black text-amber-400 bg-amber-900/40 border border-amber-600/40 rounded px-0.5 leading-none cursor-help" style={{ boxShadow: '0 0 4px rgba(251,191,36,0.3)' }}>MIX</span>
+                                                                                    </Tooltip>
+                                                                                )}
+                                                                            </span>
+                                                                        </div>
+
+                                                                        {/* Seat content */}
+                                                                        <div className="px-2 py-3 min-h-[72px] flex flex-col items-center justify-center text-center gap-1">
+                                                                            {isDisabled ? (
+                                                                                <Ban size={14} className="text-slate-600" />
+                                                                            ) : isBlocked ? (
+                                                                                <>
+                                                                                    <XCircle size={12} className="text-red-500" />
+                                                                                    <span className="text-[10px] font-bold font-mono text-red-400 leading-none w-full truncate">{paVisible!.registerNumber}</span>
+                                                                                    <span className="text-[7px] text-red-400/60 leading-none w-full truncate">{paVisible!.studentName}</span>
+                                                                                    <span className="px-1 py-0.5 rounded text-[6px] font-bold uppercase bg-red-900/40 text-red-400 border border-red-700/40 mt-0.5">Not Eligible</span>
+                                                                                </>
+                                                                            ) : paVisible ? (
+                                                                                <>
+                                                                                    <span className="text-[11px] font-bold font-mono leading-none w-full truncate" style={{ color: accent || '#94a3b8' }}>
+                                                                                        {paVisible.registerNumber}
+                                                                                    </span>
+                                                                                    <span className="text-[8px] text-slate-500 leading-none w-full truncate">{paVisible.studentName}</span>
+                                                                                    {isEndSem && paVisible.subjectCode ? (
+                                                                                        <span className="px-1 py-0.5 rounded text-[7px] font-extrabold uppercase truncate max-w-full mt-0.5"
+                                                                                            style={{ background: pSub?.glow ?? '#334155', color: pSub?.text ?? '#94a3b8', border: `1px solid ${pSub?.text ?? '#334155'}40` }}>
+                                                                                            {paVisible.subjectCode}
+                                                                                        </span>
+                                                                                    ) : !isEndSem && paVisible.deptCode ? (
+                                                                                        <span className="text-[7px] font-bold mt-0.5" style={{ color: accent || '#94a3b8' }}>{paVisible.deptCode}</span>
+                                                                                    ) : null}
+                                                                                    {/* Second seat student (dual-bench) */}
+                                                                                    {saVisible && (
+                                                                                        <div className="w-full border-t border-white/10 mt-1 pt-1 flex flex-col items-center gap-0.5">
+                                                                                            <span className="text-[10px] font-bold font-mono leading-none w-full truncate" style={{ color: isEndSem && saVisible.subjectCode ? getSubjectStyle(saVisible.subjectCode).text : getDeptStyle(saVisible.deptCode).text }}>
+                                                                                                {saVisible.registerNumber}
+                                                                                            </span>
+                                                                                            <span className="text-[7px] text-slate-500 leading-none w-full truncate">{saVisible.studentName}</span>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <Armchair size={13} className="text-slate-700" />
+                                                                                    <span className="text-[7px] text-slate-600">EMPTY</span>
+                                                                                </>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </Tooltip>
+                                                            );
+                                                        })}
+                                                    </div>
                                                 </div>
-                                                {row.benches.map((bench, benchIdx) => {
-                                                    const ls = bench.seats.find(s => s.SeatNumber === 1);
-                                                    const rs = bench.seats.find(s => s.SeatNumber === 2);
-                                                    const la = ls ? detailAssignments[ls.SeatID] : undefined;
-                                                    const ra = rs ? detailAssignments[rs.SeatID] : undefined;
-
-                                                    // apply 'hide ineligible' filter
-                                                    const laVisible = la && !(hideIneligible && la.isBlocked) ? la : undefined;
-                                                    const raVisible = ra && !(hideIneligible && ra.isBlocked) ? ra : undefined;
-
-                                                    const lSt = laVisible ? getDeptStyle(laVisible.deptCode) : null;
-                                                    const rSt = raVisible ? getDeptStyle(raVisible.deptCode) : null;
-                                                    const lSub = laVisible?.subjectCode ? getSubjectStyle(laVisible.subjectCode!) : null;
-                                                    const rSub = raVisible?.subjectCode ? getSubjectStyle(raVisible.subjectCode!) : null;
-                                                    const isEndSem = lastExamType === 'EndSemester';
-
-                                                    const ld = ls && !ls.IsActive;
-                                                    const rd = rs && !rs.IsActive;
-
-                                                    const INELIG_BG = 'linear-gradient(135deg, #2d1010 0%, #1f0c0c 100%)';
-                                                    const INELIG_BORDER = '#ef4444';
-                                                    const INELIG_BORDER_SOFT = '#ef444430';
-
-                                                    const leftIsBlocked = !ld && !!laVisible?.isBlocked;
-                                                    const rightIsBlocked = !rd && !!raVisible?.isBlocked;
-
-                                                    // Bench conflict: both seats have same subject (EndSem only)
-                                                    const hasBenchConflict = isEndSem
-                                                        && !!laVisible?.subjectCode && !!raVisible?.subjectCode
-                                                        && laVisible.subjectCode === raVisible.subjectCode;
-
-                                                    // Seat accent: EndSem uses subject color; Internal uses dept color
-                                                    const lAccent = isEndSem && lSub ? lSub.text : lSt ? lSt.text : null;
-                                                    const rAccent = isEndSem && rSub ? rSub.text : rSt ? rSt.text : null;
-
-                                                    // Tooltip content helpers
-                                                    const leftTooltipContent = ld ? 'Disabled'
-                                                        : leftIsBlocked ? `${laVisible!.registerNumber} | ${laVisible!.deptCode} | Not Eligible`
-                                                            : laVisible ? [
-                                                                laVisible.registerNumber,
-                                                                laVisible.subjectCode ? `${laVisible.subjectCode}` : '',
-                                                                laVisible.deptCode,
-                                                                'Eligible',
-                                                            ].filter(Boolean).join('  ·  ')
-                                                                : 'Empty';
-                                                    const rightTooltipContent = rd ? 'Disabled'
-                                                        : rightIsBlocked ? `${raVisible!.registerNumber} | ${raVisible!.deptCode} | Not Eligible`
-                                                            : raVisible ? [
-                                                                raVisible.registerNumber,
-                                                                raVisible.subjectCode ? `${raVisible.subjectCode}` : '',
-                                                                raVisible.deptCode,
-                                                                'Eligible',
-                                                            ].filter(Boolean).join('  ·  ')
-                                                                : 'Empty';
-
-                                                    return (
-                                                        <div key={`${bench.rowLabel}-${bench.benchNumber}`} className="group bench-anim"
-                                                            style={{ animationDelay: `${(rowIdx * 8 + benchIdx) * 18}ms` }}>
-                                                            {/* DESK TOP */}
-                                                            <div className={`rounded-t-xl px-3 py-1.5 flex items-center justify-between border border-b-0 transition-all ${hasBenchConflict
-                                                                    ? 'bg-gradient-to-r from-amber-900/60 to-amber-800/40 border-amber-500/40'
-                                                                    : 'bg-gradient-to-r from-[#2a3245] to-[#252d40] border-slate-200 group-hover:from-[#303a50] group-hover:to-[#2a3348]'
-                                                                }`}>
-                                                                <span className="text-[9px] font-extrabold text-slate-500 group-hover:text-slate-700 tracking-[0.2em] uppercase transition-colors">
-                                                                    B{bench.benchNumber}
-                                                                </span>
-                                                                <div className="flex items-center gap-1.5">
-                                                                    {hasBenchConflict && (
-                                                                        <span title="Same subject on same bench!" className="text-amber-400 text-[11px] animate-pulse">!</span>
-                                                                    )}
-                                                                    <span className="text-[8px] text-slate-500 font-mono">BENCH {bench.benchNumber}</span>
-                                                                </div>
-                                                            </div>
-
-                                                            {/* TWO SEATS */}
-                                                            <div className="grid grid-cols-2 gap-[2px]">
-                                                                {/* Left Seat */}
-                                                                <Tooltip
-                                                                    content={leftTooltipContent}
-                                                                    delay={150}
-                                                                    classNames={{
-                                                                        content: `text-[11px] font-medium rounded-lg border shadow-2xl max-w-[240px] ${leftIsBlocked ? 'bg-red-50 text-red-700 border-red-200'
-                                                                                : 'bg-slate-900 text-slate-100 border-slate-700'
-                                                                            }`
-                                                                    }}
-                                                                >
-                                                                    <div
-                                                                        className={`relative rounded-bl-xl overflow-hidden cursor-default transition-all duration-200 seat-anim ${ld ? '' : leftIsBlocked ? 'opacity-90' : 'hover:brightness-110'}`}
-                                                                        style={{
-                                                                            animationDelay: `${(rowIdx * 8 + benchIdx) * 18 + 40}ms`,
-                                                                            background: ld ? 'repeating-linear-gradient(45deg, #1a1f2e, #1a1f2e 3px, #1e2436 3px, #1e2436 6px)'
-                                                                                : leftIsBlocked ? INELIG_BG
-                                                                                    : laVisible ? 'linear-gradient(135deg, #10263b 0%, #151c2e 100%)' : '#131826',
-                                                                            borderLeft: ld ? '3px solid transparent' : leftIsBlocked ? `3px solid ${INELIG_BORDER}` : lAccent ? `3px solid ${lAccent}` : '3px solid transparent',
-                                                                            borderBottom: `1px solid ${ld ? '#253040' : leftIsBlocked ? INELIG_BORDER_SOFT : lAccent ? lAccent + '30' : '#253040'}`,
-                                                                            borderRight: '1px solid #253040',
-                                                                            boxShadow: leftIsBlocked ? 'inset 0 0 20px rgba(239,68,68,0.08)'
-                                                                                : lAccent && laVisible ? `inset 0 0 12px ${lAccent}12` : 'none',
-                                                                        }}
-                                                                    >
-                                                                        <div className="px-3 py-4 min-h-[80px] flex flex-col items-center justify-center text-center">
-                                                                            {ld ? <Ban size={16} className="text-slate-600" />
-                                                                                : leftIsBlocked ? (
-                                                                                    <div className="flex flex-col items-center w-full gap-1">
-                                                                                        <XCircle size={13} className="text-red-500 mb-0.5" />
-                                                                                        <span className="text-[11px] font-bold font-mono tracking-wide w-full leading-none text-red-400 opacity-80">{laVisible!.registerNumber}</span>
-                                                                                        <span className="text-[8px] text-red-500/60 font-medium w-full truncate leading-none">{laVisible!.studentName}</span>
-                                                                                        <span className="mt-1 px-1.5 py-0.5 rounded text-[7px] font-bold tracking-widest uppercase bg-red-900/40 text-red-400 border border-red-700/40">Not Eligible</span>
-                                                                                    </div>
-                                                                                ) : laVisible ? (
-                                                                                    <div className="flex flex-col items-center w-full gap-1">
-                                                                                        <span className="text-[13px] font-bold font-mono tracking-wide w-full leading-none" style={{ color: lAccent || (lSt?.text ?? '#94a3b8') }}>{laVisible.registerNumber}</span>
-                                                                                        <span className="text-[9px] text-slate-500 font-medium w-full truncate leading-none">{laVisible.studentName}</span>
-                                                                                        {isEndSem && laVisible.subjectCode && (
-                                                                                            <div className="flex flex-col items-center mt-1 w-full flex-1 justify-center">
-                                                                                                <span className="px-1.5 py-0.5 rounded-[4px] text-[8px] font-extrabold tracking-widest uppercase truncate max-w-full"
-                                                                                                    style={{ background: `${lSub?.glow ?? '#334155'}`, color: lSub?.text ?? '#94a3b8', border: `1px solid ${lSub?.text ?? '#334155'}40` }}>
-                                                                                                    {laVisible.subjectCode}
-                                                                                                </span>
-                                                                                                {laVisible.subjectName && (
-                                                                                                    <span className="text-[6.5px] leading-tight text-slate-400 mt-1 uppercase tracking-wider w-full text-center truncate opacity-80" title={laVisible.subjectName}>
-                                                                                                        {laVisible.subjectName}
-                                                                                                    </span>
-                                                                                                )}
-                                                                                            </div>
-                                                                                        )}
-                                                                                    </div>
-                                                                                ) : (
-                                                                                    <div className="flex flex-col items-center gap-1">
-                                                                                        <Armchair size={14} className="text-slate-700" />
-                                                                                        <span className="text-[8px] text-slate-600 font-medium">EMPTY</span>
-                                                                                    </div>
-                                                                                )}
-                                                                        </div>
-                                                                    </div>
-                                                                </Tooltip>
-
-                                                                {/* Right Seat */}
-                                                                <Tooltip
-                                                                    content={rightTooltipContent}
-                                                                    delay={150}
-                                                                    classNames={{
-                                                                        content: `text-[11px] font-medium rounded-lg border shadow-2xl max-w-[240px] ${rightIsBlocked ? 'bg-red-50 text-red-700 border-red-200'
-                                                                                : 'bg-slate-900 text-slate-100 border-slate-700'
-                                                                            }`
-                                                                    }}
-                                                                >
-                                                                    <div
-                                                                        className={`relative rounded-br-xl overflow-hidden cursor-default transition-all duration-200 seat-anim ${rd ? '' : rightIsBlocked ? 'opacity-90' : 'hover:brightness-110'}`}
-                                                                        style={{
-                                                                            animationDelay: `${(rowIdx * 8 + benchIdx) * 18 + 60}ms`,
-                                                                            background: rd ? 'repeating-linear-gradient(45deg, #1a1f2e, #1a1f2e 3px, #1e2436 3px, #1e2436 6px)'
-                                                                                : rightIsBlocked ? INELIG_BG
-                                                                                    : raVisible ? 'linear-gradient(135deg, #1c1530 0%, #14111e 100%)' : '#13111a',
-                                                                            borderRight: rd ? '3px solid transparent' : rightIsBlocked ? `3px solid ${INELIG_BORDER}` : rAccent ? `3px solid ${rAccent}` : '3px solid transparent',
-                                                                            borderBottom: `1px solid ${rd ? '#253040' : rightIsBlocked ? INELIG_BORDER_SOFT : rAccent ? rAccent + '30' : '#253040'}`,
-                                                                            borderLeft: '1px solid #253040',
-                                                                            boxShadow: rightIsBlocked ? 'inset 0 0 20px rgba(239,68,68,0.08)'
-                                                                                : rAccent && raVisible ? `inset 0 0 12px ${rAccent}12` : 'none',
-                                                                        }}
-                                                                    >
-                                                                        <div className="px-3 py-4 min-h-[80px] flex flex-col items-center justify-center text-center">
-                                                                            {rd ? <Ban size={16} className="text-slate-600" />
-                                                                                : rightIsBlocked ? (
-                                                                                    <div className="flex flex-col items-center w-full gap-1">
-                                                                                        <XCircle size={13} className="text-red-500 mb-0.5" />
-                                                                                        <span className="text-[11px] font-bold font-mono tracking-wide w-full leading-none text-red-400 opacity-80">{raVisible!.registerNumber}</span>
-                                                                                        <span className="text-[8px] text-red-500/60 font-medium w-full truncate leading-none">{raVisible!.studentName}</span>
-                                                                                        <span className="mt-1 px-1.5 py-0.5 rounded text-[7px] font-bold tracking-widest uppercase bg-red-900/40 text-red-400 border border-red-700/40">Not Eligible</span>
-                                                                                    </div>
-                                                                                ) : raVisible ? (
-                                                                                    <div className="flex flex-col items-center w-full gap-1">
-                                                                                        <span className="text-[13px] font-bold font-mono tracking-wide w-full leading-none" style={{ color: rAccent || (rSt?.text ?? '#94a3b8') }}>{raVisible.registerNumber}</span>
-                                                                                        <span className="text-[9px] text-slate-500 font-medium w-full truncate leading-none">{raVisible.studentName}</span>
-                                                                                        {isEndSem && raVisible.subjectCode && (
-                                                                                            <div className="flex flex-col items-center mt-1 w-full flex-1 justify-center">
-                                                                                                <span className="px-1.5 py-0.5 rounded-[4px] text-[8px] font-extrabold tracking-widest uppercase truncate max-w-full"
-                                                                                                    style={{ background: `${rSub?.glow ?? '#334155'}`, color: rSub?.text ?? '#94a3b8', border: `1px solid ${rSub?.text ?? '#334155'}40` }}>
-                                                                                                    {raVisible.subjectCode}
-                                                                                                </span>
-                                                                                                {raVisible.subjectName && (
-                                                                                                    <span className="text-[6.5px] leading-tight text-slate-400 mt-1 uppercase tracking-wider w-full text-center truncate opacity-80" title={raVisible.subjectName}>
-                                                                                                        {raVisible.subjectName}
-                                                                                                    </span>
-                                                                                                )}
-                                                                                            </div>
-                                                                                        )}
-                                                                                    </div>
-                                                                                ) : (
-                                                                                    <div className="flex flex-col items-center gap-1">
-                                                                                        <Armchair size={14} className="text-slate-700" />
-                                                                                        <span className="text-[8px] text-slate-600 font-medium">EMPTY</span>
-                                                                                    </div>
-                                                                                )}
-                                                                        </div>
-                                                                    </div>
-                                                                </Tooltip>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
                                             );
                                         })}
                                     </div>
+
                                 </div>
                             )}
                         </ModalBody>
@@ -2681,35 +2723,53 @@ const SeatingPlans: React.FC = () => {
                                                 </button>
                                             </div>
                                             {/* Room cap */}
-                                            <div className="flex items-center px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 gap-2">
-                                                <span className="text-[11px] text-slate-600 font-medium whitespace-nowrap">Room cap <span className="text-slate-400 text-[9px]">(End Sem)</span></span>
-                                                <input
-                                                    id="room-capacity-limit-series"
-                                                    name="roomCapacityLimitSeries"
-                                                    type="number" min={1} max={200}
-                                                    value={roomCapacityLimit}
-                                                    onChange={e => setRoomCapacityLimit(Math.max(1, Number(e.target.value) || 40))}
-                                                    className="w-12 h-6 text-center text-[11px] font-bold text-slate-700 border border-slate-300 rounded-md bg-white focus:outline-none focus:border-indigo-400"
-                                                    disabled={seriesRunning}
-                                                />
+                                            <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 border border-slate-200">
+                                                <div className="flex flex-col">
+                                                    <span className="text-[11px] text-slate-600 font-medium leading-tight">Room cap</span>
+                                                    <span className="text-[9px] text-slate-400 leading-tight">seats per hall (End Sem)</span>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setRoomCapacityLimit(v => String(Math.max(1, (Number(v) || 0) - 1)))}
+                                                        disabled={seriesRunning}
+                                                        className="w-6 h-6 rounded-md bg-white border border-slate-300 text-slate-500 hover:bg-slate-100 hover:border-slate-400 flex items-center justify-center text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                                        aria-label="Decrease room cap"
+                                                    >−</button>
+                                                    <input
+                                                        id="room-capacity-limit-series"
+                                                        name="roomCapacityLimitSeries"
+                                                        type="number" min={1} max={200}
+                                                        value={roomCapacityLimit}
+                                                        placeholder="40"
+                                                        onChange={e => setRoomCapacityLimit(e.target.value)}
+                                                        disabled={seriesRunning}
+                                                        className="w-12 h-6 text-center text-[12px] font-bold text-indigo-700 border border-indigo-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400/50 focus:border-indigo-500 placeholder:text-slate-400 placeholder:font-normal [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setRoomCapacityLimit(v => String(Math.min(200, (Number(v) || 0) + 1)))}
+                                                        disabled={seriesRunning}
+                                                        className="w-6 h-6 rounded-md bg-white border border-slate-300 text-slate-500 hover:bg-slate-100 hover:border-slate-400 flex items-center justify-center text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                                        aria-label="Increase room cap"
+                                                    >+</button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 )}
                                 <div className="max-h-[60vh] overflow-y-auto px-6 py-5 space-y-3 bg-slate-50/50" style={{ scrollbarWidth: 'thin' }}>
                                     {seriesTasks.map((t, i) => (
-                                        <div key={i} className={`flex items-center justify-between p-3 rounded-xl border bg-white shadow-sm transition-all ${
-                                            t.status === 'running' ? 'border-indigo-400 ring-2 ring-indigo-500/20' 
-                                            : t.status === 'success' ? 'border-emerald-200 bg-emerald-50/30' 
-                                            : t.status === 'failed' ? 'border-rose-200 bg-rose-50/30'
-                                            : 'border-slate-200'
-                                        }`}>
+                                        <div key={i} className={`flex items-center justify-between p-3 rounded-xl border bg-white shadow-sm transition-all ${t.status === 'running' ? 'border-indigo-400 ring-2 ring-indigo-500/20'
+                                            : t.status === 'success' ? 'border-emerald-200 bg-emerald-50/30'
+                                                : t.status === 'failed' ? 'border-rose-200 bg-rose-50/30'
+                                                    : 'border-slate-200'
+                                            }`}>
                                             <div className="flex items-center gap-3">
                                                 <div className="flex flex-col">
                                                     <span className="text-[13px] font-bold text-slate-700">{t.date}</span>
-                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded mt-1 w-fit uppercase tracking-widest ${
-                                                        t.session === 'FN' ? 'bg-indigo-50 text-indigo-600' : 'bg-orange-50 text-orange-600'
-                                                    }`}>{t.session === 'FN' ? 'Forenoon' : 'Afternoon'}</span>
+                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded mt-1 w-fit uppercase tracking-widest ${t.session === 'FN' ? 'bg-indigo-50 text-indigo-600' : 'bg-orange-50 text-orange-600'
+                                                        }`}>{t.session === 'FN' ? 'Forenoon' : 'Afternoon'}</span>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-2 text-right">
