@@ -146,7 +146,8 @@ const SeatingPlans: React.FC = () => {
     const [selectedHallIds, setSelectedHallIds] = useState<Set<number>>(new Set());
     const [hallSearch, setHallSearch] = useState('');
     const [hallFilter, setHallFilter] = useState<'all' | 'empty' | 'partial' | 'full'>('all');
-
+    const [batchYears, setBatchYears] = useState<number[]>([]);
+    const [selectedBatch, setSelectedBatch] = useState<string>('');
 
     const [assigning, setAssigning] = useState(false);
     const [loadingSummary, setLoadingSummary] = useState(false);
@@ -280,6 +281,10 @@ const SeatingPlans: React.FC = () => {
             try { setHalls(await SeatingService.getHalls().then(r => Array.isArray(r) ? r : [])); } catch { toast.error('Failed to load halls'); }
             try { setDepartments(await SeatingService.getDepartments().then(r => Array.isArray(r) ? r : [])); } catch { toast.error('Failed to load departments'); }
 
+            try {
+                const filters = await api.get('/students/meta/filters').catch(() => ({ data: { batchYears: [] } }));
+                if (filters.data?.batchYears) setBatchYears(filters.data.batchYears);
+            } catch (e) { console.error("Failed to load student filters", e); }
         })();
     }, []);
 
@@ -371,7 +376,7 @@ const SeatingPlans: React.FC = () => {
             if (e && 'data' in e && (e as MessageEvent).data?.roomId) {
                 targetRoomId = Number((e as MessageEvent).data.roomId);
             }
-            
+
             if (detailHall && (!targetRoomId || detailHall.hallId === targetRoomId)) {
                 try {
                     const layout = await SeatingService.getHallLayout(detailHall.hallId);
@@ -385,7 +390,7 @@ const SeatingPlans: React.FC = () => {
 
         window.addEventListener('focus', handleSync);
         window.addEventListener('ROOM_LAYOUT_UPDATED', handleSync);
-        
+
         let channel: BroadcastChannel | null = null;
         try {
             channel = new BroadcastChannel('seating_sync');
@@ -426,7 +431,7 @@ const SeatingPlans: React.FC = () => {
     };
 
     /* bulk assign */
-    const handleBulkAssign = async () => {
+    const handleBulkAssign = async (useBatch = false) => {
         if (!selectedDate) { toast.error('Select an exam date first'); return; }
         let ids = selectedHallIds.size > 0 ? [...selectedHallIds] : hallSummary.map(h => h.hallId);
         if (ids.length === 0) { toast.error('No halls available'); return; }
@@ -438,9 +443,8 @@ const SeatingPlans: React.FC = () => {
         const seatCount = hallSummary
             .filter(h => ids.includes(h.hallId))
             .reduce((sum, h) => sum + h.totalSeats, 0);
-        
-        // Only show shortage warning if eligibleStudentCount > 0 and seatCount < eligibleStudentCount
-        if (eligibleStudentCount > 0 && seatCount < eligibleStudentCount) {
+        // Only show shortage warning if NOT using batch-wise seating (as batch-wise is expected to be partial)
+        if (!useBatch && eligibleStudentCount > 0 && seatCount < eligibleStudentCount) {
             const shortBy = eligibleStudentCount - seatCount;
             const autoCandidates = hallSummary.filter(h => !ids.includes(h.hallId));
             let autoIds: number[] = [];
@@ -476,6 +480,7 @@ const SeatingPlans: React.FC = () => {
             console.log("=== ASSIGN CLICKED ===");
             console.log("Assignment mode:", assignmentMode);
             console.log("Selected halls:", ids);
+            console.log("Batch filter:", useBatch ? selectedBatch : 'None');
             const r = await SeatingService.bulkAssign({
                 examDate: selectedDate, session: selectedSession, hallIds: ids,
                 mode: assignmentMode,
@@ -485,6 +490,7 @@ const SeatingPlans: React.FC = () => {
                 shuffleRooms,
                 roomCapacityLimit: roomCapacityLimit !== '' ? Number(roomCapacityLimit) : undefined,
                 seriesId: selectedSeries ? Number(selectedSeries) : undefined,
+                batchYear: useBatch ? Number(selectedBatch) : undefined,
             });
             // Support both Internal (totalLeft/RightAssigned) and EndSem (assignedCount) response shapes
             const examType: string = r.examType || 'Internal';
