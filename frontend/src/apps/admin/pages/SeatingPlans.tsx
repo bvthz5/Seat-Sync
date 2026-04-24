@@ -375,7 +375,7 @@ const SeatingPlans: React.FC = () => {
             if (e && 'data' in e && (e as MessageEvent).data?.roomId) {
                 targetRoomId = Number((e as MessageEvent).data.roomId);
             }
-            
+
             if (detailHall && (!targetRoomId || detailHall.hallId === targetRoomId)) {
                 try {
                     const layout = await SeatingService.getHallLayout(detailHall.hallId);
@@ -389,7 +389,7 @@ const SeatingPlans: React.FC = () => {
 
         window.addEventListener('focus', handleSync);
         window.addEventListener('ROOM_LAYOUT_UPDATED', handleSync);
-        
+
         let channel: BroadcastChannel | null = null;
         try {
             channel = new BroadcastChannel('seating_sync');
@@ -442,7 +442,7 @@ const SeatingPlans: React.FC = () => {
         const seatCount = hallSummary
             .filter(h => ids.includes(h.hallId))
             .reduce((sum, h) => sum + h.totalSeats, 0);
-        
+
         // Only show shortage warning if NOT using batch-wise seating (as batch-wise is expected to be partial)
         if (!useBatch && eligibleStudentCount > 0 && seatCount < eligibleStudentCount) {
             const shortBy = eligibleStudentCount - seatCount;
@@ -481,7 +481,7 @@ const SeatingPlans: React.FC = () => {
             console.log("Assignment mode:", assignmentMode);
             console.log("Selected halls:", ids);
             console.log("Batch filter:", useBatch ? selectedBatch : 'None');
-            
+
             const r = await SeatingService.bulkAssign({
                 examDate: selectedDate, session: selectedSession, hallIds: ids,
                 mode: assignmentMode,
