@@ -74,22 +74,22 @@ const getDeptStyle = (code: string) => {
      • Different codes → always different color (no hash collisions)
    Supports up to 16 simultaneous subject codes with zero collisions.      */
 const SUBJECT_HUE_PALETTE = [
-    { h:  200, text: '#67e8f9', glow: 'rgba(103,232,249,0.28)' },  //  0  cyan
-    { h:  262, text: '#c4b5fd', glow: 'rgba(196,181,253,0.28)' },  //  1  violet
-    { h:  142, text: '#6ee7b7', glow: 'rgba(110,231,183,0.28)' },  //  2  emerald
-    { h:   24, text: '#fdba74', glow: 'rgba(253,186,116,0.28)' },  //  3  orange
-    { h:  340, text: '#f9a8d4', glow: 'rgba(249,168,212,0.28)' },  //  4  pink
-    { h:  213, text: '#93c5fd', glow: 'rgba(147,197,253,0.28)' },  //  5  sky-blue
-    { h:   50, text: '#fde68a', glow: 'rgba(253,230,138,0.28)' },  //  6  amber
-    { h:  168, text: '#5eead4', glow: 'rgba(94,234,212,0.28)' },   //  7  teal
-    { h:  280, text: '#e879f9', glow: 'rgba(232,121,249,0.28)' },  //  8  fuchsia
-    { h:  104, text: '#a3e635', glow: 'rgba(163,230,53,0.28)'  },  //  9  lime
-    { h:    4, text: '#fca5a5', glow: 'rgba(252,165,165,0.28)' },  // 10  rose
-    { h:  246, text: '#a5b4fc', glow: 'rgba(165,180,252,0.28)' },  // 11  indigo
-    { h:  183, text: '#67e8f9', glow: 'rgba(103,232,249,0.22)' },  // 12  light-cyan
-    { h:   76, text: '#d9f99d', glow: 'rgba(217,249,157,0.28)' },  // 13  yellow-green
-    { h:  316, text: '#f0abfc', glow: 'rgba(240,171,252,0.28)' },  // 14  orchid
-    { h:  228, text: '#bfdbfe', glow: 'rgba(191,219,254,0.28)' },  // 15  pale-blue
+    { h: 200, text: '#67e8f9', glow: 'rgba(103,232,249,0.28)' },  //  0  cyan
+    { h: 262, text: '#c4b5fd', glow: 'rgba(196,181,253,0.28)' },  //  1  violet
+    { h: 142, text: '#6ee7b7', glow: 'rgba(110,231,183,0.28)' },  //  2  emerald
+    { h: 24, text: '#fdba74', glow: 'rgba(253,186,116,0.28)' },  //  3  orange
+    { h: 340, text: '#f9a8d4', glow: 'rgba(249,168,212,0.28)' },  //  4  pink
+    { h: 213, text: '#93c5fd', glow: 'rgba(147,197,253,0.28)' },  //  5  sky-blue
+    { h: 50, text: '#fde68a', glow: 'rgba(253,230,138,0.28)' },  //  6  amber
+    { h: 168, text: '#5eead4', glow: 'rgba(94,234,212,0.28)' },   //  7  teal
+    { h: 280, text: '#e879f9', glow: 'rgba(232,121,249,0.28)' },  //  8  fuchsia
+    { h: 104, text: '#a3e635', glow: 'rgba(163,230,53,0.28)' },  //  9  lime
+    { h: 4, text: '#fca5a5', glow: 'rgba(252,165,165,0.28)' },  // 10  rose
+    { h: 246, text: '#a5b4fc', glow: 'rgba(165,180,252,0.28)' },  // 11  indigo
+    { h: 183, text: '#67e8f9', glow: 'rgba(103,232,249,0.22)' },  // 12  light-cyan
+    { h: 76, text: '#d9f99d', glow: 'rgba(217,249,157,0.28)' },  // 13  yellow-green
+    { h: 316, text: '#f0abfc', glow: 'rgba(240,171,252,0.28)' },  // 14  orchid
+    { h: 228, text: '#bfdbfe', glow: 'rgba(191,219,254,0.28)' },  // 15  pale-blue
 ];
 const subjectColorCache = new Map<string, typeof SUBJECT_HUE_PALETTE[0]>();
 /* Sequential assignment: first new code gets slot 0, second gets slot 1, etc.
@@ -355,6 +355,50 @@ const SeatingPlans: React.FC = () => {
     }, [selectedDate, selectedSession, startTransition]);
 
     useEffect(() => { loadSummary(); }, [loadSummary]);
+
+    // Auto-refresh data when returning to the tab or on layout update
+    useEffect(() => {
+        const handleSync = async (e?: Event | MessageEvent) => {
+            try {
+                const updatedHalls = await SeatingService.getHalls();
+                setHalls(Array.isArray(updatedHalls) ? updatedHalls : []);
+            } catch { }
+            if (selectedDate) loadSummary();
+
+            // Refresh the live detail modal if it's currently open
+            let targetRoomId: number | null = null;
+            if (e && 'data' in e && (e as MessageEvent).data?.roomId) {
+                targetRoomId = Number((e as MessageEvent).data.roomId);
+            }
+            
+            if (detailHall && (!targetRoomId || detailHall.hallId === targetRoomId)) {
+                try {
+                    const layout = await SeatingService.getHallLayout(detailHall.hallId);
+                    startTransition(() => {
+                        setDetailBenches(layout.benches || []);
+                        setDetailTotalSeats(layout.totalSeats || 0);
+                    });
+                } catch { }
+            }
+        };
+
+        window.addEventListener('focus', handleSync);
+        window.addEventListener('ROOM_LAYOUT_UPDATED', handleSync);
+        
+        let channel: BroadcastChannel | null = null;
+        try {
+            channel = new BroadcastChannel('seating_sync');
+            channel.onmessage = (e) => {
+                if (e.data?.type === 'ROOM_LAYOUT_UPDATED') handleSync(e);
+            };
+        } catch (e) { }
+
+        return () => {
+            window.removeEventListener('focus', handleSync);
+            window.removeEventListener('ROOM_LAYOUT_UPDATED', handleSync);
+            if (channel) channel.close();
+        };
+    }, [loadSummary, selectedDate, detailHall]);
 
     /* quick add slot */
     const handleQuickAddSlot = async () => {
@@ -1795,8 +1839,8 @@ const SeatingPlans: React.FC = () => {
                                                 <Button onPress={openSeriesModal}
                                                     isDisabled={!selectedSeries}
                                                     className={`w-full font-bold text-white rounded-xl h-11 border transition-all ${!selectedSeries
-                                                            ? 'bg-slate-300 border-slate-300 opacity-60 cursor-not-allowed'
-                                                            : 'bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 border-fuchsia-500/50 shadow-[0_0_20px_rgba(217,70,239,0.2)]'
+                                                        ? 'bg-slate-300 border-slate-300 opacity-60 cursor-not-allowed'
+                                                        : 'bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 border-fuchsia-500/50 shadow-[0_0_20px_rgba(217,70,239,0.2)]'
                                                         }`}
                                                     startContent={<Rocket size={16} fill="currentColor" />}>
                                                     Auto-Assign Full Series
@@ -2717,9 +2761,9 @@ const SeatingPlans: React.FC = () => {
                                 <div className="max-h-[60vh] overflow-y-auto px-6 py-5 space-y-3 bg-slate-50/50" style={{ scrollbarWidth: 'thin' }}>
                                     {seriesTasks.map((t, i) => (
                                         <div key={i} className={`flex items-center justify-between p-3 rounded-xl border bg-white shadow-sm transition-all ${t.status === 'running' ? 'border-indigo-400 ring-2 ring-indigo-500/20'
-                                                : t.status === 'success' ? 'border-emerald-200 bg-emerald-50/30'
-                                                    : t.status === 'failed' ? 'border-rose-200 bg-rose-50/30'
-                                                        : 'border-slate-200'
+                                            : t.status === 'success' ? 'border-emerald-200 bg-emerald-50/30'
+                                                : t.status === 'failed' ? 'border-rose-200 bg-rose-50/30'
+                                                    : 'border-slate-200'
                                             }`}>
                                             <div className="flex items-center gap-3">
                                                 <div className="flex flex-col">

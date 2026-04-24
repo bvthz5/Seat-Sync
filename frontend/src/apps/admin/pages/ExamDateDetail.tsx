@@ -201,23 +201,25 @@ const ExamDateDetail: React.FC = () => {
         <div className="min-h-screen bg-[#F8F9FA] pb-16">
             <div className="bg-white border-b border-slate-200/80 px-8 py-8 md:py-10 mb-8 shadow-sm relative overflow-hidden">
                 <div className="absolute right-0 top-0 w-64 h-64 bg-indigo-50 rounded-full blur-3xl opacity-60 -translate-y-1/2 translate-x-1/3"></div>
-                <div className="max-w-[1600px] mx-auto flex items-center gap-5 relative z-10">
-                    <Button
-                        isIconOnly
-                        variant="light"
-                        className="bg-slate-50 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-2xl shadow-sm border border-slate-100 transition-all w-12 h-12"
-                        onPress={() => navigate(`/admin/exams/series/${seriesId}/dates`)}
-                    >
-                        <ArrowLeft size={20} className="stroke-[2.5]" />
-                    </Button>
-                    <div>
-                        <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-baseline gap-3">
-                            <span className="text-indigo-600 text-xl font-extrabold uppercase tracking-widest">
-                                {new Date(date || '').getDate().toString().padStart(2, '0')}
-                            </span>
-                            {selectedDateLabel}
-                        </h1>
-                        <p className="text-slate-500 mt-1.5 font-medium text-sm">Managing explicit subjects scheduled for this day.</p>
+                <div className="max-w-[1600px] mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 relative z-10">
+                    <div className="flex items-center gap-5">
+                        <Button
+                            isIconOnly
+                            variant="light"
+                            className="bg-slate-50 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-2xl shadow-sm border border-slate-100 transition-all w-12 h-12"
+                            onPress={() => navigate(`/admin/exams/series/${seriesId}/dates`)}
+                        >
+                            <ArrowLeft size={20} className="stroke-[2.5]" />
+                        </Button>
+                        <div>
+                            <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-baseline gap-3">
+                                <span className="text-indigo-600 text-xl font-extrabold uppercase tracking-widest">
+                                    {new Date(date || '').getDate().toString().padStart(2, '0')}
+                                </span>
+                                {selectedDateLabel}
+                            </h1>
+                            <p className="text-slate-500 mt-1.5 font-medium text-sm">Managing explicit subjects scheduled for this day.</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -297,6 +299,7 @@ const ExamDateDetail: React.FC = () => {
                     onEdit={() => { }}
                 />
             )}
+
         </div>
     );
 };

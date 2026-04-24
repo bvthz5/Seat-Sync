@@ -80,6 +80,7 @@ router.post('/preview-timetable', AuthMiddleware.verifyAccessToken, upload.singl
  *       200:
  *         description: Eligible students imported
  */
+router.post('/bulk-import-eligibility', AuthMiddleware.verifyAccessToken, upload.array('files'), ExamController.bulkImportEligibility);
 router.post('/:id/eligible-students/import', AuthMiddleware.verifyAccessToken, upload.single('file'), ExamController.importEligibleStudents);
 
 /**
@@ -207,6 +208,7 @@ router.get('/:id/eligible-students', AuthMiddleware.verifyAccessToken, ExamContr
  *       200:
  *         description: Exam deleted
  */
+router.delete('/clear-eligibility', AuthMiddleware.verifyAccessToken, ExamController.clearEligibility);
 router.delete('/delete-all', AuthMiddleware.verifyAccessToken, ExamController.deleteAllExams);
 router.delete('/:id', AuthMiddleware.verifyAccessToken, ExamController.deleteExam);
 

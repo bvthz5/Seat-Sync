@@ -13,11 +13,11 @@ type RoomType = 'ROOM' | 'HALL';
 type ViewMode = 'PHYSICAL' | 'LOGICAL' | 'DISABLE';
 
 interface SeatConfig {
-    id: string; 
+    id: string;
     colIndex: number;
     colLabel: string;
     benchIndex: number;
-    seatIndex: number; 
+    seatIndex: number;
     isActive: boolean;
     logicalRow: number;
     zoneId?: number;
@@ -49,12 +49,13 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
     const [zones, setZones] = useState<Zone[]>([]);
     const [seatZoneMap, setSeatZoneMap] = useState<Map<string, number>>(new Map());
     const [seatIdMap, setSeatIdMap] = useState<Map<string, number>>(new Map());
-// Cleaned up manual zone states
+    // Cleaned up manual zone states
 
     const [isSaved, setIsSaved] = useState(true);
     const [loading, setLoading] = useState(false);
-    const [initialConfig, setInitialConfig] = useState<any>(null); 
+    const [initialConfig, setInitialConfig] = useState<any>(null);
     const [initialSeatZoneMap, setInitialSeatZoneMap] = useState<Map<string, number> | null>(null);
+    const [initialDisabledSeatIds, setInitialDisabledSeatIds] = useState<Set<string>>(new Set());
     const [isFullScreen, setIsFullScreen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -110,10 +111,10 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
 
                     const data = await structureService.getRoomLayout(Number(selectedRoomId));
                     const room = data.room;
-                    
+
                     let parsedRowLayout = (room as any).RowLayout;
                     if (typeof parsedRowLayout === 'string') {
-                        try { parsedRowLayout = JSON.parse(parsedRowLayout); } catch(e) { parsedRowLayout = []; }
+                        try { parsedRowLayout = JSON.parse(parsedRowLayout); } catch (e) { parsedRowLayout = []; }
                     }
                     if (!Array.isArray(parsedRowLayout)) {
                         if (room.TotalRows && room.BenchesPerRow) {
@@ -148,6 +149,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                     }
 
                     setDisabledSeatIds(newDisabledSet);
+                    setInitialDisabledSeatIds(new Set(newDisabledSet)); // baseline for dirty check
                     setSeatZoneMap(newZoneMap);
                     setInitialSeatZoneMap(newZoneMap);
                     setSeatIdMap(newSeatIdMap);
@@ -188,14 +190,14 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
         try {
             const response: any = await structureService.getFloors({ blockId, limit: 100 });
             setFloors(Array.isArray(response.data || response) ? (response.data || response) : []);
-        } catch (error) {}
+        } catch (error) { }
     };
 
     const loadRooms = async (blockId: number, floorId: number) => {
         try {
             const response: any = await structureService.getRooms({ blockId, floorId });
             setRooms(Array.isArray(response) ? response : (response.data || []));
-        } catch (error) {}
+        } catch (error) { }
     };
 
     const generatedSeats = useMemo(() => {
@@ -203,7 +205,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
         if (!selectedRoomId || !config.rowLayout.length) return seats;
 
         config.rowLayout.forEach((benches, r) => {
-            const colLabel = String.fromCharCode(65 + r); 
+            const colLabel = String.fromCharCode(65 + r);
 
             for (let b = 0; b < benches; b++) {
                 for (let s = 1; s <= config.seatsPerBench; s++) {
@@ -255,20 +257,20 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
     const handleAddRow = () => {
 
         const lastBenchCount = config.rowLayout.length > 0 ? config.rowLayout[config.rowLayout.length - 1] : 5;
-        setConfig({...config, rowLayout: [...config.rowLayout, lastBenchCount]});
+        setConfig({ ...config, rowLayout: [...config.rowLayout, lastBenchCount] });
     };
 
     const handleRemoveRow = (index: number) => {
         setIsSaved(false);
         const newLayout = [...config.rowLayout];
         newLayout.splice(index, 1);
-        setConfig({...config, rowLayout: newLayout});
+        setConfig({ ...config, rowLayout: newLayout });
     };
 
     const handleBenchCountChange = (index: number, value: number) => {
         const newLayout = [...config.rowLayout];
         newLayout[index] = value;
-        setConfig({...config, rowLayout: newLayout});
+        setConfig({ ...config, rowLayout: newLayout });
     };
 
     const handleAutoZone = async () => {
@@ -278,12 +280,12 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
             await structureService.autoZoneRoom(Number(selectedRoomId), selectedZoneCount);
             toast.success("Room auto-zoned successfully");
             setShowZoneModal(false);
-            
+
             // Refresh logic - unmount and remount room
             const currentId = selectedRoomId;
             setSelectedRoomId("");
             setTimeout(() => setSelectedRoomId(currentId), 50);
-            
+
         } catch (error: any) {
             toast.error(error.response?.data?.message || "Failed to auto-zone room");
         } finally {
@@ -293,77 +295,118 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
 
 
 
-    
-    useEffect(() => {
-        if (!isSaved && selectedRoomId) {
-            const debounceSave = setTimeout(() => {
-                handleSave();
-            }, 1000);
-            return () => clearTimeout(debounceSave);
+
+    /**
+     * autoSaveSeatStates — called by the debounce effect.
+     * NEVER calls updateRoomLayout (never blocked by exam allocations).
+     * Only persists seat enable/disable and zone assignments.
+     */
+    const autoSaveSeatStates = async () => {
+        if (!selectedRoomId || seatIdMap.size === 0) return;
+
+        // Internal guard: skip if nothing actually changed from saved baseline
+        const disabledChanged = disabledSeatIds.size !== initialDisabledSeatIds.size ||
+            [...disabledSeatIds].some(id => !initialDisabledSeatIds.has(id));
+        const zonesChanged = seatZoneMap.size !== (initialSeatZoneMap?.size ?? 0) ||
+            [...seatZoneMap.entries()].some(([k, v]) => initialSeatZoneMap?.get(k) !== v);
+        if (!disabledChanged && !zonesChanged) return;
+
+        try {
+            const updates: any[] = [];
+            config.rowLayout.forEach((benches, r) => {
+                const colLabel = String.fromCharCode(65 + r);
+                for (let b = 0; b < benches; b++) {
+                    for (let s = 1; s <= config.seatsPerBench; s++) {
+                        const seatId = `${colLabel}-${b + 1}-${s}`;
+                        const dbSeatId = seatIdMap.get(seatId);
+                        if (dbSeatId) {
+                            updates.push({
+                                SeatID: dbSeatId,
+                                IsActive: !disabledSeatIds.has(seatId),
+                                ZoneID: seatZoneMap.get(seatId) || null,
+                            });
+                        }
+                    }
+                }
+            });
+            if (updates.length > 0) {
+                await structureService.updateSeatZones(Number(selectedRoomId), updates);
+                setInitialDisabledSeatIds(new Set(disabledSeatIds));
+                setInitialSeatZoneMap(new Map(seatZoneMap));
+                setIsSaved(true);
+
+                // Dispatch event for auto-refresh on Seating Plans
+                window.dispatchEvent(new Event('ROOM_LAYOUT_UPDATED'));
+                try {
+                    const channel = new BroadcastChannel('seating_sync');
+                    channel.postMessage({ type: 'ROOM_LAYOUT_UPDATED', roomId: selectedRoomId });
+                } catch (e) { }
+            }
+        } catch (error: any) {
+            console.warn('[auto-save] failed:', error?.response?.data?.message || error?.message);
         }
-    }, [config, isSaved, selectedRoomId]);
-    
+    };
+
+    /**
+     * handleSave — called by the explicit Save button.
+     * Saves BOTH structural layout (updateRoomLayout) AND seat states.
+     * May return 400 if room has future exam allocations AND layout changed.
+     */
     const handleSave = async () => {
         if (!selectedRoomId) return;
 
-        const room = rooms.find(r => r.RoomID === Number(selectedRoomId));
-        if (!room) return;
-
-        const calculatedCapacity = config.rowLayout.reduce((acc, curr) => acc + curr, 0) * config.seatsPerBench;
-        if (capacityCount !== calculatedCapacity) {
-            toast.error("Invalid layout");
-            return;
-        }
+        const layoutChanged = initialConfig &&
+            (JSON.stringify(config.rowLayout) !== JSON.stringify(initialConfig.rowLayout) ||
+                config.seatsPerBench !== initialConfig.seatsPerBench);
 
         setLoading(true);
         try {
-            const isLayoutSame = false;
-
-            // 1. Update Layout Structure
-            await structureService.updateRoomLayout(Number(selectedRoomId), { ...room, RowLayout: config.rowLayout as any,
-                SeatsPerBench: config.seatsPerBench,
-                TotalRows: config.rowLayout.length,
-                BenchesPerRow: config.rowLayout.length > 0 ? config.rowLayout[0] : 0
-              } as any);
-
-            // 2. Sent Seat Updates
-            if (isLayoutSame) {
-                const updates: any[] = [];
-                config.rowLayout.forEach((benches, r) => {
-                    const colLabel = String.fromCharCode(65 + r);
-                    for (let b = 0; b < benches; b++) {
-                        for (let s = 0; s < config.seatsPerBench; s++) {
-                            const seatIndex = s + 1;
-                            const seatId = `${colLabel}-${b + 1}-${seatIndex}`;
-                            const dbSeatId = seatIdMap.get(seatId);
-
-                            if (dbSeatId) {
-                                updates.push({
-                                    SeatID: dbSeatId,
-                                    IsActive: !disabledSeatIds.has(seatId),
-                                    ZoneID: seatZoneMap.get(seatId) || null
-                                });
-                            }
-                        }
-                    }
-                });
-
-                if (updates.length > 0) {
-                    await structureService.updateSeatZones(Number(selectedRoomId), updates);
-                }
-            } else {
-                if (disabledSeatIds.size > 0 || seatZoneMap.size > 0) {
-                    toast.success("Layout dimensions changed. Seat statuses and zones resetted by server.");
-                }
+            if (layoutChanged) {
+                await structureService.updateRoomLayout(Number(selectedRoomId), {
+                    RowLayout: config.rowLayout,
+                    SeatsPerBench: config.seatsPerBench,
+                    TotalRows: config.rowLayout.length,
+                    BenchesPerRow: config.rowLayout.length > 0 ? config.rowLayout[0] : 0,
+                } as any);
             }
 
-            toast.success("Seating layout updated successfully");
-              setIsSaved(true);
+            // Persist seat states
+            const updates: any[] = [];
+            config.rowLayout.forEach((benches, r) => {
+                const colLabel = String.fromCharCode(65 + r);
+                for (let b = 0; b < benches; b++) {
+                    for (let s = 1; s <= config.seatsPerBench; s++) {
+                        const seatId = `${colLabel}-${b + 1}-${s}`;
+                        const dbSeatId = seatIdMap.get(seatId);
+                        if (dbSeatId) {
+                            updates.push({
+                                SeatID: dbSeatId,
+                                IsActive: !disabledSeatIds.has(seatId),
+                                ZoneID: seatZoneMap.get(seatId) || null,
+                            });
+                        }
+                    }
+                }
+            });
+            if (updates.length > 0) {
+                await structureService.updateSeatZones(Number(selectedRoomId), updates);
+            }
+
+            toast.success('Layout saved successfully');
+            
+            window.dispatchEvent(new Event('ROOM_LAYOUT_UPDATED'));
+            try {
+                const channel = new BroadcastChannel('seating_sync');
+                channel.postMessage({ type: 'ROOM_LAYOUT_UPDATED', roomId: selectedRoomId });
+            } catch (e) { }
+
+            setIsSaved(true);
             setInitialConfig(config);
+            setInitialDisabledSeatIds(new Set(disabledSeatIds));
 
             const data = await structureService.getRoomLayout(Number(selectedRoomId));
             const newSeatIdMap = new Map<string, number>();
-            const currentZoneMap = new Map<string, number>(); 
+            const currentZoneMap = new Map<string, number>();
             if (data.seats) {
                 data.seats.forEach((s: any) => {
                     const rowLabel = s.RowLabel ? s.RowLabel.trim() : '';
@@ -374,7 +417,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
             }
             setSeatIdMap(newSeatIdMap);
 
-            if (!isLayoutSame) {
+            if (layoutChanged) {
                 setSeatZoneMap(new Map());
                 setInitialSeatZoneMap(new Map());
                 setDisabledSeatIds(new Set());
@@ -382,9 +425,8 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                 setSeatZoneMap(currentZoneMap);
                 setInitialSeatZoneMap(currentZoneMap);
             }
-
         } catch (error: any) {
-            toast.error(error.response?.data?.message || "Failed to save layout");
+            toast.error(error.response?.data?.message || 'Failed to save layout');
         } finally {
             setLoading(false);
         }
@@ -393,7 +435,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
     const handleReset = () => {
         if (initialConfig) {
             setConfig(initialConfig);
-            setDisabledSeatIds(new Set());
+            setDisabledSeatIds(new Set(initialDisabledSeatIds));
             if (initialSeatZoneMap) setSeatZoneMap(new Map(initialSeatZoneMap));
             toast.success("Layout reset to saved state");
         }
@@ -402,17 +444,28 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
     const isDirty = useMemo(() => {
         if (!initialConfig) return false;
         if (JSON.stringify(config.rowLayout) !== JSON.stringify(initialConfig.rowLayout) ||
-            config.seatsPerBench !== initialConfig.seatsPerBench ||
-            disabledSeatIds.size > 0) return true;
-
+            config.seatsPerBench !== initialConfig.seatsPerBench) return true;
+        if (disabledSeatIds.size !== initialDisabledSeatIds.size) return true;
+        for (const id of disabledSeatIds) {
+            if (!initialDisabledSeatIds.has(id)) return true;
+        }
         if (!initialSeatZoneMap) return seatZoneMap.size > 0;
         if (seatZoneMap.size !== initialSeatZoneMap.size) return true;
-
         for (const [key, val] of seatZoneMap) {
             if (initialSeatZoneMap.get(key) !== val) return true;
         }
         return false;
-    }, [config, initialConfig, disabledSeatIds, seatZoneMap, initialSeatZoneMap]);
+    }, [config, initialConfig, disabledSeatIds, initialDisabledSeatIds, seatZoneMap, initialSeatZoneMap]);
+
+    // ── Auto-save: watches ONLY seat state, never layout dims ──
+    // Depends directly on the state values — no computed memo needed.
+    // autoSaveSeatStates has its own guard to skip if nothing really changed.
+    useEffect(() => {
+        if (!selectedRoomId || seatIdMap.size === 0) return;
+        const timer = setTimeout(() => { autoSaveSeatStates(); }, 1000);
+        return () => clearTimeout(timer);
+    }, [disabledSeatIds, seatZoneMap, selectedRoomId]);
+
 
     return (
         <div className="flex flex-col gap-8 pb-12 relative">
@@ -421,7 +474,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                     <ModalHeader className="flex flex-col gap-1 text-slate-800">Auto-Zone Room</ModalHeader>
                     <ModalBody>
                         <p className="text-sm text-slate-500 mb-2">Evenly divide the room into zones column-by-column.</p>
-                        <Input name="custom-input"  type="number" label="Number of Zones" labelPlacement="outside" min={2} max={6} value={selectedZoneCount.toString()} onValueChange={(val) => setSelectedZoneCount(Number(val))} classNames={{ inputWrapper: "bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors shadow-sm" }} />
+                        <Input name="custom-input" type="number" label="Number of Zones" labelPlacement="outside" min={2} max={6} value={selectedZoneCount.toString()} onValueChange={(val) => setSelectedZoneCount(Number(val))} classNames={{ inputWrapper: "bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors shadow-sm" }} />
                     </ModalBody>
                     <ModalFooter>
                         <Button color="danger" variant="light" onPress={() => setShowZoneModal(false)}>Cancel</Button>
@@ -489,52 +542,52 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                             {selectedRoomId ? (
                                 <div className="space-y-6">
                                     {/* Auto Zone removed ZONE_EDIT branch, just showing generic config now */}
-                                        <div className="space-y-6">
-                                            
-                                            <div className="flex flex-col gap-3">
-                                                <div className="flex items-center justify-between">
-                                                    <h4 className="text-xs font-bold text-slate-700 uppercase tracking-widest">Row Configuration</h4>
-                                                    <Button size="sm" variant="flat" color="primary" startContent={<Plus size={14}/>} onPress={handleAddRow}>Add Row</Button>
-                                                </div>
-                                                <div className="bg-slate-50 p-2 rounded-xl border border-slate-200 max-h-[250px] overflow-y-auto custom-scrollbar flex flex-col gap-2">
-                                                    {config.rowLayout.map((benches, i) => (
-                                                        <div key={i} className="flex gap-2 items-center bg-white p-2 rounded-lg border shadow-sm">
-                                                            <div className="w-8 h-8 rounded-md bg-slate-800 text-white flex items-center justify-center font-bold text-xs shrink-0">
-                                                                {String.fromCharCode(65 + i)}
-                                                            </div>
-                                                            <div className="flex-1 flex gap-2 items-center">
-                                                                <span id={`bench-label-${i}`} className="text-[10px] uppercase font-bold text-slate-500">Benches:</span>
-                                                                <Input name="custom-input"  aria-labelledby={`bench-label-${i}`} size="sm" type="number" min={1} value={benches.toString()} onValueChange={(val) => handleBenchCountChange(i, Number(val))} classNames={{ inputWrapper: "bg-slate-50 hover:bg-slate-100 transition-colors shadow-none border border-slate-200" }} className="w-20" />
-                                                            </div>
-                                                            <Button isIconOnly size="sm" variant="light" color="danger" onPress={() => handleRemoveRow(i)}><Minus size={14}/></Button>
-                                                        </div>
-                                                    ))}
-                                                    {config.rowLayout.length === 0 && <p className="text-xs text-slate-400 text-center py-4">No rows defined</p>}
-                                                </div>
-                                            </div>
+                                    <div className="space-y-6">
 
-                                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col gap-3">
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Total Benches</span>
-                                                    <span className="font-mono font-bold text-slate-800">{config.rowLayout.reduce((acc, curr) => acc + curr, 0)}</span>
-                                                </div>
-                                                <div className="flex flex-col gap-2">
-                                                    <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Seats Per Bench</span>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        <button onClick={() => setConfig({...config, seatsPerBench: 1})} className={`py-2 rounded-lg text-xs font-bold border-2 transition-all ${config.seatsPerBench === 1 ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>Single (1)</button>
-                                                        <button onClick={() => setConfig({...config, seatsPerBench: 2})} className={`py-2 rounded-lg text-xs font-bold border-2 transition-all ${config.seatsPerBench === 2 ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>Dual (2)</button>
+                                        <div className="flex flex-col gap-3">
+                                            <div className="flex items-center justify-between">
+                                                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-widest">Row Configuration</h4>
+                                                <Button size="sm" variant="flat" color="primary" startContent={<Plus size={14} />} onPress={handleAddRow}>Add Row</Button>
+                                            </div>
+                                            <div className="bg-slate-50 p-2 rounded-xl border border-slate-200 max-h-[250px] overflow-y-auto custom-scrollbar flex flex-col gap-2">
+                                                {config.rowLayout.map((benches, i) => (
+                                                    <div key={i} className="flex gap-2 items-center bg-white p-2 rounded-lg border shadow-sm">
+                                                        <div className="w-8 h-8 rounded-md bg-slate-800 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                                                            {String.fromCharCode(65 + i)}
+                                                        </div>
+                                                        <div className="flex-1 flex gap-2 items-center">
+                                                            <span id={`bench-label-${i}`} className="text-[10px] uppercase font-bold text-slate-500">Benches:</span>
+                                                            <Input name="custom-input" aria-labelledby={`bench-label-${i}`} size="sm" type="number" min={1} value={benches.toString()} onValueChange={(val) => handleBenchCountChange(i, Number(val))} classNames={{ inputWrapper: "bg-slate-50 hover:bg-slate-100 transition-colors shadow-none border border-slate-200" }} className="w-20" />
+                                                        </div>
+                                                        <Button isIconOnly size="sm" variant="light" color="danger" onPress={() => handleRemoveRow(i)}><Minus size={14} /></Button>
                                                     </div>
-                                                </div>
-                                                <Divider className="my-1"/>
-                                                <div className="flex justify-between items-center">
-                                                    <div className="flex flex-col">
-                                                        <span className="text-xs font-bold uppercase tracking-widest text-indigo-600">Final Capacity</span>
-                                                        <span className="text-[10px] text-slate-400">Auto-calculated from layout</span>
-                                                    </div>
-                                                    <span className="text-2xl font-black text-indigo-600">{capacityCount}</span>
-                                                </div>
+                                                ))}
+                                                {config.rowLayout.length === 0 && <p className="text-xs text-slate-400 text-center py-4">No rows defined</p>}
                                             </div>
                                         </div>
+
+                                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col gap-3">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Total Benches</span>
+                                                <span className="font-mono font-bold text-slate-800">{config.rowLayout.reduce((acc, curr) => acc + curr, 0)}</span>
+                                            </div>
+                                            <div className="flex flex-col gap-2">
+                                                <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Seats Per Bench</span>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <button onClick={() => setConfig({ ...config, seatsPerBench: 1 })} className={`py-2 rounded-lg text-xs font-bold border-2 transition-all ${config.seatsPerBench === 1 ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>Single (1)</button>
+                                                    <button onClick={() => setConfig({ ...config, seatsPerBench: 2 })} className={`py-2 rounded-lg text-xs font-bold border-2 transition-all ${config.seatsPerBench === 2 ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>Dual (2)</button>
+                                                </div>
+                                            </div>
+                                            <Divider className="my-1" />
+                                            <div className="flex justify-between items-center">
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-bold uppercase tracking-widest text-indigo-600">Final Capacity</span>
+                                                    <span className="text-[10px] text-slate-400">Auto-calculated from layout</span>
+                                                </div>
+                                                <span className="text-2xl font-black text-indigo-600">{capacityCount}</span>
+                                            </div>
+                                        </div>
+                                    </div>
 
                                     {!readOnly && (
                                         <div className="grid grid-cols-2 gap-3 pt-4 border-t border-slate-100">
@@ -544,39 +597,52 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                     )}
                                 </div>
                             ) : (
-                                <div className="py-10 text-center opacity-50"><Armchair size={48} className="mx-auto mb-4"/><p className="text-sm font-medium">Select a room</p></div>
+                                <div className="py-10 text-center opacity-50"><Armchair size={48} className="mx-auto mb-4" /><p className="text-sm font-medium">Select a room</p></div>
                             )}
                         </CardBody>
                     </Card>
                 </div>
 
                 {/* VISUAL EDITOR */}
-                <div ref={containerRef} className={`${isFullScreen ? 'fixed inset-0 z-[100] h-screen w-screen rounded-none' : 'flex-1 xl:h-[calc(100vh-220px)] xl:min-h-[700px] rounded-3xl border border-slate-200'} flex flex-col bg-[#0F172A] relative transition-all relative overflow-hidden`}>
-                    
-                    <div className="relative z-20 flex justify-between items-center p-6 border-b border-white/5 bg-[#0F172A]/90 backdrop-blur-xl">
-                        <div className="flex items-center gap-4">
-                            <div className={`w-2.5 h-2.5 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.5)] ${selectedRoomId ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`} />
+                <div ref={containerRef} className={`${isFullScreen ? 'fixed inset-0 z-[100] h-screen w-screen rounded-none' : 'flex-1 xl:h-[calc(100vh-220px)] xl:min-h-[700px] rounded-3xl border border-indigo-900/40'} flex flex-col relative transition-all overflow-hidden`} style={{ background: 'linear-gradient(145deg, #0f1c3a 0%, #111d3d 40%, #0e1830 70%, #131e3f 100%)' }}>
+
+                    {/* ── Header ── */}
+                    <div className="relative z-20 flex justify-between items-center px-6 py-3.5 border-b border-white/8"
+                        style={{ background: 'rgba(10,18,50,0.85)', backdropFilter: 'blur(16px)' }}>
+                        <div className="flex items-center gap-3">
+                            <div className="relative">
+                                <div className={`w-2.5 h-2.5 rounded-full ${selectedRoomId ? 'bg-emerald-400' : 'bg-slate-600'}`}
+                                    style={selectedRoomId ? { boxShadow: '0 0 0 3px rgba(52,211,153,0.18), 0 0 10px rgba(52,211,153,0.55)' } : {}} />
+                                {selectedRoomId && <div className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-25" />}
+                            </div>
                             <div>
-                                <h3 className="text-white font-bold tracking-tight text-sm">3D Visual Map</h3>
-                                <p className="text-[10px] text-slate-400 font-mono tracking-wider uppercase mt-0.5">
-                                    {selectedRoomId ? `Editing: ${rooms.find(r => r.RoomID === Number(selectedRoomId))?.RoomCode}` : 'No Room'}
+                                <h3 className="text-sm font-black tracking-tight" style={{ background: 'linear-gradient(90deg,#c7d2fe,#a5b4fc,#818cf8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>3D Visual Map</h3>
+                                <p className="text-[10px] font-mono tracking-widest uppercase mt-0.5 text-indigo-400/60">
+                                    {selectedRoomId ? `Editing: ${rooms.find(r => r.RoomID === Number(selectedRoomId))?.RoomCode}` : 'No room selected'}
                                 </p>
                             </div>
                         </div>
-
-                        <div className="flex items-center gap-2 bg-slate-800/50 p-1 rounded-lg border border-slate-700/50">
-                            <Button size="sm" className={viewMode === 'PHYSICAL' ? 'bg-indigo-600 text-white' : 'bg-transparent text-slate-400 font-bold uppercase text-[10px]'} onPress={() => setViewMode('PHYSICAL')} startContent={<Eye size={14}/>}>View</Button>
-                            <Button size="sm" className={viewMode === 'DISABLE' ? 'bg-red-600 text-white' : 'bg-transparent text-slate-400 font-bold uppercase text-[10px]'} onPress={() => setViewMode('DISABLE')} startContent={<Ban size={14}/>}>Disable</Button>
-                            <Button size="sm" className="bg-transparent text-amber-500 font-bold uppercase text-[10px] hover:bg-amber-600 hover:text-white" onPress={() => setShowZoneModal(true)} startContent={<Grid3X3 size={14}/>}>Auto-Zone</Button>
+                        <div className="flex items-center gap-1.5 p-1 rounded-xl border border-white/8" style={{ background: 'rgba(99,102,241,0.06)' }}>
+                            <Button size="sm" onPress={() => setViewMode('PHYSICAL')} startContent={<Eye size={13}/>}
+                                className={viewMode === 'PHYSICAL' ? 'text-white font-bold uppercase text-[10px]' : 'bg-transparent text-indigo-400/70 font-bold uppercase text-[10px] hover:text-indigo-200'}
+                                style={viewMode === 'PHYSICAL' ? { background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', boxShadow: '0 0 14px rgba(99,102,241,0.5)' } : {}}>View</Button>
+                            <Button size="sm" onPress={() => setViewMode('DISABLE')} startContent={<Ban size={13}/>}
+                                className={viewMode === 'DISABLE' ? 'text-white font-bold uppercase text-[10px]' : 'bg-transparent text-rose-400/70 font-bold uppercase text-[10px] hover:text-rose-300'}
+                                style={viewMode === 'DISABLE' ? { background: 'linear-gradient(135deg,#be123c,#9f1239)', boxShadow: '0 0 14px rgba(244,63,94,0.4)' } : {}}>Disable</Button>
+                            <Button size="sm" className="bg-transparent text-amber-400/80 font-bold uppercase text-[10px] hover:text-amber-300 hover:bg-amber-400/10" onPress={() => setShowZoneModal(true)} startContent={<Grid3X3 size={13}/>}>Auto-Zone</Button>
+                            <div className="w-px h-4 bg-white/10 mx-0.5" />
                             <Tooltip content="Toggle Fullscreen">
-                                <Button isIconOnly variant="light" size="sm" className="text-slate-400 hover:text-white ml-2" onPress={toggleFullScreen}>
-                                    {isFullScreen ? <Minimize2 size={16}/> : <Maximize2 size={16}/>}
+                                <Button isIconOnly variant="light" size="sm" className="text-indigo-400/60 hover:text-white" onPress={toggleFullScreen}>
+                                    {isFullScreen ? <Minimize2 size={14}/> : <Maximize2 size={14}/>}
                                 </Button>
                             </Tooltip>
                         </div>
                     </div>
 
-                    <div className="flex-1 relative overflow-auto p-12 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[length:40px_40px]">
+                    <div className="flex-1 relative overflow-auto p-12" style={{
+                        backgroundImage: 'linear-gradient(rgba(99,102,241,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(99,102,241,0.06) 1px, transparent 1px)',
+                        backgroundSize: '36px 36px',
+                    }}>
                         {!selectedRoomId ? (
                             <div className="h-full flex flex-col items-center justify-center opacity-20">
                                 <Grid3X3 size={80} className="text-white mb-4" />
@@ -584,12 +650,19 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                             </div>
                         ) : (
                             <div className="min-w-min mx-auto pb-24">
-                                {/* Blackboard */}
+                                {/* ── Blackboard ── */}
                                 <div className="flex flex-col items-center mb-10">
-                                    <div className="w-full max-w-4xl h-14 bg-gradient-to-b from-slate-800 to-slate-900 border border-slate-700/50 rounded-2xl flex items-center justify-center shadow-lg relative overflow-hidden">
-                                        <div className="absolute top-0 inset-x-0 h-[1px] bg-indigo-500/50" />
-                                        <span className="text-xs font-bold text-slate-500 uppercase tracking-[0.2em]">Front Blackboard</span>
+                                    <div className="w-full max-w-4xl h-14 rounded-2xl flex items-center justify-center relative overflow-hidden"
+                                        style={{
+                                            background: 'linear-gradient(180deg,#1a1f3a 0%,#131730 55%,#0f1228 100%)',
+                                            border: '1.5px solid rgba(129,140,248,0.25)',
+                                            boxShadow: '0 4px 24px rgba(0,0,0,0.45), 0 0 40px rgba(99,102,241,0.05), inset 0 1px 0 rgba(129,140,248,0.12)',
+                                        }}>
+                                        <div className="absolute top-0 left-6 right-6 h-px" style={{ background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.09),transparent)' }} />
+                                        <span className="text-[11px] font-black uppercase tracking-[0.4em] select-none" style={{ color: 'rgba(165,180,252,0.5)', textShadow: '0 0 20px rgba(99,102,241,0.2)' }}>✦ Front Blackboard ✦</span>
+                                        <div className="absolute bottom-0 left-0 right-0 h-[2.5px]" style={{ background: 'linear-gradient(90deg,transparent,rgba(99,102,241,0.5),rgba(139,92,246,0.4),transparent)' }} />
                                     </div>
+                                    <div className="w-4/5 h-3 -mt-0.5" style={{ background: 'radial-gradient(ellipse,rgba(99,102,241,0.08) 0%,transparent 70%)' }} />
                                 </div>
 
                                 {/* Bench Pillars — one pill per column (A, B, C…) */}
@@ -600,16 +673,29 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
 
                                         return (
                                             <div key={r} className="flex flex-col items-center gap-3">
-                                                {/* Column header label */}
-                                                <div className="text-white font-black text-xl tracking-[0.25em] drop-shadow-lg">{colLetter}</div>
+                                                {/* Column header */}
+                                                <div className="flex flex-col items-center gap-1">
+                                                    <span className="text-xl font-black tracking-[0.3em] select-none"
+                                                        style={{ background: 'linear-gradient(180deg,#a5b4fc 0%,#818cf8 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 0 10px rgba(129,140,248,0.6))' }}>
+                                                        {colLetter}
+                                                    </span>
+                                                    <span className="w-6 h-[2px] rounded-full" style={{ background: 'linear-gradient(90deg,transparent,#818cf8,transparent)' }} />
+                                                </div>
 
-                                                {/* Single pill containing all bench seats vertically */}
-                                                <div
-                                                    className="relative bg-slate-800/30 border-2 border-white/10 rounded-[2.5rem] px-5 py-6 flex flex-col gap-3 shadow-[0_20px_50px_rgba(0,0,0,0.35)] group transition-all duration-300 hover:border-indigo-500/30 hover:shadow-[0_20px_60px_rgba(99,102,241,0.12)]"
-                                                    style={{ minWidth: '72px' }}
+                                                {/* Pill container */}
+                                                <div className="relative rounded-[2rem] flex flex-col gap-2.5 transition-all duration-300"
+                                                    style={{
+                                                        minWidth: '72px',
+                                                        padding: '18px 16px',
+                                                        background: 'linear-gradient(175deg, rgba(99,102,241,0.12) 0%, rgba(15,28,74,0.7) 100%)',
+                                                        border: '1px solid rgba(129,140,248,0.2)',
+                                                        boxShadow: '0 8px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)',
+                                                        backdropFilter: 'blur(8px)',
+                                                    }}
+                                                    onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.border = '1px solid rgba(129,140,248,0.5)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 12px 40px rgba(0,0,0,0.4), 0 0 20px rgba(99,102,241,0.12), inset 0 1px 0 rgba(255,255,255,0.08)'; }}
+                                                    onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.border = '1px solid rgba(129,140,248,0.2)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 8px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)'; }}
                                                 >
-                                                    {/* Subtle gradient overlay on hover */}
-                                                    <div className="absolute inset-0 rounded-[2.5rem] bg-gradient-to-b from-indigo-500/5 via-transparent to-slate-900/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                                                    <div className="absolute top-2.5 left-4 right-4 h-px pointer-events-none" style={{ background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.07),transparent)' }} />
 
                                                     {Array.from({ length: benches }).map((_, b) => {
                                                         const benchNum = b + 1;
@@ -623,40 +709,42 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                                                 ? `${colLetterLower}${benchNum}${seatIndex === 1 ? 'l' : 'r'}`
                                                                 : `${colLetterLower}${benchNum}`;
 
-                                                            let seatCls = isDual
-                                                                ? "w-10 h-10 rounded-xl border-2 flex items-center justify-center cursor-pointer transition-all duration-200 text-[10px] font-bold shadow-md select-none "
-                                                                : "w-12 h-12 rounded-2xl border-2 flex items-center justify-center cursor-pointer transition-all duration-200 text-[11px] font-bold shadow-md select-none ";
+                                                            const base = isDual
+                                                                ? 'w-10 h-10 rounded-xl flex items-center justify-center cursor-pointer transition-all duration-150 text-[10px] font-bold select-none border '
+                                                                : 'w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all duration-150 text-[11px] font-bold select-none border ';
+                                                            let seatCls = base;
+                                                            let seatStyle: React.CSSProperties = {};
 
                                                             if (!isActive) {
-                                                                seatCls += "bg-slate-900/40 border-white/5 text-slate-700 opacity-30";
-                                                                if (viewMode === 'DISABLE') seatCls += " hover:border-red-500/60 hover:opacity-60";
+                                                                seatCls += 'opacity-20 cursor-not-allowed ';
+                                                                seatStyle = { background: 'repeating-linear-gradient(45deg,#111d3a,#111d3a 3px,#0e1830 3px,#0e1830 6px)', borderColor: 'rgba(255,255,255,0.05)', color: '#334155' };
                                                             } else if (viewMode === 'DISABLE') {
-                                                                seatCls += "bg-indigo-900/70 border-indigo-500 text-white shadow-[0_0_18px_rgba(99,102,241,0.4)] hover:scale-105";
+                                                                seatCls += 'hover:scale-110 active:scale-95 ';
+                                                                seatStyle = { background: 'linear-gradient(135deg,#3730a3,#4338ca)', borderColor: '#818cf8', color: '#e0e7ff', boxShadow: '0 0 16px rgba(99,102,241,0.5), inset 0 1px 0 rgba(255,255,255,0.15)' };
                                                             } else if (viewMode === 'PHYSICAL' && zoneId) {
                                                                 const z = zones.find(zn => zn.ZoneID === zoneId);
-                                                                if (z) {
-                                                                    switch (z.Color?.toLowerCase()) {
-                                                                        case 'red':    seatCls += "bg-red-500/20 border-red-500/50 text-red-300 hover:bg-red-500/30 hover:scale-105"; break;
-                                                                        case 'green':  seatCls += "bg-green-500/20 border-green-500/50 text-green-300 hover:bg-green-500/30 hover:scale-105"; break;
-                                                                        case 'yellow': seatCls += "bg-yellow-500/20 border-yellow-500/50 text-yellow-300 hover:bg-yellow-500/30 hover:scale-105"; break;
-                                                                        case 'purple': seatCls += "bg-purple-500/20 border-purple-500/50 text-purple-300 hover:bg-purple-500/30 hover:scale-105"; break;
-                                                                        default:       seatCls += "bg-indigo-500/20 border-indigo-500/50 text-indigo-300 hover:bg-indigo-500/30 hover:scale-105"; break;
-                                                                    }
-                                                                } else {
-                                                                    seatCls += "bg-slate-800 border-slate-700 text-slate-400";
-                                                                }
+                                                                const zoneMap: Record<string, React.CSSProperties> = {
+                                                                    red:    { background: 'linear-gradient(135deg,#7f1d1d,#991b1b)', borderColor: '#f87171', color: '#fecaca', boxShadow: '0 0 14px rgba(248,113,113,0.35)' },
+                                                                    green:  { background: 'linear-gradient(135deg,#14532d,#166534)', borderColor: '#4ade80', color: '#bbf7d0', boxShadow: '0 0 14px rgba(74,222,128,0.35)' },
+                                                                    yellow: { background: 'linear-gradient(135deg,#713f12,#854d0e)', borderColor: '#fbbf24', color: '#fef08a', boxShadow: '0 0 14px rgba(251,191,36,0.35)' },
+                                                                    purple: { background: 'linear-gradient(135deg,#4a1d96,#5b21b6)', borderColor: '#c084fc', color: '#e9d5ff', boxShadow: '0 0 14px rgba(192,132,252,0.35)' },
+                                                                };
+                                                                seatStyle = z ? (zoneMap[z.Color?.toLowerCase() ?? ''] ?? { background: 'linear-gradient(135deg,#1e3a8a,#1e40af)', borderColor: '#60a5fa', color: '#bfdbfe', boxShadow: '0 0 12px rgba(96,165,250,0.3)' }) : { background: '#0e1830', borderColor: 'rgba(255,255,255,0.08)', color: '#475569' };
+                                                                seatCls += 'hover:scale-105 active:scale-95 ';
                                                             } else {
-                                                                seatCls += "bg-slate-900 border-white/10 text-indigo-300 hover:bg-indigo-600 hover:text-white hover:border-indigo-400 hover:scale-110 active:scale-95";
+                                                                seatCls += 'hover:scale-110 active:scale-95 ';
+                                                                seatStyle = { background: 'linear-gradient(135deg,rgba(99,102,241,0.18) 0%,rgba(15,28,74,0.85) 100%)', borderColor: 'rgba(129,140,248,0.3)', color: '#a5b4fc', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.07)' };
                                                             }
 
                                                             return (
-                                                                <Tooltip key={seatId} content={`${seatId}${!isActive ? ' (Disabled)' : ''}`}>
-                                                                    <div className={seatCls} onClick={() => toggleSeat(seatId)}>
+                                                                <Tooltip key={seatId} content={`${seatId}${!isActive ? ' · disabled' : ''}`}
+                                                                    classNames={{ content: 'bg-slate-900/95 border border-indigo-500/30 text-indigo-200 rounded-lg text-[10px] font-mono px-2 py-1' }}>
+                                                                    <div className={seatCls} style={seatStyle} onClick={() => toggleSeat(seatId)}>
                                                                         {isActive
                                                                             ? zoneId
-                                                                                ? <span className="opacity-90">{zones.find(zn => zn.ZoneID === zoneId)?.ZoneCode}</span>
-                                                                                : <span>{seatLabel}</span>
-                                                                            : <Ban size={12} />}
+                                                                                ? <span className="font-black text-[9px]">{zones.find(zn => zn.ZoneID === zoneId)?.ZoneCode}</span>
+                                                                                : <span className="font-bold tracking-tight">{seatLabel}</span>
+                                                                            : <Ban size={11} className="opacity-50" />}
                                                                     </div>
                                                                 </Tooltip>
                                                             );
@@ -664,9 +752,9 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
 
                                                         if (isDual) {
                                                             return (
-                                                                <div key={benchNum} className="flex gap-1 items-center">
+                                                                <div key={benchNum} className="flex gap-1.5 items-center">
                                                                     {makeSeatCell(1)}
-                                                                    <div className="w-px h-5 bg-white/10 rounded-full shrink-0" />
+                                                                    <div className="w-px h-4 rounded-full shrink-0" style={{ background: 'linear-gradient(180deg,transparent,rgba(129,140,248,0.25),transparent)' }} />
                                                                     {makeSeatCell(2)}
                                                                 </div>
                                                             );

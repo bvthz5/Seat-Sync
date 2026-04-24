@@ -768,6 +768,42 @@ export class ExamController {
         }
     }
 
+    static async clearEligibility(req: Request, res: Response) {
+        try {
+            const { seriesId, date } = req.query;
+            let query = 'DELETE FROM ExamRegistrations WHERE ExamID IN (SELECT ExamID FROM Exams WHERE 1=1';
+            const replacements: any = {};
+
+            if (seriesId) {
+                query += ' AND ExamSeriesID = :seriesId';
+                replacements.seriesId = parseInt(String(seriesId), 10);
+            }
+            if (date) {
+                query += ' AND ExamDate = :date';
+                replacements.date = date;
+            }
+            query += ')';
+
+            // Delete associated seat allocations first to prevent foreign key errors
+            let seatQuery = 'DELETE FROM SeatAllocations WHERE ExamID IN (SELECT ExamID FROM Exams WHERE 1=1';
+            if (seriesId) seatQuery += ' AND ExamSeriesID = :seriesId';
+            if (date) seatQuery += ' AND ExamDate = :date';
+            seatQuery += ')';
+            
+            await sequelize.query(seatQuery, { replacements, type: QueryTypes.DELETE });
+
+            await sequelize.query(query, {
+                replacements,
+                type: QueryTypes.DELETE
+            });
+
+            res.json({ message: 'Eligibility list cleared successfully' });
+        } catch (error: any) {
+            console.error('Clear eligibility error:', error);
+            res.status(500).json({ message: 'Error clearing eligibility list', error: error.message });
+        }
+    }
+
     // Delete all exams (optionally by series)
     static async deleteAllExams(req: Request, res: Response) {
         try {
@@ -1303,123 +1339,8 @@ export class ExamController {
             }
 
             const transaction = await sequelize.transaction();
-            const seenRegNos = new Set<string>();
-            const errors: Array<{ row: number; reason: string }> = [];
-            let createdUsers = 0;
-            let updatedUsers = 0;
-            let createdStudents = 0;
-            let updatedStudents = 0;
-            let registrationsCreated = 0;
-            let registrationsSkipped = 0;
-            let eligibleCount = 0;
-            let ineligibleCount = 0;
-
-            // Values that explicitly mark a student as NOT eligible
-            const INELIGIBLE_VALUES = new Set(['no', 'not eligible', '0', 'false', 'ineligible']);
-
             try {
-                for (let index = 0; index < rows.length; index++) {
-                    const row = rows[index];
-                    const rowNumber = index + 2;
-
-                    const fullName = String(getEligibleCellValue(row, ['Name', 'Student Name', 'Full Name', 'FullName']) ?? '').trim();
-                    const registerNumber = String(getEligibleCellValue(row, ['Register Number', 'RegisterNumber', 'Reg No', 'RegNo', 'University RegNo', 'University Registration No']) ?? '').trim();
-
-                    // ── STEP 1: Parse eligibility – default TRUE when column is absent or blank ──
-                    const isEligibleRaw = String(
-                        getEligibleCellValue(row, ['Is Eligible', 'IsEligible', 'Eligible', 'isEligible', 'Eligibility', 'Status']) ?? ''
-                    ).trim().toLowerCase();
-                    const isEligible: boolean = isEligibleRaw === ''
-                        ? true
-                        : !INELIGIBLE_VALUES.has(isEligibleRaw);
-
-                    console.log(`[IMPORT DEBUG] Row ${rowNumber}:`, { fullName, registerNumber, isEligibleRaw, isEligible, row });
-
-                    // ── STEP 2: Only skip rows missing required identity fields ──
-                    if (!fullName || !registerNumber) {
-                        console.log(`[IMPORT DEBUG] Row ${rowNumber} skipped: Missing required Name or Register Number`);
-                        errors.push({ row: rowNumber, reason: 'Missing required Name or Register Number' });
-                        continue;
-                    }
-
-                    const normalizedRegNo = registerNumber.toUpperCase();
-                    if (seenRegNos.has(normalizedRegNo)) {
-                        continue; // silently skip exact duplicates within the same sheet
-                    }
-                    seenRegNos.add(normalizedRegNo);
-
-                    // Track eligibility distribution
-                    if (isEligible) { eligibleCount++; } else { ineligibleCount++; }
-
-                    let student = await Student.findOne({
-                        where: { RegisterNumber: normalizedRegNo },
-                        transaction
-                    });
-
-                    if (!student) {
-                        // ── Resolve / create Student (ALL students enter the system) ──
-                        const email = buildEligibleStudentEmail(fullName, registerNumber);
-                        const defaultPassword = await bcrypt.hash('12345678', 10);
-                        
-                        const [user, userCreated] = await User.findOrCreate({
-                            where: { Email: email },
-                            defaults: {
-                                Email: email,
-                                FullName: fullName,
-                                PasswordHash: defaultPassword,
-                                Role: 'student',
-                                IsActive: true,
-                                IsPasswordChanged: false,
-                                IsActivated: false
-                            } as any,
-                            transaction
-                        });
-
-                        if (userCreated) {
-                            createdUsers++;
-                        } else {
-                            updatedUsers++;
-                        }
-
-                        student = await Student.create({
-                            RegisterNumber: normalizedRegNo,
-                            FullName: fullName,
-                            UserID: user.UserID,
-                            Status: 'ACTIVE'
-                        } as any, { transaction });
-                        createdStudents++;
-                    } else {
-                        await student.update({
-                            Status: 'ACTIVE'
-                        }, { transaction });
-                        updatedStudents++;
-                    }
-
-                    // ── STEP 3: Upsert ExamRegistration with IsEligible flag ──
-                    const [registration, created] = await ExamRegistration.findOrCreate({
-                        where: {
-                            ExamID: examId,
-                            StudentID: student.StudentID
-                        },
-                        defaults: {
-                            ExamID: examId,
-                            StudentID: student.StudentID,
-                            IsEligible: isEligible
-                        } as any,
-                        transaction
-                    });
-
-                    if (created) {
-                        registrationsCreated++;
-                    } else {
-                        // Refresh eligibility flag if it changed since last import
-                        if ((registration as any).IsEligible !== isEligible) {
-                            await (registration as any).update({ IsEligible: isEligible }, { transaction });
-                        }
-                        registrationsSkipped++;
-                    }
-                }
-
+                const result = await ExamController._processEligibleStudentsRows(examId, rows, transaction);
                 await transaction.commit();
 
                 // ── STEP 4: Return enriched summary ──
@@ -1431,17 +1352,7 @@ export class ExamController {
                         DepartmentCode: department.DepartmentCode,
                         DepartmentName: department.DepartmentName
                     },
-                    total: eligibleCount + ineligibleCount,
-                    eligibleCount,
-                    ineligibleCount,
-                    createdUsers,
-                    updatedUsers,
-                    createdStudents,
-                    updatedStudents,
-                    registrationsCreated,
-                    registrationsSkipped,
-                    errorCount: errors.length,
-                    errors
+                    ...result
                 });
             } catch (error: any) {
                 await transaction.rollback();
@@ -1452,6 +1363,246 @@ export class ExamController {
                 message: 'Failed to import eligible students',
                 error: error.message
             });
+        }
+    }
+
+    static async _processEligibleStudentsRows(examId: number, rows: any[], transaction: any) {
+        const seenRegNos = new Set<string>();
+        const errors: Array<{ row: number; reason: string }> = [];
+        let createdUsers = 0;
+        let updatedUsers = 0;
+        let createdStudents = 0;
+        let updatedStudents = 0;
+        let registrationsCreated = 0;
+        let registrationsSkipped = 0;
+        let eligibleCount = 0;
+        let ineligibleCount = 0;
+
+        const INELIGIBLE_VALUES = new Set(['no', 'not eligible', '0', 'false', 'ineligible']);
+
+        for (let index = 0; index < rows.length; index++) {
+            const row = rows[index];
+            const rowNumber = index + 2;
+
+            const fullName = String(getEligibleCellValue(row, ['Name', 'Student Name', 'Full Name', 'FullName']) ?? '').trim();
+            const registerNumber = String(getEligibleCellValue(row, ['Register Number', 'RegisterNumber', 'Reg No', 'RegNo', 'University RegNo', 'University Registration No']) ?? '').trim();
+
+            const isEligibleRaw = String(
+                getEligibleCellValue(row, ['Is Eligible', 'IsEligible', 'Eligible', 'isEligible', 'Eligibility', 'Status']) ?? ''
+            ).trim().toLowerCase();
+            const isEligible: boolean = isEligibleRaw === ''
+                ? true
+                : !INELIGIBLE_VALUES.has(isEligibleRaw);
+
+            if (!fullName || !registerNumber) {
+                errors.push({ row: rowNumber, reason: 'Missing required Name or Register Number' });
+                continue;
+            }
+
+            const normalizedRegNo = registerNumber.toUpperCase();
+            if (seenRegNos.has(normalizedRegNo)) {
+                continue;
+            }
+            seenRegNos.add(normalizedRegNo);
+
+            if (isEligible) { eligibleCount++; } else { ineligibleCount++; }
+
+            let student = await Student.findOne({
+                where: { RegisterNumber: normalizedRegNo },
+                transaction
+            });
+
+            if (!student) {
+                const email = buildEligibleStudentEmail(fullName, registerNumber);
+                const defaultPassword = await bcrypt.hash('12345678', 10);
+                
+                const [user, userCreated] = await User.findOrCreate({
+                    where: { Email: email },
+                    defaults: {
+                        Email: email,
+                        FullName: fullName,
+                        PasswordHash: defaultPassword,
+                        Role: 'student',
+                        IsActive: true,
+                        IsPasswordChanged: false,
+                        IsActivated: false
+                    } as any,
+                    transaction
+                });
+
+                if (userCreated) {
+                    createdUsers++;
+                } else {
+                    updatedUsers++;
+                }
+
+                student = await Student.create({
+                    RegisterNumber: normalizedRegNo,
+                    FullName: fullName,
+                    UserID: user.UserID,
+                    Status: 'ACTIVE'
+                } as any, { transaction });
+                createdStudents++;
+            } else {
+                await student.update({
+                    Status: 'ACTIVE'
+                }, { transaction });
+                updatedStudents++;
+            }
+
+            const [registration, created] = await ExamRegistration.findOrCreate({
+                where: {
+                    ExamID: examId,
+                    StudentID: student.StudentID
+                },
+                defaults: {
+                    ExamID: examId,
+                    StudentID: student.StudentID,
+                    IsEligible: isEligible
+                } as any,
+                transaction
+            });
+
+            if (created) {
+                registrationsCreated++;
+            } else {
+                if ((registration as any).IsEligible !== isEligible) {
+                    await (registration as any).update({ IsEligible: isEligible }, { transaction });
+                }
+                registrationsSkipped++;
+            }
+        }
+
+        return {
+            total: eligibleCount + ineligibleCount,
+            eligibleCount,
+            ineligibleCount,
+            createdUsers,
+            updatedUsers,
+            createdStudents,
+            updatedStudents,
+            registrationsCreated,
+            registrationsSkipped,
+            errorCount: errors.length,
+            errors
+        };
+    }
+
+    static async bulkImportEligibility(req: Request, res: Response) {
+        try {
+            const { date } = req.body;
+            const files = req.files as Express.Multer.File[];
+
+            if (!date || !files || files.length === 0) {
+                return res.status(400).json({ message: 'Missing date or files' });
+            }
+
+            const parsedDate = formatDateForDb(new Date(date));
+
+            // Fetch ALL exams for the entire day, regardless of session
+            const exams = await Exam.findAll({
+                where: {
+                    ExamDate: parsedDate
+                },
+                include: [{
+                    model: Subject,
+                    include: [{
+                        model: Department,
+                        attributes: ['DepartmentID', 'DepartmentCode', 'DepartmentName']
+                    }]
+                }]
+            });
+
+            const normalizeStr = (str: string) => {
+                return (str || '')
+                    .replace(/[—–]/g, '-')
+                    .replace(/[^a-zA-Z0-9 -]/g, '')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .toUpperCase();
+            };
+
+            const result = {
+                success: [] as any[],
+                skipped: [] as any[],
+                errors: [] as any[]
+            };
+
+            for (const file of files) {
+                const originalName = file.originalname;
+                let rawSubject = originalName.replace(/\.[^/.]+$/, ''); // remove extension
+                rawSubject = rawSubject.replace(/^EligibleList[-_ ]?/i, ''); // remove prefix
+                const fileSubject = normalizeStr(rawSubject);
+
+                const exactMatches = exams.filter(exam => {
+                    const examSubject = normalizeStr((exam as any).Subject?.SubjectName);
+                    return fileSubject === examSubject;
+                });
+
+                let finalExam = null;
+
+                if (exactMatches.length > 0) {
+                    // If there's 1 or more exact matches, just pick the first one.
+                    // This handles cases where the same subject has multiple rows (e.g., for different departments)
+                    finalExam = exactMatches[0];
+                } else {
+                    // Fallback Matching
+                    let partialMatches = exams.filter(exam => {
+                        const examSubject = normalizeStr((exam as any).Subject?.SubjectName);
+                        return fileSubject.includes(examSubject) || examSubject.includes(fileSubject);
+                    }).sort((a, b) => {
+                        const aLen = normalizeStr((a as any).Subject?.SubjectName).length;
+                        const bLen = normalizeStr((b as any).Subject?.SubjectName).length;
+                        return bLen - aLen;
+                    });
+                    
+                    if (partialMatches.length > 0) {
+                        const maxLen = normalizeStr((partialMatches[0] as any).Subject?.SubjectName).length;
+                        partialMatches = partialMatches.filter(exam => normalizeStr((exam as any).Subject?.SubjectName).length === maxLen);
+                    }
+
+                    if (partialMatches.length === 0) {
+                        result.skipped.push({ file: originalName, reason: 'No matching exam scheduled for this date' });
+                        continue;
+                    } else if (partialMatches.length > 1) {
+                        result.errors.push({ file: originalName, reason: 'Ambiguous: Multiple partial matches found' });
+                        continue;
+                    } else {
+                        finalExam = partialMatches[0];
+                    }
+                }
+
+                try {
+                    const rows = parseEligibleWorkbook(file.buffer, originalName);
+                    if (!rows.length) {
+                        result.skipped.push({ file: originalName, reason: 'Empty file' });
+                        continue;
+                    }
+
+                    // Execution
+                    const transaction = await sequelize.transaction();
+                    try {
+                        const importResult = await ExamController._processEligibleStudentsRows((finalExam as any).ExamID, rows, transaction);
+                        await transaction.commit();
+                        
+                        result.success.push({
+                            file: originalName,
+                            exam: (finalExam as any).ExamName,
+                            session: (finalExam as any).Session,
+                            imported: importResult.total
+                        });
+                    } catch (err: any) {
+                        await transaction.rollback();
+                        result.errors.push({ file: originalName, reason: 'Database error during import: ' + err.message });
+                    }
+                } catch (err: any) {
+                    result.errors.push({ file: originalName, reason: 'File parse error: ' + err.message });
+                }
+            }
+
+            return res.json(result);
+        } catch (error: any) {
+            return res.status(500).json({ message: 'Failed to bulk import', error: error.message });
         }
     }
 

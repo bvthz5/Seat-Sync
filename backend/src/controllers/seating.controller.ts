@@ -141,8 +141,41 @@ const getStudentsForExamSession = async (
     )];
 
     if (studentIds.length === 0) {
-        console.log("DEBUG: No registered students found for these exams");
-        return [];
+        console.log("DEBUG: No registered students found in ExamRegistration. Falling back to department-based implicit registration.");
+        const examSubjectRows = await sequelize.query<{ DepartmentID: number }>(
+            `
+            SELECT DISTINCT sub.DepartmentID
+            FROM Exams e
+            INNER JOIN Subjects sub ON sub.SubjectID = e.SubjectID
+            WHERE e.ExamID IN (${examIds.map((_, i) => `:examId${i}`).join(",")})
+            `,
+            {
+                type: QueryTypes.SELECT,
+                replacements: examIds.reduce((acc, id, i) => ({ ...acc, [`examId${i}`]: id }), {} as Record<string, number>),
+                ...(transaction ? { transaction } : {}),
+            }
+        );
+        const slotDeptIds = [...new Set(examSubjectRows.map(r => Number(r.DepartmentID)).filter(Boolean))];
+        if (slotDeptIds.length === 0) return [];
+
+        const allSlotStudents = await Student.findAll({
+            where: { DepartmentID: { [Op.in]: slotDeptIds } },
+            include: [
+                { model: User, attributes: ["FullName"] },
+                { model: Department, attributes: ["DepartmentCode", "DepartmentID"] },
+            ],
+            order: [["RegisterNumber", "ASC"]],
+            ...(transaction ? { transaction } : {}),
+        });
+
+        const excluded = new Set<number>(excludeStudentIds.map(Number));
+        const finalStudents = allSlotStudents.filter((s: any) => !excluded.has(Number(s.StudentID)));
+        
+        return finalStudents.map((s: any) => {
+            const jsonStu = typeof s.toJSON === 'function' ? s.toJSON() : { ...s };
+            jsonStu._isEligible = true; // Implicitly eligible
+            return jsonStu;
+        });
     }
 
     // Filter out excluded students
@@ -434,10 +467,28 @@ export const getHallLayout = async (req: Request, res: Response) => {
         const activeSeats = seats.filter(s => s.IsActive).length;
 
         const benchMap: Record<string, Record<number, any[]>> = {};
+        
+        // Parse row layout to enforce physical bounds
+        let parsedLayout: number[] = [];
+        if (hall.RowLayout) {
+            try { parsedLayout = typeof hall.RowLayout === 'string' ? JSON.parse(hall.RowLayout) : hall.RowLayout; }
+            catch { parsedLayout = []; }
+        }
+        const seatsPerBench = Number(hall.SeatsPerBench) || 1;
+
         for (const seat of seats) {
             const rowLabel = getRowLabel(seat);
             const benchNumber = getBenchNumber(seat);
             const seatNumber = getSeatNumber(seat);
+            
+            // BOUNDARY CHECK: Ensure seat is physically within the current Room Layout
+            // RowIndex is A, B, C... (0, 1, 2)
+            const rowNumericIndex = rowLabel.toUpperCase().charCodeAt(0) - 65;
+            
+            if (rowNumericIndex >= parsedLayout.length || rowNumericIndex < 0) continue; // Out of column bounds
+            if (benchNumber > (parsedLayout[rowNumericIndex] ?? 0)) continue; // Out of bench bounds for this column
+            if (seatNumber > seatsPerBench) continue; // Out of seat bounds for this bench
+
             const normalizedSeat = {
                 ...(typeof (seat as any).toJSON === "function" ? (seat as any).toJSON() : seat),
                 RowLabel: rowLabel,

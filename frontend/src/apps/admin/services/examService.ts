@@ -81,5 +81,23 @@ export const ExamService = {
     getEligibleStudents: async (examId: number) => {
         const response = await api.get(`${PREFIX}/${examId}/eligible-students`);
         return response.data;
+    },
+
+    bulkImportEligibility: async (date: string, files: File[]) => {
+        const formData = new FormData();
+        formData.append('date', date);
+        files.forEach(file => {
+            formData.append('files', file);
+        });
+        const response = await api.post(`${PREFIX}/bulk-import-eligibility`, formData);
+        return response.data;
+    },
+
+    clearEligibility: async (seriesId?: number, date?: string) => {
+        let params = new URLSearchParams();
+        if (seriesId) params.append('seriesId', String(seriesId));
+        if (date) params.append('date', date);
+        const response = await api.delete(`${PREFIX}/clear-eligibility?${params.toString()}`);
+        return response.data;
     }
 };
