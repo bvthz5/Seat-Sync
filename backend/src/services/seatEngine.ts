@@ -24,8 +24,7 @@ export async function generateSeats(room: Room | any, transaction?: any) {
 
         // 1. Fetch all existing seats for the room
         const queryOptions: any = { 
-            where: { RoomID: Number(room.RoomID) },
-            raw: true 
+            where: { RoomID: Number(room.RoomID) }
         };
         if (transaction) queryOptions.transaction = transaction;
         
@@ -46,7 +45,7 @@ export async function generateSeats(room: Room | any, transaction?: any) {
     // benches = RowLayout[rowIndex]
     for (let rowIndex = 0; rowIndex < layout.length; rowIndex++) {
         const benches = layout[rowIndex] || 0;
-        // If benches == 0 â†’ skip
+        // If benches == 0 → skip
         if (benches === 0) continue;
         const rowLabel = String.fromCharCode(65 + rowIndex);
 
@@ -77,11 +76,8 @@ export async function generateSeats(room: Room | any, transaction?: any) {
     const seatsToUpdateActiveState: Array<{ seat: any; isActive: boolean }> = [];
 
     for (const seat of existingSeats as any[]) {
-        // Handle both Sequelize aliases and raw DB column names
-        const rIndex = seat.RowIndex ?? seat.RowLabel;
-        const bIndex = seat.BenchIndex ?? seat.BenchNumber;
-        const sIndex = seat.SeatIndex ?? seat.SeatNumber;
-        const key = `${rIndex}-${bIndex}-${sIndex}`;
+        // Seat is a Sequelize instance here, use property names
+        const key = `${seat.RowIndex}-${seat.BenchIndex}-${seat.SeatIndex}`;
         existingSeatKeys.add(key);
 
         // If seat no longer exists physically in the new layout
