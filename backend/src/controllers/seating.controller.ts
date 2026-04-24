@@ -1200,11 +1200,11 @@ export const bulkAssign = async (req: Request, res: Response) => {
 
             // ── Fetch and cap seats ──
             let allActiveSeatsES: any[] = await sequelize.query(`
-                SELECT SeatID, RoomID, RowIndex, BenchIndex, SeatIndex
+                SELECT SeatID, RoomID, RowLabel AS RowIndex, BenchNumber AS BenchIndex, SeatNumber AS SeatIndex
                 FROM   Seats
                 WHERE  RoomID IN (${(hallIds as number[]).map(Number).join(',')})
                 AND    IsActive = 1
-                ORDER BY RoomID ASC, RowIndex ASC, BenchIndex ASC, SeatIndex ASC
+                ORDER BY RoomID ASC, RowLabel ASC, BenchNumber ASC, SeatNumber ASC
             `, { type: QueryTypes.SELECT, raw: true, transaction }) as any[];
 
             if (allActiveSeatsES.length === 0) {
@@ -1462,11 +1462,11 @@ export const bulkAssign = async (req: Request, res: Response) => {
         let allActiveSeats: any[] = [];
         try {
             allActiveSeats = await sequelize.query(`
-                SELECT SeatID, RoomID, RowIndex, BenchIndex, SeatIndex
+                SELECT SeatID, RoomID, RowLabel AS RowIndex, BenchNumber AS BenchIndex, SeatNumber AS SeatIndex
                 FROM Seats
                 WHERE RoomID IN (${hallIds.map((id: any) => Number(id)).join(',')})
                 AND IsActive = 1
-                ORDER BY RoomID ASC, RowIndex ASC, BenchIndex ASC, SeatIndex ASC
+                ORDER BY RoomID ASC, RowLabel ASC, BenchNumber ASC, SeatNumber ASC
             `, {
                 type: QueryTypes.SELECT,
                 raw: true,
@@ -2233,7 +2233,7 @@ export const searchStudent = async (req: Request, res: Response) => {
                 StudentID: number; SeatID: number; RowLabel: string;
                 BenchNumber: number; SeatNumber: number; RoomID: number; RoomCode: string;
             }>(
-                `SELECT sa.StudentID, sa.SeatID, st.RowIndex AS RowLabel, st.BenchIndex AS BenchNumber, st.SeatIndex AS SeatNumber,
+                `SELECT sa.StudentID, sa.SeatID, st.RowLabel AS RowLabel, st.BenchNumber AS BenchNumber, st.SeatNumber AS SeatNumber,
                         r.RoomID, r.RoomName AS RoomCode
                  FROM SeatAllocations sa
                  JOIN Seats st ON sa.SeatID = st.SeatID
