@@ -38,6 +38,12 @@ export const SeatingService = {
         return r.data;
     },
 
+    /** Fetch all allocations globally for a specific date and session */
+    getGlobalAllocations: async (examDate: string, session: string) => {
+        const r = await api.get(`${PREFIX}/global-allocations/${examDate}/${session}`);
+        return r.data;
+    },
+
     /** Auto-assign students to a single hall */
     autoAssign: async (payload: { examDate: string; session: string; hallId: number; leftDeptId?: number | null; rightDeptId?: number | null; seriesId?: number }) => {
         const r = await api.post(`${PREFIX}/auto-assign`, payload);

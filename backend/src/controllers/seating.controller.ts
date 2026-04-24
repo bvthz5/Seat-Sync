@@ -237,6 +237,7 @@ const getRowLabel = (seat: any): string => String(seat?.RowIndex ?? seat?.RowLab
 const getBenchNumber = (seat: any): number => Number(seat?.BenchIndex ?? seat?.BenchNumber ?? 0);
 const getSeatNumber = (seat: any): number => Number(seat?.SeatIndex ?? seat?.SeatNumber ?? 0);
 
+
 const sortSeatsByPosition = (a: any, b: any) => {
     const ar = getRowLabel(a);
     const br = getRowLabel(b);
@@ -467,7 +468,12 @@ export const getHallLayout = async (req: Request, res: Response) => {
         const hall = await Room.findByPk(Number(hallId));
         if (!hall) return res.status(404).json({ message: "Hall not found" });
 
-        await ensureSeatsExist(hall);
+        // Gracefully try to ensure seats exist — do NOT let failures block the layout response
+        try {
+            await ensureSeatsExist(hall);
+        } catch (seatErr: any) {
+            console.warn(`getHallLayout: ensureSeatsExist failed for room ${hallId}, continuing with existing seats:`, seatErr?.message);
+        }
 
         // Fetch ALL seats (active + inactive) so the UI can show disabled ones
         const seats = await Seat.findAll({
@@ -493,12 +499,11 @@ export const getHallLayout = async (req: Request, res: Response) => {
             const seatNumber = getSeatNumber(seat);
             
             // BOUNDARY CHECK: Ensure seat is physically within the current Room Layout
-            // RowIndex is A, B, C... (0, 1, 2)
             const rowNumericIndex = rowLabel.toUpperCase().charCodeAt(0) - 65;
             
-            if (rowNumericIndex >= parsedLayout.length || rowNumericIndex < 0) continue; // Out of column bounds
-            if (benchNumber > (parsedLayout[rowNumericIndex] ?? 0)) continue; // Out of bench bounds for this column
-            if (seatNumber > seatsPerBench) continue; // Out of seat bounds for this bench
+            if (rowNumericIndex >= parsedLayout.length || rowNumericIndex < 0) continue;
+            if (benchNumber > (parsedLayout[rowNumericIndex] ?? 0)) continue;
+            if (seatNumber > seatsPerBench) continue;
 
             const normalizedSeat = {
                 ...(typeof (seat as any).toJSON === "function" ? (seat as any).toJSON() : seat),
@@ -522,7 +527,7 @@ export const getHallLayout = async (req: Request, res: Response) => {
             }
         }
 
-        res.json({ hall, totalSeats: Number((hall as any).Capacity || activeSeats), benches });
+        res.json({ hall, totalSeats: Number((hall as any).Capacity || activeSeats), benches, rowLayout: parsedLayout, seatsPerBench });
     } catch (error: any) {
         console.error("GET HALL LAYOUT ERROR:", error);
         res.status(500).json({ message: (error instanceof Error ? error.message : String(error)) });
@@ -746,29 +751,27 @@ export const getAllocationForHall = async (req: Request, res: Response) => {
             };
         }
 
-        // Enrich with subjectCode via ExamRegistration → Exam → Subject
-        // Build (StudentID, ExamID) pairs from allocations
+        // Enrich with subjectCode via ExamRegistration -> Exam -> Subject
         if (allocations.length > 0) {
             const studentIds = [...new Set((allocations as any[]).map(a => Number(a.StudentID)))];
-            const regsWithSubject = await sequelize.query<{ StudentID: number; ExamID: number; SubjectCode: string, SubjectName: string }>(`
-                SELECT er.StudentID, er.ExamID, s.SubjectCode, s.SubjectName
-                FROM   ExamRegistrations er
-                INNER JOIN Exams e ON e.ExamID = er.ExamID
-                INNER JOIN Subjects s ON s.SubjectID = e.SubjectID
-                WHERE  er.StudentID IN (:studentIds)
-                AND    er.ExamID IN (:examIds)
-            `, {
-                type: QueryTypes.SELECT,
-                replacements: { studentIds, examIds },
-            });
-            // Build lookup: studentId → info (first match wins)
-            const subjectByStudent = new Map<number, {code: string, name: string}>();
+            // Use inline interpolation for MSSQL IN clause compatibility
+            const studentIdList = studentIds.join(',');
+            const examIdList = examIds.join(',');
+            const regsWithSubject = await sequelize.query<{ StudentID: number; SubjectCode: string; SubjectName: string }>(
+                `SELECT er.StudentID, s.SubjectCode, s.SubjectName
+                 FROM   ExamRegistrations er
+                 INNER JOIN Exams e ON e.ExamID = er.ExamID
+                 INNER JOIN Subjects s ON s.SubjectID = e.SubjectID
+                 WHERE  er.StudentID IN (${studentIdList})
+                 AND    er.ExamID IN (${examIdList})`,
+                { type: QueryTypes.SELECT }
+            );
+            const subjectByStudent = new Map<number, { code: string; name: string }>();
             for (const r of regsWithSubject) {
                 if (!subjectByStudent.has(Number(r.StudentID))) {
                     subjectByStudent.set(Number(r.StudentID), { code: r.SubjectCode, name: r.SubjectName });
                 }
             }
-            // Inject into assignments
             for (const alloc of allocations as any[]) {
                 const sid = Number(alloc.StudentID);
                 if (subjectByStudent.has(sid)) {
@@ -1157,6 +1160,17 @@ const fetchEndSemStudentsBySubject = async (
 export const bulkAssign = async (req: Request, res: Response) => {
     const transaction = await sequelize.transaction();
     try {
+        // Defensive check: Ensure Seats table exists and has data
+        try {
+            const [results] = await sequelize.query("SELECT TOP 1 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Seats'");
+            if (!results || results.length === 0) {
+                await transaction.rollback();
+                return res.status(500).json({ message: 'Seats table does not exist. Please run migrations/seeders.' });
+            }
+        } catch (tableErr) {
+            await transaction.rollback();
+            return res.status(500).json({ message: 'Database error: Unable to check Seats table existence.', error: (tableErr as any)?.message || tableErr });
+        }
         console.log("=== BACKEND HIT ===");
         console.log("req.body:", req.body);
         console.log("payload fields:", {
@@ -1279,15 +1293,21 @@ export const bulkAssign = async (req: Request, res: Response) => {
                 await transaction.rollback();
                 return res.status(400).json({ message: 'No valid hall IDs provided.', examType });
             }
-            const allActiveSeatsES: any[] = await sequelize.query(`
-                SELECT SeatID, RoomID, RowLabel, BenchNumber, SeatNumber
-                FROM   Seats
-                WHERE  RoomID IN (${safeHallIds.join(',')})
-                AND    IsActive = 1
-                ORDER BY RoomID ASC, RowLabel ASC, BenchNumber ASC, SeatNumber ASC
-            `, { type: QueryTypes.SELECT, raw: true, transaction }) as any[];
+            let allActiveSeatsES: any[] = [];
+            try {
+                allActiveSeatsES = await sequelize.query(`
+                    SELECT SeatID, RoomID, RowIndex AS RowLabel, BenchIndex AS BenchNumber, SeatIndex AS SeatNumber
+                    FROM   Seats
+                    WHERE  RoomID IN (${safeHallIds.join(',')})
+                    AND    IsActive = 1
+                    ORDER BY RoomID ASC, RowIndex ASC, BenchIndex ASC, SeatIndex ASC
+                `, { type: QueryTypes.SELECT, raw: true, transaction }) as any[];
+            } catch (seatQueryErr) {
+                await transaction.rollback();
+                return res.status(500).json({ message: 'Database error: Unable to query Seats. Table may be missing or corrupted.', error: (seatQueryErr as any)?.message || seatQueryErr });
+            }
 
-            if (allActiveSeatsES.length === 0) {
+            if (!allActiveSeatsES || allActiveSeatsES.length === 0) {
                 await transaction.commit();
                 return res.status(400).json({ message: 'No active seats found in selected halls.', examType });
             }
@@ -1630,11 +1650,11 @@ export const bulkAssign = async (req: Request, res: Response) => {
         let allActiveSeats: any[] = [];
         try {
             allActiveSeats = await sequelize.query(`
-                SELECT SeatID, RoomID, RowLabel, BenchNumber, SeatNumber
+                SELECT SeatID, RoomID, RowIndex AS RowLabel, BenchIndex AS BenchNumber, SeatIndex AS SeatNumber
                 FROM Seats
                 WHERE RoomID IN (${hallIds.map((id: any) => Number(id)).join(',')})
                 AND IsActive = 1
-                ORDER BY RoomID ASC, RowLabel ASC, BenchNumber ASC, SeatNumber ASC
+                ORDER BY RoomID ASC, RowIndex ASC, BenchIndex ASC, SeatIndex ASC
             `, {
                 type: QueryTypes.SELECT,
                 raw: true,
@@ -2401,7 +2421,7 @@ export const searchStudent = async (req: Request, res: Response) => {
                 StudentID: number; SeatID: number; RowLabel: string;
                 BenchNumber: number; SeatNumber: number; RoomID: number; RoomCode: string;
             }>(
-                `SELECT sa.StudentID, sa.SeatID, st.RowLabel, st.BenchNumber, st.SeatNumber,
+                `SELECT sa.StudentID, sa.SeatID, st.RowIndex AS RowLabel, st.BenchIndex AS BenchNumber, st.SeatIndex AS SeatNumber,
                         r.RoomID, r.RoomName AS RoomCode
                  FROM SeatAllocations sa
                  JOIN Seats st ON sa.SeatID = st.SeatID
@@ -2841,6 +2861,72 @@ export const exportSeatingToExcel = async (req: Request, res: Response) => {
         res.send(buffer);
     } catch (error: any) {
         console.error("EXPORT SEATING ERROR:", error);
+        res.status(500).json({ message: (error instanceof Error ? error.message : String(error)) });
+    }
+};
+
+/* ════════════════════════════════════════════════════════════
+ *  GET /api/seating/global-allocations/:examDate/:session
+ *  Fetch all allocations for a specific date and session
+ * ════════════════════════════════════════════════════════════ */
+export const getGlobalAllocations = async (req: Request, res: Response) => {
+    try {
+        const { examDate, session } = req.params;
+        const examIds = await resolveExamIds(examDate as string, session as string);
+        if (examIds.length === 0) return res.json({ allocations: [] });
+
+        const allocations = await SeatAllocation.findAll({
+            where: { ExamID: { [Op.in]: examIds } },
+            include: [
+                { model: Seat, attributes: ["RoomID"], include: [{ model: Room, attributes: ["RoomCode"] }] },
+                {
+                    model: Student,
+                    include: [{ model: Department, attributes: ["DepartmentCode", "DepartmentName"] }]
+                }
+            ]
+        });
+
+        // Enrich with subjectCode via ExamRegistrations (similar to getAllocationForHall)
+        const studentIds = [...new Set((allocations as any[]).map(a => Number(a.StudentID)))];
+        const subjectByStudent = new Map<number, { code: string, name: string }>();
+        
+        if (studentIds.length > 0) {
+            const studentIdList = studentIds.join(',');
+            const examIdList = examIds.join(',');
+            const regsWithSubject = await sequelize.query<{ StudentID: number; SubjectCode: string; SubjectName: string }>(
+                `SELECT er.StudentID, s.SubjectCode, s.SubjectName
+                 FROM   ExamRegistrations er
+                 INNER JOIN Exams e ON e.ExamID = er.ExamID
+                 INNER JOIN Subjects s ON s.SubjectID = e.SubjectID
+                 WHERE  er.StudentID IN (${studentIdList})
+                 AND    er.ExamID IN (${examIdList})`,
+                { type: QueryTypes.SELECT }
+            );
+            
+            for (const r of regsWithSubject) {
+                if (!subjectByStudent.has(Number(r.StudentID))) {
+                    subjectByStudent.set(Number(r.StudentID), { code: r.SubjectCode, name: r.SubjectName });
+                }
+            }
+        }
+
+        const results = (allocations as any[]).map(a => {
+            const sid = Number(a.StudentID);
+            const sbj = subjectByStudent.get(sid);
+            return {
+                seatId: a.SeatID,
+                roomId: a.Seat?.RoomID,
+                roomCode: a.Seat?.Room?.RoomCode,
+                studentId: sid,
+                registerNumber: a.Student?.RegisterNumber,
+                subjectCode: sbj?.code || "Unknown",
+                subjectName: sbj?.name || "Unknown",
+            };
+        });
+
+        res.json({ allocations: results });
+    } catch (error: any) {
+        console.error("GET GLOBAL ALLOCATIONS ERROR:", error);
         res.status(500).json({ message: (error instanceof Error ? error.message : String(error)) });
     }
 };

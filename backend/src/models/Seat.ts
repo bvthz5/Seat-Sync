@@ -49,17 +49,17 @@ Seat.init(
     RowIndex: {
       type: DataTypes.CHAR(1),
       allowNull: false,
-      field: 'RowLabel',
+      field: 'RowIndex',
     },
     BenchIndex: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      field: 'BenchNumber',
+      field: 'BenchIndex',
     },
     SeatIndex: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      field: 'SeatNumber',
+      field: 'SeatIndex',
     },
     IsActive: {
       type: DataTypes.BOOLEAN,

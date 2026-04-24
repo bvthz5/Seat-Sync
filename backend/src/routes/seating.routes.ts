@@ -19,7 +19,8 @@ import {
     quickAddExamSlot,
     importSeatingFromExcel,
     searchStudent,
-    exportSeatingToExcel
+    exportSeatingToExcel,
+    getGlobalAllocations
 } from "../controllers/seating.controller.js";
 
 const router = express.Router();
@@ -81,6 +82,9 @@ router.get("/allocation/:examDate/:session/:hallId", getAllocationForHall);
 
 // Clear allocation for date + session + hall
 router.delete("/allocation/:examDate/:session/:hallId", clearAllocation);
+
+// Get global allocations
+router.get("/global-allocations/:examDate/:session", getGlobalAllocations);
 
 // Clear ALL allocations for an entire date + session
 router.delete("/allocation/:examDate/:session", clearAllAllocations);

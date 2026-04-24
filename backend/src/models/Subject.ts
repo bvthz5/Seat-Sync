@@ -1,6 +1,8 @@
+
 import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from "../config/database.js";
 import { Department } from "./Department.js";
+import { Semester } from "./Semester.js";
 
 /**
  * Subject table attributes
@@ -50,12 +52,14 @@ Subject.init(
         key: "DepartmentID",
       },
     },
-    /*
     SemesterID: {
       type: DataTypes.INTEGER,
-      allowNull: true,  // nullable at Sequelize level; DB has a default or we supply it
-    }
-    */
+      allowNull: false, // must not be null
+      references: {
+        model: 'Semesters',
+        key: 'SemesterID',
+      },
+    },
   },
   {
     sequelize,
@@ -73,6 +77,16 @@ Subject.belongsTo(Department, {
 
 Department.hasMany(Subject, {
   foreignKey: "DepartmentID",
+  onDelete: 'CASCADE',
+});
+
+// Add Semester association
+import { Semester } from './Semester.js';
+Subject.belongsTo(Semester, {
+  foreignKey: "SemesterID",
+});
+Semester.hasMany(Subject, {
+  foreignKey: "SemesterID",
   onDelete: 'CASCADE',
 });
 

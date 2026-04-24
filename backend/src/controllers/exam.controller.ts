@@ -1208,6 +1208,14 @@ export class ExamController {
                         const subjectKey = `${cleanCode}::${departmentID}`;
                         const cachedSubjID = subjectCache.get(subjectKey);
 
+                        // Defensive check: Ensure SemesterID is valid
+                        if (!defaultSemesterID || isNaN(Number(defaultSemesterID))) {
+                            const errMsg = `Row ${data.indexOf(row) + 2}: Missing or invalid SemesterID for Subject '${cleanCode}' (DepartmentID: ${departmentID}). Subject not created.`;
+                            console.error(errMsg);
+                            errors.push(errMsg);
+                            continue;
+                        }
+
                         if (cachedSubjID !== undefined) {
                             subjectID = cachedSubjID;
                         } else {

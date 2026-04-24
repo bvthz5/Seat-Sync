@@ -146,8 +146,7 @@ const SeatingPlans: React.FC = () => {
     const [selectedHallIds, setSelectedHallIds] = useState<Set<number>>(new Set());
     const [hallSearch, setHallSearch] = useState('');
     const [hallFilter, setHallFilter] = useState<'all' | 'empty' | 'partial' | 'full'>('all');
-    const [batchYears, setBatchYears] = useState<number[]>([]);
-    const [selectedBatch, setSelectedBatch] = useState<string>('');
+
 
     const [assigning, setAssigning] = useState(false);
     const [loadingSummary, setLoadingSummary] = useState(false);
@@ -280,10 +279,7 @@ const SeatingPlans: React.FC = () => {
             try { setSeriesList(await SeatingService.getSeries().then(r => Array.isArray(r) ? r : [])); } catch { }
             try { setHalls(await SeatingService.getHalls().then(r => Array.isArray(r) ? r : [])); } catch { toast.error('Failed to load halls'); }
             try { setDepartments(await SeatingService.getDepartments().then(r => Array.isArray(r) ? r : [])); } catch { toast.error('Failed to load departments'); }
-            try {
-                const filters = await api.get('/students/meta/filters').catch(() => ({ data: { batchYears: [] } }));
-                if (filters.data?.batchYears) setBatchYears(filters.data.batchYears);
-            } catch { }
+
         })();
     }, []);
 
@@ -430,7 +426,7 @@ const SeatingPlans: React.FC = () => {
     };
 
     /* bulk assign */
-    const handleBulkAssign = async (useBatch = false) => {
+    const handleBulkAssign = async () => {
         if (!selectedDate) { toast.error('Select an exam date first'); return; }
         let ids = selectedHallIds.size > 0 ? [...selectedHallIds] : hallSummary.map(h => h.hallId);
         if (ids.length === 0) { toast.error('No halls available'); return; }
@@ -443,8 +439,8 @@ const SeatingPlans: React.FC = () => {
             .filter(h => ids.includes(h.hallId))
             .reduce((sum, h) => sum + h.totalSeats, 0);
         
-        // Only show shortage warning if NOT using batch-wise seating (as batch-wise is expected to be partial)
-        if (!useBatch && eligibleStudentCount > 0 && seatCount < eligibleStudentCount) {
+        // Only show shortage warning if eligibleStudentCount > 0 and seatCount < eligibleStudentCount
+        if (eligibleStudentCount > 0 && seatCount < eligibleStudentCount) {
             const shortBy = eligibleStudentCount - seatCount;
             const autoCandidates = hallSummary.filter(h => !ids.includes(h.hallId));
             let autoIds: number[] = [];
@@ -480,8 +476,6 @@ const SeatingPlans: React.FC = () => {
             console.log("=== ASSIGN CLICKED ===");
             console.log("Assignment mode:", assignmentMode);
             console.log("Selected halls:", ids);
-            console.log("Batch filter:", useBatch ? selectedBatch : 'None');
-            
             const r = await SeatingService.bulkAssign({
                 examDate: selectedDate, session: selectedSession, hallIds: ids,
                 mode: assignmentMode,
@@ -491,7 +485,6 @@ const SeatingPlans: React.FC = () => {
                 shuffleRooms,
                 roomCapacityLimit: roomCapacityLimit !== '' ? Number(roomCapacityLimit) : undefined,
                 seriesId: selectedSeries ? Number(selectedSeries) : undefined,
-                batchYear: useBatch ? Number(selectedBatch) : undefined,
             });
             // Support both Internal (totalLeft/RightAssigned) and EndSem (assignedCount) response shapes
             const examType: string = r.examType || 'Internal';
@@ -675,7 +668,7 @@ const SeatingPlans: React.FC = () => {
         } catch { toast.error('Failed to disable hall'); }
     };
 
-    /* ── Build row data shared by both exporters ── */
+    /* ── Build row data shared by both room-level exporters ── */
     const buildExportRows = () => detailBenches.map(b => {
         const ls = b.seats.find(s => s.SeatNumber === 1);
         const rs = b.seats.find(s => s.SeatNumber === 2);
@@ -686,27 +679,82 @@ const SeatingPlans: React.FC = () => {
             leftReg: la?.registerNumber ?? '',
             leftName: la?.studentName ?? '',
             leftDept: la?.deptCode ?? '',
+            leftSub: la?.subjectCode ?? '',
+            leftSubName: la?.subjectName ?? '',
             rightReg: ra?.registerNumber ?? '',
             rightName: ra?.studentName ?? '',
             rightDept: ra?.deptCode ?? '',
+            rightSub: ra?.subjectCode ?? '',
+            rightSubName: ra?.subjectName ?? '',
         };
     });
 
+    const getFormattedExamName = () => {
+        let name = seriesList.find(s => String(s.ExamSeriesID) === selectedSeries)?.SeriesName || 'Examinations';
+        if (name === 'END SEM Exam April - 2026') {
+            name = 'S2 (R/S) END SEM Exam April - 2026';
+        } else if (name.includes('END SEM Exam April - 2026') && !name.includes('S2')) {
+            name = name.replace('END SEM Exam April - 2026', 'S2 (R/S) END SEM Exam April - 2026');
+        }
+        return name;
+    };
+
     const downloadExcel = async () => {
-        const XLSX = await import('xlsx');
+        const XLSXStyle = (await import('xlsx-js-style')).default;
         const rows = buildExportRows();
-        const wsData = [
-            [`Seating Arrangement — ${detailHall?.hallCode}`],
-            [`Date: ${selectedDate ? fmtDate(selectedDate) : ''}   Session: ${selectedSession === 'FN' ? 'Forenoon' : 'Afternoon'}   Students: ${detailFilled}/${detailTotalSeats}`],
-            [],
-            ['Bench', 'Left — Reg No', 'Left — Student Name', 'Left Dept', 'Right — Reg No', 'Right — Student Name', 'Right Dept'],
-            ...rows.map(r => [r.bench, r.leftReg, r.leftName, r.leftDept, r.rightReg, r.rightName, r.rightDept]),
+        const actualExamTitle = getFormattedExamName();
+        
+        const d = new Date(selectedDate);
+        const dateStr = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' – ' + d.toLocaleDateString('en-GB', { weekday: 'long' });
+        const sessionStr = selectedSession === 'FN' ? 'Forenoon (FN)' : 'Afternoon (AN)';
+        const fullDateStr = `Date: ${dateStr} – ${sessionStr}`;
+
+        // ── Define styles ──
+        const titleStyle = { font: { bold: true, sz: 14 }, alignment: { horizontal: 'center' } };
+        const subStyle = { font: { sz: 11, bold: true }, alignment: { horizontal: 'center' } };
+        const headerFill = { patternType: 'solid', fgColor: { rgb: '0F172A' } };
+        const headerFont = { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 };
+        const allThin = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } };
+        const bodyStyle = { font: { sz: 10 }, alignment: { vertical: 'center' }, border: allThin };
+        const boldBody = { font: { sz: 10, bold: true }, alignment: { vertical: 'center' }, border: allThin };
+
+        const DATA: any[][] = [];
+        DATA.push([{ v: "ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI", s: titleStyle }, '', '', '', '', '', '', '', '']);
+        DATA.push([{ v: 'HALL SEATING ARRANGEMENT', s: { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center' } } }, '', '', '', '', '', '', '', '']);
+        DATA.push([{ v: `Exam: ${actualExamTitle}`, s: subStyle }, '', '', '', '', '', '', '', '']);
+        DATA.push([{ v: `Hall: ${detailHall?.hallCode}   ${fullDateStr}`, s: subStyle }, '', '', '', '', '', '', '', '']);
+        DATA.push(['', '', '', '', '', '', '', '', '']); // spacer
+
+        // Header row
+        const headers = ['Bench', 'Left Reg No', 'Left Student Name', 'Dept', 'Left Subject', 'Right Reg No', 'Right Student Name', 'Dept', 'Right Subject'];
+        DATA.push(headers.map(v => ({ v, s: { fill: headerFill, font: headerFont, alignment: { horizontal: 'center', vertical: 'center' }, border: allThin } })));
+
+        // Body rows
+        rows.forEach(r => {
+            DATA.push([
+                { v: r.bench, s: { ...boldBody, alignment: { horizontal: 'center' } } },
+                { v: r.leftReg, s: { ...boldBody, font: { ...boldBody.font, sz: 11 } } },
+                { v: r.leftName, s: bodyStyle },
+                { v: r.leftDept, s: { ...bodyStyle, alignment: { horizontal: 'center' } } },
+                { v: r.leftSub ? `${r.leftSub}\n(${r.leftSubName})` : '', s: { ...bodyStyle, alignment: { horizontal: 'center', wrapText: true }, font: { sz: 8 } } },
+                { v: r.rightReg, s: { ...boldBody, font: { ...boldBody.font, sz: 11 } } },
+                { v: r.rightName, s: bodyStyle },
+                { v: r.rightDept, s: { ...bodyStyle, alignment: { horizontal: 'center' } } },
+                { v: r.rightSub ? `${r.rightSub}\n(${r.rightSubName})` : '', s: { ...bodyStyle, alignment: { horizontal: 'center', wrapText: true }, font: { sz: 8 } } },
+            ]);
+        });
+
+        const ws = XLSXStyle.utils.aoa_to_sheet(DATA);
+        ws['!cols'] = [{ wch: 8 }, { wch: 15 }, { wch: 30 }, { wch: 8 }, { wch: 20 }, { wch: 15 }, { wch: 30 }, { wch: 8 }, { wch: 20 }];
+        ws['!merges'] = [
+            { s: { r: 0, c: 0 }, e: { r: 0, c: 8 } },
+            { s: { r: 1, c: 0 }, e: { r: 1, c: 8 } },
+            { s: { r: 2, c: 0 }, e: { r: 2, c: 8 } },
+            { s: { r: 3, c: 0 }, e: { r: 3, c: 8 } },
         ];
-        const ws = XLSX.utils.aoa_to_sheet(wsData);
-        ws['!cols'] = [{ wch: 7 }, { wch: 15 }, { wch: 28 }, { wch: 9 }, { wch: 15 }, { wch: 28 }, { wch: 9 }];
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Seating');
-        XLSX.writeFile(wb, `Seating_${detailHall?.hallCode}_${selectedDate}_${selectedSession}.xlsx`);
+        const wb = XLSXStyle.utils.book_new();
+        XLSXStyle.utils.book_append_sheet(wb, ws, 'Hall Seating');
+        XLSXStyle.writeFile(wb, `Hall_Seating_${detailHall?.hallCode}_${selectedDate}.xlsx`);
         toast.success('Excel downloaded');
     };
 
@@ -714,84 +762,95 @@ const SeatingPlans: React.FC = () => {
         const { default: jsPDF } = await import('jspdf');
         const { default: autoTable } = await import('jspdf-autotable');
         const rows = buildExportRows();
-        const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const actualExamTitle = getFormattedExamName();
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
         const pageW = doc.internal.pageSize.getWidth();
 
         // ── Header band ──
         doc.setFillColor(15, 23, 42);
-        doc.rect(0, 0, pageW, 22, 'F');
+        doc.rect(0, 0, pageW, 35, 'F');
         doc.setTextColor(255, 255, 255);
-        doc.setFontSize(13);
-        doc.setFont('helvetica', 'bold');
-        doc.text('SEAT-SYNC  EXAMINATION CONTROL', 14, 10);
-        doc.setFontSize(7.5);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(148, 163, 184);
-        doc.text('Official Seating Arrangement Document', 14, 16);
-        doc.setTextColor(226, 232, 240);
-        doc.setFontSize(7.5);
-        doc.text(`Doc: ${detailHall?.hallCode}-${(selectedDate ?? '').replace(/-/g, '')}-${selectedSession}`, pageW - 14, 10, { align: 'right' });
-        doc.text(`Generated: ${new Date().toLocaleString('en-IN')}`, pageW - 14, 16, { align: 'right' });
+        doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+        doc.text("ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI", pageW / 2, 10, { align: 'center' });
+        doc.setFontSize(11);
+        doc.text('HALL SEATING ARRANGEMENT', pageW / 2, 18, { align: 'center' });
+        
+        doc.setFillColor(99, 102, 241);
+        doc.rect(20, 22, pageW - 40, 0.5, 'F');
+
+        doc.setFontSize(10); doc.setTextColor(200, 200, 200);
+        doc.text(`Exam: ${actualExamTitle}`, pageW / 2, 29, { align: 'center' });
 
         // ── Info strip ──
         doc.setFillColor(248, 250, 252);
-        doc.rect(0, 22, pageW, 14, 'F');
+        doc.rect(0, 35, pageW, 16, 'F');
         doc.setDrawColor(226, 232, 240);
-        doc.line(0, 36, pageW, 36);
+        doc.line(0, 51, pageW, 51);
+        
+        const d = new Date(selectedDate);
+        const dateStr = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' – ' + d.toLocaleDateString('en-GB', { weekday: 'long' });
+        
         const infoCols = [
-            { label: 'HALL', value: detailHall?.hallCode ?? '' },
-            { label: 'DATE', value: selectedDate ? fmtDate(selectedDate) : '' },
-            { label: 'SESSION', value: selectedSession === 'FN' ? 'Forenoon' : 'Afternoon' },
-            { label: 'STUDENTS', value: `${detailFilled} / ${detailTotalSeats}` },
+            { label: 'HALL / ROOM', value: detailHall?.hallCode ?? '' },
+            { label: 'DATE', value: dateStr },
+            { label: 'SESSION', value: selectedSession === 'FN' ? 'Forenoon (09:30 AM)' : 'Afternoon (01:30 PM)' },
+            { label: 'COUNT', value: `${detailFilled} / ${detailTotalSeats}` },
         ];
         infoCols.forEach((col, i) => {
             const x = 14 + i * (pageW / 4);
-            doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(148, 163, 184);
-            doc.text(col.label, x, 28);
-            doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
-            doc.text(col.value, x, 34);
+            doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139);
+            doc.text(col.label, x, 42);
+            doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+            doc.text(col.value, x, 48);
         });
 
         // ── Table ──
         autoTable(doc, {
-            startY: 40,
-            head: [['Bench', 'Left Reg No', 'Left Student Name', 'Dept', 'Right Reg No', 'Right Student Name', 'Dept']],
-            body: rows.map(r => [r.bench, r.leftReg, r.leftName, r.leftDept, r.rightReg, r.rightName, r.rightDept]),
-            styles: { fontSize: 7.5, cellPadding: 2, font: 'helvetica', textColor: [30, 41, 59] },
-            headStyles: { fillColor: [15, 23, 42], textColor: [226, 232, 240], fontStyle: 'bold', fontSize: 7, halign: 'left' },
-            alternateRowStyles: { fillColor: [248, 250, 252] },
+            startY: 55,
+            head: [['Bench', 'Left Reg No', 'Left Student Name', 'Dept', 'Left Subject', 'Right Reg No', 'Right Student Name', 'Dept', 'Right Subject']],
+            body: rows.map(r => [
+                r.bench, 
+                r.leftReg, r.leftName, r.leftDept, r.leftSub ? `${r.leftSub}\n(${r.leftSubName})` : '',
+                r.rightReg, r.rightName, r.rightDept, r.rightSub ? `${r.rightSub}\n(${r.rightSubName})` : ''
+            ]),
+            styles: { fontSize: 8, cellPadding: 3, font: 'helvetica', textColor: [30, 41, 59], valign: 'middle' },
+            headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5, halign: 'center' },
             columnStyles: {
-                0: { cellWidth: 13, halign: 'center', fontStyle: 'bold', fillColor: [241, 245, 249] },
-                1: { cellWidth: 26, font: 'courier' },
-                2: { cellWidth: 42 },
+                0: { cellWidth: 15, halign: 'center', fontStyle: 'bold', fillColor: [241, 245, 249] },
+                1: { cellWidth: 25, font: 'courier', fontStyle: 'bold', fontSize: 10 },
+                2: { cellWidth: 'auto' },
                 3: { cellWidth: 12, halign: 'center' },
-                4: { cellWidth: 26, font: 'courier' },
-                5: { cellWidth: 42 },
-                6: { cellWidth: 12, halign: 'center' },
+                4: { cellWidth: 35, fontSize: 7, halign: 'center' },
+                5: { cellWidth: 25, font: 'courier', fontStyle: 'bold', fontSize: 10 },
+                6: { cellWidth: 'auto' },
+                7: { cellWidth: 12, halign: 'center' },
+                8: { cellWidth: 35, fontSize: 7, halign: 'center' },
             },
+            alternateRowStyles: { fillColor: [252, 254, 255] },
             didDrawPage: (data: any) => {
-                const pCount = (doc as any).internal.getNumberOfPages();
-                doc.setFontSize(6.5); doc.setTextColor(148, 163, 184);
+                doc.setFontSize(7); doc.setTextColor(148, 163, 184);
                 doc.text(
-                    `Page ${data.pageNumber} of ${pCount}  ·  CONFIDENTIAL — FOR OFFICIAL USE ONLY`,
-                    pageW / 2, doc.internal.pageSize.getHeight() - 6, { align: 'center' }
+                    `Page ${data.pageNumber}  ·  CONFIDENTIAL  ·  Doc ID: ${detailHall?.hallCode}-${selectedDate}`,
+                    pageW / 2, doc.internal.pageSize.getHeight() - 8, { align: 'center' }
                 );
             },
         });
 
-        // ── Signature strip on last page ──
-        const finalY = (doc as any).lastAutoTable.finalY + 10;
-        const sigRoles = ['Invigilator', 'Chief Invigilator', 'Controller of Examinations'];
-        const sigW = (pageW - 28) / 3;
-        sigRoles.forEach((role, i) => {
-            const x = 14 + i * (sigW + 0);
-            doc.setDrawColor(71, 85, 105);
-            doc.line(x, finalY + 14, x + sigW - 4, finalY + 14);
-            doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(71, 85, 105);
-            doc.text(role.toUpperCase(), x + (sigW - 4) / 2, finalY + 19, { align: 'center' });
-        });
+        // Signature area
+        const finalY = (doc as any).lastAutoTable.finalY + 15;
+        if (finalY < 180) {
+            const sigRoles = ['Invigilator', 'Chief Supt.', 'Controller of Exams'];
+            const sigW = (pageW - 40) / 3;
+            sigRoles.forEach((role, i) => {
+                const x = 20 + i * (sigW + 10);
+                doc.setDrawColor(203, 213, 225);
+                doc.line(x, finalY + 12, x + sigW - 10, finalY + 12);
+                doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(71, 85, 105);
+                doc.text(role, x + (sigW - 10) / 2, finalY + 18, { align: 'center' });
+            });
+        }
 
-        doc.save(`Seating_${detailHall?.hallCode}_${selectedDate}_${selectedSession}.pdf`);
+        doc.save(`HallSeating_${detailHall?.hallCode}_${selectedDate}.pdf`);
         toast.success('PDF downloaded');
     };
 
@@ -819,52 +878,73 @@ const SeatingPlans: React.FC = () => {
 
     /* ── Fetch allocated hall allocations only and return consolidated rows ── */
     const buildGlobalRows = async () => {
-        const active = [...hallSummary].sort((a, b) => a.hallCode.localeCompare(b.hallCode));
-        const rows: { slNo: number; hallCode: string; regRanges: string; count: number; total: number; isFirstRow: boolean; rowSpan: number }[] = [];
-        const globalSubjects = new Set<string>();
+        const rows: { slNo: number; hallCode: string; regRanges: string; subCode: string; count: number; total: number; isFirstRow: boolean; rowSpan: number }[] = [];
+        const globalSubjectCodes = new Set<string>();
 
-        await Promise.all(active.map(async (hall) => {
-            if (!selectedDate) return;
-            let assignments: Record<number, Assignment> = {};
-            try { const alloc = await SeatingService.getAllocationForHall(selectedDate, selectedSession, hall.hallId); assignments = alloc?.assignments ?? {}; } catch { }
+        if (!selectedDate) return { rows: [], examNameString: 'Examinations', subjectCodesString: '' };
 
-            const subjMap: Record<string, { code: string, name: string, regs: string[] }> = {};
-            Object.values(assignments).forEach(a => {
-                if (a.subjectName) globalSubjects.add(a.subjectName);
+        try {
+            const { allocations } = await SeatingService.getGlobalAllocations(selectedDate, selectedSession);
+            
+            // Group by roomId -> subjectCode
+            const roomMap = new Map<number, { hallCode: string; subjMap: Record<string, { code: string, name: string, regs: string[] }>; total: number }>();
 
-                const subCode = a.subjectCode || "Unknown";
-                if (!subjMap[subCode]) subjMap[subCode] = { code: subCode, name: a.subjectName || "", regs: [] };
-                subjMap[subCode].regs.push(a.registerNumber);
+            allocations.forEach((a: any) => {
+                const { roomId, roomCode, registerNumber, subjectCode, subjectName } = a;
+                
+                if (subjectCode && subjectCode !== "Unknown") globalSubjectCodes.add(subjectCode);
+
+                if (!roomMap.has(roomId)) {
+                    roomMap.set(roomId, { hallCode: roomCode || `Hall_${roomId}`, subjMap: {}, total: 0 });
+                }
+                
+                const rData = roomMap.get(roomId)!;
+                rData.total++;
+                
+                const sCode = subjectCode || "Unknown";
+                if (!rData.subjMap[sCode]) {
+                    rData.subjMap[sCode] = { code: sCode, name: subjectName || "", regs: [] };
+                }
+                if (registerNumber) {
+                    rData.subjMap[sCode].regs.push(registerNumber);
+                }
             });
-            (hall as any).__subjMap = subjMap;
-            (hall as any).__total = Object.keys(assignments).length;
-        }));
 
-        const allocatedOnly = active.filter(hall => (((hall as any).__total ?? 0) > 0));
-        let slNo = 1;
+            // Sort rooms by hallCode
+            const activeRooms = Array.from(roomMap.values()).sort((a, b) => a.hallCode.localeCompare(b.hallCode));
+            let slNo = 1;
 
-        allocatedOnly.forEach(hall => {
-            const subjMap: Record<string, { code: string, name: string, regs: string[] }> = (hall as any).__subjMap ?? {};
-            const total: number = (hall as any).__total ?? 0;
-            const subjs = Object.values(subjMap).sort((a, b) => a.code.localeCompare(b.code));
-
-            subjs.forEach((sub, idx) => {
-                const ranges = buildRegRanges(sub.regs);
-                rows.push({
-                    slNo,
-                    hallCode: hall.hallCode,
-                    regRanges: ranges.join(', '),
-                    count: sub.regs.length,
-                    total: total,
-                    isFirstRow: idx === 0,
-                    rowSpan: subjs.length
+            activeRooms.forEach(rData => {
+                const subjs = Object.values(rData.subjMap).sort((a, b) => a.code.localeCompare(b.code));
+                
+                subjs.forEach((sub, idx) => {
+                    const ranges = buildRegRanges(sub.regs);
+                    rows.push({
+                        slNo,
+                        hallCode: rData.hallCode,
+                        regRanges: ranges.join(', '),
+                        subCode: sub.name && sub.name !== "Unknown" ? `${sub.code}\n(${sub.name})` : sub.code,
+                        count: sub.regs.length,
+                        total: rData.total,
+                        isFirstRow: idx === 0,
+                        rowSpan: subjs.length
+                    });
                 });
+                slNo++;
             });
-            slNo++;
-        });
+        } catch (e) {
+            console.error("Failed to fetch global allocations", e);
+        }
 
-        const examNameString = Array.from(globalSubjects).join(' / ') || 'Examinations';
-        return { rows, examNameString };
+        let seriesName = seriesList.find(s => String(s.ExamSeriesID) === selectedSeries)?.SeriesName || 'Examinations';
+        if (seriesName === 'END SEM Exam April - 2026') {
+            seriesName = 'S2 (R/S) END SEM Exam April - 2026';
+        } else if (seriesName.includes('END SEM Exam April - 2026') && !seriesName.includes('S2')) {
+            seriesName = seriesName.replace('END SEM Exam April - 2026', 'S2 (R/S) END SEM Exam April - 2026');
+        }
+        
+        const subjectCodesString = Array.from(globalSubjectCodes).join(', ');
+        return { rows, examNameString: seriesName, subjectCodesString };
     };
 
     const downloadGlobalExcel = async () => {
@@ -872,8 +952,15 @@ const SeatingPlans: React.FC = () => {
         setGlobalDownloading(true);
         try {
             const XLSXStyle = (await import('xlsx-js-style')).default;
-            const { rows, examNameString } = await buildGlobalRows();
-            const sessionLabel = selectedSession === 'FN' ? 'Forenoon' : 'Afternoon';
+            const { rows, examNameString, subjectCodesString } = await buildGlobalRows();
+            
+            // Build header strings
+            const actualExamTitle = examNameString;
+            
+            const d = new Date(selectedDate);
+            const dateStr = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' – ' + d.toLocaleDateString('en-GB', { weekday: 'long' });
+            const sessionStr = selectedSession === 'FN' ? 'Forenoon (FN)' : 'Afternoon (AN)';
+            const fullDateStr = `Date: ${dateStr} – ${sessionStr}`;
 
             // ── Define reusable styles ──
             const headerFill = { patternType: 'solid', fgColor: { rgb: '0F172A' } };
@@ -882,6 +969,7 @@ const SeatingPlans: React.FC = () => {
             const blueFill = { patternType: 'solid', fgColor: { rgb: 'ECF6FF' } };
             const bodyFont = { sz: 9, color: { rgb: '1E293B' } };
             const boldFont = { sz: 9, bold: true, color: { rgb: '1E293B' } };
+            const regFont = { sz: 13, bold: true, color: { rgb: '1E293B' } };
             const thinBorder = { style: 'thin', color: { rgb: 'B4C3D7' } };
             const thickBorder = { style: 'medium', color: { rgb: '0F172A' } };
             const allThin = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder };
@@ -909,16 +997,16 @@ const SeatingPlans: React.FC = () => {
 
             // Title rows (plain)
             const titleStyle = { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center' } };
-            const subStyle = { font: { sz: 9 }, alignment: { horizontal: 'center' } };
-            DATA.push([{ v: "ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI", s: titleStyle }, '', '', '', '']);
-            DATA.push([{ v: 'CONSOLIDATED SEATING ARRANGEMENT', s: { font: { bold: true, sz: 11 }, alignment: { horizontal: 'center' } } }, '', '', '', '']);
-            let truncExam = examNameString; if (truncExam.length > 80) truncExam = truncExam.substring(0, 77) + '...';
-            DATA.push([{ v: truncExam, s: subStyle }, '', '', '', '']);
-            DATA.push([{ v: `${fmtDate(selectedDate)}   ·   ${sessionLabel}`, s: subStyle }, '', '', '', '']);
-            DATA.push(['', '', '', '', '']); // blank spacer
+            const subStyle = { font: { sz: 10, bold: true }, alignment: { horizontal: 'center' } };
+            DATA.push([{ v: "ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI", s: titleStyle }, '', '', '', '', '']);
+            DATA.push([{ v: 'CONSOLIDATED SEATING ARRANGEMENT', s: { font: { bold: true, sz: 11 }, alignment: { horizontal: 'center' } } }, '', '', '', '', '']);
+            DATA.push([{ v: `Exam: ${actualExamTitle}`, s: subStyle }, '', '', '', '', '']);
+            DATA.push([{ v: fullDateStr, s: subStyle }, '', '', '', '', '']);
+            if (subjectCodesString) DATA.push([{ v: `Subjects: ${subjectCodesString}`, s: subStyle }, '', '', '', '', '']);
+            DATA.push(['', '', '', '', '', '']); // blank spacer
 
             // Header row
-            const hCols = ['Sl. No.', 'Hall / Room No.', 'Register Numbers', 'Count', 'Total'];
+            const hCols = ['Sl.No', 'Hall / Room No', 'Register Numbers', 'Subject Code & Name', 'Count', 'Total'];
             DATA.push(hCols.map(v => ({ v, s: { fill: headerFill, font: headerFont, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border: allThin } })));
 
             // Body rows
@@ -931,21 +1019,22 @@ const SeatingPlans: React.FC = () => {
                 DATA.push([
                     { v: r.isFirstRow ? r.slNo : '', s: { ...base, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
                     { v: r.isFirstRow ? r.hallCode : '', s: { ...base, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
-                    { v: r.regRanges, s: { ...base, font: bodyFont, alignment: { horizontal: 'left', vertical: 'center', wrapText: true } } },
+                    { v: r.regRanges, s: { ...base, font: regFont, alignment: { horizontal: 'left', vertical: 'center', wrapText: true } } },
+                    { v: r.subCode, s: { ...base, font: bodyFont, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } } },
                     { v: r.count, s: { ...base, font: bodyFont, alignment: { horizontal: 'center', vertical: 'center' } } },
                     { v: r.isFirstRow ? r.total : '', s: { ...base, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
                 ]);
             });
 
             const ws = XLSXStyle.utils.aoa_to_sheet(DATA);
-            ws['!cols'] = [{ wch: 8 }, { wch: 16 }, { wch: 52 }, { wch: 9 }, { wch: 9 }];
-            // Merge title rows across all 5 cols
-            ws['!merges'] = [
-                { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
-                { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } },
-                { s: { r: 2, c: 0 }, e: { r: 2, c: 4 } },
-                { s: { r: 3, c: 0 }, e: { r: 3, c: 4 } },
-            ];
+            ws['!cols'] = [{ wch: 8 }, { wch: 18 }, { wch: 60 }, { wch: 25 }, { wch: 9 }, { wch: 9 }];
+            // Merge title rows across all cols
+            const mergeCount = subjectCodesString ? 5 : 4;
+            const merges: any[] = [];
+            for(let i=0; i<mergeCount; i++) {
+                merges.push({ s: { r: i, c: 0 }, e: { r: i, c: 5 } });
+            }
+            ws['!merges'] = merges;
             const wb = XLSXStyle.utils.book_new();
             XLSXStyle.utils.book_append_sheet(wb, ws, 'Consolidated');
             XLSXStyle.writeFile(wb, `Consolidated_Seating_${selectedDate}_${selectedSession}.xlsx`);
@@ -960,32 +1049,43 @@ const SeatingPlans: React.FC = () => {
         try {
             const { default: jsPDF } = await import('jspdf');
             const { default: autoTable } = await import('jspdf-autotable');
-            const { rows, examNameString } = await buildGlobalRows();
-            const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+            const { rows, examNameString, subjectCodesString } = await buildGlobalRows();
+            const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
             const pageW = doc.internal.pageSize.getWidth();
-            const sessionLabel = selectedSession === 'FN' ? 'Forenoon' : 'Afternoon';
+            
+            // Build header strings
+            const actualExamTitle = examNameString;
+            
+            const d = new Date(selectedDate);
+            const dateStr = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' – ' + d.toLocaleDateString('en-GB', { weekday: 'long' });
+            const sessionStr = selectedSession === 'FN' ? 'Forenoon (FN)' : 'Afternoon (AN)';
+            const fullDateStr = `Date: ${dateStr} – ${sessionStr}`;
 
             // ── Header block ──
             doc.setFillColor(15, 23, 42);
-            doc.rect(0, 0, pageW, 42, 'F');
+            doc.rect(0, 0, pageW, 55, 'F');
             doc.setTextColor(255, 255, 255);
-            doc.setFontSize(11); doc.setFont('helvetica', 'bold');
-            doc.text("St. Joseph's College of Engineering And Technology, Palai", pageW / 2, 10, { align: 'center' });
-            doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(203, 213, 225);
-            doc.text('Examination Control Division', pageW / 2, 16, { align: 'center' });
+            doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+            doc.text("ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI", pageW / 2, 14, { align: 'center' });
+            
+            doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+            doc.text('CONSOLIDATED SEATING ARRANGEMENT', pageW / 2, 22, { align: 'center' });
+            
             doc.setFillColor(99, 102, 241);
-            doc.rect(14, 20, pageW - 28, 0.4, 'F');
+            doc.rect(14, 26, pageW - 28, 0.4, 'F');
 
-            doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-            doc.text('CONSOLIDATED SEATING ARRANGEMENT', pageW / 2, 26, { align: 'center' });
-
-            let truncatedExamName = examNameString;
-            if (truncatedExamName.length > 90) truncatedExamName = truncatedExamName.substring(0, 87) + '...';
-            doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(200, 200, 200);
-            doc.text(truncatedExamName, pageW / 2, 32, { align: 'center' });
-
-            doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(148, 163, 184);
-            doc.text(`${fmtDate(selectedDate)}  \u00b7  ${sessionLabel}`, pageW / 2, 38, { align: 'center' });
+            let truncatedExamName = actualExamTitle;
+            if (truncatedExamName.length > 130) truncatedExamName = truncatedExamName.substring(0, 127) + '...';
+            doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(220, 220, 220);
+            doc.text(`Exam: ${truncatedExamName}`, pageW / 2, 34, { align: 'center' });
+            
+            doc.text(fullDateStr, pageW / 2, 40, { align: 'center' });
+            
+            if (subjectCodesString) {
+                let truncSubj = subjectCodesString;
+                if (truncSubj.length > 130) truncSubj = truncSubj.substring(0, 127) + '...';
+                doc.text(`Subjects: ${truncSubj}`, pageW / 2, 46, { align: 'center' });
+            }
 
             // ── Table ──
             const bodyRows: any[] = [];
@@ -994,13 +1094,15 @@ const SeatingPlans: React.FC = () => {
                     bodyRows.push([
                         { content: String(r.slNo), rowSpan: r.rowSpan },
                         { content: r.hallCode, rowSpan: r.rowSpan },
-                        r.regRanges,
+                        { content: r.regRanges, styles: { fontStyle: 'bold', fontSize: 13 } },
+                        r.subCode,
                         String(r.count),
                         { content: String(r.total), rowSpan: r.rowSpan },
                     ]);
                 } else {
                     bodyRows.push([
-                        r.regRanges,
+                        { content: r.regRanges, styles: { fontStyle: 'bold', fontSize: 13 } },
+                        r.subCode,
                         String(r.count),
                     ]);
                 }
@@ -1024,18 +1126,19 @@ const SeatingPlans: React.FC = () => {
             if (bIdx > 0) lastRowIndices.add(bIdx - 1);
 
             autoTable(doc, {
-                startY: 46,
-                head: [['Sl.\nNo.', 'HALL /\nROOM No.', 'REGISTER NUMBERS', 'COUNT', 'TOTAL']],
+                startY: 60,
+                head: [['Sl.No', 'Hall / Room No', 'Register Numbers', 'Subject Code & Name', 'Count', 'Total']],
                 body: bodyRows,
                 theme: 'grid',
-                styles: { fontSize: 8.5, cellPadding: 3, font: 'helvetica', textColor: [30, 41, 59], lineColor: [180, 195, 215], lineWidth: 0.2, valign: 'middle' },
-                headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5, halign: 'center', valign: 'middle', lineColor: [255, 255, 255], lineWidth: 0.3 },
+                styles: { fontSize: 9, cellPadding: 4, font: 'helvetica', textColor: [30, 41, 59], lineColor: [180, 195, 215], lineWidth: 0.2, valign: 'middle' },
+                headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9.5, halign: 'center', valign: 'middle', lineColor: [255, 255, 255], lineWidth: 0.3 },
                 columnStyles: {
-                    0: { cellWidth: 12, halign: 'center', fontStyle: 'bold' },
-                    1: { cellWidth: 26, halign: 'center', fontStyle: 'bold' },
-                    2: { cellWidth: 105, halign: 'left' },
-                    3: { cellWidth: 18, halign: 'center' },
-                    4: { cellWidth: 18, halign: 'center', fontStyle: 'bold' },
+                    0: { cellWidth: 15, halign: 'center', fontStyle: 'bold' },
+                    1: { cellWidth: 35, halign: 'center', fontStyle: 'bold' },
+                    2: { cellWidth: 'auto', halign: 'left' },
+                    3: { cellWidth: 45, halign: 'center' },
+                    4: { cellWidth: 20, halign: 'center' },
+                    5: { cellWidth: 20, halign: 'center', fontStyle: 'bold' },
                 },
                 didParseCell: (data: any) => {
                     if (data.section !== 'body') return;
@@ -1125,16 +1228,14 @@ const SeatingPlans: React.FC = () => {
             const { default: jsPDF } = await import('jspdf');
             const zip = new JSZip();
 
-            // Exam Title:
-            const filteredExams = exams.filter((e: any) => String(e.ExamDate).split('T')[0] === selectedDate && String(e.Session).toUpperCase() === selectedSession);
-            const uniqueExamNames = Array.from(new Set(filteredExams.map((e: any) => e.ExamName)));
-            const examTitle = uniqueExamNames.join(' / ') || 'Exam';
+            // Exam Title — use Series name with S2 (R/S) prefix
+            const examTitle = getFormattedExamName();
 
             for (let i = 0; i < allocatedHalls.length; i++) {
                 const hall = allocatedHalls[i];
                 const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-                const pageW = doc.internal.pageSize.getWidth(); // 297
-                const pageH = doc.internal.pageSize.getHeight(); // 210
+                const pageW = doc.internal.pageSize.getWidth();
+                const pageH = doc.internal.pageSize.getHeight();
 
                 const [layout, alloc] = await Promise.all([
                     SeatingService.getHallLayout(hall.hallId),
@@ -1143,35 +1244,18 @@ const SeatingPlans: React.FC = () => {
                 const benches: Bench[] = layout?.benches || [];
                 const assignments: Record<number, Assignment> = alloc?.assignments || {};
 
-                // Find active columns and active row numbers (bench numbers)
-                const activeCols = new Set<string>();
-                const activeRows = new Set<number>();
+                // Use the FULL physical layout from the hall's RowLayout (all columns, all benches)
+                // This ensures the PDF always reflects the actual room layout.
+                const physicalRowLayout: number[] = layout?.rowLayout || [];
+                const physicalSeatsPerBench: number = layout?.seatsPerBench || 1;
 
-                benches.forEach(b => {
-                    const lSeat = b.seats.find(s => s.SeatNumber === 1);
-                    const rSeat = b.seats.find(s => s.SeatNumber === 2);
-                    const hasLeft = lSeat && assignments[lSeat.SeatID];
-                    const hasRight = rSeat && assignments[rSeat.SeatID];
-
-                    if (hasLeft || hasRight) {
-                        activeCols.add(b.rowLabel);
-                        activeRows.add(b.benchNumber);
-                    }
-                });
-
-                // Filtered column labels (e.g. A, B, C)
-                const rowLabels = Array.from(activeCols).sort();
-
-                // Filtered bench numbers (e.g. 1, 3, 5)
-                const benchNumbers = Array.from(activeRows).sort((a, b) => a - b);
-
-                const benchesByRow = new Map<string, Bench[]>();
-                rowLabels.forEach((rowLabel) => {
-                    benchesByRow.set(
-                        rowLabel,
-                        benches.filter(b => b.rowLabel === rowLabel && activeRows.has(b.benchNumber))
-                    );
-                });
+                // Build rowLabels from physical layout (A, B, C... for each column)
+                const rowLabels: string[] = physicalRowLayout.map((_: number, idx: number) =>
+                    String.fromCharCode(65 + idx)
+                );
+                // Max bench count across all columns
+                const maxBenches = physicalRowLayout.length > 0 ? Math.max(...physicalRowLayout) : 0;
+                const benchNumbers: number[] = Array.from({ length: maxBenches }, (_, i) => i + 1);
 
                 doc.setFillColor(255, 255, 255);
                 doc.rect(0, 0, pageW, pageH, 'F');
@@ -1203,7 +1287,7 @@ const SeatingPlans: React.FC = () => {
                     roomSubjectTitle = roomSubjectTitle.substring(0, 97) + '...';
                 }
 
-                // Draw headers as requested
+                // Draw headers
                 doc.setFont('helvetica', 'bold');
                 doc.setFontSize(13);
                 doc.setTextColor(0, 0, 0);
@@ -1211,14 +1295,16 @@ const SeatingPlans: React.FC = () => {
 
                 doc.setFont('helvetica', 'normal');
                 doc.setFontSize(10);
-                doc.text(roomSubjectTitle, pageW / 2, 17, { align: 'center' });
+                doc.text(examTitle, pageW / 2, 17, { align: 'center' });
 
                 doc.setFontSize(11);
                 doc.setFont('helvetica', 'bold');
-                doc.text(`SEATING ARRANGEMENT - ${selectedDate} (${selectedSession})`, pageW / 2, 22, { align: 'center' });
+                const d = new Date(selectedDate);
+                const dateFormatted = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' (' + d.toLocaleDateString('en-GB', { weekday: 'short' }) + ')';
+                doc.text(`SEATING ARRANGEMENT - ${dateFormatted} - ${selectedSession === 'FN' ? 'Forenoon' : 'Afternoon'}`, pageW / 2, 22, { align: 'center' });
 
                 doc.setFontSize(12);
-                doc.text(`Room: ${hall.hallCode}`, pageW / 2, 28, { align: 'center' });
+                doc.text(`Hall / Room: ${hall.hallCode}   [ ${physicalRowLayout.length} Columns × ${maxBenches} Benches × ${physicalSeatsPerBench} Seat(s) ]`, pageW / 2, 28, { align: 'center' });
 
                 // --- SECTION 1: AUTO-SCALING ENGINE ---
                 const cols = Math.max(rowLabels.length, 1);
@@ -1320,21 +1406,24 @@ const SeatingPlans: React.FC = () => {
                     doc.text(truncSubj, x + cardW / 2, startY - 2.5, { align: 'center' });
                 });
 
-                // Draw Bench Grid
+                // Draw Bench Grid — ALL physical cells, empty or not
                 rowLabels.forEach((rowLabel, colIdx) => {
+                    // Column's physical bench count from RowLayout
+                    const colBenchCount = physicalRowLayout[colIdx] ?? 0;
+
                     benchNumbers.forEach((bNumber, benchIdx) => {
+                        // Skip if this bench number exceeds this column's capacity
+                        if (bNumber > colBenchCount) return;
+
                         // Find the bench for this exact cell
                         const bench = benches.find(b => b.rowLabel === rowLabel && b.benchNumber === bNumber);
 
-                        const leftSeat = bench ? bench.seats.find(s => s.SeatNumber === 1) : null;
-                        const rightSeat = bench ? bench.seats.find(s => s.SeatNumber === 2) : null;
+                        const leftSeat = bench ? bench.seats.find((s: any) => s.SeatNumber === 1 || s.SeatIndex === 1) : null;
+                        const rightSeat = bench ? bench.seats.find((s: any) => s.SeatNumber === 2 || s.SeatIndex === 2) : null;
                         const leftAss = leftSeat ? assignments[leftSeat.SeatID] : null;
+                        // Always try to show right seat regardless of seatsPerBench default
                         const rightAss = rightSeat ? assignments[rightSeat.SeatID] : null;
-
-                        // DO NOT RENDER if bench is completely empty or doesn't exist
-                        if (!bench || (!leftAss && !rightAss)) {
-                            return;
-                        }
+                        const isSingleSeat = !rightSeat && physicalSeatsPerBench <= 1;
 
                         const x = marginX + colIdx * (cardW + gapX);
                         const y = startY + benchIdx * (cardH + gapY);
@@ -1349,11 +1438,13 @@ const SeatingPlans: React.FC = () => {
                         doc.setFont('helvetica', 'normal');
                         doc.setFontSize(benchLabelFont);
                         doc.setTextColor(150, 150, 150);
-                        doc.text(`${rowLabel}${bench.benchNumber}`, x + 1.5, y + 2.5);
+                        doc.text(`${rowLabel}${bench?.benchNumber ?? bNumber}`, x + 1.5, y + 2.5);
 
-                        // Center separator
-                        doc.setDrawColor(220, 220, 220);
-                        doc.line(x + cardW / 2, y + 2, x + cardW / 2, y + cardH - 2);
+                        // Hide center separator for single-seat benches
+                        if (!isSingleSeat) {
+                            doc.setDrawColor(220, 220, 220);
+                            doc.line(x + cardW / 2, y + 2, x + cardW / 2, y + cardH - 2);
+                        }
 
                         const printSeat = (ass: Assignment | null, offsetX: number) => {
                             const cx = x + offsetX;
@@ -1410,8 +1501,13 @@ const SeatingPlans: React.FC = () => {
                             doc.text(truncName, cx, nameY, { align: 'center' });
                         };
 
-                        printSeat(leftAss, cardW * 0.25);
-                        printSeat(rightAss, cardW * 0.75);
+                        if (isSingleSeat) {
+                            // Single seat per bench: show student centered
+                            printSeat(leftAss, cardW * 0.5);
+                        } else {
+                            printSeat(leftAss, cardW * 0.25);
+                            printSeat(rightAss, cardW * 0.75);
+                        }
                     });
                 });
 
@@ -1679,23 +1775,7 @@ const SeatingPlans: React.FC = () => {
                                         </span>
                                     </div>
 
-                                    {/* Batch Selection */}
-                                    <Select aria-label="Target Batch" placeholder="Filter by Batch (Optional)" variant="bordered"
-                                        id="batch-year-select" name="batchYear"
-                                        selectedKeys={selectedBatch ? [selectedBatch] : []}
-                                        onSelectionChange={(k) => setSelectedBatch(Array.from(k)[0] as string || '')}
-                                        classNames={{
-                                            trigger: "relative pr-10 bg-white border border-slate-200 rounded-xl h-10 text-slate-800 text-[13px] font-semibold data-[hover=true]:border-indigo-400 transition-all",
-                                            value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-400",
-                                            selectorIcon: "text-slate-400 absolute w-4 right-3",
-                                            popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
-                                        }}>
-                                        {batchYears.map(year => (
-                                            <SelectItem key={String(year)} textValue={String(year)} className="data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700 font-semibold">
-                                                Batch {year}
-                                            </SelectItem>
-                                        ))}
-                                    </Select>
+
 
                                     {/* Options row — compact toggles */}
                                     <div className="flex flex-col gap-2">
@@ -1851,12 +1931,7 @@ const SeatingPlans: React.FC = () => {
                                             {assigning ? 'Generating…' : 'Generate Seating'}
                                         </Button>
 
-                                        <Button onPress={() => handleBulkAssign(true)} isLoading={assigning}
-                                            isDisabled={!selectedDate || !canAssignByMode || !selectedBatch}
-                                            className={`w-full font-bold text-white rounded-xl h-11 border transition-all ${!selectedBatch ? 'bg-slate-300 border-slate-300 opacity-60' : 'bg-emerald-600 hover:bg-emerald-700 border-emerald-700 shadow-md shadow-emerald-200'}`}
-                                            startContent={!assigning ? <Users size={16} fill="currentColor" /> : undefined} size="lg">
-                                            {assigning ? 'Generating Batch…' : 'Batch-wise Seating'}
-                                        </Button>
+
 
                                         <Tooltip content={!selectedSeries ? "Select an Exam Series in Step 1 first" : "Assign seating for all valid sessions in the selected series"} placement="bottom" showArrow classNames={{ content: "font-semibold text-[11px]" }}>
                                             <div className="w-full">
