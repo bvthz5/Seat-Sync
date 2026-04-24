@@ -39,7 +39,7 @@ const fetchRegisteredExams = async (studentId: number) => {
             },
             {
                 model: Subject,
-                attributes: ["SubjectID", "SubjectCode", "SubjectName", "DepartmentID", "SemesterID"],
+                attributes: ["SubjectID", "SubjectCode", "SubjectName", "DepartmentID"],
             },
         ],
         order: [

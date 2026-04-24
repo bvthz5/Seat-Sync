@@ -1,3 +1,20 @@
+// --- DELETE ALL STRUCTURE DATA --- 
+export const deleteAllStructureData = async (req: Request, res: Response) => {
+    try {
+        await sequelize.transaction(async (t) => {
+            // Delete from child tables first to avoid FK constraint errors
+            await SeatAllocation.destroy({ where: {}, transaction: t });
+            await Seat.destroy({ where: {}, transaction: t });
+            await Zone.destroy({ where: {}, transaction: t });
+            await Room.destroy({ where: {}, transaction: t });
+            await Floor.destroy({ where: {}, transaction: t });
+            await Block.destroy({ where: {}, transaction: t });
+        });
+        res.json({ message: "All structure data deleted successfully." });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
 import { generateSeats } from '../services/seatEngine.js';
 import { Request, Response } from "express";
 import { sequelize } from "../config/database.js";

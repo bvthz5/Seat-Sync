@@ -11,6 +11,10 @@ export interface PaginatedResponse<T> {
 }
 
 export const structureService = {
+    // --- DELETE ALL STRUCTURE DATA ---
+    deleteAllStructureData: async () => {
+        await api.delete(`${PREFIX}/all`);
+    },
     // --- BLOCKS ---
     getBlocks: async (params?: { page?: number, limit?: number, search?: string, status?: string }) => {
         const response = await api.get<PaginatedResponse<Block>>(`${PREFIX}/blocks`, { params });

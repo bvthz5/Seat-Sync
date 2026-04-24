@@ -1316,6 +1316,7 @@ export class ExamController {
             const exam = await Exam.findByPk(examId, {
                 include: [{
                     model: Subject,
+                    attributes: ['SubjectID', 'SubjectCode', 'SubjectName', 'DepartmentID'],
                     include: [{
                         model: Department,
                         attributes: ['DepartmentID', 'DepartmentCode', 'DepartmentName']
@@ -1340,7 +1341,12 @@ export class ExamController {
 
             const transaction = await sequelize.transaction();
             try {
-                const result = await ExamController._processEligibleStudentsRows(examId, rows, transaction);
+                const result = await ExamController._processEligibleStudentsRows(
+                    examId, 
+                    rows, 
+                    transaction, 
+                    department.DepartmentID
+                );
                 await transaction.commit();
 
                 // ── STEP 4: Return enriched summary ──
@@ -1359,6 +1365,7 @@ export class ExamController {
                 throw error;
             }
         } catch (error: any) {
+            console.error('importEligibleStudents error:', error);
             return res.status(500).json({
                 message: 'Failed to import eligible students',
                 error: error.message
@@ -1366,7 +1373,7 @@ export class ExamController {
         }
     }
 
-    static async _processEligibleStudentsRows(examId: number, rows: any[], transaction: any) {
+    static async _processEligibleStudentsRows(examId: number, rows: any[], transaction: any, defaultDepartmentId?: number) {
         const seenRegNos = new Set<string>();
         const errors: Array<{ row: number; reason: string }> = [];
         let createdUsers = 0;
@@ -1379,6 +1386,7 @@ export class ExamController {
         let ineligibleCount = 0;
 
         const INELIGIBLE_VALUES = new Set(['no', 'not eligible', '0', 'false', 'ineligible']);
+        const defaultPassword = await bcrypt.hash('12345678', 10);
 
         for (let index = 0; index < rows.length; index++) {
             const row = rows[index];
@@ -1414,7 +1422,6 @@ export class ExamController {
 
             if (!student) {
                 const email = buildEligibleStudentEmail(fullName, registerNumber);
-                const defaultPassword = await bcrypt.hash('12345678', 10);
                 
                 const [user, userCreated] = await User.findOrCreate({
                     where: { Email: email },
@@ -1436,11 +1443,31 @@ export class ExamController {
                     updatedUsers++;
                 }
 
+                // Resolve Department, Program, Semester for the NEW student
+                const deptId = defaultDepartmentId;
+                let progId = undefined;
+                let semId = undefined;
+
+                if (deptId) {
+                    try {
+                        const program = await resolveProgramForEligibleImport(deptId, row, transaction);
+                        progId = program.ProgramID;
+                        const semester = await resolveSemesterForEligibleImport(progId, row, transaction);
+                        semId = semester.SemesterID;
+                    } catch (e) {
+                        console.error('Error resolving program/semester for row:', rowNumber, e);
+                    }
+                }
+
                 student = await Student.create({
                     RegisterNumber: normalizedRegNo,
                     FullName: fullName,
                     UserID: user.UserID,
-                    Status: 'ACTIVE'
+                    Status: 'ACTIVE',
+                    DepartmentID: deptId,
+                    ProgramID: progId,
+                    SemesterID: semId,
+                    BatchYear: new Date().getFullYear()
                 } as any, { transaction });
                 createdStudents++;
             } else {
@@ -1506,6 +1533,7 @@ export class ExamController {
                 },
                 include: [{
                     model: Subject,
+                    attributes: ['SubjectID', 'SubjectCode', 'SubjectName', 'DepartmentID'],
                     include: [{
                         model: Department,
                         attributes: ['DepartmentID', 'DepartmentCode', 'DepartmentName']
@@ -1582,7 +1610,12 @@ export class ExamController {
                     // Execution
                     const transaction = await sequelize.transaction();
                     try {
-                        const importResult = await ExamController._processEligibleStudentsRows((finalExam as any).ExamID, rows, transaction);
+                        const importResult = await ExamController._processEligibleStudentsRows(
+                            (finalExam as any).ExamID, 
+                            rows, 
+                            transaction,
+                            (finalExam as any).Subject?.DepartmentID
+                        );
                         await transaction.commit();
                         
                         result.success.push({
