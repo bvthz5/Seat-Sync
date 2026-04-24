@@ -304,6 +304,11 @@ async function ensureSchemaIntegrity() {
                 END
 
                 -- Ensure DepartmentID is nullable (Fix for decoupling)
+                IF EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Faculties]') 
+                    AND name = 'DepartmentID'
+                )
                 BEGIN
                     ALTER TABLE [dbo].[Faculties] ALTER COLUMN [DepartmentID] INT NULL;
                     PRINT 'Ensured Faculty.DepartmentID is nullable';

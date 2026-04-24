@@ -56,6 +56,7 @@ export const SeatingService = {
         avoidSameDeptBench?: boolean;
         shuffleRooms?: boolean;
         roomCapacityLimit?: number;   // End Sem: per-room seat cap (default 40)
+        batchYear?: number;           // Optional filter by batch
         leftDeptId?: number | null; // backward compatibility
         rightDeptId?: number | null; // backward compatibility
     }) => {
