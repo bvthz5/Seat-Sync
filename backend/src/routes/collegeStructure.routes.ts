@@ -1,13 +1,17 @@
+
 import express from "express";
+const router = express.Router();
 import { AuthMiddleware } from "../middlewares/auth.middleware.js";
 import {
     getBlocks, createBlock, updateBlock, deleteBlock,
     getFloors, createFloor, updateFloor, deleteFloor,
     getRooms, createRoom, updateRoom, deleteRoom, getRoomLayout, bulkCreateRooms, autoZoneRoom,
-    getZones, createZone, deleteZone, updateSeatZones
+    getZones, createZone, deleteZone, updateSeatZones,
+    deleteAllStructureData
 } from "../controllers/collegeStructure.controller.js";
 
-const router = express.Router();
+// Delete all structure data (Blocks, Floors, Rooms, Seats, Zones)
+router.delete("/all", deleteAllStructureData);
 
 // Apply Root Admin protection to all routes
 router.use(AuthMiddleware.requireRootAuth);

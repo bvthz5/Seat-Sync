@@ -7,6 +7,8 @@ import { RoomManager } from '../components/structure/RoomManager';
 import { LayoutConfig } from '../components/structure/LayoutConfig';
 import { StructureImport } from '../components/structure/StructureImport';
 import { useAuth } from '../../../hooks/useAuth';
+import { structureService } from '../services/structureService';
+import { toast } from 'react-hot-toast';
 
 const CollegeStructure: React.FC = () => {
     const { user } = useAuth();
@@ -14,6 +16,17 @@ const CollegeStructure: React.FC = () => {
 
     const isRootAdmin = user?.IsRootAdmin === true;
     const isReadOnly = !isRootAdmin;
+
+    const handleDeleteAll = async () => {
+        if (!window.confirm('Are you sure you want to delete ALL structure data? This cannot be undone.')) return;
+        try {
+            await structureService.deleteAllStructureData();
+            toast.success('All structure data deleted.');
+            window.location.reload();
+        } catch (err: any) {
+            toast.error('Failed to delete all structure data.');
+        }
+    };
 
     return (
         <div className="min-h-screen bg-slate-50/50 pb-12">
@@ -87,8 +100,15 @@ const CollegeStructure: React.FC = () => {
                         />
                     </Tabs>
                     {isRootAdmin && (
-                        <div className="mb-2">
+                        <div className="mb-2 flex gap-2">
                             <StructureImport onChange={() => window.location.reload()} />
+                            <button
+                                className="ml-2 px-4 py-2 bg-red-600 text-white rounded shadow hover:bg-red-700 transition"
+                                onClick={handleDeleteAll}
+                                type="button"
+                            >
+                                Delete All
+                            </button>
                         </div>
                     )}
                 </div>
