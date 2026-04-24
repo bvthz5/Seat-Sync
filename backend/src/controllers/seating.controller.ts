@@ -102,7 +102,8 @@ const getStudentsForExamSession = async (
     examDate: string,
     slot: string,
     excludeStudentIds: number[],
-    transaction?: any
+    transaction?: any,
+    batchYear?: number
 ) => {
     const normalizedSlot = String(slot || "").trim().toUpperCase();
 
@@ -158,8 +159,13 @@ const getStudentsForExamSession = async (
         const slotDeptIds = [...new Set(examSubjectRows.map(r => Number(r.DepartmentID)).filter(Boolean))];
         if (slotDeptIds.length === 0) return [];
 
+        const studentWhereFallback: any = { DepartmentID: { [Op.in]: slotDeptIds } };
+        if (batchYear) {
+            studentWhereFallback.BatchYear = batchYear;
+        }
+
         const allSlotStudents = await Student.findAll({
-            where: { DepartmentID: { [Op.in]: slotDeptIds } },
+            where: studentWhereFallback,
             include: [
                 { model: User, attributes: ["FullName"] },
                 { model: Department, attributes: ["DepartmentCode", "DepartmentID"] },
@@ -185,8 +191,13 @@ const getStudentsForExamSession = async (
     console.log("DEBUG: Filtered student IDs:", { total: studentIds.length, afterExclude: filteredStudentIds.length });
 
     // Fetch full student data
+    const studentWhere: any = { StudentID: { [Op.in]: filteredStudentIds } };
+    if (batchYear) {
+        studentWhere.BatchYear = batchYear;
+    }
+
     const students = await Student.findAll({
-        where: { StudentID: { [Op.in]: filteredStudentIds } },
+        where: studentWhere,
         include: [
             { model: User, attributes: ["FullName"] },
             { model: Department, attributes: ["DepartmentCode", "DepartmentID"] },
@@ -1172,6 +1183,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
             avoidSameDeptBench,
             shuffleRooms,
             roomCapacityLimit,   // End-Sem: optional per-room seat cap (default 40)
+            batchYear,           // Optional filter by batch
         } = req.body;
 
         if (!examDate || !session || !hallIds || hallIds.length === 0) {
@@ -1542,7 +1554,8 @@ export const bulkAssign = async (req: Request, res: Response) => {
             String(examDate),
             slotValue,
             excludeIds,
-            transaction
+            transaction,
+            batchYear ? Number(batchYear) : undefined
         );
 
         // ── STEP 2: Build left/right pools based on mode + departments ──

@@ -146,6 +146,8 @@ const SeatingPlans: React.FC = () => {
     const [selectedHallIds, setSelectedHallIds] = useState<Set<number>>(new Set());
     const [hallSearch, setHallSearch] = useState('');
     const [hallFilter, setHallFilter] = useState<'all' | 'empty' | 'partial' | 'full'>('all');
+    const [batchYears, setBatchYears] = useState<number[]>([]);
+    const [selectedBatch, setSelectedBatch] = useState<string>('');
 
     const [assigning, setAssigning] = useState(false);
     const [loadingSummary, setLoadingSummary] = useState(false);
@@ -276,9 +278,12 @@ const SeatingPlans: React.FC = () => {
     useEffect(() => {
         (async () => {
             try { setSeriesList(await SeatingService.getSeries().then(r => Array.isArray(r) ? r : [])); } catch { }
-
             try { setHalls(await SeatingService.getHalls().then(r => Array.isArray(r) ? r : [])); } catch { toast.error('Failed to load halls'); }
             try { setDepartments(await SeatingService.getDepartments().then(r => Array.isArray(r) ? r : [])); } catch { toast.error('Failed to load departments'); }
+            try {
+                const filters = await api.get('/students/meta/filters').catch(() => ({ data: { batchYears: [] } }));
+                if (filters.data?.batchYears) setBatchYears(filters.data.batchYears);
+            } catch { }
         })();
     }, []);
 
@@ -425,7 +430,7 @@ const SeatingPlans: React.FC = () => {
     };
 
     /* bulk assign */
-    const handleBulkAssign = async () => {
+    const handleBulkAssign = async (useBatch = false) => {
         if (!selectedDate) { toast.error('Select an exam date first'); return; }
         let ids = selectedHallIds.size > 0 ? [...selectedHallIds] : hallSummary.map(h => h.hallId);
         if (ids.length === 0) { toast.error('No halls available'); return; }
@@ -437,7 +442,9 @@ const SeatingPlans: React.FC = () => {
         const seatCount = hallSummary
             .filter(h => ids.includes(h.hallId))
             .reduce((sum, h) => sum + h.totalSeats, 0);
-        if (eligibleStudentCount > 0 && seatCount < eligibleStudentCount) {
+        
+        // Only show shortage warning if NOT using batch-wise seating (as batch-wise is expected to be partial)
+        if (!useBatch && eligibleStudentCount > 0 && seatCount < eligibleStudentCount) {
             const shortBy = eligibleStudentCount - seatCount;
             const autoCandidates = hallSummary.filter(h => !ids.includes(h.hallId));
             let autoIds: number[] = [];
@@ -473,17 +480,8 @@ const SeatingPlans: React.FC = () => {
             console.log("=== ASSIGN CLICKED ===");
             console.log("Assignment mode:", assignmentMode);
             console.log("Selected halls:", ids);
-            console.log("Selected halls length:", ids?.length);
-            console.log("Eligible students (preview):", eligibleStudentCount);
-            console.log("Payload going to API:", {
-                examDate: selectedDate,
-                session: selectedSession,
-                hallIds: ids,
-                mode: assignmentMode,
-                primaryDeptId: primaryDept ? Number(primaryDept) : null,
-                secondaryDeptId: secondaryDept ? Number(secondaryDept) : null,
-                avoidSameDeptBench,
-            });
+            console.log("Batch filter:", useBatch ? selectedBatch : 'None');
+            
             const r = await SeatingService.bulkAssign({
                 examDate: selectedDate, session: selectedSession, hallIds: ids,
                 mode: assignmentMode,
@@ -493,6 +491,7 @@ const SeatingPlans: React.FC = () => {
                 shuffleRooms,
                 roomCapacityLimit: roomCapacityLimit !== '' ? Number(roomCapacityLimit) : undefined,
                 seriesId: selectedSeries ? Number(selectedSeries) : undefined,
+                batchYear: useBatch ? Number(selectedBatch) : undefined,
             });
             // Support both Internal (totalLeft/RightAssigned) and EndSem (assignedCount) response shapes
             const examType: string = r.examType || 'Internal';
@@ -1680,6 +1679,24 @@ const SeatingPlans: React.FC = () => {
                                         </span>
                                     </div>
 
+                                    {/* Batch Selection */}
+                                    <Select aria-label="Target Batch" placeholder="Filter by Batch (Optional)" variant="bordered"
+                                        id="batch-year-select" name="batchYear"
+                                        selectedKeys={selectedBatch ? [selectedBatch] : []}
+                                        onSelectionChange={(k) => setSelectedBatch(Array.from(k)[0] as string || '')}
+                                        classNames={{
+                                            trigger: "relative pr-10 bg-white border border-slate-200 rounded-xl h-10 text-slate-800 text-[13px] font-semibold data-[hover=true]:border-indigo-400 transition-all",
+                                            value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-400",
+                                            selectorIcon: "text-slate-400 absolute w-4 right-3",
+                                            popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
+                                        }}>
+                                        {batchYears.map(year => (
+                                            <SelectItem key={String(year)} textValue={String(year)} className="data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700 font-semibold">
+                                                Batch {year}
+                                            </SelectItem>
+                                        ))}
+                                    </Select>
+
                                     {/* Options row — compact toggles */}
                                     <div className="flex flex-col gap-2">
                                         {(([
@@ -1832,6 +1849,13 @@ const SeatingPlans: React.FC = () => {
                                             className="w-full font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl h-11 border border-indigo-700 transition-all data-[disabled=true]:opacity-50 text-[14px] shadow-md shadow-indigo-200"
                                             startContent={!assigning ? <Zap size={16} fill="currentColor" /> : undefined} size="lg">
                                             {assigning ? 'Generating…' : 'Generate Seating'}
+                                        </Button>
+
+                                        <Button onPress={() => handleBulkAssign(true)} isLoading={assigning}
+                                            isDisabled={!selectedDate || !canAssignByMode || !selectedBatch}
+                                            className={`w-full font-bold text-white rounded-xl h-11 border transition-all ${!selectedBatch ? 'bg-slate-300 border-slate-300 opacity-60' : 'bg-emerald-600 hover:bg-emerald-700 border-emerald-700 shadow-md shadow-emerald-200'}`}
+                                            startContent={!assigning ? <Users size={16} fill="currentColor" /> : undefined} size="lg">
+                                            {assigning ? 'Generating Batch…' : 'Batch-wise Seating'}
                                         </Button>
 
                                         <Tooltip content={!selectedSeries ? "Select an Exam Series in Step 1 first" : "Assign seating for all valid sessions in the selected series"} placement="bottom" showArrow classNames={{ content: "font-semibold text-[11px]" }}>
