@@ -41,6 +41,8 @@ interface AssignFeedback {
     hallIds: number[];
 }
 
+const OFFICIAL_DEPT_PRIORITY = ['CS', 'AD', 'CA', 'CC', 'EC', 'EE', 'ME'];
+
 /* ─── High-End Dark NASA Theme Colors ───────────────────────────── */
 const DARK_DEPT_COLORS: Record<string, { bg: string; text: string; border: string }> = {
     // Cool blues, teals, and soft purples/pinks to match the blueprint theme (No oranges/yellows)
@@ -48,15 +50,12 @@ const DARK_DEPT_COLORS: Record<string, { bg: string; text: string; border: strin
     CS: { bg: 'rgba(56, 189, 248, 0.05)', text: '#38bdf8', border: 'rgba(56, 189, 248, 0.3)' },
     MCA: { bg: 'rgba(45, 212, 191, 0.05)', text: '#2dd4bf', border: 'rgba(45, 212, 191, 0.3)' },     // Teal
     CA: { bg: 'rgba(45, 212, 191, 0.05)', text: '#2dd4bf', border: 'rgba(45, 212, 191, 0.3)' },      // Teal (Explicit mapping for CA)
-    ECE: { bg: 'rgba(167, 139, 250, 0.05)', text: '#a78bfa', border: 'rgba(167, 139, 250, 0.3)' },   // Soft Amethyst
-    EC: { bg: 'rgba(167, 139, 250, 0.05)', text: '#a78bfa', border: 'rgba(167, 139, 250, 0.3)' },
-    EEE: { bg: 'rgba(232, 121, 249, 0.05)', text: '#e879f9', border: 'rgba(232, 121, 249, 0.3)' },   // Soft Fuchsia
-    EE: { bg: 'rgba(232, 121, 249, 0.05)', text: '#e879f9', border: 'rgba(232, 121, 249, 0.3)' },
-    ME: { bg: 'rgba(96, 165, 250, 0.05)', text: '#60a5fa', border: 'rgba(96, 165, 250, 0.3)' },      // Sky Blue
-    CE: { bg: 'rgba(16, 185, 129, 0.05)', text: '#34d399', border: 'rgba(16, 185, 129, 0.3)' },      // Emerald
-    MBA: { bg: 'rgba(244, 114, 182, 0.05)', text: '#f472b6', border: 'rgba(244, 114, 182, 0.3)' },   // Soft Pink
-    BA: { bg: 'rgba(244, 114, 182, 0.05)', text: '#f472b6', border: 'rgba(244, 114, 182, 0.3)' },
-    IT: { bg: 'rgba(129, 140, 248, 0.05)', text: '#818cf8', border: 'rgba(129, 140, 248, 0.3)' },    // Indigo
+    AD: { bg: 'rgba(129, 140, 248, 0.05)', text: '#818cf8', border: 'rgba(129, 140, 248, 0.3)' },   // Indigo
+    EC: { bg: 'rgba(167, 139, 250, 0.05)', text: '#a78bfa', border: 'rgba(167, 139, 250, 0.3)' },   // Violet
+    EE: { bg: 'rgba(192, 132, 252, 0.05)', text: '#c084fc', border: 'rgba(192, 132, 252, 0.3)' },   // Purple
+    ME: { bg: 'rgba(232, 121, 249, 0.05)', text: '#e879f9', border: 'rgba(232, 121, 249, 0.3)' },   // Fuchsia
+    CE: { bg: 'rgba(244, 114, 182, 0.05)', text: '#f472b6', border: 'rgba(244, 114, 182, 0.3)' },   // Pink
+    IT: { bg: 'rgba(56, 189, 248, 0.05)', text: '#38bdf8', border: 'rgba(56, 189, 248, 0.3)' },
 };
 
 const getDeptStyle = (code: string) => {
@@ -925,7 +924,20 @@ const SeatingPlans: React.FC = () => {
                 const subjs = Object.values(rData.subjMap).sort((a, b) => a.code.localeCompare(b.code));
 
                 subjs.forEach((sub, idx) => {
-                    const ranges = buildRegRanges(sub.regs);
+                    const sortedRegs = [...sub.regs].sort((r1, r2) => {
+                        const d1 = r1.substring(5, 7).toUpperCase();
+                        const d2 = r2.substring(5, 7).toUpperCase();
+                        if (d1 !== d2) {
+                            const i1 = OFFICIAL_DEPT_PRIORITY.indexOf(d1);
+                            const i2 = OFFICIAL_DEPT_PRIORITY.indexOf(d2);
+                            if (i1 !== -1 && i2 !== -1) return i1 - i2;
+                            if (i1 !== -1) return -1;
+                            if (i2 !== -1) return 1;
+                            return d1.localeCompare(d2);
+                        }
+                        return r1.localeCompare(r2);
+                    });
+                    const ranges = buildRegRanges(sortedRegs);
                     rows.push({
                         slNo,
                         hallCode: rData.hallCode,
@@ -978,7 +990,28 @@ const SeatingPlans: React.FC = () => {
                 name,
                 halls: Array.from(halls.entries())
                     .sort(([a], [b]) => a.localeCompare(b))
-                    .map(([hallCode, regs]) => ({ hallCode, regs, ranges: buildRegRanges(regs).join(', ') }))
+                    .map(([hallCode, regs]) => {
+                        // Sort registers by department (index 5-7) using priority then alphabetically
+                        const sortedRegs = [...regs].sort((r1, r2) => {
+                            const d1 = r1.substring(5, 7).toUpperCase();
+                            const d2 = r2.substring(5, 7).toUpperCase();
+                            
+                            if (d1 !== d2) {
+                                const i1 = OFFICIAL_DEPT_PRIORITY.indexOf(d1);
+                                const i2 = OFFICIAL_DEPT_PRIORITY.indexOf(d2);
+                                if (i1 !== -1 && i2 !== -1) return i1 - i2;
+                                if (i1 !== -1) return -1;
+                                if (i2 !== -1) return 1;
+                                return d1.localeCompare(d2);
+                            }
+                            return r1.localeCompare(r2);
+                        });
+                        return { 
+                            hallCode, 
+                            regs: sortedRegs, 
+                            ranges: buildRegRanges(sortedRegs).join(', ') 
+                        };
+                    })
             }));
 
         const seriesName = seriesList.find(s => String(s.ExamSeriesID) === selectedSeries)?.SeriesName || 'Examinations';
@@ -1019,30 +1052,55 @@ const SeatingPlans: React.FC = () => {
             })));
 
             let sl = 1;
+            const merges: any[] = [];
+            for (let i = 0; i < 5; i++) merges.push({ s: { r: i, c: 0 }, e: { r: i, c: 5 } });
+
             subjectGroups.forEach((sg, gi) => {
-                const fill = gi % 2 === 0 ? whiteFill : blueFill;
+                const fill = gi % 2 === 0 ? { patternType: 'solid', fgColor: { rgb: 'EAF3FF' } } : { patternType: 'solid', fgColor: { rgb: 'F3E8FF' } };
+                const startRow = DATA.length;
+                
                 sg.halls.forEach((h, hi) => {
-                    DATA.push([
-                        { v: hi === 0 ? sl : '', s: { fill, border: allThin, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
-                        { v: hi === 0 ? sg.code : '', s: { fill, border: allThin, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
-                        { v: hi === 0 ? sg.name : '', s: { fill, border: allThin, font: bodyFont, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } } },
+                    const row: any[] = [
+                        { v: sl, s: { fill, border: allThin, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
+                        { v: sg.code, s: { fill, border: allThin, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
+                        { v: sg.name, s: { fill, border: allThin, font: bodyFont, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } } },
                         { v: h.hallCode, s: { fill, border: allThin, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
                         { v: h.ranges, s: { fill, border: allThin, font: regFont, alignment: { horizontal: 'left', vertical: 'center', wrapText: true } } },
                         { v: h.regs.length, s: { fill, border: allThin, font: bodyFont, alignment: { horizontal: 'center', vertical: 'center' } } },
-                    ]);
+                    ];
+                    DATA.push(row);
                 });
+
+                const endRow = DATA.length - 1;
+                if (endRow >= startRow) {
+                    // Sl.No, Subject Code, Subject Name Merging
+                    merges.push({ s: { r: startRow, c: 0 }, e: { r: endRow, c: 0 } });
+                    merges.push({ s: { r: startRow, c: 1 }, e: { r: endRow, c: 1 } });
+                    merges.push({ s: { r: startRow, c: 2 }, e: { r: endRow, c: 2 } });
+                    
+                    // Thicker top border for first row of subject block
+                    const firstRow = DATA[startRow];
+                    firstRow.forEach((cell: any) => {
+                        cell.s.border = { ...allThin, top: { style: 'medium', color: { rgb: '475569' } } };
+                    });
+                }
                 sl++;
             });
 
             const ws = XLSXStyle.utils.aoa_to_sheet(DATA);
-            ws['!cols'] = [{ wch: 8 }, { wch: 16 }, { wch: 28 }, { wch: 16 }, { wch: 62 }, { wch: 9 }];
-            const merges: any[] = [];
-            for (let i = 0; i < 4; i++) merges.push({ s: { r: i, c: 0 }, e: { r: i, c: 5 } });
+            ws['!cols'] = [
+                { wch: 6 },  // Sl.No
+                { wch: 15 }, // Subject Code
+                { wch: 35 }, // Subject Name
+                { wch: 15 }, // Hall
+                { wch: 70 }, // Register Numbers
+                { wch: 8 }   // Count
+            ];
             ws['!merges'] = merges;
             const wb = XLSXStyle.utils.book_new();
-            XLSXStyle.utils.book_append_sheet(wb, ws, 'Subject Wise');
-            XLSXStyle.writeFile(wb, `SubjectWise_Seating_${selectedDate}_${selectedSession}.xlsx`);
-            toast.success('Subject Wise Excel downloaded');
+            XLSXStyle.utils.book_append_sheet(wb, ws, 'Consolidated Seating');
+            XLSXStyle.writeFile(wb, `SubjectWise_Consolidated_${selectedDate}.xlsx`);
+            toast.success('Subject-wise Consolidated Excel downloaded');
         } catch (e) { console.error(e); toast.error('Failed to generate Subject Wise Excel'); }
         finally { setSubjectDownloading(false); }
     };
@@ -1073,18 +1131,30 @@ const SeatingPlans: React.FC = () => {
             doc.text(`Exam: ${examNameString}`, pageW / 2, 32, { align: 'center' });
             doc.text(`Date: ${dateStr} – ${sessionStr}`, pageW / 2, 38, { align: 'center' });
 
-            const bodyRows: any[][] = [];
+            const bodyRows: any[] = [];
             let sl = 1;
-            subjectGroups.forEach(sg => {
+            subjectGroups.forEach((sg, gi) => {
+                const rowCount = sg.halls.length;
+                const fill = gi % 2 === 0 ? [234, 243, 255] : [243, 232, 255]; // Matching Excel #EAF3FF and #F3E8FF
+                
                 sg.halls.forEach((h, hi) => {
-                    bodyRows.push([
-                        hi === 0 ? String(sl) : '',
-                        hi === 0 ? sg.code : '',
-                        hi === 0 ? sg.name : '',
-                        h.hallCode,
-                        h.ranges,
-                        String(h.regs.length),
-                    ]);
+                    if (hi === 0) {
+                        bodyRows.push([
+                            { content: String(sl), rowSpan: rowCount, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } },
+                            { content: sg.code, rowSpan: rowCount, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } },
+                            { content: sg.name, rowSpan: rowCount, styles: { halign: 'center', valign: 'middle', wrapText: true, fillColor: fill } },
+                            { content: h.hallCode, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } },
+                            { content: h.ranges, styles: { halign: 'left', valign: 'middle', fillColor: fill, fontSize: 8 } },
+                            { content: String(h.regs.length), styles: { halign: 'center', valign: 'middle', fillColor: fill } },
+                        ]);
+                    } else {
+                        bodyRows.push([
+                            '', '', '', // Placeholders for columns 0, 1, 2 (merged)
+                            { content: h.hallCode, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } },
+                            { content: h.ranges, styles: { halign: 'left', valign: 'middle', fillColor: fill, fontSize: 8 } },
+                            { content: String(h.regs.length), styles: { halign: 'center', valign: 'middle', fillColor: fill } },
+                        ]);
+                    }
                 });
                 sl++;
             });
@@ -1093,17 +1163,17 @@ const SeatingPlans: React.FC = () => {
                 startY: 53,
                 head: [['Sl.No', 'Subject Code', 'Subject Name', 'Hall / Room No', 'Register Numbers', 'Count']],
                 body: bodyRows,
-                styles: { fontSize: 7.5, cellPadding: 2.5, lineColor: [180, 195, 215], lineWidth: 0.25 },
+                theme: 'grid',
+                styles: { fontSize: 7.5, cellPadding: 2.5, lineColor: [180, 195, 215], lineWidth: 0.25, valign: 'middle' },
                 headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
                 columnStyles: {
-                    0: { cellWidth: 12, halign: 'center' },
-                    1: { cellWidth: 22, halign: 'center', fontStyle: 'bold' },
-                    2: { cellWidth: 40 },
-                    3: { cellWidth: 22, halign: 'center', fontStyle: 'bold' },
+                    0: { cellWidth: 12 },
+                    1: { cellWidth: 22 },
+                    2: { cellWidth: 45 },
+                    3: { cellWidth: 22 },
                     4: { cellWidth: 'auto' },
-                    5: { cellWidth: 14, halign: 'center' },
+                    5: { cellWidth: 14 },
                 },
-                alternateRowStyles: { fillColor: [238, 242, 255] },
                 didDrawPage: (d2: any) => {
                     doc.setFontSize(7); doc.setTextColor(150, 150, 150);
                     doc.text(`Page ${d2.pageNumber}`, pageW - 14, doc.internal.pageSize.getHeight() - 6, { align: 'right' });

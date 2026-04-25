@@ -22,6 +22,7 @@ interface StudentRow {
 const ExamDetailPanel: React.FC<ExamDetailPanelProps> = ({ exam, isOpen, onClose, onEdit }) => {
     const [eligibleStudents,   setEligibleStudents]   = useState<StudentRow[]>([]);
     const [ineligibleStudents, setIneligibleStudents] = useState<StudentRow[]>([]);
+    const [batchCounts, setBatchCounts] = useState<Record<string, number>>({});
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
@@ -37,10 +38,12 @@ const ExamDetailPanel: React.FC<ExamDetailPanelProps> = ({ exam, isOpen, onClose
             // New shape: eligibleStudents + ineligibleStudents arrays
             setEligibleStudents(data.eligibleStudents ?? data.students ?? []);
             setIneligibleStudents(data.ineligibleStudents ?? []);
+            setBatchCounts(data.batchCounts || {});
         } catch (error) {
             console.error('Failed to fetch students:', error);
             setEligibleStudents([]);
             setIneligibleStudents([]);
+            setBatchCounts({});
         } finally {
             setLoading(false);
         }
@@ -211,6 +214,19 @@ const ExamDetailPanel: React.FC<ExamDetailPanelProps> = ({ exam, isOpen, onClose
                                     {loading ? '…' : eligibleStudents.length}
                                 </span>
                             </div>
+
+                            {/* Batch Summary */}
+                            {!loading && Object.keys(batchCounts).length > 0 && (
+                                <div className="flex flex-wrap gap-2 mb-4 bg-white/50 p-3 rounded-lg border border-green-100/50">
+                                    {Object.entries(batchCounts).map(([batch, count]) => (
+                                        <div key={batch} className="flex items-center gap-2 px-2.5 py-1 bg-green-100/50 rounded-md border border-green-200/50 shadow-sm">
+                                            <span className="text-[10px] font-black text-green-700 uppercase tracking-wider">{batch}</span>
+                                            <span className="w-5 h-5 bg-green-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">{count}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
                             {loading ? (
                                 <div className="flex justify-center py-4"><Spinner size="sm" /></div>
                             ) : (

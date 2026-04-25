@@ -546,6 +546,18 @@ export class ExamController {
 
             const exams = await Exam.findAll({
                 where: whereClause,
+                attributes: {
+                    include: [
+                        [
+                            sequelize.literal(`(
+                                SELECT COUNT(*)
+                                FROM ExamRegistrations AS er
+                                WHERE er.ExamID = Exam.ExamID
+                            )`),
+                            'registrationCount'
+                        ]
+                    ]
+                },
                 include: [
                     {
                         model: Subject,
@@ -1821,12 +1833,25 @@ export class ExamController {
             const eligibleStudents   = allStudents.filter(s => s.IsEligible);
             const ineligibleStudents = allStudents.filter(s => !s.IsEligible);
 
+            // Compute batch-wise counts for eligible students
+            const batchCounts: Record<string, number> = {};
+            eligibleStudents.forEach(s => {
+                // Extract batch prefix (e.g., SJ24CS001 -> SJ24CS, SJ24MCAAD001 -> SJ24MCAAD)
+                // We take everything before the last 3 digits if they are numeric, 
+                // or just some reasonable prefix logic.
+                const reg = s.RegisterNumber || '';
+                const match = reg.match(/^([A-Z0-9]+?)\d{3}$/i) || reg.match(/^([A-Z0-9]+)/i);
+                const batch = match ? match[1].toLowerCase() : 'Unknown';
+                batchCounts[batch] = (batchCounts[batch] || 0) + 1;
+            });
+
             res.json({
                 success: true,
                 examId,
                 totalStudents: allStudents.length,
                 eligibleCount: eligibleStudents.length,
                 ineligibleCount: ineligibleStudents.length,
+                batchCounts,
                 // Keep legacy `students` key pointing to eligible only for backward compat
                 students: eligibleStudents,
                 eligibleStudents,

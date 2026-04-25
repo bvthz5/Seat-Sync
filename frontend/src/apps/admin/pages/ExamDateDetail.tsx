@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button, Card, CardBody } from '@heroui/react';
-import { ArrowLeft, Upload, Sun, Moon, Info, CalendarClock } from 'lucide-react';
+import { ArrowLeft, Upload, Sun, Moon, Info, CalendarClock, CalendarCheck } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { ExamService } from '../services/examService';
 import EligibleStudentsImportModal from '../components/exams/EligibleStudentsImportModal';
@@ -23,6 +23,7 @@ type GroupedExam = {
     duration: number;
     subjectCode: string;
     branches: BranchOption[];
+    hasRegistrations: boolean;
 };
 
 const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
@@ -47,7 +48,8 @@ const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
                 duration,
                 subjectCode: String(exam?.Subject?.SubjectCode || ''),
                 branches: [],
-                branchKeys: new Set<string>()
+                branchKeys: new Set<string>(),
+                hasRegistrations: false
             });
         }
 
@@ -60,6 +62,10 @@ const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
                 departmentCode: String(department.DepartmentCode || 'GEN'),
                 departmentName: String(department.DepartmentName || 'General')
             });
+        }
+
+        if (Number(exam.registrationCount || 0) > 0) {
+            group.hasRegistrations = true;
         }
     });
 
@@ -97,12 +103,18 @@ const ExamDateDetail: React.FC = () => {
 
     const selectedDateLabel = useMemo(() => {
         if (!date) return '';
-        return new Date(date).toLocaleDateString(undefined, {
-            weekday: 'long',
-            month: 'long',
-            day: 'numeric',
-            year: 'numeric'
-        });
+        try {
+            const d = new Date(date);
+            if (isNaN(d.getTime())) return date;
+            return d.toLocaleDateString(undefined, {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric'
+            });
+        } catch (e) {
+            return date;
+        }
     }, [date]);
 
     const openImport = (exam: GroupedExam) => {
@@ -142,8 +154,13 @@ const ExamDateDetail: React.FC = () => {
                 <div className="flex flex-col h-full justify-between">
                     <div>
                         <div className="flex justify-between items-start gap-4 mb-5">
-                            <h3 className="text-xl font-black text-slate-800 leading-tight">
+                            <h3 className="text-xl font-black text-slate-800 leading-tight flex items-center gap-2">
                                 {exam.examName}
+                                {exam.hasRegistrations && (
+                                    <div className="w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center shrink-0 shadow-sm" title="Eligibility Imported">
+                                        <CalendarCheck size={12} className="stroke-[3]" />
+                                    </div>
+                                )}
                             </h3>
                             <div className="flex shrink-0 gap-2">
                                 <span className="px-3 py-1.5 rounded-xl text-[10px] font-extrabold uppercase tracking-widest bg-slate-100 text-slate-500 border border-slate-200/60 shadow-sm leading-none flex items-center justify-center">

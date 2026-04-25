@@ -1,16 +1,15 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Card, Button, Select, SelectItem, Input, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/react";
-import { ArrowLeft, CalendarDays, Filter, CalendarCheck2, ArrowRight, Search, X, Trash2, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Filter, CalendarCheck, CalendarDays, ArrowRight, Search, X, Trash2, AlertTriangle, Upload } from "lucide-react";
 import { toast } from 'react-hot-toast';
 import { ExamService } from '../services/examService';
 import BulkEligibleImportModal from '../components/exams/BulkEligibleImportModal';
-import { Upload } from 'lucide-react';
 
 const ExamDates: React.FC = () => {
     const navigate = useNavigate();
     const { seriesId } = useParams<{ seriesId: string }>();
-    const [dates, setDates] = useState<{ date: string; count: number; subjects: { name: string; code: string }[] }[]>([]);
+    const [dates, setDates] = useState<{ date: string; count: number; hasRegistrations: boolean; subjects: { name: string; code: string }[] }[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedMonth, setSelectedMonth] = useState<string>('All');
     const [exactDate, setExactDate] = useState<string>('');
@@ -28,20 +27,22 @@ const ExamDates: React.FC = () => {
         try {
             const response = await ExamService.getAll({ seriesId });
             const exams = response || [];
-            const groups: Record<string, { sessions: Set<string>; subjects: Map<string, string> }> = {};
+            const groups: Record<string, { sessions: Set<string>; subjects: Map<string, string>; hasReg: boolean }> = {};
             exams.forEach((ex: any) => {
                 const d = new Date(ex.ExamDate).toISOString().split('T')[0];
-                if (!groups[d]) groups[d] = { sessions: new Set(), subjects: new Map() };
+                if (!groups[d]) groups[d] = { sessions: new Set(), subjects: new Map(), hasReg: false };
                 groups[d].sessions.add(`${String(ex.ExamName || '').trim()}::${String(ex.Session || '').trim().toUpperCase()}`);
                 const code = String(ex.SubjectCode || ex.ExamCode || '').trim();
                 const name = String(ex.ExamName || ex.SubjectName || '').trim();
                 if (name) groups[d].subjects.set(code || name, name);
+                if (ex.registrationCount > 0) groups[d].hasReg = true;
             });
             const entries = Object.keys(groups)
                 .sort()
                 .map(k => ({
                     date: k,
                     count: groups[k].sessions.size,
+                    hasRegistrations: groups[k].hasReg,
                     subjects: Array.from(groups[k].subjects.entries()).map(([code, name]) => ({ code, name }))
                 }));
             setDates(entries);
@@ -106,22 +107,19 @@ const ExamDates: React.FC = () => {
             bg: 'bg-emerald-50 text-emerald-600', 
             text: 'text-emerald-500', 
             border: 'border-emerald-100', 
-            hoverBorder: 'group-hover:border-emerald-300',
-            label: 'Light Load' 
+            hoverBorder: 'group-hover:border-emerald-300'
         };
         if (count <= 8) return { 
             bg: 'bg-amber-50 text-amber-600', 
             text: 'text-amber-500', 
             border: 'border-amber-100', 
-            hoverBorder: 'group-hover:border-amber-300',
-            label: 'Moderate Load' 
+            hoverBorder: 'group-hover:border-amber-300'
         };
         return { 
             bg: 'bg-rose-50 text-rose-600', 
             text: 'text-rose-500', 
             border: 'border-rose-100', 
-            hoverBorder: 'group-hover:border-rose-300',
-            label: 'Heavy Load' 
+            hoverBorder: 'group-hover:border-rose-300'
         };
     };
 
@@ -268,7 +266,7 @@ const ExamDates: React.FC = () => {
                 ) : dates.length === 0 ? (
                     <div className="text-center py-24 bg-white border border-slate-200/60 rounded-[32px] shadow-sm max-w-3xl mx-auto">
                         <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-5 text-indigo-400">
-                            <CalendarCheck2 size={32} />
+                            <CalendarCheck size={32} />
                         </div>
                         <h2 className="text-slate-900 font-extrabold text-2xl mb-2 tracking-tight">No exams scheduled</h2>
                         <p className="text-slate-500 font-medium text-sm">There are no dates allocated in your current series.</p>
@@ -304,8 +302,13 @@ const ExamDates: React.FC = () => {
                                         <div className="p-7">
                                             {/* Top Status & Arrow */}
                                             <div className="flex justify-between items-center mb-6">
-                                                <div className={`px-3 py-1 rounded-lg text-[10px] uppercase tracking-widest font-extrabold border bg-opacity-40 shadow-sm ${load.bg} ${load.border}`}>
-                                                    {load.label}
+                                                <div className="flex items-center gap-2">
+                                                    {d.hasRegistrations && (
+                                                        <div className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1 rounded-lg border border-green-100 shadow-sm" title="Eligibility Imported">
+                                                            <CalendarCheck size={13} className="stroke-[3]" />
+                                                            <span className="text-[10px] font-extrabold uppercase tracking-widest">Registered</span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <div className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-300 opacity-0 group-hover:opacity-100 bg-white ${load.text} ${load.hoverBorder}`}>
                                                     <ArrowRight size={14} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
