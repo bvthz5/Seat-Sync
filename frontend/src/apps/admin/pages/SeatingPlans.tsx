@@ -864,7 +864,7 @@ const SeatingPlans: React.FC = () => {
        e.g. ["23CS001","23CS002","23CS003","23CS005"] → ["23CS001-003", "23CS005"] */
     const buildRegRanges = (regs: string[]): string[] => {
         if (!regs.length) return [];
-        const sorted = [...regs].sort();
+        const sorted = regs; // Respect the caller's sort order (already optimized for dept priority)
         const ranges: string[] = [];
         let start = sorted[0], prev = sorted[0];
         for (let i = 1; i < sorted.length; i++) {
@@ -921,7 +921,11 @@ const SeatingPlans: React.FC = () => {
             let slNo = 1;
 
             activeRooms.forEach(rData => {
-                const subjs = Object.values(rData.subjMap).sort((a, b) => a.code.localeCompare(b.code));
+                const subjs = Object.values(rData.subjMap)
+                    .filter(s => s.regs.length > 0) // SECTION 6: Filter empty rows
+                    .sort((a, b) => a.code.localeCompare(b.code));
+
+                if (subjs.length === 0) return; // Skip empty halls
 
                 subjs.forEach((sub, idx) => {
                     const sortedRegs = [...sub.regs].sort((r1, r2) => {
@@ -988,10 +992,11 @@ const SeatingPlans: React.FC = () => {
             .map(([code, { name, halls }]) => ({
                 code,
                 name,
+                totalStudents: Array.from(halls.values()).reduce((sum, regs) => sum + regs.length, 0),
                 halls: Array.from(halls.entries())
                     .sort(([a], [b]) => a.localeCompare(b))
                     .map(([hallCode, regs]) => {
-                        // Sort registers by department (index 5-7) using priority then alphabetically
+                        if (regs.length === 0) return null;
                         const sortedRegs = [...regs].sort((r1, r2) => {
                             const d1 = r1.substring(5, 7).toUpperCase();
                             const d2 = r2.substring(5, 7).toUpperCase();
@@ -1012,6 +1017,7 @@ const SeatingPlans: React.FC = () => {
                             ranges: buildRegRanges(sortedRegs).join(', ') 
                         };
                     })
+                    .filter(h => h !== null)
             }));
 
         const seriesName = seriesList.find(s => String(s.ExamSeriesID) === selectedSeries)?.SeriesName || 'Examinations';
@@ -1066,17 +1072,18 @@ const SeatingPlans: React.FC = () => {
                         { v: sg.name, s: { fill, border: allThin, font: bodyFont, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } } },
                         { v: h.hallCode, s: { fill, border: allThin, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
                         { v: h.ranges, s: { fill, border: allThin, font: regFont, alignment: { horizontal: 'left', vertical: 'center', wrapText: true } } },
-                        { v: h.regs.length, s: { fill, border: allThin, font: bodyFont, alignment: { horizontal: 'center', vertical: 'center' } } },
-                    ];
-                    DATA.push(row);
-                });
+                { v: hi === 0 ? sg.totalStudents : '', s: { fill, border: allThin, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
+            ];
+            DATA.push(row);
+        });
 
-                const endRow = DATA.length - 1;
-                if (endRow >= startRow) {
-                    // Sl.No, Subject Code, Subject Name Merging
-                    merges.push({ s: { r: startRow, c: 0 }, e: { r: endRow, c: 0 } });
-                    merges.push({ s: { r: startRow, c: 1 }, e: { r: endRow, c: 1 } });
-                    merges.push({ s: { r: startRow, c: 2 }, e: { r: endRow, c: 2 } });
+        const endRow = DATA.length - 1;
+        if (endRow >= startRow) {
+            // Sl.No, Subject Code, Subject Name, Total Merging
+            merges.push({ s: { r: startRow, c: 0 }, e: { r: endRow, c: 0 } });
+            merges.push({ s: { r: startRow, c: 1 }, e: { r: endRow, c: 1 } });
+            merges.push({ s: { r: startRow, c: 2 }, e: { r: endRow, c: 2 } });
+            merges.push({ s: { r: startRow, c: 6 }, e: { r: endRow, c: 6 } });
                     
                     // Thicker top border for first row of subject block
                     const firstRow = DATA[startRow];
@@ -1144,14 +1151,14 @@ const SeatingPlans: React.FC = () => {
                             { content: sg.code, rowSpan: rowCount, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } },
                             { content: sg.name, rowSpan: rowCount, styles: { halign: 'center', valign: 'middle', wrapText: true, fillColor: fill } },
                             { content: h.hallCode, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } },
-                            { content: h.ranges, styles: { halign: 'left', valign: 'middle', fillColor: fill, fontSize: 8 } },
+                            { content: h.ranges, styles: { halign: 'left', valign: 'middle', fillColor: fill, fontSize: 8.5 } },
                             { content: String(h.regs.length), styles: { halign: 'center', valign: 'middle', fillColor: fill } },
+                            { content: String(sg.totalStudents), rowSpan: rowCount, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } },
                         ]);
                     } else {
                         bodyRows.push([
-                            '', '', '', // Placeholders for columns 0, 1, 2 (merged)
                             { content: h.hallCode, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } },
-                            { content: h.ranges, styles: { halign: 'left', valign: 'middle', fillColor: fill, fontSize: 8 } },
+                            { content: h.ranges, styles: { halign: 'left', valign: 'middle', fillColor: fill, fontSize: 8.5 } },
                             { content: String(h.regs.length), styles: { halign: 'center', valign: 'middle', fillColor: fill } },
                         ]);
                     }
@@ -1161,18 +1168,26 @@ const SeatingPlans: React.FC = () => {
 
             autoTable(doc, {
                 startY: 53,
-                head: [['Sl.No', 'Subject Code', 'Subject Name', 'Hall / Room No', 'Register Numbers', 'Count']],
+                head: [['Sl.No', 'Subject Code', 'Subject Name', 'Hall / Room No', 'Register Numbers', 'Count', 'Total']],
                 body: bodyRows,
                 theme: 'grid',
-                styles: { fontSize: 7.5, cellPadding: 2.5, lineColor: [180, 195, 215], lineWidth: 0.25, valign: 'middle' },
+                styles: { 
+                    fontSize: 8.5, 
+                    cellPadding: 3, 
+                    lineColor: [180, 195, 215], 
+                    lineWidth: 0.25, 
+                    valign: 'middle',
+                    overflow: 'linebreak' 
+                },
                 headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
                 columnStyles: {
-                    0: { cellWidth: 12 },
-                    1: { cellWidth: 22 },
-                    2: { cellWidth: 45 },
-                    3: { cellWidth: 22 },
-                    4: { cellWidth: 'auto' },
-                    5: { cellWidth: 14 },
+                    0: { cellWidth: 10, halign: 'center' },
+                    1: { cellWidth: 25, halign: 'center' },
+                    2: { cellWidth: 45, fillColor: [248, 250, 252] },
+                    3: { cellWidth: 25, halign: 'center' },
+                    4: { cellWidth: 130, halign: 'left' },
+                    5: { cellWidth: 12, halign: 'center' },
+                    6: { cellWidth: 12, halign: 'center', fontStyle: 'bold' },
                 },
                 didDrawPage: (d2: any) => {
                     doc.setFontSize(7); doc.setTextColor(150, 150, 150);
@@ -1209,11 +1224,11 @@ const SeatingPlans: React.FC = () => {
             // ── Define reusable styles ──
             const headerFill = { patternType: 'solid', fgColor: { rgb: '0F172A' } };
             const headerFont = { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 };
-            const whiteFill = { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } };
-            const blueFill = { patternType: 'solid', fgColor: { rgb: 'ECF6FF' } };
+            const whiteFill = { patternType: 'solid', fgColor: { rgb: 'EAF3FF' } };
+            const blueFill = { patternType: 'solid', fgColor: { rgb: 'F3E8FF' } };
             const bodyFont = { sz: 9, color: { rgb: '1E293B' } };
             const boldFont = { sz: 9, bold: true, color: { rgb: '1E293B' } };
-            const regFont = { sz: 13, bold: true, color: { rgb: '1E293B' } };
+            const regFont = { sz: 10, bold: true, color: { rgb: '1E293B' } };
             const thinBorder = { style: 'thin', color: { rgb: 'B4C3D7' } };
             const thickBorder = { style: 'medium', color: { rgb: '0F172A' } };
             const allThin = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder };
@@ -1325,7 +1340,7 @@ const SeatingPlans: React.FC = () => {
 
             doc.text(fullDateStr, pageW / 2, 40, { align: 'center' });
 
-            if (subjectCodesString) {
+            if (subjectCodesString && subjectCodesString !== 'N/A' && subjectCodesString !== 'Unknown') {
                 let truncSubj = subjectCodesString;
                 if (truncSubj.length > 130) truncSubj = truncSubj.substring(0, 127) + '...';
                 doc.text(`Subjects: ${truncSubj}`, pageW / 2, 46, { align: 'center' });
@@ -1338,19 +1353,16 @@ const SeatingPlans: React.FC = () => {
                     bodyRows.push([
                         { content: String(r.slNo), rowSpan: r.rowSpan },
                         { content: r.hallCode, rowSpan: r.rowSpan },
-                        { content: r.regRanges, styles: { fontStyle: 'bold', fontSize: 13 } },
+                        { content: r.regRanges, styles: { fontStyle: 'bold', fontSize: 8.5, halign: 'left' } },
                         r.subCode,
                         String(r.count),
                         { content: String(r.total), rowSpan: r.rowSpan },
                     ]);
                 } else {
                     bodyRows.push([
-                        '', // Sl.No placeholder
-                        '', // Hall placeholder
-                        { content: r.regRanges, styles: { fontStyle: 'bold', fontSize: 13 } },
+                        { content: r.regRanges, styles: { fontStyle: 'bold', fontSize: 8.5, halign: 'left' } },
                         r.subCode,
                         String(r.count),
-                        '', // Total placeholder
                     ]);
                 }
             });
@@ -1377,38 +1389,30 @@ const SeatingPlans: React.FC = () => {
                 head: [['Sl.No', 'Hall / Room No', 'Register Numbers', 'Subject Code & Name', 'Count', 'Total']],
                 body: bodyRows,
                 theme: 'grid',
-                styles: { fontSize: 9, cellPadding: 4, font: 'helvetica', textColor: [30, 41, 59], lineColor: [180, 195, 215], lineWidth: 0.2, valign: 'middle' },
-                headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9.5, halign: 'center', valign: 'middle', lineColor: [255, 255, 255], lineWidth: 0.3 },
+                styles: { 
+                    fontSize: 8, 
+                    cellPadding: 3, 
+                    font: 'helvetica', 
+                    textColor: [30, 41, 59], 
+                    lineColor: [180, 195, 215], 
+                    lineWidth: 0.2, 
+                    valign: 'middle',
+                    overflow: 'linebreak'
+                },
+                headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5, halign: 'center', valign: 'middle' },
                 columnStyles: {
-                    0: { cellWidth: 15, halign: 'center', fontStyle: 'bold' },
-                    1: { cellWidth: 35, halign: 'center', fontStyle: 'bold' },
-                    2: { cellWidth: 'auto', halign: 'left' },
-                    3: { cellWidth: 45, halign: 'center' },
-                    4: { cellWidth: 20, halign: 'center' },
-                    5: { cellWidth: 20, halign: 'center', fontStyle: 'bold' },
+                    0: { cellWidth: 12, halign: 'center', fontStyle: 'bold' },
+                    1: { cellWidth: 28, halign: 'center', fontStyle: 'bold' },
+                    2: { cellWidth: 140, halign: 'left' }, 
+                    3: { cellWidth: 45, halign: 'center', fillColor: [248, 250, 252] },
+                    4: { cellWidth: 15, halign: 'center' },
+                    5: { cellWidth: 15, halign: 'center', fontStyle: 'bold' },
                 },
                 didParseCell: (data: any) => {
                     if (data.section !== 'body') return;
                     const groupIndex = rowGroupMap.get(data.row.index) ?? 0;
-                    // Alternate room group background: white vs soft ice-blue
-                    data.cell.styles.fillColor = groupIndex % 2 === 0
-                        ? [255, 255, 255]
-                        : [236, 246, 255];
-                },
-                willDrawCell: (data: any) => {
-                    if (data.section !== 'body') return;
-                    const rowIdx: number = data.row.index;
-                    const cell = data.cell;
-                    const isFirst = firstRowIndices.has(rowIdx);
-                    const isLast = lastRowIndices.has(rowIdx);
-                    if (isFirst || isLast) {
-                        doc.setDrawColor(15, 23, 42);
-                        doc.setLineWidth(0.75);
-                        if (isFirst) doc.line(cell.x, cell.y, cell.x + cell.width, cell.y);
-                        if (isLast) doc.line(cell.x, cell.y + cell.height, cell.x + cell.width, cell.y + cell.height);
-                        doc.setDrawColor(180, 195, 215);
-                        doc.setLineWidth(0.2);
-                    }
+                    // Alternate room group background: Subject-wise style parity
+                    data.cell.styles.fillColor = groupIndex % 2 === 0 ? [234, 243, 255] : [243, 232, 255];
                 },
                 didDrawPage: (data: any) => {
                     const pCount = (doc as any).internal.getNumberOfPages();
