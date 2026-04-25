@@ -1047,19 +1047,19 @@ const SeatingPlans: React.FC = () => {
             const regFont = { sz: 12, bold: true, color: { rgb: '1E293B' } };
 
             const DATA: any[][] = [];
-            DATA.push([{ v: "ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI", s: titleStyle }, '', '', '', '']);
-            DATA.push([{ v: 'SUBJECT WISE CONSOLIDATED SEATING ARRANGEMENT', s: { font: { bold: true, sz: 11 }, alignment: { horizontal: 'center' } } }, '', '', '', '']);
-            DATA.push([{ v: `Exam: ${examNameString}`, s: subStyle }, '', '', '', '']);
-            DATA.push([{ v: `Date: ${dateStr} – ${sessionStr}`, s: subStyle }, '', '', '', '']);
-            DATA.push(['', '', '', '', '']);
+            DATA.push([{ v: "ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI", s: titleStyle }, '', '', '', '', '', '']);
+            DATA.push([{ v: 'SUBJECT WISE CONSOLIDATED SEATING ARRANGEMENT', s: { font: { bold: true, sz: 11 }, alignment: { horizontal: 'center' } } }, '', '', '', '', '', '']);
+            DATA.push([{ v: `Exam: ${examNameString}`, s: subStyle }, '', '', '', '', '', '']);
+            DATA.push([{ v: `Date: ${dateStr} – ${sessionStr}`, s: subStyle }, '', '', '', '', '', '']);
+            DATA.push(['', '', '', '', '', '', '']);
 
-            DATA.push(['Sl.No', 'Subject Code', 'Subject Name', 'Hall / Room No', 'Register Numbers', 'Count'].map(v => ({
+            DATA.push(['Sl.No', 'Subject Code', 'Subject Name', 'Hall / Room No', 'Register Numbers', 'Count', 'Total'].map(v => ({
                 v, s: { fill: headerFill, font: headerFont, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border: allThin }
             })));
 
             let sl = 1;
             const merges: any[] = [];
-            for (let i = 0; i < 5; i++) merges.push({ s: { r: i, c: 0 }, e: { r: i, c: 5 } });
+            for (let i = 0; i < 5; i++) merges.push({ s: { r: i, c: 0 }, e: { r: i, c: 6 } });
 
             subjectGroups.forEach((sg, gi) => {
                 const fill = gi % 2 === 0 ? { patternType: 'solid', fgColor: { rgb: 'EAF3FF' } } : { patternType: 'solid', fgColor: { rgb: 'F3E8FF' } };
@@ -1072,10 +1072,11 @@ const SeatingPlans: React.FC = () => {
                         { v: sg.name, s: { fill, border: allThin, font: bodyFont, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } } },
                         { v: h.hallCode, s: { fill, border: allThin, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
                         { v: h.ranges, s: { fill, border: allThin, font: regFont, alignment: { horizontal: 'left', vertical: 'center', wrapText: true } } },
-                { v: hi === 0 ? sg.totalStudents : '', s: { fill, border: allThin, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
-            ];
-            DATA.push(row);
-        });
+                        { v: h.regs.length, s: { fill, border: allThin, font: bodyFont, alignment: { horizontal: 'center', vertical: 'center' } } },
+                        { v: hi === 0 ? sg.totalStudents : '', s: { fill, border: allThin, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
+                    ];
+                    DATA.push(row);
+                });
 
         const endRow = DATA.length - 1;
         if (endRow >= startRow) {
@@ -1126,17 +1127,19 @@ const SeatingPlans: React.FC = () => {
             const sessionStr = selectedSession === 'FN' ? 'Forenoon (FN)' : 'Afternoon (AN)';
 
             doc.setFillColor(15, 23, 42);
-            doc.rect(0, 0, pageW, 50, 'F');
+            doc.rect(0, 0, pageW, 55, 'F');
             doc.setTextColor(255, 255, 255);
             doc.setFontSize(13); doc.setFont('helvetica', 'bold');
-            doc.text("ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI", pageW / 2, 13, { align: 'center' });
+            doc.text("ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI", pageW / 2, 12, { align: 'center' });
             doc.setFontSize(11);
-            doc.text('SUBJECT WISE CONSOLIDATED SEATING ARRANGEMENT', pageW / 2, 21, { align: 'center' });
+            doc.text('SUBJECT WISE CONSOLIDATED SEATING ARRANGEMENT', pageW / 2, 20, { align: 'center' });
+            
             doc.setFillColor(99, 102, 241);
             doc.rect(14, 25, pageW - 28, 0.4, 'F');
+            
             doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(210, 210, 210);
-            doc.text(`Exam: ${examNameString}`, pageW / 2, 32, { align: 'center' });
-            doc.text(`Date: ${dateStr} – ${sessionStr}`, pageW / 2, 38, { align: 'center' });
+            doc.text(`Exam: ${examNameString}`, pageW / 2, 35, { align: 'center' });
+            doc.text(`Date: ${dateStr} – ${sessionStr}`, pageW / 2, 42, { align: 'center' });
 
             const bodyRows: any[] = [];
             let sl = 1;
@@ -1167,7 +1170,7 @@ const SeatingPlans: React.FC = () => {
             });
 
             autoTable(doc, {
-                startY: 53,
+                startY: 60,
                 head: [['Sl.No', 'Subject Code', 'Subject Name', 'Hall / Room No', 'Register Numbers', 'Count', 'Total']],
                 body: bodyRows,
                 theme: 'grid',
