@@ -2935,6 +2935,10 @@ export const getGlobalAllocations = async (req: Request, res: Response) => {
                 roomCode: a.Seat?.Room?.RoomCode,
                 studentId: sid,
                 registerNumber: a.Student?.RegisterNumber,
+                studentName: a.Student?.FullName,
+                isEligible: a.IsEligible !== false,
+                isBlocked: a.IsBlocked === true,
+                deptCode: a.Student?.Department?.DepartmentCode,
                 subjectCode: sbj?.code || "Unknown",
                 subjectName: sbj?.name || "Unknown",
             };

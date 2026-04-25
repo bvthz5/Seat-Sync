@@ -140,9 +140,11 @@ export const deleteDepartment = async (req: Request, res: Response) => {
                     await sequelize.query(`DELETE FROM Subjects WHERE SubjectID IN (${subList})`, { transaction: t });
                 }
                 await sequelize.query(`DELETE FROM ExamSeries WHERE SemesterID IN (${semList})`, { transaction: t });
-                await sequelize.query(`UPDATE Students SET SemesterID = NULL WHERE SemesterID IN (${semList})`, { transaction: t });
+                await sequelize.query(`UPDATE Students SET SemesterID = NULL, ProgramID = NULL WHERE SemesterID IN (${semList})`, { transaction: t });
                 await sequelize.query(`DELETE FROM Semesters WHERE SemesterID IN (${semList})`, { transaction: t });
             }
+            await sequelize.query(`DELETE FROM Attendance WHERE ExamID IN (SELECT ExamID FROM Exams WHERE SubjectID IN (SELECT SubjectID FROM Subjects WHERE SemesterID IN (SELECT SemesterID FROM Semesters WHERE ProgramID IN (${progList}))))`, { transaction: t });
+            await sequelize.query(`DELETE FROM InvigilatorAssignments WHERE ExamID IN (SELECT ExamID FROM Exams WHERE SubjectID IN (SELECT SubjectID FROM Subjects WHERE SemesterID IN (SELECT SemesterID FROM Semesters WHERE ProgramID IN (${progList}))))`, { transaction: t });
             await sequelize.query(`DELETE FROM ProgramDepartments WHERE ProgramID IN (${progList})`, { transaction: t });
             // Only delete programs exclusively owned by this department (not shared)
             await sequelize.query(`DELETE FROM Programs WHERE ProgramID IN (${progList}) AND ProgramID NOT IN (SELECT ProgramID FROM ProgramDepartments)`, { transaction: t });
@@ -412,6 +414,8 @@ export const deleteAllDepartments = async (req: Request, res: Response) => {
     const t = await sequelize.transaction();
     try {
         // Full cascade — same order as deleteProgram but for everything
+        await sequelize.query(`DELETE FROM Attendance WHERE ExamID IN (SELECT ExamID FROM Exams WHERE SubjectID IN (SELECT SubjectID FROM Subjects))`, { transaction: t });
+        await sequelize.query(`DELETE FROM InvigilatorAssignments WHERE ExamID IN (SELECT ExamID FROM Exams WHERE SubjectID IN (SELECT SubjectID FROM Subjects))`, { transaction: t });
         await sequelize.query(`DELETE FROM ExamRegistrations WHERE ExamID IN (SELECT ExamID FROM Exams WHERE SubjectID IN (SELECT SubjectID FROM Subjects))`, { transaction: t });
         await sequelize.query(`DELETE FROM SeatAllocations WHERE ExamID IN (SELECT ExamID FROM Exams WHERE SubjectID IN (SELECT SubjectID FROM Subjects))`, { transaction: t });
         await sequelize.query(`DELETE FROM Exams WHERE SubjectID IN (SELECT SubjectID FROM Subjects)`, { transaction: t });
@@ -419,7 +423,7 @@ export const deleteAllDepartments = async (req: Request, res: Response) => {
         await sequelize.query(`DELETE FROM InvigilatorSubjects`, { transaction: t });
         await sequelize.query(`DELETE FROM Subjects`, { transaction: t });
         await sequelize.query(`DELETE FROM ExamSeries WHERE SemesterID IS NOT NULL`, { transaction: t });
-        await sequelize.query(`UPDATE Students SET SemesterID = NULL WHERE SemesterID IS NOT NULL`, { transaction: t });
+        await sequelize.query(`UPDATE Students SET SemesterID = NULL, ProgramID = NULL WHERE SemesterID IS NOT NULL`, { transaction: t });
         await sequelize.query(`DELETE FROM Semesters`, { transaction: t });
         await sequelize.query(`DELETE FROM ProgramDepartments`, { transaction: t });
         await sequelize.query(`DELETE FROM Programs`, { transaction: t });
