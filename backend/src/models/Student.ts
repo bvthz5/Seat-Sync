@@ -119,6 +119,7 @@ Student.init(
  */
 Student.belongsTo(User, {
   foreignKey: "UserID",
+  onDelete: 'NO ACTION',
 });
 
 User.hasOne(Student, {
@@ -127,29 +128,32 @@ User.hasOne(Student, {
 
 Student.belongsTo(Department, {
   foreignKey: "DepartmentID",
+  onDelete: 'NO ACTION',
 });
 
 Department.hasMany(Student, {
   foreignKey: "DepartmentID",
-  onDelete: 'CASCADE',
+  onDelete: 'NO ACTION',
 });
 
 Student.belongsTo(Program, {
   foreignKey: "ProgramID",
+  onDelete: 'NO ACTION',
 });
 
 Program.hasMany(Student, {
   foreignKey: "ProgramID",
-  onDelete: 'CASCADE',
+  onDelete: 'NO ACTION',
 });
 
 Student.belongsTo(Semester, {
   foreignKey: "SemesterID",
+  onDelete: 'NO ACTION',
 });
 
 Semester.hasMany(Student, {
   foreignKey: "SemesterID",
-  onDelete: 'CASCADE',
+  onDelete: 'NO ACTION',
 });
 
 export default Student;

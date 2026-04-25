@@ -68,27 +68,29 @@ Invigilator.belongsTo(Department, {
 Department.hasMany(Program, {
     foreignKey: "DepartmentID",
     as: "Programs",
-    onDelete: 'CASCADE'
+    onDelete: 'NO ACTION'
 });
 
 Program.belongsTo(Department, {
     foreignKey: "DepartmentID",
-    as: "Department"
+    as: "Department",
+    onDelete: 'NO ACTION'
 });
 
-// Program <-> Department many-to-many via bridge table
 Program.belongsToMany(Department, {
     through: ProgramDepartment,
     foreignKey: "ProgramID",
     otherKey: "DepartmentID",
-    as: "Departments"
+    as: "Departments",
+    onDelete: 'NO ACTION'
 });
 
 Department.belongsToMany(Program, {
     through: ProgramDepartment,
     foreignKey: "DepartmentID",
     otherKey: "ProgramID",
-    as: "LinkedPrograms"
+    as: "LinkedPrograms",
+    onDelete: 'NO ACTION'
 });
 
 // Invigilator Associations

@@ -12,13 +12,13 @@ interface SubjectAttributes {
   SubjectCode: string;
   SubjectName: string;
   DepartmentID: number;
-  // SemesterID: number;
+  SemesterID: number;
 }
 
 /**
  * Attributes required when creating a subject
  */
-interface SubjectCreationAttributes extends Optional<SubjectAttributes, "SubjectID" /* | "SemesterID" */> { }
+interface SubjectCreationAttributes extends Optional<SubjectAttributes, "SubjectID" | "SemesterID"> { }
 
 export class Subject extends Model<SubjectAttributes, SubjectCreationAttributes>
   implements SubjectAttributes {
@@ -26,7 +26,7 @@ export class Subject extends Model<SubjectAttributes, SubjectCreationAttributes>
   declare SubjectCode: string;
   declare SubjectName: string;
   declare DepartmentID: number;
-  // declare SemesterID: number;
+  declare SemesterID: number;
 }
 
 Subject.init(
@@ -81,7 +81,6 @@ Department.hasMany(Subject, {
 });
 
 // Add Semester association
-import { Semester } from './Semester.js';
 Subject.belongsTo(Semester, {
   foreignKey: "SemesterID",
 });

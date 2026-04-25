@@ -61,12 +61,13 @@ ExamSeries.init(
         IsActive: {
             type: DataTypes.BOOLEAN,
             defaultValue: true,
-        }
+        },
+
     },
     {
         sequelize,
         tableName: "ExamSeries",
-        timestamps: true,
+        timestamps: false,
     }
 );
 
@@ -79,7 +80,7 @@ ExamSeries.belongsTo(Semester, {
 
 Semester.hasMany(ExamSeries, {
     foreignKey: "SemesterID",
-    onDelete: 'CASCADE',
+    onDelete: 'NO ACTION',
 });
 
 export default ExamSeries;

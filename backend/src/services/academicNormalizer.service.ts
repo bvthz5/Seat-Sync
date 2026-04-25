@@ -80,13 +80,7 @@ export const parseBatchString = (batchText: unknown): NormalizedAcademicInfo => 
     return { programCode, batchYear, semester };
 };
 
-export const defaultByType = (code: string): number => {
-  const upperCode = code.toUpperCase();
-  if (['BHM'].includes(upperCode)) return 3;
-  if (['MBA', 'MCA'].includes(upperCode)) return 2;
-  if (['BTECH', 'BE'].includes(upperCode)) return 4;
-  return 3;
-};
+
 
 export const resolveOrCreateProgram = async (programCode: string, t?: Transaction) => {
   const code = normalizeProgram(programCode);

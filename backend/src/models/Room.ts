@@ -90,9 +90,16 @@ Room.init(
       defaultValue: "CUSTOM",
     },
     RowLayout: {
-      type: DataTypes.JSON, // or STRING if you parse manually
+      type: DataTypes.TEXT,
       allowNull: false,
-      defaultValue: [],
+      defaultValue: "[]" as any,
+      get() {
+        const val = this.getDataValue('RowLayout');
+        try { return typeof val === 'string' ? JSON.parse(val) : val; } catch(e) { return []; }
+      },
+      set(val: any) {
+        this.setDataValue('RowLayout', (typeof val === 'string' ? val : JSON.stringify(val)) as any);
+      }
     },
     SeatsPerBench: {
       type: DataTypes.INTEGER,

@@ -39,12 +39,6 @@ ProgramDepartment.init(
     sequelize,
     tableName: "ProgramDepartments",
     timestamps: false,
-    indexes: [
-      {
-        unique: true,
-        fields: ["ProgramID", "DepartmentID"],
-      },
-    ],
   }
 );
 
