@@ -1148,23 +1148,17 @@ const SeatingPlans: React.FC = () => {
                 const fill = gi % 2 === 0 ? [234, 243, 255] : [243, 232, 255]; // Matching Excel #EAF3FF and #F3E8FF
                 
                 sg.halls.forEach((h, hi) => {
-                    if (hi === 0) {
-                        bodyRows.push([
-                            { content: String(sl), rowSpan: rowCount, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } },
-                            { content: sg.code, rowSpan: rowCount, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } },
-                            { content: sg.name, rowSpan: rowCount, styles: { halign: 'center', valign: 'middle', wrapText: true, fillColor: fill } },
-                            { content: h.hallCode, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } },
-                            { content: h.ranges, styles: { halign: 'left', valign: 'middle', fillColor: fill, fontSize: 8.5 } },
-                            { content: String(h.regs.length), styles: { halign: 'center', valign: 'middle', fillColor: fill } },
-                            { content: String(sg.totalStudents), rowSpan: rowCount, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } },
-                        ]);
-                    } else {
-                        bodyRows.push([
-                            { content: h.hallCode, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } },
-                            { content: h.ranges, styles: { halign: 'left', valign: 'middle', fillColor: fill, fontSize: 8.5 } },
-                            { content: String(h.regs.length), styles: { halign: 'center', valign: 'middle', fillColor: fill } },
-                        ]);
-                    }
+                    const isFirst = hi === 0;
+                    const tc = isFirst ? [30, 41, 59] : [100, 116, 139]; 
+                    bodyRows.push([
+                        { content: String(sl), styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', textColor: tc, fillColor: fill } },
+                        { content: sg.code, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', textColor: tc, fillColor: fill } },
+                        { content: sg.name, styles: { halign: 'center', valign: 'middle', wrapText: true, textColor: tc, fillColor: fill } },
+                        { content: h.hallCode, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } },
+                        { content: h.ranges, styles: { halign: 'left', valign: 'middle', fillColor: fill, fontSize: 8.5 } },
+                        { content: String(h.regs.length), styles: { halign: 'center', valign: 'middle', fillColor: fill } },
+                        { content: String(sg.totalStudents), styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', textColor: tc, fillColor: fill } },
+                    ]);
                 });
                 sl++;
             });
@@ -1352,22 +1346,15 @@ const SeatingPlans: React.FC = () => {
             // ── Table ──
             const bodyRows: any[] = [];
             rows.forEach(r => {
-                if (r.isFirstRow) {
-                    bodyRows.push([
-                        { content: String(r.slNo), rowSpan: r.rowSpan },
-                        { content: r.hallCode, rowSpan: r.rowSpan },
-                        { content: r.regRanges, styles: { fontStyle: 'bold', fontSize: 8.5, halign: 'left' } },
-                        r.subCode,
-                        String(r.count),
-                        { content: String(r.total), rowSpan: r.rowSpan },
-                    ]);
-                } else {
-                    bodyRows.push([
-                        { content: r.regRanges, styles: { fontStyle: 'bold', fontSize: 8.5, halign: 'left' } },
-                        r.subCode,
-                        String(r.count),
-                    ]);
-                }
+                const tc = r.isFirstRow ? [30, 41, 59] : [100, 116, 139]; 
+                bodyRows.push([
+                    { content: String(r.slNo), styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', textColor: tc } },
+                    { content: r.hallCode, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', textColor: tc } },
+                    { content: r.regRanges, styles: { fontStyle: 'bold', fontSize: 8.5, halign: 'left', valign: 'middle' } },
+                    { content: r.subCode, styles: { halign: 'center', valign: 'middle' } },
+                    { content: String(r.count), styles: { halign: 'center', valign: 'middle' } },
+                    { content: String(r.total), styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', textColor: tc } },
+                ]);
             });
 
             // Build room-group lookup maps
