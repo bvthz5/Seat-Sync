@@ -486,17 +486,54 @@ async function ensureSchemaIntegrity() {
         await sequelize.query(`
             IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Seats' AND TABLE_SCHEMA = 'dbo')
             BEGIN
+                -- Add IsActive if not exists
                 IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'IsActive')
                 BEGIN
                     ALTER TABLE [dbo].[Seats] ADD [IsActive] BIT DEFAULT 1 WITH VALUES;
                     PRINT 'Added IsActive to Seats';
                 END
 
+                -- Add ZoneID if not exists
                 IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'ZoneID')
                 BEGIN
                     ALTER TABLE [dbo].[Seats] ADD [ZoneID] INT NULL;
                     PRINT 'Added ZoneID to Seats';
                 END
+
+                -- Handle Column Renames for Thaz branch compatibility
+                -- RowLabel -> RowIndex
+                IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'RowLabel')
+                AND NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'RowIndex')
+                BEGIN
+                    EXEC sp_rename 'Seats.RowLabel', 'RowIndex', 'COLUMN';
+                    PRINT 'Renamed Seats.RowLabel to RowIndex';
+                END
+
+                -- BenchNumber -> BenchIndex
+                IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'BenchNumber')
+                AND NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'BenchIndex')
+                BEGIN
+                    EXEC sp_rename 'Seats.BenchNumber', 'BenchIndex', 'COLUMN';
+                    PRINT 'Renamed Seats.BenchNumber to BenchIndex';
+                END
+
+                -- SeatNumber -> SeatIndex
+                IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'SeatNumber')
+                AND NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'SeatIndex')
+                BEGIN
+                    EXEC sp_rename 'Seats.SeatNumber', 'SeatIndex', 'COLUMN';
+                    PRINT 'Renamed Seats.SeatNumber to SeatIndex';
+                END
+
+                -- Ensure new columns exist even if renames didn't happen (fallback)
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'RowIndex')
+                ALTER TABLE [dbo].[Seats] ADD [RowIndex] CHAR(1) NULL;
+                
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'BenchIndex')
+                ALTER TABLE [dbo].[Seats] ADD [BenchIndex] INT NULL;
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'SeatIndex')
+                ALTER TABLE [dbo].[Seats] ADD [SeatIndex] INT NULL;
             END
         `, { type: QueryTypes.RAW });
 
@@ -612,6 +649,28 @@ async function ensureSchemaIntegrity() {
                   BEGIN
                       ALTER TABLE [dbo].[ExamSeries] ADD [IsActive] BIT NOT NULL DEFAULT 1;
                       PRINT 'Added IsActive to ExamSeries';
+                  END
+                  IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[ExamSeries]') AND name = 'AcademicYearID')
+                  BEGIN
+                      ALTER TABLE [dbo].[ExamSeries] ADD [AcademicYearID] INT NULL;
+                      PRINT 'Added AcademicYearID to ExamSeries';
+                  END
+                  IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[ExamSeries]') AND name = 'ExamType')
+                  BEGIN
+                      ALTER TABLE [dbo].[ExamSeries] ADD [ExamType] NVARCHAR(20) NOT NULL DEFAULT 'Internal';
+                      PRINT 'Added ExamType to ExamSeries';
+                  END
+              END
+          `, { type: QueryTypes.RAW });
+
+        // Ensure Subjects has missing SemesterID
+        await sequelize.query(`
+              IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Subjects' AND TABLE_SCHEMA = 'dbo')
+              BEGIN
+                  IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Subjects]') AND name = 'SemesterID')
+                  BEGIN
+                      ALTER TABLE [dbo].[Subjects] ADD [SemesterID] INT NULL;
+                      PRINT 'Added SemesterID to Subjects';
                   END
               END
           `, { type: QueryTypes.RAW });

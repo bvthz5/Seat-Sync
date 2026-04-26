@@ -1446,57 +1446,71 @@ export const bulkAssign = async (req: Request, res: Response) => {
 
                 const allRowsES = Object.keys(rowBenchMap).sort();
                 let hallFilledES = 0;
-                let localRowCounter = 0; // ← resets per hall; pool pointers maintain cross-hall continuity
+                let activeMinorityCycleIndex = subjectCount - 1; // start offset
+
+                const pickPoolForRow = (colIdx: number): { code: string; students: any[] } | null => {
+                    const validPools = subjectPools.filter(p => p.students.length > 0);
+                    if (validPools.length === 0) return null;
+                    if (validPools.length === 1) return validPools[0]!; // Forcibly fill remaining
+
+                    const primaryValid = subjectPools[0]!.students.length > 0;
+
+                    // Even Columns (A, C, E) priority -> Primary Subject
+                    if (colIdx % 2 === 0) {
+                        if (primaryValid) return subjectPools[0]!;
+                    }
+
+                    // Odd Columns (B, D) priority (or Even if Primary exhausted) -> Minority Cycle
+                    if (subjectCount > 1) {
+                        for (let i = 1; i < subjectCount; i++) {
+                            const testOffset = ((activeMinorityCycleIndex - 1 + i) % (subjectCount - 1)) + 1;
+                            if ((subjectPools[testOffset]?.students.length ?? 0) > 0) {
+                                activeMinorityCycleIndex = testOffset;
+                                return subjectPools[testOffset]!;
+                            }
+                        }
+                    }
+
+                    // Fallback: If Minority exhausted in an Odd column, fill with Primary
+                    if (primaryValid) return subjectPools[0]!;
+
+                    return null;
+                };
 
                 for (const row of allRowsES) {
                     if (totalRemaining() === 0) break; // all students seated
 
-                    /* ── Determine mode for this row ── */
-                    const exhaust = isExhaustMode();
-
-                    /* Pick the primary pool (STRICT_ROW or EXHAUST_MODE) */
-                    let rowPool = pickPoolForRow(localRowCounter);
-                    localRowCounter++;
+                    const colIdx = String(row).toUpperCase().charCodeAt(0) - 65;
+                    let rowPool = pickPoolForRow(colIdx);
 
                     if (!rowPool) break; // all pools truly empty
 
-                    let isMixedRow = false;
                     const primaryCode = rowPool.code;
-
-                    /* Record primary subject for UI (will append backfill codes if mixed) */
                     const sample = rowPool.students[0];
+                    const firstStudentDept = sample?.Department?.DepartmentCode ?? null;
+
                     rowPrimarySubjectMap[hallIdNum][row] = sample
                         ? `${sample._subjectName ?? ''} (${rowPool.code})`
                         : rowPool.code;
 
-                    /* ── Seat-level fill loop ── */
                     const benchNums = Object.keys(rowBenchMap[row]!).map(Number).sort((a, b) => a - b);
                     outerBench: for (const benchNum of benchNums) {
                         const benchSeats = (rowBenchMap[row]![benchNum] ?? []).sort(sortSeatsByPosition);
                         for (const seat of benchSeats) {
 
-                            /* ── Pool exhausted mid-seat: switch mode ── */
                             if (rowPool.students.length === 0) {
-                                let next: { code: string; students: any[] } | null = null;
-
-                                if (exhaust) {
-                                    /* EXHAUST_MODE: grab the only remaining pool */
-                                    next = nonEmptyPools()[0] ?? null;
-                                } else {
-                                    /* SOFT_BACKFILL_MODE: pick next largest non-empty pool */
-                                    next = pickBackfillPool(primaryCode);
-                                }
-
-                                if (!next) break outerBench; // nothing left anywhere
-                                rowPool = next;
-                                isMixedRow = true;
-
-                                /* Annotate row label to show backfill */
-                                rowPrimarySubjectMap[hallIdNum][row] += ` +${rowPool.code}`;
-                                console.log(`[EndSem][BACKFILL] Hall ${hallIdNum} row ${row}: switching to ${rowPool.code}`);
+                                // Pool exhausted mid-column. DO NOT backfill. 
+                                // Leave the rest of the seats in this column empty to preserve continuity.
+                                break outerBench;
                             }
 
-                            /* Resolve ExamID for current (possibly switched) pool */
+                            const peekStu = rowPool.students[0];
+                            const currentDept = peekStu?.Department?.DepartmentCode ?? null;
+                            if (firstStudentDept !== null && currentDept !== null && currentDept !== firstStudentDept) {
+                                // Department changed! Break out to prevent mixing in the same column!
+                                break outerBench;
+                            }
+
                             const subjExamId = examIdBySubjectCode[rowPool.code];
                             if (subjExamId === undefined) {
                                 console.warn(`[EndSem] No ExamID for "${rowPool.code}" — student discarded`);
@@ -1510,10 +1524,6 @@ export const bulkAssign = async (req: Request, res: Response) => {
                             pushAllocation(allNewAllocsES, subjExamId, seat, stu);
                             hallFilledES++;
                         }
-                    }
-
-                    if (isMixedRow) {
-                        console.log(`[EndSem][MIXED ROW] Hall ${hallIdNum} row ${row}: ${rowPrimarySubjectMap[hallIdNum][row]}`);
                     }
                 }
 

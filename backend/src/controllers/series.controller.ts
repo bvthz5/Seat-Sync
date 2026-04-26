@@ -14,7 +14,7 @@ export const getAllSeries = async (req: Request, res: Response): Promise<void> =
 
         const series = await ExamSeries.findAll({
             where: whereClause,
-            order: [['createdAt', 'DESC']]
+            order: [['ExamSeriesID', 'DESC']]
         });
 
         res.status(200).json({
