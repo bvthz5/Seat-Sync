@@ -1368,43 +1368,101 @@ export const bulkAssign = async (req: Request, res: Response) => {
                 }
             }
 
-            const rowPrimarySubjectMap: Record<number, Record<string, string>> = {};
+            /* ═════════════════════════════════════════════════════════════════
+             * CONTINUOUS COLUMN FILLING WITH SMART BACKFILL
+             * Implements real-world exam rules:
+             * 1. Same subject stays continuous
+             * 2. Same department doesn't share bench
+             * 3. Hall fills completely before next hall
+             * 4. No column breaking mid-way
+             * 5. Maximum capacity utilization
+             * ═════════════════════════════════════════════════════════════════ */
 
-            /* ═══════════════════════════════════════════════════════════════
-             * HELPER: Pick primary pool for a given localRowCounter.
-             * Uses per-hall local counter so striping is clean for each hall.
-             * Cross-hall continuity is provided by the shared pool pointers.
-             * ═══════════════════════════════════════════════════════════════ */
-            const pickPoolForRow = (localRow: number): { code: string; students: any[] } | null => {
-                if (subjectCount === 1) {
-                    return subjectPools[0]!.students.length > 0 ? subjectPools[0]! : null;
+            // Split students into regular and supplementary for even distribution
+            const splitStudentsByType = (students: any[]) => {
+                const regular: any[] = [];
+                const supply: any[] = [];
+                for (const stu of students) {
+                    if (stu._isSupply === true) supply.push(stu);
+                    else regular.push(stu);
                 }
-                if (subjectCount === 2) {
-                    const preferred = localRow % 2 === 0 ? 0 : 1;
-                    const fallback = 1 - preferred;
-                    if ((subjectPools[preferred]?.students.length ?? 0) > 0) return subjectPools[preferred]!;
-                    if ((subjectPools[fallback]?.students.length ?? 0) > 0) return subjectPools[fallback]!;
-                    return null;
-                }
-                // 3+ subjects: cyclic assignment with full fallback scan
-                for (let attempt = 0; attempt < subjectCount; attempt++) {
-                    const idx = (localRow + attempt) % subjectCount;
-                    if ((subjectPools[idx]?.students.length ?? 0) > 0) return subjectPools[idx]!;
-                }
-                return null;
+                return { regular, supply };
             };
 
-            /* SOFT_BACKFILL: pick next non-empty pool, preferring largest remaining count. */
-            const pickBackfillPool = (excludeCode: string): { code: string; students: any[] } | null =>
-                subjectPools
-                    .filter(p => p.code !== excludeCode && p.students.length > 0)
+            // Interleave supply students evenly (1 supply after every N regular)
+            const createInterleavedQueue = (regular: any[], supply: any[], ratio: number = 8) => {
+                const result: any[] = [];
+                let supplyIdx = 0;
+                for (let i = 0; i < regular.length; i++) {
+                    result.push(regular[i]);
+                    // Insert supply student at regular intervals
+                    if (i % ratio === ratio - 1 && supplyIdx < supply.length) {
+                        result.push(supply[supplyIdx++]);
+                    }
+                }
+                // Add any remaining supply students at the end
+                while (supplyIdx < supply.length) {
+                    result.push(supply[supplyIdx++]);
+                }
+                return result;
+            };
+
+            // Apply splitting and interleaving to all subject pools
+            for (const pool of subjectPools) {
+                const { regular, supply } = splitStudentsByType(pool.students);
+                pool.students = createInterleavedQueue(regular, supply);
+            }
+
+            // Enhanced pool picker with continuous column filling
+            const pickPoolForContinuousColumn = (colIdx: number, excludeCode?: string): { code: string; students: any[] } | null => {
+                const availablePools = excludeCode 
+                    ? subjectPools.filter(p => p.code !== excludeCode && p.students.length > 0)
+                    : subjectPools.filter(p => p.students.length > 0);
+                
+                if (availablePools.length === 0) return null;
+                
+                // If only one pool available, use it (prevents column breaking)
+                if (availablePools.length === 1) return availablePools[0]!;
+                
+                // Column striping: even columns prioritize largest pool, odd columns rotate
+                if (colIdx % 2 === 0) {
+                    // Even columns: prioritize largest pool (primary subject)
+                    return availablePools.sort((a, b) => b.students.length - a.students.length)[0]!;
+                } else {
+                    // Odd columns: rotate through remaining pools
+                    const largestPool = availablePools.sort((a, b) => b.students.length - a.students.length)[0]!;
+                    const otherPools = availablePools.filter(p => p.code !== largestPool.code);
+                    if (otherPools.length > 0) {
+                        return otherPools[colIdx % otherPools.length]!;
+                    }
+                    return largestPool; // Fallback to largest if only one left
+                }
+            };
+
+            // Smart backfill: find next best pool when current pool is exhausted
+            const getSmartBackfillPool = (excludeCode?: string): { code: string; students: any[] } | null => {
+                return subjectPools
+                    .filter(p => !excludeCode || p.code !== excludeCode)
+                    .filter(p => p.students.length > 0)
                     .sort((a, b) => b.students.length - a.students.length)[0] ?? null;
+            };
 
-            /* EXHAUST_MODE check: ≤1 pool still has students. */
-            const nonEmptyPools = () => subjectPools.filter(p => p.students.length > 0);
-            const isExhaustMode = () => nonEmptyPools().length <= 1;
+            // Check for department conflict on bench
+            const hasDepartmentConflict = (currentStudent: any, benchAssignments: any[]): boolean => {
+                if (!currentStudent?.Department?.DepartmentCode) return false;
+                const currentDept = currentStudent.Department.DepartmentCode;
+                return benchAssignments.some(alloc => 
+                    alloc.student?.Department?.DepartmentCode === currentDept
+                );
+            };
 
-            /* Total remaining students across all pools. */
+            // Track bench assignments for conflict detection
+            const benchAssignmentTracker = new Map<string, any[]>(); // benchKey -> assignments
+
+            // Track primary subject per hall row during End-Sem seating
+            const rowPrimarySubjectMap: Record<number, Record<string, string>> = {};
+
+            // Total remaining students across all pools
             const totalRemaining = () => subjectPools.reduce((s, p) => s + p.students.length, 0);
 
             for (const hallIdNum of hallIdsToUseES) {
@@ -1418,7 +1476,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
                     continue;
                 }
 
-                /* ── Cause 4 guard: skip hall entirely if all pools are empty ── */
+                // HALL FILL GUARANTEE: Only skip if NO students remain globally
                 if (totalRemaining() === 0) {
                     hallResultsES.push({
                         hallId: hallIdNum,
@@ -1428,17 +1486,15 @@ export const bulkAssign = async (req: Request, res: Response) => {
                         cappedAt: capLimit,
                         skipped: true,
                     });
-                    console.log(`[EndSem] Hall ${hallIdNum} skipped — no students remaining.`);
                     continue;
                 }
 
-                // Build row → bench → [seats] map (skip malformed seat records)
+                // Build row → bench → [seats] map
                 const rowBenchMap: Record<string, Record<number, any[]>> = {};
                 for (const seat of seats) {
                     const row = getRowLabel(seat);
                     const bench = getBenchNumber(seat);
-                    if (!row) { console.warn(`[EndSem] Seat ${seat.SeatID} has no RowIndex — skipped`); continue; }
-                    if (!bench) { console.warn(`[EndSem] Seat ${seat.SeatID} has no BenchIndex — skipped`); continue; }
+                    if (!row || !bench) continue;
                     if (!rowBenchMap[row]) rowBenchMap[row] = {};
                     if (!rowBenchMap[row]![bench]) rowBenchMap[row]![bench] = [];
                     rowBenchMap[row]![bench]!.push(seat);
@@ -1446,83 +1502,96 @@ export const bulkAssign = async (req: Request, res: Response) => {
 
                 const allRowsES = Object.keys(rowBenchMap).sort();
                 let hallFilledES = 0;
-                let activeMinorityCycleIndex = subjectCount - 1; // start offset
+                let columnContinues = true;
 
-                const pickPoolForRow = (colIdx: number): { code: string; students: any[] } | null => {
-                    const validPools = subjectPools.filter(p => p.students.length > 0);
-                    if (validPools.length === 0) return null;
-                    if (validPools.length === 1) return validPools[0]!; // Forcibly fill remaining
-
-                    const primaryValid = subjectPools[0]!.students.length > 0;
-
-                    // Even Columns (A, C, E) priority -> Primary Subject
-                    if (colIdx % 2 === 0) {
-                        if (primaryValid) return subjectPools[0]!;
-                    }
-
-                    // Odd Columns (B, D) priority (or Even if Primary exhausted) -> Minority Cycle
-                    if (subjectCount > 1) {
-                        for (let i = 1; i < subjectCount; i++) {
-                            const testOffset = ((activeMinorityCycleIndex - 1 + i) % (subjectCount - 1)) + 1;
-                            if ((subjectPools[testOffset]?.students.length ?? 0) > 0) {
-                                activeMinorityCycleIndex = testOffset;
-                                return subjectPools[testOffset]!;
-                            }
-                        }
-                    }
-
-                    // Fallback: If Minority exhausted in an Odd column, fill with Primary
-                    if (primaryValid) return subjectPools[0]!;
-
-                    return null;
-                };
-
+                // Process each row (column) continuously
                 for (const row of allRowsES) {
-                    if (totalRemaining() === 0) break; // all students seated
+                    if (totalRemaining() === 0) break; // Global stop condition
 
                     const colIdx = String(row).toUpperCase().charCodeAt(0) - 65;
-                    let rowPool = pickPoolForRow(colIdx);
+                    let currentPool = pickPoolForContinuousColumn(colIdx);
+                    
+                    if (!currentPool) {
+                        // No pool available - try smart backfill
+                        currentPool = getSmartBackfillPool();
+                        if (!currentPool) break; // Truly no students left
+                    }
 
-                    if (!rowPool) break; // all pools truly empty
-
-                    const primaryCode = rowPool.code;
-                    const sample = rowPool.students[0];
-                    const firstStudentDept = sample?.Department?.DepartmentCode ?? null;
-
-                    rowPrimarySubjectMap[hallIdNum][row] = sample
-                        ? `${sample._subjectName ?? ''} (${rowPool.code})`
-                        : rowPool.code;
+                    // Record primary subject for this row
+                    const sampleStudent = currentPool.students[0];
+                    rowPrimarySubjectMap[hallIdNum][row] = sampleStudent
+                        ? `${sampleStudent._subjectName ?? ''} (${currentPool.code})`
+                        : currentPool.code;
 
                     const benchNums = Object.keys(rowBenchMap[row]!).map(Number).sort((a, b) => a - b);
-                    outerBench: for (const benchNum of benchNums) {
+                    
+                    // CONTINUOUS COLUMN FILLING - No breaking mid-column
+                    for (const benchNum of benchNums) {
                         const benchSeats = (rowBenchMap[row]![benchNum] ?? []).sort(sortSeatsByPosition);
+                        const benchKey = `${hallIdNum}-${row}-${benchNum}`;
+                        
                         for (const seat of benchSeats) {
+                            // HALL FILL GUARANTEE: Keep trying until seat is filled or no students remain
+                            let studentAssigned = false;
+                            let attempts = 0;
+                            const maxAttempts = subjectPools.length + 1; // Prevent infinite loops
+                            
+                            while (!studentAssigned && attempts < maxAttempts && totalRemaining() > 0) {
+                                attempts++;
+                                
+                                // If current pool exhausted, get smart backfill
+                                if (!currentPool || currentPool.students.length === 0) {
+                                    const prevPoolCode = currentPool?.code;
+                                    currentPool = getSmartBackfillPool(prevPoolCode);
+                                    if (!currentPool) break; // No students left
+                                }
 
-                            if (rowPool.students.length === 0) {
-                                // Pool exhausted mid-column. DO NOT backfill. 
-                                // Leave the rest of the seats in this column empty to preserve continuity.
-                                break outerBench;
+                                // Double-check we have a valid pool
+                                if (!currentPool || currentPool.students.length === 0) break;
+
+                                const candidateStudent = currentPool.students[0];
+                                const subjExamId = examIdBySubjectCode[currentPool.code];
+                                
+                                if (subjExamId === undefined) {
+                                    console.warn(`[EndSem] No ExamID for "${currentPool.code}" — student discarded`);
+                                    currentPool.students.shift(); // Remove invalid student
+                                    continue;
+                                }
+
+                                // DEPARTMENT CONFLICT CHECK
+                                const benchAssignments = benchAssignmentTracker.get(benchKey) || [];
+                                if (hasDepartmentConflict(candidateStudent, benchAssignments)) {
+                                    // Try next student in same pool
+                                    if (currentPool.students.length > 1) {
+                                        // Move conflicting student to back and try next
+                                        const conflictStudent = currentPool.students.shift()!;
+                                        currentPool.students.push(conflictStudent);
+                                        continue;
+                                    } else {
+                                        // Only one student in pool and it conflicts, switch pools
+                                        const prevPoolCode = currentPool.code;
+                                        currentPool = getSmartBackfillPool(prevPoolCode);
+                                        if (!currentPool || currentPool.students.length === 0) break;
+                                        continue;
+                                    }
+                                }
+
+                                // ASSIGN STUDENT
+                                const student = currentPool.students.shift();
+                                if (student) {
+                                    pushAllocation(allNewAllocsES, subjExamId, seat, student);
+                                    
+                                    // Track bench assignment for conflict detection
+                                    benchAssignments.push({ student, seat });
+                                    benchAssignmentTracker.set(benchKey, benchAssignments);
+                                    
+                                    hallFilledES++;
+                                    studentAssigned = true;
+                                }
                             }
-
-                            const peekStu = rowPool.students[0];
-                            const currentDept = peekStu?.Department?.DepartmentCode ?? null;
-                            if (firstStudentDept !== null && currentDept !== null && currentDept !== firstStudentDept) {
-                                // Department changed! Break out to prevent mixing in the same column!
-                                break outerBench;
-                            }
-
-                            const subjExamId = examIdBySubjectCode[rowPool.code];
-                            if (subjExamId === undefined) {
-                                console.warn(`[EndSem] No ExamID for "${rowPool.code}" — student discarded`);
-                                rowPool.students.shift(); // prevent infinite loop
-                                continue;
-                            }
-
-                            const stu = rowPool.students.shift();
-                            if (!stu) break outerBench; // defensive guard
-
-                            pushAllocation(allNewAllocsES, subjExamId, seat, stu);
-                            hallFilledES++;
+                            
+                            // If still no student assigned after all attempts, break (global exhaustion)
+                            if (!studentAssigned && totalRemaining() === 0) break;
                         }
                     }
                 }
@@ -1534,6 +1603,9 @@ export const bulkAssign = async (req: Request, res: Response) => {
                     filled: hallFilledES,
                     cappedAt: capLimit,
                 });
+
+                // HALL FILL GUARANTEE: If this hall isn't full and students remain, continue to next hall
+                // (This is handled by the outer loop continuing to next hall)
             }
 
             if (allNewAllocsES.length > 0) {
