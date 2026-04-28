@@ -17,12 +17,11 @@ import {
     ArrowLeft,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import * as XLSX from 'xlsx';
 import { invigilatorService, BulkImportRow } from '../../services/invigilatorService';
 
 interface Props { isOpen: boolean; onClose: () => void; onSuccess: () => void; }
 type Step = 'instructions' | 'upload' | 'preview' | 'result';
-interface ImportResult { message: string; created: number; skipped: { row: number; reason: string }[]; }
+interface ImportResult { message: string; created: number[]; successCount: number; skipped: { row: number; reason: string }[]; }
 
 const STEPS: { key: Step; label: string }[] = [
     { key: 'instructions', label: 'Guide' },
@@ -32,12 +31,13 @@ const STEPS: { key: Step; label: string }[] = [
 ];
 const stepIdx = (s: Step) => STEPS.findIndex(x => x.key === s);
 
-const downloadTemplate = () => {
+const downloadTemplate = async () => {
+    const XLSX = await import('xlsx');
     const ws = XLSX.utils.aoa_to_sheet([
-        ['FacultyID', 'Name', 'Email', 'Department', 'Phone', 'Designation'],
-        ['101', 'Dr. Sarah Johnson', 'sarah.j@college.edu', 'CS', '+91 9800000000', 'Professor'],
-        ['102', 'Mr. Alan Walker', 'alan.w@college.edu', 'ECE', '+91 9800000001', 'Asst. Professor'],
-        ['103', 'Ms. Priya Nair', 'priya.n@college.edu', 'ME', '+91 9800000003', 'Senior Lecturer'],
+        ['Name', 'Department'],
+        ['Dr. Sarah Johnson', 'CS'],
+        ['Mr. Alan Walker', 'ECE'],
+        ['Ms. Priya Nair', 'ME'],
     ]);
     ws['!cols'] = [{ wch: 12 }, { wch: 22 }, { wch: 26 }, { wch: 16 }, { wch: 18 }, { wch: 22 }];
     const wb = XLSX.utils.book_new();
@@ -65,8 +65,9 @@ const BulkImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
     const parseFile = (f: File) => {
         setFile(f);
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = async (e) => {
             try {
+                const XLSX = await import('xlsx');
                 const data = new Uint8Array(e.target?.result as ArrayBuffer);
                 const wb = XLSX.read(data, { type: 'array' });
                 const ws = wb.Sheets[wb.SheetNames[0]];
@@ -78,13 +79,26 @@ const BulkImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
                     const t: Record<string, any> = {};
                     Object.keys(r).forEach(k => { t[k.trim()] = typeof r[k] === 'string' ? r[k].trim() : r[k]; });
                     if (!t['Name'] && !t['Department']) return;
-                    const fid = t['FacultyID'] || t['Faculty ID'] || t['faculty_id'] || t['StaffCode'];
-                    if (!fid) { errors.push(`Row ${i + 2}: Missing FacultyID.`); return; }
-                    const email = t['Email'] || t['email'] || t['EMAIL'];
-                    if (!email) { errors.push(`Row ${i + 2}: Missing Email (Required for Activation).`); return; }
                     if (!t['Name']) { errors.push(`Row ${i + 2}: Missing Name.`); return; }
                     if (!t['Department']) { errors.push(`Row ${i + 2}: Missing Department.`); return; }
-                    normalised.push({ FacultyID: fid, Email: email, Name: t['Name'], Department: t['Department'], Phone: t['Phone'] || undefined, Designation: t['Designation'] || undefined });
+                    // Extract fields with multiple possible header names
+                    const staffCode = t['Staff Code'] || t['StaffCode'] || t['Faculty ID'] || t['FacultyID'] || t['ID'] || t['Staff ID'];
+                    const phone = t['Phone'] || t['Mobile'] || t['Phone Number'] || t['Contact'];
+                    const designation = t['Designation'] || t['Role'] || t['Position'];
+                    const emailInput = t['Email'] || t['Email Address'] || t['Mail'];
+
+                    // Auto-generate email from name if not provided
+                    const nameForEmail = t['Name'].toLowerCase().replace(/[^a-z]/g, '');
+                    const email = emailInput || `${nameForEmail}@sjcetpalai.ac.in`;
+
+                    normalised.push({ 
+                        Name: t['Name'], 
+                        Department: t['Department'], 
+                        Email: email,
+                        FacultyID: staffCode,
+                        Phone: phone,
+                        Designation: designation
+                    });
                 });
                 setRows(normalised); setParseErrors(errors); setStep('preview');
             } catch { toast.error('Could not parse the file. Please use .xlsx or .csv.'); }
@@ -112,7 +126,7 @@ const BulkImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
             // 2. Now bulk import the new rows
             const res = await invigilatorService.bulkImport(rows);
             setResult(res); setStep('result');
-            if (res.created > 0) onSuccess();
+            if (res.successCount > 0) onSuccess();
         } catch (e: any) {
             toast.error(e.response?.data?.message || 'Import failed. Please try again.');
         } finally { setIsImporting(false); }
@@ -191,12 +205,8 @@ const BulkImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
                                             ))}
                                         </div>
                                         {[
-                                            { col: 'FacultyID', req: true, note: 'Unique numeric or string ID.' },
                                             { col: 'Name', req: true, note: 'Full name of the staff member.' },
-                                            { col: 'Email', req: true, note: 'Unique email address for activation link.' },
                                             { col: 'Department', req: true, note: 'Department code (CS, ECE) or full name.' },
-                                            { col: 'Phone', req: false, note: 'Contact phone number.' },
-                                            { col: 'Designation', req: false, note: 'e.g. Professor. Defaults to "Faculty".' },
                                         ].map(({ col, req, note }, i, arr) => (
                                             <div key={col} className={`grid grid-cols-[100px_80px_1fr] px-3 py-2.5 gap-3 items-center bg-white ${i < arr.length - 1 ? 'border-b border-slate-100' : ''}`}>
                                                 <span className="font-mono font-bold text-slate-800">{col}</span>
@@ -294,15 +304,15 @@ const BulkImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
                             {/* STEP 4: Result */}
                             {step === 'result' && result && (
                                 <div className="space-y-3">
-                                    <div className={`rounded-xl p-5 text-center border ${result.created > 0 ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-200'}`}>
-                                        <div className={`w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center ${result.created > 0 ? 'bg-emerald-500' : 'bg-slate-400'}`}>
+                                    <div className={`rounded-xl p-5 text-center border ${result.successCount > 0 ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-200'}`}>
+                                        <div className={`w-12 h-12 rounded-xl mx-auto mb-3 flex items-center justify-center ${result.successCount > 0 ? 'bg-emerald-500' : 'bg-slate-400'}`}>
                                             <CheckCircle2 size={22} className="text-white" />
                                         </div>
                                         <h3 className="text-base font-bold text-slate-900 mb-1">Import Complete</h3>
                                         <p className="text-xs text-slate-500 mb-4">{result.message}</p>
                                         <div className="flex justify-center gap-8">
                                             <div className="text-center">
-                                                <p className="text-2xl font-bold text-emerald-600">{result.created}</p>
+                                                <p className="text-2xl font-bold text-emerald-600">{Array.isArray(result.created) ? result.created.length : result.created}</p>
                                                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Imported</p>
                                             </div>
                                             <div className="w-px bg-slate-200" />

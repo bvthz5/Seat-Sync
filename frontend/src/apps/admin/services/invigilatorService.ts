@@ -61,7 +61,7 @@ export const invigilatorService = {
     },
     bulkImport: async (rows: BulkImportRow[]) => {
         const response = await api.post('/invigilators/bulk-import', { rows });
-        return response.data as { message: string; created: number; skipped: { row: number; reason: string }[] };
+        return response.data as { message: string; created: number[]; successCount: number; skipped: { row: number; reason: string }[] };
     },
     getRequests: async () => {
         const response = await api.get<InvigilatorRequest[]>('/invigilators/requests');
@@ -74,8 +74,44 @@ export const invigilatorService = {
     rejectRequest: async (id: number) => {
         const response = await api.post(`/invigilators/requests/${id}/reject`);
         return response.data;
+    },
+    getLoadStats: async () => {
+        const response = await api.get<InvigilatorLoadStat[]>('/invigilators/load-stats');
+        return response.data;
+    },
+    autoAssign: async (date: string, session: string) => {
+        const response = await api.post('/invigilators/auto-assign', { date, session });
+        return response.data as { assignments: { hallId: number; invigilatorId: number; invigilatorName: string; department?: string; dutyCount: number }[] };
+    },
+    saveAssignments: async (date: string, session: string, assignments: any[]) => {
+        const response = await api.post('/invigilators/save-assignments', { date, session, assignments });
+        return response.data;
+    },
+    getAssignments: async (date: string, session: string) => {
+        const response = await api.get('/invigilators/assignments', { params: { date, session } });
+        return response.data as { hallId: number; hallName: string; invigilatorId: number; invigilatorName: string; department?: string }[];
+    },
+    getDashboardData: async () => {
+        const response = await api.get('/invigilators/dashboard');
+        return response.data;
+    },
+    getAssignmentDetails: async (id: string | number) => {
+        const response = await api.get(`/invigilators/assignments/${id}`);
+        return response.data;
+    },
+    saveAttendance: async (examId: number, students: { StudentID: number, IsPresent: boolean }[]) => {
+        const response = await api.post('/invigilators/attendance/save', { examId, students });
+        return response.data;
     }
 };
+
+export interface InvigilatorLoadStat {
+    FacultyID: number;
+    Name: string;
+    Department: string;
+    Designation: string;
+    dutyCount: number;
+}
 
 export interface InvigilatorRequest {
     RequestID: number;

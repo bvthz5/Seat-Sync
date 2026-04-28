@@ -1,40 +1,46 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     LayoutDashboard, ClipboardList, Grid3X3, Users,
     RefreshCcw, Bell, UserCircle, LogOut, CheckCircle2,
     Clock, Calendar, DoorOpen, LayoutGrid, ClipboardCheck,
     AlertTriangle, ChevronRight, Eye, Menu, X,
-    Wifi, MapPin, Settings, Moon, Sun, User, ChevronDown
+    Wifi, MapPin, Settings, Moon, Sun, User, ChevronDown, RefreshCw
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
+import { invigilatorService } from '../../admin/services/invigilatorService';
+import { SeatingService } from '../../admin/services/seatingService';
 
-// --- MOCK DATA ---
-const MOCK_USER = {
-    name: "John Mathew",
-    date: "20 Feb 2026",
-    status: "active", // "active" | "inactive"
-    currentExamRoom: "A-204",
-    timeRemaining: "01:32:12",
-};
-
-const SUMMARY_METRICS = [
-    { title: "Today's Exams", value: "2", icon: Calendar, color: "blue", label: "Scheduled" },
-    { title: "Current Location", value: "A-204", icon: MapPin, color: "green", label: "Block 2" },
-    { title: "Total Students", value: "85", icon: Users, color: "indigo", label: "Supervising" },
-    { title: "Attendance", value: "28/32", icon: ClipboardCheck, color: "amber", label: "Marked" },
-];
-
-const ASSIGNED_DUTIES = [
-    { id: 1, exam: "OS – MCA", session: "FN", room: "A-204", block: "Block 2", time: "9:30 - 12:30", students: 32, status: "In Progress" },
-    { id: 2, exam: "DBMS – BCA", session: "AN", room: "B-102", block: "Block 1", time: "13:30 - 16:30", students: 53, status: "Upcoming" },
-];
-
-const SWAP_REQUESTS = [
-    { id: 1, duty: "13:30 - B-102", type: "Give Away", with: "Dr. Smith", status: "Pending Admin", reason: "Medical Emergency" },
-    { id: 2, duty: "Yesterday", type: "Take Over", with: "Prof. Alan", status: "Approved", reason: "Mutually agreed" },
-];
+// --- TYPES ---
+interface DashboardData {
+    user: {
+        name: string;
+        email: string;
+        department: string;
+        designation: string;
+        date: string;
+        status: string;
+    };
+    metrics: Array<{
+        title: string;
+        value: string;
+        icon: any;
+        color: string;
+        label: string;
+    }>;
+    duties: Array<{
+        id: number;
+        exam: string;
+        session: string;
+        room: string;
+        block: string;
+        time: string;
+        students: number;
+        status: string;
+    }>;
+    swaps: any[];
+}
 
 const NAV_GROUPS = [
     {
@@ -79,8 +85,40 @@ export default function InvigilatorDashboard() {
     const [profileOpen, setProfileOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
     const [darkMode, setDarkMode] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [data, setData] = useState<DashboardData | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
-    // Live Clock & Responsive Checking
+    // Live Clock Logic
+    const [timeRemaining, setTimeRemaining] = useState("01:32:12");
+
+    useEffect(() => {
+        fetchDashboardData();
+    }, []);
+
+    const fetchDashboardData = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            const res = await invigilatorService.getDashboardData();
+            // Map icon strings back to Lucide components
+            const iconMap: any = { Calendar, MapPin, Users, ClipboardCheck, ClipboardList, CheckCircle2 };
+            if (res.metrics) {
+                res.metrics = res.metrics.map((m: any) => ({
+                    ...m,
+                    icon: iconMap[m.icon] || Calendar
+                }));
+            }
+            setData(res);
+        } catch (err: any) {
+            console.error('Failed to fetch dashboard data:', err);
+            setError(err.response?.data?.message || err.message || "Failed to load dashboard data");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Responsive Checking
     useEffect(() => {
         const checkMobile = () => {
             setIsMobile(window.innerWidth < 1024);
@@ -123,6 +161,33 @@ export default function InvigilatorDashboard() {
         return map[color] || "bg-slate-100 text-slate-600";
     };
 
+    if (loading) {
+        return (
+            <div className="flex h-screen w-full flex-col items-center justify-center bg-slate-50 gap-4 font-sans">
+                <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+                <p className="text-slate-500 font-bold animate-pulse uppercase tracking-widest text-xs">Synchronizing Portal...</p>
+            </div>
+        );
+    }
+
+    if (error || !data) {
+        return (
+            <div className="flex h-screen w-full flex-col items-center justify-center bg-slate-50 p-6 text-center font-sans">
+                <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center text-red-600 mb-4 shadow-sm border border-red-200">
+                    <AlertTriangle size={32} />
+                </div>
+                <h2 className="text-xl font-bold text-slate-800 mb-2">Portal Access Error</h2>
+                <p className="text-slate-500 max-w-md mb-6">{error || "Your invigilator profile is incomplete or not linked correctly. Please contact the exam admin."}</p>
+                <button 
+                    onClick={fetchDashboardData}
+                    className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center gap-2"
+                >
+                    <RefreshCcw size={18} /> Retry Connection
+                </button>
+            </div>
+        );
+    }
+
     return (
         <div className={`flex h-screen font-sans selection:bg-blue-500/20 selection:text-blue-900 overflow-hidden ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-[#F4F7FB] text-slate-800'}`}>
 
@@ -163,7 +228,17 @@ export default function InvigilatorDashboard() {
                                         {group.items.map((item) => (
                                             <button
                                                 key={item.id}
-                                                onClick={() => { setActiveNav(item.id); if (item.path === '/invigilator/profile') navigate(item.path) }}
+                                                onClick={() => { 
+                                                    setActiveNav(item.id); 
+                                                    if (item.path && item.path !== '/invigilator/dashboard' && item.id !== 'seating') {
+                                                        // For attendance, try to find an active duty ID
+                                                        if (item.id === 'attendance' && data?.duties && data.duties.length > 0) {
+                                                            navigate(`${item.path}/${data.duties[0].id}`);
+                                                        } else {
+                                                            navigate(item.path);
+                                                        }
+                                                    }
+                                                }}
                                                 className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-all font-semibold text-[13px] group relative ${activeNav === item.id
                                                     ? 'bg-blue-50 text-[#2F3FA5] shadow-[inset_0_0_0_1px_rgba(47,63,165,0.05)]' // ERP active state highlight
                                                     : darkMode ? 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
@@ -233,7 +308,7 @@ export default function InvigilatorDashboard() {
                         </button>
                         <div>
                             <h2 className={`text-[17px] leading-none font-extrabold hidden sm:block ${darkMode ? 'text-white' : 'text-[#1E2A78]'}`}>Dashboard Overview</h2>
-                            <p className="text-[11px] font-semibold text-slate-500 hidden sm:block mt-1">Welcome back, {MOCK_USER.name.split(' ')[0]}</p>
+                            <p className="text-[11px] font-semibold text-slate-500 hidden sm:block mt-1">Welcome back, {data?.user.name.split(' ')[0] || 'Invigilator'}</p>
                         </div>
                     </div>
 
@@ -264,7 +339,7 @@ export default function InvigilatorDashboard() {
                                 className="flex items-center gap-2.5 transition-colors group"
                             >
                                 <div className="flex flex-col items-end hidden sm:flex">
-                                    <span className={`text-[13px] font-bold ${darkMode ? 'text-slate-200' : 'text-slate-700'}`}>Prof. {MOCK_USER.name.split(' ')[0]}</span>
+                                    <span className={`text-[13px] font-bold ${darkMode ? 'text-slate-200' : 'text-slate-700'}`}>{data?.user.name.split(' ')[0] || 'User'}</span>
                                     <span className="text-[9px] font-bold text-slate-500 uppercase">Invigilator</span>
                                 </div>
                                 <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-100 to-indigo-50 flex items-center justify-center text-indigo-700 border border-white shadow-sm group-hover:shadow transition-all">
@@ -276,10 +351,11 @@ export default function InvigilatorDashboard() {
                 </header>
 
                 <main className="flex-1 overflow-y-auto custom-scrollbar relative">
-
-                    {/* 2. HERO STATUS BANNER (FULL WIDTH) */}
-                    <div className="px-4 sm:px-6 lg:px-8 pt-5 pb-6 w-full">
-                        <div className={`w-full overflow-hidden relative rounded-[20px] shadow-lg transition-all duration-500 ${MOCK_USER.status === 'active' ? 'bg-[#2D3C8A] shadow-[#2F3FA5]/10' : 'bg-gradient-to-r from-slate-800 to-slate-900 border-slate-700'}`}>
+                    {activeNav === 'dashboard' ? (
+                        <>
+                            {/* 2. HERO STATUS BANNER (FULL WIDTH) */}
+                            <div className="px-4 sm:px-6 lg:px-8 pt-5 pb-6 w-full">
+                        <div className={`w-full overflow-hidden relative rounded-[20px] shadow-lg transition-all duration-500 ${data?.user.status === 'active' ? 'bg-[#2D3C8A] shadow-[#2F3FA5]/10' : 'bg-gradient-to-r from-slate-800 to-slate-900 border-slate-700'}`}>
                             {/* Decorative background shapes */}
                             <div className="absolute top-0 right-[15%] w-[400px] h-[400px] bg-white/5 rounded-full blur-[80px] pointer-events-none"></div>
                             <div className="absolute bottom-[-100px] left-[-100px] w-[300px] h-[300px] bg-blue-500/10 rounded-full blur-[80px] pointer-events-none"></div>
@@ -289,28 +365,28 @@ export default function InvigilatorDashboard() {
                                     <div className="flex items-center gap-2">
                                         <span className="px-2.5 py-0.5 bg-white/10 text-white backdrop-blur-md rounded-full text-[9px] font-extrabold uppercase tracking-widest border border-white/10 shadow-sm">Command Center</span>
                                         <p className="text-blue-100/90 font-semibold text-[11px] flex items-center gap-1.5 uppercase tracking-wide">
-                                            <Calendar size={12} /> {MOCK_USER.date}
+                                            <Calendar size={12} /> {data?.user.date || 'Today'}
                                         </p>
                                     </div>
-                                    <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white drop-shadow">Welcome, {MOCK_USER.name}</h1>
-                                    {MOCK_USER.status === 'active' && (
+                                    <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white drop-shadow">Welcome, {data?.user.name || 'Invigilator'}</h1>
+                                    {data?.user.status === 'active' && (
                                         <div className="inline-flex items-center gap-2 mt-1 px-3 py-1.5 rounded-lg border border-[rgba(255,255,255,0.08)] bg-[#1F2B6C] text-blue-50 text-[11px] font-bold tracking-wide shadow-sm">
                                             <span className="relative flex h-2 w-2">
                                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                                             </span>
-                                            EXAM IN PROGRESS – ROOM {MOCK_USER.currentExamRoom}
+                                            EXAM IN PROGRESS – ROOM {data?.duties[0]?.room || '...'}
                                         </div>
                                     )}
                                 </div>
 
-                                {MOCK_USER.status === "active" && (
+                                {data?.user.status === "active" && (
                                     <div className="bg-[#1F2B6C] backdrop-blur-md border border-[rgba(255,255,255,0.05)] rounded-[16px] p-5 sm:p-6 flex flex-col items-start lg:items-end w-full lg:w-auto shadow-lg">
                                         <span className="text-[10px] font-bold text-blue-200/70 uppercase tracking-[0.15em] mb-1.5 flex items-center gap-1.5">
                                             <Clock size={12} className="text-blue-400" /> Live Time Remaining
                                         </span>
                                         <div className="text-4xl sm:text-5xl font-mono font-black text-white tracking-widest tabular-nums leading-none drop-shadow-sm">
-                                            {MOCK_USER.timeRemaining}
+                                            {timeRemaining}
                                         </div>
                                     </div>
                                 )}
@@ -322,7 +398,7 @@ export default function InvigilatorDashboard() {
 
                         {/* 3. SUMMARY METRICS ROW - ERP Depth Style */}
                         <motion.div initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.1 } } }} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                            {SUMMARY_METRICS.map((metric, i) => (
+                            {data?.metrics.map((metric, i) => (
                                 <motion.div
                                     key={i} variants={fadeUp}
                                     className={`p-5 rounded-2xl border shadow-sm flex flex-col gap-4 relative overflow-hidden transition-all duration-300 hover:shadow-md hover:-translate-y-1 group ${darkMode ? 'bg-[#1e293b] border-slate-700' : 'bg-white border-slate-200/60 block'}`}
@@ -351,7 +427,7 @@ export default function InvigilatorDashboard() {
                         </motion.div>
 
                         {/* 4. QUICK ACTION BAR (Sticky Horizontal Scroll) */}
-                        {MOCK_USER.status === "active" && (
+                        {data?.user.status === "active" && (
                             <div className={`sticky top-0 z-20 py-3 -mx-4 px-4 sm:mx-0 sm:px-0 bg-gradient-to-b ${darkMode ? 'from-[#0f172a] via-[#0f172a]' : 'from-[#F4F7FB] via-[#F4F7FB]'} to-transparent backdrop-blur-md`}>
                                 <motion.div initial="hidden" animate="show" variants={popIn} className="flex items-center gap-3 sm:gap-4 overflow-x-auto custom-scrollbar pb-1.5 pt-1 px-0.5">
                                     {[
@@ -399,7 +475,7 @@ export default function InvigilatorDashboard() {
                                                 </tr>
                                             </thead>
                                             <tbody className={`divide-y ${darkMode ? 'divide-slate-700/50' : 'divide-slate-100/80'}`}>
-                                                {ASSIGNED_DUTIES.map(duty => (
+                                                {data?.duties.map(duty => (
                                                     <tr key={duty.id} className={`transition-colors group ${darkMode ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50/50'}`}>
                                                         <td className="px-4 py-4">
                                                             <div className="flex items-center gap-3">
@@ -419,7 +495,7 @@ export default function InvigilatorDashboard() {
                                                         <td className="px-4 py-4">
                                                             <div className="flex flex-col gap-0.5">
                                                                 <span className={`font-bold ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>{duty.students} Students</span>
-                                                                {duty.status === "In Progress" && <span className="text-[9px] font-bold text-emerald-600 uppercase">28 Marked</span>}
+                                                                {duty.status === "In Progress" && <span className="text-[9px] font-bold text-emerald-600 uppercase">{duty.presentCount} Marked</span>}
                                                             </div>
                                                         </td>
                                                         <td className="px-4 py-4">
@@ -514,7 +590,11 @@ export default function InvigilatorDashboard() {
                                         <button className="text-[9px] font-bold text-[#2F3FA5] hover:text-white uppercase tracking-widest bg-blue-50 hover:bg-[#2F3FA5] px-2.5 py-1 rounded-lg transition-colors">View All</button>
                                     </div>
                                     <div className="space-y-3">
-                                        {SWAP_REQUESTS.map(swap => (
+                                        {!data?.swaps || data.swaps.length === 0 ? (
+                                            <div className="py-8 text-center">
+                                                <p className="text-slate-400 text-[11px] font-bold uppercase tracking-widest">No active requests</p>
+                                            </div>
+                                        ) : data.swaps.map(swap => (
                                             <div key={swap.id} className={`p-3 sm:p-4 rounded-xl border transition-all shadow-sm group ${darkMode ? 'bg-slate-800/50 border-slate-700 hover:border-slate-500' : 'bg-slate-50 border-slate-100 hover:bg-white hover:border-blue-200 hover:shadow-md'}`}>
                                                 <div className="flex justify-between items-start mb-2 pointer-events-none">
                                                     <span className={`text-[13px] font-black tracking-wide transition-colors ${darkMode ? 'text-white' : 'text-slate-800 group-hover:text-[#2F3FA5]'}`}>{swap.duty}</span>
@@ -533,16 +613,287 @@ export default function InvigilatorDashboard() {
                                             </div>
                                         ))}
                                     </div>
-                                    <button className={`w-full mt-4 py-2.5 border-2 border-dashed font-bold text-[13px] rounded-xl transition-all group ${darkMode ? 'border-slate-600 text-slate-400 hover:bg-slate-800 hover:border-slate-500 hover:text-white' : 'border-slate-300 text-slate-500 hover:bg-blue-50 hover:border-blue-300 hover:text-[#2F3FA5]'}`}>
-                                        <span className="group-hover:hidden flex items-center justify-center gap-1.5"><span className="text-lg leading-none">+</span> Request New Swap</span>
-                                        <span className="hidden group-hover:block">Initialize Request Panel</span>
-                                    </button>
                                 </div>
-
                             </motion.div>
                         </div>
                     </div>
-                </main>
+                </>
+                ) : activeNav === 'seating' ? (
+                    <InvigilatorSeatingView darkMode={darkMode} />
+                ) : (
+                    <div className="p-8 text-center opacity-50 flex flex-col items-center justify-center h-full">
+                        <ClipboardList size={48} className="mb-4" />
+                        <h2 className="text-xl font-bold">View Under Construction</h2>
+                        <p>This module is coming soon in the next update.</p>
+                    </div>
+                )}
+            </main>
+        </div>
+    </div>
+    );
+}
+
+// ==========================================
+// SEATING VIEW COMPONENT
+// ==========================================
+function InvigilatorSeatingView({ darkMode }: { darkMode: boolean }) {
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [duties, setDuties] = useState<any[]>([]);
+    const [selectedDuty, setSelectedDuty] = useState<any>(null);
+    const [benches, setBenches] = useState<any[]>([]);
+    const [studentAllocations, setStudentAllocations] = useState<Record<number, any>>({});
+
+    useEffect(() => {
+        fetchInitialData();
+    }, []);
+
+    const fetchInitialData = async () => {
+        try {
+            setLoading(true);
+            const dashboard = await invigilatorService.getDashboardData();
+            if (dashboard.duties && dashboard.duties.length > 0) {
+                setDuties(dashboard.duties);
+                // Use first duty by default (most likely current one)
+                handleDutySelect(dashboard.duties[0]);
+            } else {
+                setError("No duties assigned to view seating.");
+                setLoading(false);
+            }
+        } catch (err: any) {
+            setError("Failed to load duty data.");
+            setLoading(false);
+        }
+    };
+
+    const handleDutySelect = async (duty: any) => {
+        if (!duty) return;
+        try {
+            setLoading(true);
+            setSelectedDuty(duty);
+            
+            const examDate = duty.date;
+            const session = duty.session;
+            const roomId = duty.roomID;
+
+            if (!roomId) {
+                console.error("No RoomID for duty:", duty);
+                setError("Invalid room configuration.");
+                return;
+            }
+
+            // 1. Get hall layout
+            const layout = await SeatingService.getHallLayout(roomId);
+            setBenches(layout.benches || []);
+
+            // 2. Get student allocations
+            const alloc = await SeatingService.getAllocationForHall(examDate, session, roomId);
+            setStudentAllocations(alloc.assignments || {});
+
+        } catch (err: any) {
+            console.error("Layout fetch error:", err);
+            setError("Failed to fetch room layout.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const benchRows = useMemo(() => {
+        const rows: Record<string, any[]> = {};
+        for (const bench of benches) {
+            if (!rows[bench.rowLabel]) rows[bench.rowLabel] = [];
+            rows[bench.rowLabel].push(bench);
+        }
+        return Object.keys(rows)
+            .sort()
+            .map((rowLabel) => ({
+                rowLabel,
+                benches: (rows[rowLabel] || []).sort((a, b) => a.benchNumber - b.benchNumber),
+            }));
+    }, [benches]);
+
+    if (loading && duties.length === 0) {
+        return (
+            <div className="flex-1 flex flex-col items-center justify-center p-12">
+                <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
+                <p className="text-slate-500 font-bold animate-pulse text-xs uppercase tracking-widest">Generating Room Map...</p>
+            </div>
+        );
+    }
+
+    if (error && duties.length === 0) {
+        return (
+            <div className="flex-1 flex flex-col items-center justify-center p-12 text-center">
+                <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center text-red-600 mb-4">
+                    <AlertTriangle size={32} />
+                </div>
+                <h3 className="text-lg font-bold text-slate-800">{error}</h3>
+                <button onClick={fetchInitialData} className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200 flex items-center gap-2">
+                    <RefreshCw size={16} /> Retry
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+            {/* Header / Selector */}
+            <div className={`p-4 border-b flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shrink-0 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+                <div>
+                    <h2 className={`text-lg font-black flex items-center gap-2 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+                        <LayoutGrid className="text-blue-500" size={20} /> Exam Room Layout
+                    </h2>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1">
+                        {selectedDuty?.room} • {selectedDuty?.exam}
+                    </p>
+                </div>
+
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <select 
+                        onChange={(e) => handleDutySelect(duties.find(d => d.id === parseInt(e.target.value)))}
+                        value={selectedDuty?.id}
+                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border outline-none focus:ring-2 focus:ring-blue-500/20 transition-all ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700'}`}
+                    >
+                        {duties.map(d => (
+                            <option key={d.id} value={d.id}>{d.room} - {d.exam.slice(0, 20)}...</option>
+                        ))}
+                    </select>
+                    
+                    <button onClick={() => handleDutySelect(selectedDuty)} className={`p-2 rounded-xl border transition-all ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white' : 'bg-white border-slate-200 text-slate-500 hover:text-blue-600'}`}>
+                        <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+                    </button>
+                </div>
+            </div>
+
+            {/* Layout Map Area */}
+            <div className={`flex-1 overflow-auto p-12 custom-scrollbar ${darkMode ? 'bg-[#0a0f1d]' : 'bg-slate-50'}`}>
+                <div className="inline-flex flex-col items-center min-w-full">
+                    
+                    {/* Teacher's Desk - More Professional */}
+                    <motion.div 
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="w-72 h-10 bg-[#0f172a] rounded-xl border border-slate-700 shadow-[0_10px_30px_rgba(0,0,0,0.3)] flex flex-col items-center justify-center mb-16 relative overflow-hidden group mx-auto"
+                    >
+                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-transparent to-blue-500/10 opacity-50"></div>
+                        <span className="text-blue-400 font-black text-[9px] tracking-[0.4em] uppercase">Teacher's Station / Front</span>
+                    </motion.div>
+
+                    {loading && benches.length === 0 ? (
+                        <div className="py-20 text-center">
+                             <div className="w-10 h-10 border-4 border-blue-500/10 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
+                             <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">Generating Seating Matrix...</p>
+                        </div>
+                    ) : (
+                        <div className="pb-32 flex justify-center">
+                            {benchRows.length === 0 ? (
+                                <div className="py-20 text-center opacity-30 flex flex-col items-center justify-center min-w-[600px]">
+                                    <DoorOpen size={48} className="mb-4 stroke-1" />
+                                    <h3 className="text-xl font-black uppercase tracking-widest text-slate-400">No Allocation Found</h3>
+                                </div>
+                            ) : (
+                                <div 
+                                    className="grid gap-x-8 gap-y-6 items-center"
+                                    style={{ 
+                                        gridTemplateColumns: `min-content repeat(${benchRows.length}, min-content)`,
+                                        justifyContent: 'center'
+                                    }}
+                                >
+                                    {/* COLUMN HEADERS ROW */}
+                                    <div /> {/* Spacer for row numbers column */}
+                                    {benchRows.map(({ rowLabel }) => (
+                                        <div key={rowLabel} className="flex justify-center pb-4">
+                                            <div className="relative group">
+                                                <div className="absolute -inset-2 bg-blue-500/10 rounded-2xl blur-lg opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                                <div className="w-12 h-12 rounded-2xl bg-[#0f172a] shadow-2xl flex items-center justify-center text-xl font-black text-white border border-slate-700 relative z-10">
+                                                    {rowLabel}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                    {/* GRID BODY */}
+                                    {Array.from({ length: Math.max(...benchRows.map(r => r.benches.length)) }).map((_, benchIdx) => (
+                                        <React.Fragment key={benchIdx}>
+                                            {/* Row Number Label */}
+                                            <div className="flex flex-col items-center justify-center pr-4">
+                                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">ROW</span>
+                                                <div className="w-7 h-7 flex items-center justify-center text-[11px] font-black text-blue-600 bg-blue-50 border border-blue-100 rounded-lg shadow-sm">
+                                                    {benchIdx + 1}
+                                                </div>
+                                            </div>
+
+                                            {/* Benches for this index across all columns */}
+                                            {benchRows.map(({ rowLabel, benches: colBenches }) => {
+                                                const bench = colBenches[benchIdx];
+                                                if (!bench) return <div key={rowLabel} className="w-[168px]" />; // Matching width of bench + padding
+
+                                                return (
+                                                    <div key={`${rowLabel}-${bench.benchNumber}`} className="flex gap-3 p-2.5 bg-slate-50/50 rounded-[2rem] border border-slate-200/60 shadow-sm hover:shadow-md transition-all">
+                                                        {bench.seats.map((seat: any) => {
+                                                            const alloc = studentAllocations[seat.SeatID];
+                                                            const getSubjectColor = (code: string) => {
+                                                                if (!code) return { border: 'border-slate-200', text: 'text-slate-400', pill: 'bg-slate-100', glow: 'shadow-none' };
+                                                                const hash = code.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                                                                const colors = [
+                                                                    { border: 'border-emerald-200', text: 'text-emerald-700', pill: 'bg-emerald-50', glow: 'shadow-emerald-500/5' },
+                                                                    { border: 'border-blue-200', text: 'text-blue-700', pill: 'bg-blue-50', glow: 'shadow-blue-500/5' },
+                                                                    { border: 'border-violet-200', text: 'text-violet-700', pill: 'bg-violet-50', glow: 'shadow-violet-500/5' },
+                                                                    { border: 'border-amber-200', text: 'text-amber-700', pill: 'bg-amber-50', glow: 'shadow-amber-500/5' },
+                                                                ];
+                                                                return colors[hash % colors.length];
+                                                            };
+                                                            const sStyles = getSubjectColor(alloc?.subjectCode);
+
+                                                            return (
+                                                                <motion.div
+                                                                    key={seat.SeatID}
+                                                                    whileHover={{ y: -4, scale: 1.02 }}
+                                                                    className={`
+                                                                        w-[75px] h-[100px] rounded-2xl p-2.5 flex flex-col justify-between transition-all relative border-2
+                                                                        ${!alloc ? 'bg-white border-dashed border-slate-200 opacity-40' : 
+                                                                          `bg-white ${sStyles.border} ${sStyles.glow} shadow-lg`}
+                                                                    `}
+                                                                >
+                                                                    <span className={`absolute top-1.5 left-2 text-[7px] font-black uppercase opacity-40 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                                                                        {seat.SeatNumber === 1 ? 'L' : 'R'}
+                                                                    </span>
+
+                                                                    {alloc ? (
+                                                                        <>
+                                                                            <div className="mt-2 flex flex-col items-center">
+                                                                                <span className="text-[9px] font-black text-[#0F172A] tracking-tighter leading-none mb-1">
+                                                                                    {alloc.registerNumber}
+                                                                                </span>
+                                                                                <span className="text-[7px] font-bold text-slate-400 uppercase tracking-tighter truncate w-full text-center">
+                                                                                    {alloc.studentName.split(' ')[0]}
+                                                                                </span>
+                                                                            </div>
+                                                                            
+                                                                            <div className={`mt-auto py-1 px-1.5 rounded-lg ${sStyles.pill} border ${sStyles.border} flex items-center justify-center`}>
+                                                                                <span className={`text-[6px] font-black uppercase tracking-widest truncate ${sStyles.text}`}>
+                                                                                    {alloc.subjectCode?.split('-').pop() || 'EXAM'}
+                                                                                </span>
+                                                                            </div>
+                                                                        </>
+                                                                    ) : (
+                                                                        <div className="flex-1 flex items-center justify-center">
+                                                                            <span className="text-[7px] font-black text-slate-300 tracking-widest uppercase">Vacant</span>
+                                                                        </div>
+                                                                    )}
+                                                                </motion.div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                );
+                                            })}
+                                        </React.Fragment>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );

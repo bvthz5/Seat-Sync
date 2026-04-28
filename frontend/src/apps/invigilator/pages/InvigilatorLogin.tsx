@@ -262,8 +262,8 @@ const InvigilatorLogin = () => {
         if (!email) {
             setEmailError('Faculty email is required');
             isValid = false;
-        } else if (!/^[a-zA-Z0-9._%+-]+@([a-zA-Z0-9-]+\.)*sjcetpalai\.ac\.in$/i.test(email)) {
-            setEmailError('Must use your official sjcetpalai.ac.in email (including subdomains)');
+        } else if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/i.test(email)) {
+            setEmailError('Please enter a valid email address');
             isValid = false;
         }
 

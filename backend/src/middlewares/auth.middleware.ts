@@ -43,6 +43,13 @@ export class AuthMiddleware {
     }
 
     /**
+     * Combined middleware for ANY authenticated user
+     */
+    static authenticated(req: Request, res: Response, next: NextFunction): void {
+        AuthMiddleware.verifyAccessToken(req, res, next);
+    }
+
+    /**
      * Guard for exam_admin role
      */
     static requireExamAdmin(req: Request, res: Response, next: NextFunction): void {
@@ -119,6 +126,23 @@ export class AuthMiddleware {
             res.status(403).json({
                 error: "Access denied. Student role required",
             });
+            return;
+        }
+
+        next();
+    }
+
+    /**
+     * Guard for authenticated invigilator
+     */
+    static requireInvigilator(req: Request, res: Response, next: NextFunction): void {
+        if (!req.user) {
+            res.status(401).json({ error: "Authentication required" });
+            return;
+        }
+
+        if (req.user.Role !== "invigilator") {
+            res.status(403).json({ error: "Access denied. Invigilator role required" });
             return;
         }
 

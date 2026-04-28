@@ -102,6 +102,14 @@ User.hasOne(Invigilator, {
     foreignKey: "UserID",
 });
 
+Invigilator.belongsTo(Faculty, {
+    foreignKey: "FacultyID",
+});
+
+Faculty.hasOne(Invigilator, {
+    foreignKey: "FacultyID",
+});
+
 // Notification Associations
 import { Notification } from "./Notification.js";
 import { NotificationRecipient } from "./NotificationRecipient.js";

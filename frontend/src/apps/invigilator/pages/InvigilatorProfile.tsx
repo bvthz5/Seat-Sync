@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     User, Mail, Phone, Building, Shield, Bell,
     Clock, Smartphone, Globe, Activity, CheckCircle2,
     Lock, KeyRound, AlertTriangle, Save, Loader2,
-    LogOut, ChevronRight, Eye, EyeOff, Check
+    LogOut, ChevronRight, Eye, EyeOff, Check, RefreshCcw
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../../context/AuthContext';
+import { invigilatorService } from '../../admin/services/invigilatorService';
 
 const MOCK_USER = {
     name: "John Mathew",
@@ -44,15 +46,40 @@ const TABS = [
 
 export default function InvigilatorProfile() {
     const navigate = useNavigate();
+    const { user: authUser } = useAuth();
     const [activeTab, setActiveTab] = useState('personal');
     const [isSaving, setIsSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [profileData, setProfileData] = useState<any>(null);
+    const [error, setError] = useState<string | null>(null);
 
     // Form States
-    const [phone, setPhone] = useState(MOCK_USER.phone);
-    const [emergency, setEmergency] = useState(MOCK_USER.emergency);
-    const [language, setLanguage] = useState(MOCK_USER.language);
+    const [phone, setPhone] = useState("");
+    const [emergency, setEmergency] = useState("");
+    const [language, setLanguage] = useState("English");
+
+    const fetchProfile = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            const res = await invigilatorService.getDashboardData();
+            setProfileData(res.user);
+            // Set default values for editable fields
+            setPhone("+91 98765 43210");
+            setEmergency("+91 98765 43211");
+        } catch (err: any) {
+            console.error("Failed to fetch profile:", err);
+            setError(err.response?.data?.message || err.message || "Failed to load profile");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchProfile();
+    }, []);
 
     // Notification States
     const [notifs, setNotifs] = useState({
@@ -69,6 +96,45 @@ export default function InvigilatorProfile() {
             setSaveSuccess(true);
             setTimeout(() => setSaveSuccess(false), 3000);
         }, 1500);
+    };
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-[#F5F7FB] flex items-center justify-center">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-12 h-12 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin"></div>
+                    <p className="text-slate-500 font-bold animate-pulse uppercase tracking-widest text-xs">Loading Profile...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="min-h-screen bg-[#F5F7FB] flex flex-col items-center justify-center p-6 text-center">
+                <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center text-red-600 mb-4">
+                    <AlertTriangle size={32} />
+                </div>
+                <h2 className="text-xl font-bold text-slate-800 mb-2">Profile Error</h2>
+                <p className="text-slate-500 max-w-md mb-6">{error}</p>
+                <button 
+                    onClick={fetchProfile}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all flex items-center gap-2"
+                >
+                    <RefreshCcw size={18} /> Retry
+                </button>
+            </div>
+        );
+    }
+
+    const userData = profileData || {
+        name: authUser?.FullName || "Invigilator",
+        role: "Faculty Invigilator",
+        department: "General",
+        email: authUser?.Email || "email@sjcetpalai.ac.in",
+        status: "Active",
+        totalDuties: 0,
+        lastLogin: "Just now"
     };
 
     return (
@@ -101,11 +167,11 @@ export default function InvigilatorProfile() {
                             </div>
 
                             <div className="pt-16 pb-6 px-6 text-center border-b border-slate-100">
-                                <h1 className="text-xl font-extrabold text-slate-800">{MOCK_USER.name}</h1>
-                                <p className="text-sm font-semibold text-blue-600 mt-0.5">{MOCK_USER.role}</p>
-                                <div className="inline-flex items-center gap-1.5 mt-3 bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-bold border border-blue-100">
-                                    <Building size={14} /> {MOCK_USER.department}
-                                </div>
+                                <h1 className="text-xl font-extrabold text-slate-800">{userData.name}</h1>
+                                 <p className="text-sm font-semibold text-blue-600 mt-0.5">{userData.role}</p>
+                                 <div className="inline-flex items-center gap-1.5 mt-3 bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-bold border border-blue-100">
+                                     <Building size={14} /> {userData.department}
+                                 </div>
                             </div>
 
                             <div className="p-6 space-y-4 bg-slate-50/50">
@@ -115,7 +181,7 @@ export default function InvigilatorProfile() {
                                     </div>
                                     <div className="overflow-hidden">
                                         <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Email Address</p>
-                                        <p className="font-semibold text-slate-700 truncate">{MOCK_USER.email}</p>
+                                        <p className="font-semibold text-slate-700 truncate">{userData.email}</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3 text-sm">
@@ -124,7 +190,7 @@ export default function InvigilatorProfile() {
                                     </div>
                                     <div className="overflow-hidden">
                                         <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Duties Completed</p>
-                                        <p className="font-bold text-slate-800">{MOCK_USER.totalDuties} This Year</p>
+                                        <p className="font-bold text-slate-800">{userData.totalDuties || 0} This Year</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3 text-sm">
@@ -133,7 +199,7 @@ export default function InvigilatorProfile() {
                                     </div>
                                     <div className="overflow-hidden">
                                         <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Last Login</p>
-                                        <p className="font-semibold text-slate-600">{MOCK_USER.lastLogin}</p>
+                                        <p className="font-semibold text-slate-600">{userData.lastLogin}</p>
                                     </div>
                                 </div>
                             </div>
@@ -180,11 +246,11 @@ export default function InvigilatorProfile() {
                                             {/* Read-only Fields */}
                                             <div className="space-y-2">
                                                 <div className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Full Name</div>
-                                                <input id="input-sh2ds83" name="input-sh2ds83" type="text" disabled value={MOCK_USER.name} className="w-full bg-slate-50 border border-slate-200 text-slate-600 px-4 py-3 rounded-xl font-semibold opacity-70 cursor-not-allowed" />
+                                                <input id="input-sh2ds83" name="input-sh2ds83" type="text" disabled value={userData.name} className="w-full bg-slate-50 border border-slate-200 text-slate-600 px-4 py-3 rounded-xl font-semibold opacity-70 cursor-not-allowed" />
                                             </div>
                                             <div className="space-y-2">
                                                 <div className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Email Address</div>
-                                                <input id="input-zxxqlzq" name="input-zxxqlzq" type="email" disabled value={MOCK_USER.email} className="w-full bg-slate-50 border border-slate-200 text-slate-600 px-4 py-3 rounded-xl font-semibold opacity-70 cursor-not-allowed" />
+                                                <input id="input-zxxqlzq" name="input-zxxqlzq" type="email" disabled value={userData.email} className="w-full bg-slate-50 border border-slate-200 text-slate-600 px-4 py-3 rounded-xl font-semibold opacity-70 cursor-not-allowed" />
                                             </div>
 
                                             <div className="col-span-1 md:col-span-2 my-2 border-t border-slate-100"></div>
