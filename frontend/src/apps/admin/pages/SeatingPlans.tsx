@@ -24,7 +24,7 @@ interface Dept { DepartmentID: number; DepartmentName: string; DepartmentCode: s
 interface SeatInfo { SeatID: number; RowLabel: string; BenchNumber: number; SeatNumber: number; IsActive: boolean; }
 interface Bench { rowLabel: string; benchNumber: number; seats: SeatInfo[]; }
 interface Assignment { seatId: number; studentId: number; studentName: string; registerNumber: string; deptCode: string; side: 'left' | 'right'; isEligible?: boolean; isBlocked?: boolean; subjectCode?: string; subjectName?: string; }
-interface Series { ExamSeriesID: number; SeriesName: string; IsActive: boolean; }
+interface Series { ExamSeriesID: number; SeriesName: string; IsActive: boolean; ExamType: 'Internal' | 'EndSemester'; }
 interface ExamDateSlot { examDate: string; session: string; examCount: number; }
 interface HallSummary { hallId: number; hallCode: string; capacity: number; totalSeats: number; filledSeats: number; }
 interface SeriesTask {
@@ -277,7 +277,7 @@ const SeatingPlans: React.FC = () => {
     /* initial load */
     useEffect(() => {
         (async () => {
-            try { setSeriesList(await SeatingService.getSeries().then(r => Array.isArray(r) ? r : [])); } catch { }
+            try { setSeriesList(await SeatingService.getSeries('EndSemester').then(r => Array.isArray(r) ? r : [])); } catch { }
             try { setHalls(await SeatingService.getHalls().then(r => Array.isArray(r) ? r : [])); } catch { toast.error('Failed to load halls'); }
             try { setDepartments(await SeatingService.getDepartments().then(r => Array.isArray(r) ? r : [])); } catch { toast.error('Failed to load departments'); }
 
@@ -2028,7 +2028,7 @@ const SeatingPlans: React.FC = () => {
                     <div>
                         <h1 className="text-[28px] font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-slate-600 tracking-tight flex items-center gap-3">
                             <span className="w-2.5 h-8 bg-gradient-to-b from-indigo-500 to-indigo-600 rounded-full shadow-sm"></span>
-                            Seating Arrangement
+                            Seating Arrangement (End Semester)
                         </h1>
                         <p className="text-slate-500 text-[14px] font-medium mt-2 max-w-2xl leading-relaxed">
                             Select an exam slot and departments, then dynamically assign students across multiple halls.
@@ -2122,7 +2122,7 @@ const SeatingPlans: React.FC = () => {
                                             selectorIcon: "text-slate-400 absolute w-4 right-3",
                                             popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
                                         }}>
-                                        {seriesList.map(s => <SelectItem key={String(s.ExamSeriesID)} textValue={s.SeriesName} className="data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700 font-semibold">{s.SeriesName}</SelectItem>)}
+                                        {seriesList.filter(s => s.ExamType === 'EndSemester').map(s => <SelectItem key={String(s.ExamSeriesID)} textValue={s.SeriesName} className="data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700 font-semibold">{s.SeriesName}</SelectItem>)}
                                     </Select>
 
                                     {/* Session toggle */}

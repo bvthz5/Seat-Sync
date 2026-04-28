@@ -53,10 +53,21 @@ body {
 
 /* Landing Page: Blob Animation */
 @keyframes blob {
-  0%   { transform: translate(0px, 0px) scale(1); }
-  33%  { transform: translate(30px, -50px) scale(1.1); }
-  66%  { transform: translate(-20px, 20px) scale(0.9); }
-  100% { transform: translate(0px, 0px) scale(1); }
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
 }
 
 .animate-blob {
@@ -73,9 +84,17 @@ body {
 
 /* Landing Page: Gradient-X animation for title */
 @keyframes gradient-x {
-  0%   { background-position: 0% 50%; }
-  50%  { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
 .animate-gradient-x {
@@ -114,11 +133,15 @@ body {
   transition: border-color 0.15s, box-shadow 0.15s;
   outline: none;
 }
+
 .input:focus {
   border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
 }
-.input::placeholder { color: #94a3b8; }
+
+.input::placeholder {
+  color: #94a3b8;
+}
 
 .btn-primary {
   display: inline-flex;
@@ -134,8 +157,15 @@ body {
   cursor: pointer;
   transition: background 0.15s;
 }
-.btn-primary:hover { background: #1d4ed8; }
-.btn-primary:disabled { opacity: 0.65; cursor: not-allowed; }
+
+.btn-primary:hover {
+  background: #1d4ed8;
+}
+
+.btn-primary:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
 
 .btn-ghost {
   display: inline-flex;
@@ -151,4 +181,8 @@ body {
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
-.btn-ghost:hover { background: #f1f5f9; color: #334155; }
+
+.btn-ghost:hover {
+  background: #f1f5f9;
+  color: #334155;
+}

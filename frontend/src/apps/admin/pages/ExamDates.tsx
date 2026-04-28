@@ -4,6 +4,7 @@ import { Card, Button, Select, SelectItem, Input, Modal, ModalContent, ModalHead
 import { ArrowLeft, Filter, CalendarCheck, CalendarDays, ArrowRight, Search, X, Trash2, AlertTriangle, Upload } from "lucide-react";
 import { toast } from 'react-hot-toast';
 import { ExamService } from '../services/examService';
+import { SeriesService } from '../services/seriesService';
 import BulkEligibleImportModal from '../components/exams/BulkEligibleImportModal';
 
 const ExamDates: React.FC = () => {
@@ -19,8 +20,25 @@ const ExamDates: React.FC = () => {
     const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
 
     useEffect(() => {
-        if (seriesId) fetchDates();
+        if (seriesId) {
+            checkSeriesType();
+            fetchDates();
+        }
     }, [seriesId]);
+
+    const checkSeriesType = async () => {
+        try {
+            const response = await SeriesService.getAll();
+            const series = Array.isArray(response) ? response : response.data || [];
+            const found = series.find((s: any) => String(s.ExamSeriesID) === seriesId);
+            if (found && found.ExamType === 'Internal') {
+                toast.error("Date View is not available for Internal Exams");
+                navigate(`/admin/exams/series/${seriesId}`);
+            }
+        } catch (error) {
+            console.error("Failed to check series type", error);
+        }
+    };
 
     const fetchDates = async () => {
         setLoading(true);

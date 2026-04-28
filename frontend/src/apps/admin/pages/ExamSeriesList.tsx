@@ -28,6 +28,7 @@ const ExamSeriesList: React.FC = () => {
     const [isDeleteAllOpen, setIsDeleteAllOpen] = useState(false);
     const [selectedExam, setSelectedExam] = useState<any>(null);
     const [seriesName, setSeriesName] = useState<string>('');
+    const [examType, setExamType] = useState<'Internal' | 'EndSemester'>('Internal');
 
     useEffect(() => {
         if (seriesId) {
@@ -43,6 +44,7 @@ const ExamSeriesList: React.FC = () => {
             const found = series.find((s: any) => String(s.ExamSeriesID) === seriesId);
             if (found) {
                 setSeriesName(found.SeriesName);
+                setExamType(found.ExamType);
             }
         } catch (error) {
             console.error("Failed to fetch series details", error);
@@ -179,14 +181,16 @@ const ExamSeriesList: React.FC = () => {
                         >
                             Import Timetable
                         </Button>
-                        <Button
-                            onPress={() => navigate(`/admin/exams/series/${seriesId}/dates`)}
-                            variant="flat"
-                            className="bg-white text-slate-700 border border-slate-300 font-semibold hover:bg-slate-50 transition-all px-6 rounded-xl h-14 w-full lg:w-auto"
-                            startContent={<CalendarDays size={18} />}
-                        >
-                            Date View
-                        </Button>
+                        {examType !== 'Internal' && (
+                            <Button
+                                onPress={() => navigate(`/admin/exams/series/${seriesId}/dates`)}
+                                variant="flat"
+                                className="bg-white text-slate-700 border border-slate-300 font-semibold hover:bg-slate-50 transition-all px-6 rounded-xl h-14 w-full lg:w-auto"
+                                startContent={<CalendarDays size={18} />}
+                            >
+                                Date View
+                            </Button>
+                        )}
                         <Button
                             onPress={() => setIsDeleteAllOpen(true)}
                             variant="flat"

@@ -7,6 +7,7 @@ import Exams from './pages/Exams';
 import SeriesSelection from './pages/SeriesSelection';
 import ExamSeriesList from './pages/ExamSeriesList';
 import SeatingPlans from './pages/SeatingPlans';
+import InternalSeatingPage from './pages/InternalSeatingPage';
 import Invigilators from './pages/Invigilators';
 import Attendance from './pages/Attendance';
 import Reports from './pages/Reports';
@@ -50,7 +51,8 @@ const AdminApp: React.FC = () => {
                     <Route path="exams/series/:seriesId" element={<ExamSeriesList />} />
                     <Route path="exams/series/:seriesId/dates" element={<ExamDates />} />
                     <Route path="exams/series/:seriesId/dates/:date" element={<ExamDateDetail />} />
-                    <Route path="seating" element={<SeatingPlans />} />
+                    <Route path="seating/endsem" element={<SeatingPlans />} />
+                    <Route path="seating/internal" element={<InternalSeatingPage />} />
                     <Route path="invigilators" element={<Invigilators />} />
                     <Route path="attendance" element={<Attendance />} />
                     <Route path="reports" element={<Reports />} />

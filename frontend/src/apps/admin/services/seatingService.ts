@@ -4,7 +4,10 @@ const PREFIX = '/seating';
 
 export const SeatingService = {
     /** Get all exam series */
-    getSeries: async () => { const r = await api.get(`${PREFIX}/series`); return r.data; },
+    getSeries: async (examType?: string) => { 
+        const r = await api.get(`${PREFIX}/series`, { params: examType ? { examType } : {} }); 
+        return r.data; 
+    },
 
     /** Get distinct exam dates (optionally by seriesId) */
     getExamDates: async (seriesId?: number) => {
