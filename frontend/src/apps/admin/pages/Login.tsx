@@ -60,9 +60,9 @@ const CustomInput = ({
 
     return (
         <div className="group flex flex-col gap-2 w-full">
-            <label htmlFor={id} className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">
                 {label}
-            </label>
+            </div>
             <div className={`
                 relative flex items-center w-full h-14 rounded-xl overflow-hidden bg-slate-50 border-none transition-all duration-300
                 ${error ? 'bg-red-50' : 'hover:bg-slate-100 focus-within:!bg-white focus-within:shadow-xl focus-within:shadow-blue-100'}
@@ -313,7 +313,7 @@ const AdminLogin: React.FC = () => {
     const { login, isAuthenticated, isLoading } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
-    const from = location.state?.from?.pathname || '/admin/dashboard';
+    const from = '/admin/dashboard';
 
     // If already authenticated, redirect to dashboard or the page they came from
     useEffect(() => {
@@ -355,7 +355,7 @@ const AdminLogin: React.FC = () => {
         try {
             await login(email, password);
             // Navigate to the "from" location
-            navigate('/admin/dashboard', { replace: true });
+            navigate(from, { replace: true });
         } catch (error: any) {
             setFormError("Authentication failed. Please verify your credentials.");
         } finally {

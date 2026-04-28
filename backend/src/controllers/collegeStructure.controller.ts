@@ -1,3 +1,21 @@
+// --- DELETE ALL STRUCTURE DATA --- 
+export const deleteAllStructureData = async (req: Request, res: Response) => {
+    try {
+        await sequelize.transaction(async (t) => {
+            // Delete from child tables first to avoid FK constraint errors
+            await SeatAllocation.destroy({ where: {}, transaction: t });
+            await Seat.destroy({ where: {}, transaction: t });
+            await Zone.destroy({ where: {}, transaction: t });
+            await Room.destroy({ where: {}, transaction: t });
+            await Floor.destroy({ where: {}, transaction: t });
+            await Block.destroy({ where: {}, transaction: t });
+        });
+        res.json({ message: "All structure data deleted successfully." });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+import { generateSeats } from '../services/seatEngine.js';
 import { Request, Response } from "express";
 import { sequelize } from "../config/database.js";
 import { Block } from "../models/Block.js";
@@ -98,13 +116,31 @@ export const updateBlock = async (req: Request, res: Response) => {
 export const deleteBlock = async (req: Request, res: Response) => {
     try {
         const id = Number(req.params.id);
-        const floorCount = await Floor.count({ where: { BlockID: id } });
 
-        if (floorCount > 0) {
-            return res.status(400).json({ message: "Cannot delete block with existing floors." });
+        // Find all rooms in this block
+        const rooms = await Room.findAll({ where: { BlockID: id }, attributes: ['RoomID'] });
+        const roomIds = rooms.map((r: any) => r.RoomID);
+
+        if (roomIds.length > 0) {
+            const allocations = await SeatAllocation.count({
+                include: [{ model: Seat, where: { RoomID: { [Op.in]: roomIds } } }]
+            });
+
+            if (allocations > 0) {
+                return res.status(400).json({ message: "Cannot delete block. It has rooms with examination history." });
+            }
         }
 
-        await Block.destroy({ where: { BlockID: id } });
+        await sequelize.transaction(async (t) => {
+            if (roomIds.length > 0) {
+                await Seat.destroy({ where: { RoomID: { [Op.in]: roomIds } }, transaction: t });
+                await Zone.destroy({ where: { RoomID: { [Op.in]: roomIds } }, transaction: t });
+            }
+            await Room.destroy({ where: { BlockID: id }, transaction: t });
+            await Floor.destroy({ where: { BlockID: id }, transaction: t });
+            await Block.destroy({ where: { BlockID: id }, transaction: t });
+        });
+
         res.json({ message: "Block deleted successfully" });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
@@ -202,13 +238,30 @@ export const updateFloor = async (req: Request, res: Response) => {
 export const deleteFloor = async (req: Request, res: Response) => {
     try {
         const id = Number(req.params.id);
-        const roomCount = await Room.count({ where: { FloorID: id } });
 
-        if (roomCount > 0) {
-            return res.status(400).json({ message: "Cannot delete floor with existing rooms." });
+        // Find all rooms in this floor
+        const rooms = await Room.findAll({ where: { FloorID: id }, attributes: ['RoomID'] });
+        const roomIds = rooms.map((r: any) => r.RoomID);
+
+        if (roomIds.length > 0) {
+            const allocations = await SeatAllocation.count({
+                include: [{ model: Seat, where: { RoomID: { [Op.in]: roomIds } } }]
+            });
+
+            if (allocations > 0) {
+                return res.status(400).json({ message: "Cannot delete floor. It has rooms with examination history." });
+            }
         }
 
-        await Floor.destroy({ where: { FloorID: id } });
+        await sequelize.transaction(async (t) => {
+            if (roomIds.length > 0) {
+                await Seat.destroy({ where: { RoomID: { [Op.in]: roomIds } }, transaction: t });
+                await Zone.destroy({ where: { RoomID: { [Op.in]: roomIds } }, transaction: t });
+            }
+            await Room.destroy({ where: { FloorID: id }, transaction: t });
+            await Floor.destroy({ where: { FloorID: id }, transaction: t });
+        });
+
         res.json({ message: "Floor deleted successfully" });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
@@ -217,42 +270,84 @@ export const deleteFloor = async (req: Request, res: Response) => {
 
 // --- ROOMS & LAYOUT ---
 
+
 export const getRooms = async (req: Request, res: Response) => {
     try {
-        const floorId = req.query.floorId ? Number(req.query.floorId) : undefined;
+        const { search, limit, offset, status, blockId, floorId } = req.query;
 
-        let whereClause = {};
-        let includeOptions: any[] = [{ model: Floor, include: [Block] }];
-
+        const whereClause: any = {};
+        if (search) {
+            whereClause.RoomCode = { [Op.like]: `%${search}%` };
+        }
+        if (status) {
+            whereClause.Status = status;
+        }
+        if (blockId) {
+            whereClause.BlockID = parseInt(blockId as string);
+        }
         if (floorId) {
-            whereClause = { FloorID: floorId };
+            whereClause.FloorID = parseInt(floorId as string);
         }
 
-        const rooms = await Room.findAll({
+        const limitNum = limit ? parseInt(limit as string) : undefined;
+        const offsetNum = offset ? parseInt(offset as string) : undefined;
+
+        const qOpts: any = {
             where: whereClause,
-            include: includeOptions
+            include: [
+                { model: Block, attributes: ['BlockName'] },
+                { model: Floor, attributes: ['FloorNumber'] }
+            ],
+            order: [['RoomCode', 'ASC']]
+        };
+        if (limitNum !== undefined && !isNaN(limitNum)) qOpts.limit = limitNum;
+        if (offsetNum !== undefined && !isNaN(offsetNum)) qOpts.offset = offsetNum;
+
+        const { count, rows } = await Room.findAndCountAll(qOpts);
+
+        res.json({
+            data: rows,
+            total: count,
+            totalPages: limitNum ? Math.ceil(count / limitNum) : 1
         });
-        res.json(rooms);
     } catch (error: any) {
         res.status(500).json({ message: error.message });
     }
 };
 
+
 export const getRoomLayout = async (req: Request, res: Response) => {
     try {
         const roomId = Number(req.params.id);
-        const room = await Room.findByPk(roomId);
+        const room = await Room.findByPk(roomId) as any;
         if (!room) return res.status(404).json({ message: "Room not found" });
 
-        const seats = await Seat.findAll({
-            attributes: ['SeatID', 'RoomID', 'RowLabel', 'BenchNumber', 'SeatNumber', 'IsActive', 'ZoneID'], // Explicitly select ZoneID
+        let seats = await Seat.findAll({
             where: { RoomID: roomId },
             order: [
-                ['RowLabel', 'ASC'],
-                ['BenchNumber', 'ASC'],
-                ['SeatNumber', 'ASC']
+                ['RowIndex', 'ASC'],
+                ['BenchIndex', 'ASC'],
+                ['SeatIndex', 'ASC']
             ]
         });
+
+        // HARD CONSISTENCY CHECK
+        if (room.RowLayout && Array.isArray(room.RowLayout) && room.SeatsPerBench) {
+            const expectedSeats = room.RowLayout.reduce((sum: number, count: number) => sum + count, 0) * room.SeatsPerBench;
+            // Generate seats only if there is a mismatch to prevent stale data
+            if (seats.length !== expectedSeats) {
+                console.log(`[Consistency Check] Room ${roomId} mismatch: Expected ${expectedSeats}, Found ${seats.length}. Regenerating...`);
+                await generateSeats(room);
+                seats = await Seat.findAll({
+                    where: { RoomID: roomId },
+                    order: [
+                        ['RowIndex', 'ASC'],
+                        ['BenchIndex', 'ASC'],
+                        ['SeatIndex', 'ASC']
+                    ]
+                });
+            }
+        }
 
         const zones = await Zone.findAll({ where: { RoomID: roomId } });
 
@@ -263,16 +358,20 @@ export const getRoomLayout = async (req: Request, res: Response) => {
             seatCount: seats.length
         });
     } catch (error: any) {
-        res.status(500).json({ message: error.message });
+        console.error("GET ROOM LAYOUT ERROR:", error);
+        res.status(500).json({ message: error.message || "Unknown internal server error" });
     }
 };
 
 export const createRoom = async (req: Request, res: Response) => {
     try {
-        const { BlockID, FloorID, RoomCode, ExamUsable, Status, TotalRows, BenchesPerRow, SeatsPerBench, Capacity } = req.body;
+        const { BlockID, FloorID, RoomCode, ExamUsable, Status, TotalRows, BenchesPerRow, SeatsPerBench, TotalCapacity, RowLayout } = req.body;
 
         const existing = await Room.findOne({ where: { RoomCode } });
         if (existing) return res.status(400).json({ message: "Room Code/Name must be unique" });
+
+        const finalRowLayout = RowLayout || (TotalRows && BenchesPerRow ? Array(TotalRows).fill(BenchesPerRow) : []);
+        const calcCapacity = finalRowLayout.reduce((a: number, b: number) => a + b, 0) * 2;
 
         const room = await Room.create({
             BlockID,
@@ -280,13 +379,12 @@ export const createRoom = async (req: Request, res: Response) => {
             RoomCode,
             ExamUsable: ExamUsable ?? false,
             Status: Status ?? 'Active',
-            Capacity: Capacity || 0,
-            TotalRows: TotalRows || 0,
-            BenchesPerRow: BenchesPerRow || 0,
-            SeatsPerBench: SeatsPerBench || 0
-        });
+            TotalCapacity: calcCapacity,
+            RowLayout: finalRowLayout,
+            SeatsPerBench: 2
+        } as any);
 
-        if (TotalRows > 0 && BenchesPerRow > 0 && SeatsPerBench > 0) {
+        if (finalRowLayout.length > 0) {
             await generateSeats(room);
         }
 
@@ -298,106 +396,74 @@ export const createRoom = async (req: Request, res: Response) => {
 
 export const updateRoom = async (req: Request, res: Response) => {
     try {
+        console.log("UPDATE ROOM PAYLOAD:", req.body);
         const id = Number(req.params.id);
-        const { RoomCode, Status, ExamUsable, TotalRows, BenchesPerRow, SeatsPerBench, Capacity, RoomType, BenchMode } = req.body;
+        const RoomCode = req.body.RoomCode || req.body.roomCode;
+        const Status = req.body.Status || req.body.status;
+        const ExamUsable = req.body.ExamUsable !== undefined ? req.body.ExamUsable : req.body.examUsable;
+        const TotalRows = req.body.TotalRows || req.body.totalRows;
+        const BenchesPerRow = req.body.BenchesPerRow || req.body.benchesPerRow;
+        const SeatsPerBench = req.body.SeatsPerBench !== undefined ? req.body.SeatsPerBench : req.body.seatsPerBench;
+        const TotalCapacity = req.body.TotalCapacity !== undefined ? req.body.TotalCapacity : req.body.capacity;
+        const RoomType = req.body.RoomType || req.body.roomType;
+        const RowLayout = req.body.RowLayout || req.body.rowLayout;
 
-        const room = await Room.findByPk(id);
+        const room = await Room.findByPk(id) as any;
         if (!room) return res.status(404).json({ message: "Room not found" });
 
-        // Coerce numeric fields to avoid false-positive layout-change detection
-        // (HTTP body delivers strings; Sequelize model stores numbers)
-        const newTotalRows     = TotalRows     !== undefined ? Number(TotalRows)     : undefined;
-        const newBenchesPerRow = BenchesPerRow !== undefined ? Number(BenchesPerRow) : undefined;
-        const newSeatsPerBench = SeatsPerBench !== undefined ? Number(SeatsPerBench) : undefined;
+        const newRowLayout = RowLayout || (TotalRows && BenchesPerRow ? Array(TotalRows).fill(BenchesPerRow) : undefined);
 
-        // ... Layout check ...
+        const normalizeLayout = (v: any) => {
+            if (!v) return null;
+            try { return JSON.stringify(typeof v === 'string' ? JSON.parse(v) : v); }
+            catch { return JSON.stringify(v); }
+        };
+
+        const existingLayout = normalizeLayout(room.RowLayout);
+        const incomingLayout = normalizeLayout(newRowLayout);
+
         const isPhysicalLayoutChange = (
-            (newTotalRows     !== undefined && newTotalRows     !== Number(room.TotalRows))     ||
-            (newBenchesPerRow !== undefined && newBenchesPerRow !== Number(room.BenchesPerRow)) ||
-            (newSeatsPerBench !== undefined && newSeatsPerBench !== Number(room.SeatsPerBench))
+            (newRowLayout !== undefined && existingLayout !== null && incomingLayout !== existingLayout) ||
+            (SeatsPerBench !== undefined && room.SeatsPerBench !== null && Number(SeatsPerBench) !== Number(room.SeatsPerBench))
         );
-
-        const isLogicalLayoutChange = (BenchMode !== undefined && BenchMode !== room.BenchMode);
-
-        const isLayoutChange = isPhysicalLayoutChange || isLogicalLayoutChange;
-
-        if (isLayoutChange) {
-            const futureAllocations = await SeatAllocation.count({
-                include: [
-                    {
-                        model: Seat,
-                        where: { RoomID: id },
-                        required: true
-                    },
-                    {
-                        model: Exam,
-                        where: {
-                            ExamDate: { [Op.gte]: new Date() }
-                        },
-                        required: true
-                    }
-                ]
-            });
-
-            if (futureAllocations > 0) {
-                return res.status(400).json({ message: "Cannot modify layout. Room is booked for future exams." });
-            }
-        }
+        // NOTE: No future-exam block here — generateSeats is non-destructive
+        // (marks extra seats IsActive=false, never deletes), so SeatAllocation FKs are always preserved.
 
         if (RoomCode) room.RoomCode = RoomCode;
         if (Status) room.Status = Status;
-        if (Capacity) room.Capacity = Capacity;
         if (ExamUsable !== undefined) room.ExamUsable = ExamUsable;
         if (RoomType) room.RoomType = RoomType;
-        if (BenchMode) room.BenchMode = BenchMode;
-
-        if (isLayoutChange) {
-            // If layout changes, we might want to reset RoomType to ROOM if it was HALL to force re-zoning?
-            // Or just keep it. User said "Immutable RoomType ... Once Seating layout saved OR Any SeatingPlan exists".
-            // Here we are updating layout so we assume no SeatingPlan exists (checked above).
-            // So changing RoomType is allowed.
-        }
 
         let shouldRegenerateSeats = false;
         if (isPhysicalLayoutChange) {
-            room.TotalRows = newTotalRows!;
-            room.BenchesPerRow = newBenchesPerRow!;
-            room.SeatsPerBench = newSeatsPerBench!;
+            if (newRowLayout !== undefined) room.RowLayout = newRowLayout;
+            if (SeatsPerBench !== undefined) room.SeatsPerBench = SeatsPerBench;
+
+            // Recalculate capacity using actual seatsPerBench
+            let tLayout = newRowLayout !== undefined ? newRowLayout : room.RowLayout;
+            let tSeats = room.SeatsPerBench || 1;
+            if (tLayout && Array.isArray(tLayout)) {
+                room.TotalCapacity = tLayout.reduce((a: number, b: number) => a + b, 0) * tSeats;
+                room.RoomType = room.TotalCapacity <= 80 ? 'ROOM' : 'HALL';
+            }
+
             shouldRegenerateSeats = true;
         }
 
+        // Persist seatsPerBench as-is (don't override)
         await room.save();
 
         if (shouldRegenerateSeats) {
             await generateSeats(room);
         }
 
-        res.json(room);
+        res.json({
+            room,
+            seatsUpdated: shouldRegenerateSeats
+        });
     } catch (error: any) {
+        console.error("updateRoom Error:", error);
         res.status(500).json({ message: error.message });
-    }
-};
-
-const generateSeats = async (room: Room) => {
-    await Seat.destroy({ where: { RoomID: room.RoomID } });
-
-    const seats = [];
-    for (let r = 1; r <= room.TotalRows; r++) {
-        const rowLabel = String.fromCharCode(64 + r);
-        for (let b = 1; b <= room.BenchesPerRow; b++) {
-            for (let s = 1; s <= room.SeatsPerBench; s++) {
-                seats.push({
-                    RoomID: room.RoomID,
-                    RowLabel: rowLabel,
-                    BenchNumber: b,
-                    SeatNumber: s
-                });
-            }
-        }
-    }
-
-    if (seats.length > 0) {
-        await Seat.bulkCreate(seats);
     }
 };
 
@@ -422,6 +488,29 @@ export const deleteRoom = async (req: Request, res: Response) => {
     }
 };
 
+
+export const bulkCreateRooms = async (req: Request, res: Response) => {
+    try {
+        const { rooms } = req.body;
+        if (!Array.isArray(rooms)) {
+            return res.status(400).json({ message: "rooms must be an array" });
+        }
+
+        // We run in a transaction
+        await sequelize.transaction(async (t) => {
+            const createdRooms = await Room.bulkCreate(rooms, { transaction: t });
+
+            // Note: seats need to be generated for each room individually because rowLayout logic
+            for (const r of createdRooms) {
+                await generateSeats(r);
+            }
+        });
+
+        res.status(201).json({ message: "Rooms structurally built successfully" });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
 // --- ZONES ---
 
 export const getZones = async (req: Request, res: Response) => {
@@ -456,14 +545,72 @@ export const deleteZone = async (req: Request, res: Response) => {
     try {
         const id = Number(req.params.id);
 
-        // Check if any seats are using this zone
-        const seatCount = await Seat.count({ where: { ZoneID: id } });
-        if (seatCount > 0) {
-            return res.status(400).json({ message: "Cannot delete zone. It has assigned seats." });
-        }
+        // Remove zone assignments from seats before deleting the zone
+        await Seat.update({ ZoneID: null }, { where: { ZoneID: id } });
 
         await Zone.destroy({ where: { ZoneID: id } });
         res.json({ message: "Zone deleted successfully" });
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+
+export const autoZoneRoom = async (req: Request, res: Response) => {
+    try {
+        const roomId = Number(req.params.roomId);
+        const { zoneCount } = req.body;
+
+        if (!zoneCount || zoneCount < 2 || zoneCount > 6) {
+            return res.status(400).json({ message: "zoneCount must be between 2 and 6" });
+        }
+
+        const room = await Room.findByPk(roomId);
+        if (!room) return res.status(404).json({ message: "Room not found" });
+
+        // 1. Fetch seats sorted by RowIndex, BenchIndex, SeatIndex
+        const seats = await Seat.findAll({
+            where: { RoomID: roomId, IsActive: true },
+            order: [['RowIndex', 'ASC'], ['BenchIndex', 'ASC'], ['SeatIndex', 'ASC']]
+        });
+
+        if (seats.length === 0) {
+            return res.status(400).json({ message: "No active seats found to zone." });
+        }
+
+        // Clean existing zones
+        await Seat.update({ ZoneID: null }, { where: { RoomID: roomId } });
+        await Zone.destroy({ where: { RoomID: roomId } });
+
+        // Create new zones
+        const colors = ['blue', 'red', 'green', 'yellow', 'purple', 'orange'];
+        const zones: any[] = [];
+        for (let i = 0; i < zoneCount; i++) {
+            const z = await Zone.create({
+                RoomID: roomId,
+                ZoneCode: `Z${i + 1}`,
+                ZoneName: `Zone ${i + 1}`,
+                Color: colors[i % colors.length] as string
+            });
+            zones.push(z);
+        }
+
+        // 2. Determine max columns
+        const maxColumns = Math.max(...seats.map(s => s.BenchIndex));
+
+        // 3. Divide columns into zones
+        const columnsPerZone = Math.ceil(maxColumns / zoneCount);
+
+        // 4. Assign seats
+        const updatePromises = seats.map(seat => {
+            const zoneIndex = Math.min(Math.floor((seat.BenchIndex - 1) / columnsPerZone), zoneCount - 1);
+            const targetZoneId = (zones[zoneIndex] as any).ZoneID;
+            return Seat.update({ ZoneID: targetZoneId }, { where: { SeatID: seat.SeatID } });
+        });
+
+        await Promise.all(updatePromises);
+        res.json({ message: 'Auto-zoning completed successfully', zones });
+
     } catch (error: any) {
         res.status(500).json({ message: error.message });
     }

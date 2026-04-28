@@ -182,10 +182,7 @@ const Notifications: React.FC = () => {
                             {/* Search Input */}
                             <div className="relative flex-1 w-full group">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={18} />
-                                <input
-                                    id="notifications-search"
-                                    name="notifications-search"
-                                    type="text"
+                                <input id="input-f34v8hv" name="input-f34v8hv" type="text"
                                     placeholder="Search notifications by title or content..."
                                     className="w-full pl-10 pr-4 h-10 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all outline-none text-slate-700 font-medium placeholder:text-slate-400"
                                     value={searchTerm}

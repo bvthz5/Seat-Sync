@@ -23,8 +23,10 @@ export interface InvigilatorStats {
 
 export interface CreateInvigilatorData {
     FacultyID: string;
+    Email: string;
     Name: string;
     Department: string;
+    Phone?: string;
     Designation?: string;
 }
 
@@ -60,12 +62,39 @@ export const invigilatorService = {
     bulkImport: async (rows: BulkImportRow[]) => {
         const response = await api.post('/invigilators/bulk-import', { rows });
         return response.data as { message: string; created: number; skipped: { row: number; reason: string }[] };
+    },
+    getRequests: async () => {
+        const response = await api.get<InvigilatorRequest[]>('/invigilators/requests');
+        return response.data;
+    },
+    approveRequest: async (id: number) => {
+        const response = await api.post(`/invigilators/requests/${id}/approve`);
+        return response.data;
+    },
+    rejectRequest: async (id: number) => {
+        const response = await api.post(`/invigilators/requests/${id}/reject`);
+        return response.data;
     }
 };
 
+export interface InvigilatorRequest {
+    RequestID: number;
+    FacultyID: string;
+    Name: string;
+    Email: string;
+    Phone: string;
+    Department: string;
+    Designation: string;
+    Reason: string;
+    Status: 'PENDING' | 'APPROVED' | 'REJECTED';
+    RequestedAt: string;
+}
+
 export interface BulkImportRow {
-    FacultyID?: string | number;
+    FacultyID: string | number;
+    Email: string;
     Name: string;
     Department: string;
+    Phone?: string;
     Designation?: string;
 }

@@ -1,4 +1,4 @@
-import { DataTypes, Model, Optional } from "sequelize";
+import { DataTypes, Model, Optional, literal } from "sequelize";
 import { sequelize } from "../config/database.js";
 
 /**
@@ -111,7 +111,7 @@ Notification.init(
         SentAt: {
             type: DataTypes.DATE,
             allowNull: false,
-            defaultValue: DataTypes.NOW,
+            defaultValue: literal('GETDATE()'),
         },
         ExpiresAt: {
             type: DataTypes.DATE,

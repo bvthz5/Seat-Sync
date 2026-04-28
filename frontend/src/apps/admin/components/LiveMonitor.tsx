@@ -1,17 +1,24 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Chip, Tooltip, Progress } from '@heroui/react';
 import { AlertCircle, Users, Box, ChevronRight } from 'lucide-react';
-
-const rooms = [
-    { id: '101', name: 'Main Hall A', status: 'active', capacity: 60, occupied: 45, issue: false },
-    { id: '102', name: 'Lecture Hall B', status: 'active', capacity: 40, occupied: 38, issue: true },
-    { id: '103', name: 'Computer Lab 1', status: 'vacant', capacity: 30, occupied: 0, issue: false },
-    { id: '104', name: 'Seminar Hall C', status: 'active', capacity: 100, occupied: 92, issue: false },
-    { id: '201', name: 'Drawing Hall D', status: 'prep', capacity: 50, occupied: 0, issue: false },
-    { id: '202', name: 'Multimedia Lab', status: 'active', capacity: 30, occupied: 15, issue: false },
-];
+import { DashboardService } from '../services/dashboardService';
 
 export const LiveMonitor: React.FC = () => {
+    const [rooms, setRooms] = useState<any[]>([]);
+
+    useEffect(() => {
+        const fetchRooms = async () => {
+            try {
+                const response = await DashboardService.getRooms();
+                if (response.success) {
+                    setRooms(response.data);
+                }
+            } catch (err) {
+                console.error("fetch rooms failed", err);
+            }
+        };
+        fetchRooms();
+    }, []);
     return (
         <div className="w-full overflow-hidden">
             <div className="overflow-x-auto">
@@ -27,22 +34,22 @@ export const LiveMonitor: React.FC = () => {
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                         {rooms.map((room) => (
-                            <tr key={room.id} className="hover:bg-slate-50/50 transition-colors group">
+                            <tr key={room.roomName} className="hover:bg-slate-50/50 transition-colors group">
                                 <td className="px-6 py-4">
                                     <div className="flex items-center gap-3">
-                                        <div className={`p-2 rounded-lg ${room.status === 'active' ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
+                                        <div className={`p-2 rounded-lg ${room.status === 'ACTIVE' ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
                                             <Box size={16} />
                                         </div>
                                         <div>
                                             <div className="flex items-center gap-2">
-                                                <span className="text-sm font-bold text-slate-800 tracking-tight">{room.name}</span>
-                                                {room.issue && (
+                                                <span className="text-sm font-bold text-slate-800 tracking-tight">{room.roomName}</span>
+                                                {(room.status === 'OVERLOADED') && (
                                                     <Tooltip content="Capacity Alert" color="danger" size="sm">
                                                         <AlertCircle size={12} className="text-rose-500 animate-pulse" />
                                                     </Tooltip>
                                                 )}
                                             </div>
-                                            <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">REF ID: {room.id}</span>
+                                            <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">REF ID: {room.roomName}</span>
                                         </div>
                                     </div>
                                 </td>
@@ -51,22 +58,22 @@ export const LiveMonitor: React.FC = () => {
                                 </td>
                                 <td className="px-6 py-4">
                                     <div className="flex flex-col items-center">
-                                        <span className="text-sm font-bold text-slate-900 leading-none">{room.occupied}</span>
+                                        <span className="text-sm font-bold text-slate-900 leading-none">{room.allocated}</span>
                                         <span className="text-[9px] text-slate-400 font-bold uppercase mt-1">/ {room.capacity}</span>
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 min-w-[180px]">
                                     <div className="space-y-2">
                                         <div className="flex justify-between items-center">
-                                            <span className={`text-[10px] font-bold uppercase tracking-wider ${(room.occupied / room.capacity) > 0.9 ? 'text-rose-600' : 'text-slate-500'}`}>
-                                                {Math.round((room.occupied / room.capacity) * 100)}% Capacity
+                                            <span className={`text-[10px] font-bold uppercase tracking-wider ${(room.allocated / room.capacity) > 0.9 ? 'text-rose-600' : 'text-slate-500'}`}>
+                                                {Math.round((room.allocated / room.capacity) * 100)}% Capacity
                                             </span>
                                             <Users size={12} className="text-slate-300" />
                                         </div>
                                         <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
                                             <div
-                                                className={`h-full rounded-full transition-all duration-700 ${(room.occupied / room.capacity) > 0.9 ? 'bg-rose-500' : 'bg-indigo-500'}`}
-                                                style={{ width: `${(room.occupied / room.capacity) * 100}%` }}
+                                                className={`h-full rounded-full transition-all duration-700 ${(room.allocated / room.capacity) > 0.9 ? 'bg-rose-500' : 'bg-indigo-500'}`}
+                                                style={{ width: `${(room.allocated / room.capacity) * 100}%` }}
                                             />
                                         </div>
                                     </div>

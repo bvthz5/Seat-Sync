@@ -93,7 +93,7 @@ export const ManagementConsole: React.FC<ManagementConsoleProps> = ({ exam, allE
                                 }}
                             >
                                 {allExams.map(e => (
-                                    <DropdownItem key={e.ExamID} description={e.Session}>
+                                    <DropdownItem key={e.ExamID} description={e.Session} textValue={e.ExamName}>
                                         {e.ExamName}
                                     </DropdownItem>
                                 ))}

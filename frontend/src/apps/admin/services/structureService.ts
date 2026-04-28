@@ -11,6 +11,10 @@ export interface PaginatedResponse<T> {
 }
 
 export const structureService = {
+    // --- DELETE ALL STRUCTURE DATA ---
+    deleteAllStructureData: async () => {
+        await api.delete(`${PREFIX}/all`);
+    },
     // --- BLOCKS ---
     getBlocks: async (params?: { page?: number, limit?: number, search?: string, status?: string }) => {
         const response = await api.get<PaginatedResponse<Block>>(`${PREFIX}/blocks`, { params });
@@ -54,7 +58,7 @@ export const structureService = {
         const response = await api.post<Room>(`/rooms`, data);
         return response.data;
     },
-    bulkCreateRooms: async (data: { blockId: number, floorId: number, rooms: { roomCode: string, capacity: number }[] }) => {
+    bulkCreateRooms: async (data: { blockId: number, floorId: number, rooms: { roomCode: string, TotalCapacity: number }[] }) => {
         const response = await api.post<Room[]>(`/rooms/bulk`, data);
         return response.data;
     },
@@ -70,18 +74,11 @@ export const structureService = {
     disableRoom: async (id: number) => {
         await api.patch(`/rooms/${id}/disable`);
     },
+    enableRoom: async (id: number) => {
+        await api.patch(`/rooms/${id}/enable`);
+    },
     deleteRoom: async (id: number) => {
-        // Using disable instead of delete as per new requirement, 
-        // OR keeping delete if backend supports it. New backend doesn't implement DELETE.
-        // I will map delete to disable for safety or assume delete is not supported.
-        // Actually, let's keep it calling the OLD delete endpoint if strictly needed, 
-        // OR warn. But since I'm implementing the prompt which says "Actions (Edit / Disable)",
-        // I should probably remove Delete from UI.
-        // For service completeness, I'll map it to disable or leave it throwing 404 if I removed the route.
-        // The old route /admin/college-structure/rooms/:id DELETE might still work if I kept the file.
-        // I'll leave it as is pointing to OLD prefix for physical delete if needed, or update to disable.
-        // I'll point it to disable.
-        await api.patch(`/rooms/${id}/disable`);
+        await api.delete(`/rooms/${id}`);
     },
 
     // --- LAYOUT ---
@@ -103,6 +100,12 @@ export const structureService = {
         await api.delete(`${PREFIX}/zones/${zoneId}`);
     },
 
+    // --- AUTO-ZONE ---
+    autoZoneRoom: async (roomId: number, zoneCount: number) => {
+        const response = await api.post(`${PREFIX}/rooms/${roomId}/auto-zone`, { zoneCount });
+        return response.data;
+    },
+
     // --- SEAT UPDATES ---
     updateSeatZones: async (roomId: number, updates: { SeatID: number, ZoneID?: number | null, IsActive?: boolean }[]) => {
         const response = await api.put(`${PREFIX}/rooms/${roomId}/seats`, { updates });
@@ -110,14 +113,33 @@ export const structureService = {
     },
 
     // --- IMPORT ---
-    importStructure: async (file: File) => {
+    importStructure: async (file: File, options?: { autoZone: boolean, zoneCount: number }, previewData?: { BlockName: string, FloorNumber: string, RoomCode: string, Capacity: string, IsExamUsable: string }[]) => {
+        // If pre-processed data is available, send as JSON to avoid backend re-parsing issues
+        if (previewData && previewData.length > 0) {
+            console.log('[DEBUG] Sending pre-processed JSON data:', { records: previewData.length, options });
+            const response = await api.post<{ blocksCreated: number, floorsCreated: number, roomsCreated: number, roomsUpdated?: number }>(
+                `/college-structure/import/json`,
+                {
+                    data: previewData,
+                    autoZone: options?.autoZone || false,
+                    zoneCount: options?.zoneCount || 2
+                }
+            );
+            return response.data;
+        }
+
+        // Fallback: send raw file via FormData
         const formData = new FormData();
         formData.append('file', file);
-        const response = await api.post<{ blocksCreated: number, floorsCreated: number, roomsCreated: number }>(`/college-structure/import/csv`, formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data',
-            },
-        });
+        if (options?.autoZone) formData.append('autoZone', 'true');
+        if (options?.zoneCount) formData.append('zoneCount', options.zoneCount.toString());
+
+        console.log('[DEBUG] Uploading file:', { fileName: file.name, fileSize: file.size, options });
+
+        const response = await api.post<{ blocksCreated: number, floorsCreated: number, roomsCreated: number, roomsUpdated?: number }>(
+            `/college-structure/import/csv`,
+            formData
+        );
         return response.data;
     }
 };

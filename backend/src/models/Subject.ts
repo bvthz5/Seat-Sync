@@ -1,3 +1,4 @@
+
 import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from "../config/database.js";
 import { Department } from "./Department.js";
@@ -17,7 +18,7 @@ interface SubjectAttributes {
 /**
  * Attributes required when creating a subject
  */
-interface SubjectCreationAttributes extends Optional<SubjectAttributes, "SubjectID"> { }
+interface SubjectCreationAttributes extends Optional<SubjectAttributes, "SubjectID" | "SemesterID"> { }
 
 export class Subject extends Model<SubjectAttributes, SubjectCreationAttributes>
   implements SubjectAttributes {
@@ -53,12 +54,12 @@ Subject.init(
     },
     SemesterID: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: false, // must not be null
       references: {
-        model: "Semesters",
-        key: "SemesterID",
+        model: 'Semesters',
+        key: 'SemesterID',
       },
-    }
+    },
   },
   {
     sequelize,
@@ -79,10 +80,10 @@ Department.hasMany(Subject, {
   onDelete: 'CASCADE',
 });
 
+// Add Semester association
 Subject.belongsTo(Semester, {
   foreignKey: "SemesterID",
 });
-
 Semester.hasMany(Subject, {
   foreignKey: "SemesterID",
   onDelete: 'CASCADE',

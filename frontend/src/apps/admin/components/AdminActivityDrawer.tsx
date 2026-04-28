@@ -147,7 +147,7 @@ const AdminActivityDrawer: React.FC<AdminActivityDrawerProps> = ({ isOpen, onClo
                         animate={{ x: 0 }}
                         exit={{ x: '100%' }}
                         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                        className="fixed right-0 top-0 bottom-0 w-full max-w-2xl bg-white shadow-2xl z-50 flex flex-col border-l border-slate-200"
+                        className="fixed right-0 top-[50px] bottom-0 w-full max-w-2xl bg-white shadow-2xl z-50 flex flex-col border-l border-slate-200"
                     >
                         {/* Header */}
                         <div className="p-6 border-b border-slate-100 bg-white z-10">

@@ -81,7 +81,9 @@ export const forceLogoutSession = async (req: Request, res: Response): Promise<v
             EntityID: session.SessionID,
             Details: `Force logged out session for user: ${(session as any).user?.Email}`,
             IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
+            UserAgent: req.get('user-agent') || 'unknown',
+            Severity: 'Info',
+            Status: 'Success'
         });
 
         res.status(200).json({
@@ -143,7 +145,9 @@ export const forceLogoutUser = async (req: Request, res: Response): Promise<void
             EntityID: user.UserID,
             Details: `Force logged out all sessions for user: ${user.Email}`,
             IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
+            UserAgent: req.get('user-agent') || 'unknown',
+            Severity: 'Info',
+            Status: 'Success'
         });
 
         res.status(200).json({
@@ -189,7 +193,9 @@ export const invalidateAllTokens = async (req: Request, res: Response): Promise<
             EntityID: 0,
             Details: `Emergency: Invalidated all tokens system-wide`,
             IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
+            UserAgent: req.get('user-agent') || 'unknown',
+            Severity: 'Info',
+            Status: 'Success'
         });
 
         res.status(200).json({

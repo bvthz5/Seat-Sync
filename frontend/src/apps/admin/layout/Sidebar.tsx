@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { sidebarConfig, SidebarItem as SidebarItemType } from '../config/sidebar.config';
 
-const Sidebar: React.FC<{ isOpen: boolean }> = ({ isOpen }) => {
+const Sidebar: React.FC<{ isOpen: boolean; onSeatingClick: () => void }> = ({ isOpen, onSeatingClick }) => {
     const { user, logout } = useAuth();
     const [openSections, setOpenSections] = useState<Record<string, boolean>>({ "Administration": true });
     const location = useLocation();
@@ -93,22 +93,35 @@ const Sidebar: React.FC<{ isOpen: boolean }> = ({ isOpen }) => {
             );
         }
 
+        const isSeatingPlans = item.label === "Seating Plans";
+        // Manual active check for seating to cover sub-routes like /admin/seating/endsem
+        const isActiveSeating = isSeatingPlans && location.pathname.startsWith('/admin/seating');
+
         return (
             <NavLink
                 key={item.path}
-                to={item.path!}
+                to={isSeatingPlans ? '/admin/seating' : item.path!}
+                onClick={(e) => {
+                    if (isSeatingPlans) {
+                        e.preventDefault();
+                        onSeatingClick();
+                    }
+                }}
                 title={!isOpen ? item.label : undefined}
-                className={({ isActive }) => getLinkClass(isActive)}
+                className={({ isActive }) => getLinkClass(isActive || isActiveSeating)}
             >
-                {({ isActive }) => (
-                    <>
-                        {isActive && (
-                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full bg-indigo-500" />
-                        )}
-                        <span className={isActive ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600 transition-colors'}>{item.icon}</span>
-                        {isOpen && <span className="truncate">{item.label}</span>}
-                    </>
-                )}
+                {({ isActive }) => {
+                    const effectivelyActive = isActive || isActiveSeating;
+                    return (
+                        <>
+                            {effectivelyActive && (
+                                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full bg-indigo-500" />
+                            )}
+                            <span className={effectivelyActive ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600 transition-colors'}>{item.icon}</span>
+                            {isOpen && <span className="truncate">{item.label}</span>}
+                        </>
+                    );
+                }}
             </NavLink>
         );
     };

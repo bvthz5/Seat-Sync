@@ -83,8 +83,8 @@ const Dashboard: React.FC = () => {
                         <div className="w-px h-7 bg-slate-200 hidden md:block" />
 
                         <Select
-                            id="dashboard-series-select"
-                            name="dashboardSeriesSelect"
+                            id="series-filter" /* NEW */
+                            name="seriesFilter" /* NEW */
                             aria-label="Select Exam Series"
                             placeholder="Filter by series"
                             size="sm"

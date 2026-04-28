@@ -96,8 +96,7 @@ const DataCleanup: React.FC = () => {
 
             {/* Actions */}
             <div className="flex justify-between items-center bg-white p-2 rounded-2xl border border-gray-100 shadow-sm">
-                <Input
-                    classNames={{
+                <Input id="field-68wwhbi" name="field-68wwhbi" aria-label="Search users..." classNames={{
                         base: "w-full sm:w-96",
                         inputWrapper: "bg-transparent shadow-none hover:bg-gray-50 focus-within:!bg-gray-50 border-0 ring-0 data-[hover=true]:bg-gray-50",
                         input: "text-base",

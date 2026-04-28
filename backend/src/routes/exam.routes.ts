@@ -32,6 +32,59 @@ router.get('/stats', AuthMiddleware.verifyAccessToken, ExamController.getStats);
 
 /**
  * @swagger
+ * /api/exams/preview-timetable:
+ *   post:
+ *     summary: Preview timetable without importing
+ *     tags: [Exam]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Timetable preview data
+ */
+router.post('/preview-timetable', AuthMiddleware.verifyAccessToken, upload.single('file'), ExamController.previewTimetable);
+
+/**
+ * @swagger
+ * /api/exams/{id}/eligible-students/import:
+ *   post:
+ *     summary: Import eligible students for a branch-specific exam
+ *     tags: [Exam]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Eligible students imported
+ */
+router.post('/bulk-import-eligibility', AuthMiddleware.verifyAccessToken, upload.array('files'), ExamController.bulkImportEligibility);
+router.post('/:id/eligible-students/import', AuthMiddleware.verifyAccessToken, upload.single('file'), ExamController.importEligibleStudents);
+
+/**
+ * @swagger
  * /api/exams:
  *   get:
  *     summary: Get all exams
@@ -119,6 +172,26 @@ router.put('/:id', AuthMiddleware.verifyAccessToken, ExamController.updateExam);
 
 /**
  * @swagger
+ * /api/exams/{id}/eligible-students:
+ *   get:
+ *     summary: Get eligible students for an exam
+ *     tags: [Exam]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: List of eligible students
+ */
+router.get('/:id/eligible-students', AuthMiddleware.verifyAccessToken, ExamController.getEligibleStudents);
+
+/**
+ * @swagger
  * /api/exams/{id}:
  *   delete:
  *     summary: Delete an exam
@@ -135,6 +208,8 @@ router.put('/:id', AuthMiddleware.verifyAccessToken, ExamController.updateExam);
  *       200:
  *         description: Exam deleted
  */
+router.delete('/clear-eligibility', AuthMiddleware.verifyAccessToken, ExamController.clearEligibility);
+router.delete('/delete-all', AuthMiddleware.verifyAccessToken, ExamController.deleteAllExams);
 router.delete('/:id', AuthMiddleware.verifyAccessToken, ExamController.deleteExam);
 
 /**

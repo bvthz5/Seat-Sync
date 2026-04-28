@@ -8,9 +8,9 @@ import { Room } from "./Room.js";
 interface SeatAttributes {
   SeatID: number;
   RoomID: number;
-  RowLabel: string;
-  BenchNumber: number;
-  SeatNumber: number;
+  RowIndex: string;
+  BenchIndex: number;
+  SeatIndex: number;
   IsActive: boolean;
   ZoneID: number | null;
 }
@@ -24,9 +24,9 @@ export class Seat extends Model<SeatAttributes, SeatCreationAttributes>
   implements SeatAttributes {
   declare SeatID: number;
   declare RoomID: number;
-  declare RowLabel: string;
-  declare BenchNumber: number;
-  declare SeatNumber: number;
+  declare RowIndex: string;
+  declare BenchIndex: number;
+  declare SeatIndex: number;
   declare IsActive: boolean;
   declare ZoneID: number | null;
 }
@@ -46,17 +46,20 @@ Seat.init(
         key: "RoomID",
       },
     },
-    RowLabel: {
+    RowIndex: {
       type: DataTypes.CHAR(1),
       allowNull: false,
+      field: 'RowIndex',
     },
-    BenchNumber: {
+    BenchIndex: {
       type: DataTypes.INTEGER,
       allowNull: false,
+      field: 'BenchIndex',
     },
-    SeatNumber: {
+    SeatIndex: {
       type: DataTypes.INTEGER,
       allowNull: false,
+      field: 'SeatIndex',
     },
     IsActive: {
       type: DataTypes.BOOLEAN,
@@ -76,6 +79,14 @@ Seat.init(
     sequelize,
     tableName: "Seats",
     timestamps: false,
+    indexes: [
+      {
+        fields: ["RoomID", "ZoneID"], // Optimize query for room and zone seat filtering
+      },
+      {
+        fields: ["RoomID", "IsActive"], // Optimize active seats query
+      },
+    ],
   }
 );
 

@@ -87,8 +87,7 @@ const SettingItem: React.FC<SettingItemProps> = ({ icon: Icon, title, desc, defa
                 </div>
             </div>
             <div onClick={(e) => e.stopPropagation()}>
-                <Checkbox
-                    isSelected={isSelected}
+                <Checkbox id="chk-13odjqi" name="chk-13odjqi" isSelected={isSelected}
                     onValueChange={setIsSelected}
                     size="sm"
                     color="primary"

@@ -121,44 +121,71 @@ class NotificationService {
         }
 
         try {
+            // Simplified query: get recipients first, then notifications separately
             const { count, rows } = await NotificationRecipient.findAndCountAll({
                 where: whereClause,
-                include: [{
-                    model: Notification,
-                    as: 'Notification',
-                }],
+                attributes: ['RecipientID', 'NotificationID', 'UserID', 'IsRead', 'ReadAt'],
                 order: [
-                    ['IsRead', 'ASC'], // Unread first
-                    [{ model: Notification, as: 'Notification' }, 'SentAt', 'DESC']
+                    ['IsRead', 'ASC'],
+                    ['RecipientID', 'DESC']
                 ],
                 limit: Number(limit),
-                offset: Number(offset)
+                offset: Number(offset),
+                raw: true
             });
+
+            if (rows.length === 0) {
+                return {
+                    total: count,
+                    page: Number(page),
+                    totalPages: Math.ceil(count / limit),
+                    data: []
+                };
+            }
+
+            // Get notification IDs
+            const notifIds = rows.map((r: any) => r.NotificationID);
+
+            // Fetch notifications separately to avoid join issues
+            const notifications = await Notification.findAll({
+                where: { NotificationID: notifIds },
+                attributes: ['NotificationID', 'Title', 'Message', 'Type', 'Category', 'Priority', 'SentAt', 'Metadata'],
+                raw: true
+            });
+
+            // Create a map for quick lookup
+            const notifMap: any = {};
+            notifications.forEach((n: any) => {
+                notifMap[n.NotificationID] = n;
+            });
+
+            // Combine data
+            const data = rows.map((r: any) => {
+                const n = notifMap[r.NotificationID];
+                if (!n) return null;
+                return {
+                    id: n.NotificationID,
+                    recipientId: r.RecipientID,
+                    title: n.Title,
+                    message: n.Message,
+                    type: n.Type,
+                    category: n.Category,
+                    priority: n.Priority,
+                    sentAt: n.SentAt,
+                    isRead: r.IsRead,
+                    readAt: r.ReadAt,
+                    metadata: n.Metadata
+                };
+            }).filter(Boolean);
 
             return {
                 total: count,
                 page: Number(page),
                 totalPages: Math.ceil(count / limit),
-                data: rows.map(r => {
-                    const n = (r as any).Notification;
-                    if (!n) return null; // Defensive check
-                    return {
-                        id: n.NotificationID,
-                        recipientId: r.RecipientID,
-                        title: n.Title,
-                        message: n.Message,
-                        type: n.Type,
-                        category: n.Category,
-                        priority: n.Priority,
-                        sentAt: n.SentAt,
-                        isRead: r.IsRead,
-                        readAt: r.ReadAt,
-                        metadata: n.Metadata
-                    };
-                }).filter(Boolean)
+                data
             };
-        } catch (e) {
-            console.warn(`Could not load notifications for user ${userId}:`, e);
+        } catch (e: any) {
+            console.error(`Error loading notifications for user ${userId}:`, e.message || e);
             return { total: 0, page: Number(page), totalPages: 0, data: [] };
         }
     }

@@ -1,13 +1,17 @@
+
 import express from "express";
+const router = express.Router();
 import { AuthMiddleware } from "../middlewares/auth.middleware.js";
 import {
     getBlocks, createBlock, updateBlock, deleteBlock,
     getFloors, createFloor, updateFloor, deleteFloor,
-    getRooms, createRoom, updateRoom, deleteRoom, getRoomLayout,
-    getZones, createZone, deleteZone, updateSeatZones
+    getRooms, createRoom, updateRoom, deleteRoom, getRoomLayout, bulkCreateRooms, autoZoneRoom,
+    getZones, createZone, deleteZone, updateSeatZones,
+    deleteAllStructureData
 } from "../controllers/collegeStructure.controller.js";
 
-const router = express.Router();
+// Delete all structure data (Blocks, Floors, Rooms, Seats, Zones)
+router.delete("/all", deleteAllStructureData);
 
 // Apply Root Admin protection to all routes
 router.use(AuthMiddleware.requireRootAuth);
@@ -382,11 +386,11 @@ router.get("/rooms", getRooms);
  *                     properties:
  *                       SeatID:
  *                         type: integer
- *                       RowLabel:
+ *                       RowIndex:
  *                         type: string
- *                       BenchNumber:
+ *                       BenchIndex:
  *                         type: integer
- *                       SeatNumber:
+ *                       SeatIndex:
  *                         type: integer
  *                 seatCount:
  *                   type: integer
@@ -444,6 +448,7 @@ router.get("/rooms/:id/layout", getRoomLayout);
  *         description: Server error
  */
 router.post("/rooms", createRoom);
+router.post("/rooms/bulk", bulkCreateRooms);
 
 /**
  * @swagger
@@ -494,34 +499,10 @@ router.post("/rooms", createRoom);
  */
 router.put("/rooms/:id", updateRoom);
 
-/**
- * @swagger
- * /api/admin/college-structure/rooms/{id}:
- *   delete:
- *     summary: Delete a room
- *     tags: [Structure]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Room ID
- *     responses:
- *       200:
- *         description: Room deleted successfully
- *       400:
- *         description: Cannot delete room with history
- *       500:
- *         description: Server error
- */
-router.delete("/rooms/:id", deleteRoom);
-
 // --- ZONES ---
 router.get("/rooms/:roomId/zones", getZones);
 router.post("/rooms/:roomId/zones", createZone);
+router.post("/rooms/:roomId/auto-zone", autoZoneRoom);
 router.delete("/zones/:id", deleteZone);
 
 // --- SEAT MANAGEMENT ---

@@ -11,21 +11,21 @@ interface RoomAttributes {
   BlockID: number;
   FloorID: number;
   RoomCode: string; // Renamed from RoomName
-  Capacity: number; // New field
-  TotalRows: number;
-  BenchesPerRow: number;
+  TotalCapacity: number; // New field
+  OverrideCap?: number | null; // Optional override cap
+  RoomType: "ROOM" | "HALL";
+  LayoutType: "CUSTOM";
+  RowLayout: number[];
   SeatsPerBench: number;
   Status: "Active" | "Inactive";
   ExamUsable: boolean;
-  RoomType: "ROOM" | "HALL";
-  BenchMode: "PAIRED" | "ALTERNATING";
   IsLayoutLocked: boolean;
 }
 
 /**
  * Attributes required when creating a room
  */
-interface RoomCreationAttributes extends Optional<RoomAttributes, "RoomID" | "TotalRows" | "BenchesPerRow" | "SeatsPerBench" | "RoomType" | "BenchMode" | "IsLayoutLocked"> { }
+interface RoomCreationAttributes extends Optional<RoomAttributes, "RoomID" | "RoomType" | "LayoutType" | "RowLayout" | "SeatsPerBench" | "IsLayoutLocked" | "OverrideCap"> { }
 
 export class Room extends Model<RoomAttributes, RoomCreationAttributes>
   implements RoomAttributes {
@@ -33,14 +33,14 @@ export class Room extends Model<RoomAttributes, RoomCreationAttributes>
   declare BlockID: number;
   declare FloorID: number;
   declare RoomCode: string;
-  declare Capacity: number;
-  declare TotalRows: number;
-  declare BenchesPerRow: number;
+  declare TotalCapacity: number;
+  declare OverrideCap: number | null;
+  declare RoomType: "ROOM" | "HALL";
+  declare LayoutType: "CUSTOM";
+  declare RowLayout: number[];
   declare SeatsPerBench: number;
   declare Status: "Active" | "Inactive";
   declare ExamUsable: boolean;
-  declare RoomType: "ROOM" | "HALL";
-  declare BenchMode: "PAIRED" | "ALTERNATING";
   declare IsLayoutLocked: boolean;
 }
 
@@ -72,28 +72,50 @@ Room.init(
       allowNull: false,
       field: 'RoomName'
     },
-    Capacity: {
+    TotalCapacity: {
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 0,
+      field: 'Capacity',
       validate: {
         min: 0
       }
     },
-    TotalRows: {
+    OverrideCap: {
       type: DataTypes.INTEGER,
-      allowNull: false,
-      defaultValue: 0,
+      allowNull: true,
+      defaultValue: null,
+      field: 'OverrideCap',
+      validate: {
+        min: 0
+      }
     },
-    BenchesPerRow: {
-      type: DataTypes.INTEGER,
+    RoomType: {
+      type: DataTypes.ENUM("ROOM", "HALL"),
       allowNull: false,
-      defaultValue: 0,
+      defaultValue: "ROOM",
+    },
+    LayoutType: {
+      type: DataTypes.ENUM("CUSTOM"),
+      allowNull: false,
+      defaultValue: "CUSTOM",
+    },
+    RowLayout: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+      defaultValue: "[]" as any,
+      get() {
+        const val = this.getDataValue('RowLayout');
+        try { return typeof val === 'string' ? JSON.parse(val) : val; } catch(e) { return []; }
+      },
+      set(val: any) {
+        this.setDataValue('RowLayout', (typeof val === 'string' ? val : JSON.stringify(val)) as any);
+      }
     },
     SeatsPerBench: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      defaultValue: 0,
+      defaultValue: 2,
     },
     Status: {
       type: DataTypes.ENUM("Active", "Inactive"),
@@ -104,16 +126,6 @@ Room.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: true,
-    },
-    RoomType: {
-      type: DataTypes.ENUM("ROOM", "HALL"),
-      allowNull: false,
-      defaultValue: "ROOM",
-    },
-    BenchMode: {
-      type: DataTypes.ENUM("PAIRED", "ALTERNATING"),
-      allowNull: false,
-      defaultValue: "PAIRED",
     },
     IsLayoutLocked: {
       type: DataTypes.BOOLEAN,

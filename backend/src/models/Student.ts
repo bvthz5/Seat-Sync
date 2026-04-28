@@ -12,26 +12,32 @@ interface StudentAttributes {
   StudentID: number;
   UserID: number | null;
   RegisterNumber: string;
-  DepartmentID: number | null;
-  ProgramID: number | null;
-  SemesterID: number | null;
-  BatchYear: number | null;
+  FullName: string;
+  DepartmentID: number;
+  ProgramID: number;
+  SemesterID: number;
+  BatchYear: number;
+  Status: "ACTIVE" | "GRADUATED" | "DROPPED";
+  AdmissionDate: Date | null;
 }
 
 /**
  * Attributes required when creating a student
  */
-interface StudentCreationAttributes extends Optional<StudentAttributes, "StudentID" | "UserID" | "DepartmentID" | "ProgramID" | "SemesterID" | "BatchYear"> { }
+interface StudentCreationAttributes extends Optional<StudentAttributes, "StudentID" | "UserID" | "Status" | "AdmissionDate" | "DepartmentID" | "ProgramID" | "SemesterID" | "BatchYear" | "FullName"> {}
 
 export class Student extends Model<StudentAttributes, StudentCreationAttributes>
   implements StudentAttributes {
   declare StudentID: number;
   declare UserID: number | null;
   declare RegisterNumber: string;
-  declare DepartmentID: number | null;
-  declare ProgramID: number | null;
-  declare SemesterID: number | null;
-  declare BatchYear: number | null;
+  declare FullName: string;
+  declare DepartmentID: number;
+  declare ProgramID: number;
+  declare SemesterID: number;
+  declare BatchYear: number;
+  declare Status: "ACTIVE" | "GRADUATED" | "DROPPED";
+  declare AdmissionDate: Date | null;
 }
 
 Student.init(
@@ -54,6 +60,11 @@ Student.init(
       type: DataTypes.STRING(50),
       allowNull: false,
       unique: true,
+    },
+    FullName: {
+      type: DataTypes.STRING(100),
+      allowNull: false,
+      defaultValue: '',
     },
     DepartmentID: {
       type: DataTypes.INTEGER,
@@ -83,6 +94,18 @@ Student.init(
       type: DataTypes.INTEGER,
       allowNull: true,
     },
+    Status: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: "ACTIVE",
+      validate: {
+        isIn: [['ACTIVE', 'GRADUATED', 'DROPPED']]
+      }
+    },
+    AdmissionDate: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
   },
   {
     sequelize,
@@ -96,6 +119,7 @@ Student.init(
  */
 Student.belongsTo(User, {
   foreignKey: "UserID",
+  onDelete: 'NO ACTION',
 });
 
 User.hasOne(Student, {
@@ -104,29 +128,32 @@ User.hasOne(Student, {
 
 Student.belongsTo(Department, {
   foreignKey: "DepartmentID",
+  onDelete: 'NO ACTION',
 });
 
 Department.hasMany(Student, {
   foreignKey: "DepartmentID",
-  onDelete: 'CASCADE',
+  onDelete: 'NO ACTION',
 });
 
 Student.belongsTo(Program, {
   foreignKey: "ProgramID",
+  onDelete: 'NO ACTION',
 });
 
 Program.hasMany(Student, {
   foreignKey: "ProgramID",
-  onDelete: 'CASCADE',
+  onDelete: 'NO ACTION',
 });
 
 Student.belongsTo(Semester, {
   foreignKey: "SemesterID",
+  onDelete: 'NO ACTION',
 });
 
 Semester.hasMany(Student, {
   foreignKey: "SemesterID",
-  onDelete: 'CASCADE',
+  onDelete: 'NO ACTION',
 });
 
 export default Student;

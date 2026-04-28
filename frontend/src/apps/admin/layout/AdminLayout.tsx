@@ -6,17 +6,20 @@ import { useAuth } from '../../../hooks/useAuth';
 import { motion } from 'framer-motion';
 import { Menu, Bell, LogOut, User, ChevronDown } from 'lucide-react';
 import { GlobalNotificationDrawer } from '../components/notifications/GlobalNotificationDrawer';
+import SeatingTypeModal from '../components/seating/SeatingTypeModal';
 
 const AdminLayout: React.FC = () => {
     const { logout, user } = useAuth();
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [notificationOpen, setNotificationOpen] = useState(false);
+    const [isSeatingModalOpen, setIsSeatingModalOpen] = useState(false);
     const navigate = useNavigate();
 
     return (
         <div className="flex h-screen w-full bg-[#f4f6f9] overflow-hidden font-sans selection:bg-indigo-100">
             {/* Global Notification Drawer */}
             <GlobalNotificationDrawer isOpen={notificationOpen} onClose={() => setNotificationOpen(false)} />
+            <SeatingTypeModal isOpen={isSeatingModalOpen} onClose={() => setIsSeatingModalOpen(false)} />
 
             {/* Top App Bar — White navbar */}
             <div className="fixed top-0 left-0 right-0 h-14 bg-white z-50 flex items-center px-5 justify-between border-b border-slate-200">
@@ -119,7 +122,7 @@ const AdminLayout: React.FC = () => {
                 className="fixed left-0 top-14 bottom-0 z-40 transition-all duration-300 ease-in-out overflow-hidden"
                 style={{ width: sidebarOpen ? '240px' : '72px' }}
             >
-                <Sidebar isOpen={sidebarOpen} />
+                <Sidebar isOpen={sidebarOpen} onSeatingClick={() => setIsSeatingModalOpen(true)} />
             </div>
 
             {/* Main Content Area */}

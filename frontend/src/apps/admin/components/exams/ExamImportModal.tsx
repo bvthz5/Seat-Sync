@@ -1,10 +1,11 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button, Select, SelectItem } from '@heroui/react';
 import { Upload, Download, FileSpreadsheet, CheckCircle2, Plus } from 'lucide-react';
 import { ExamService } from '../../services/examService';
 import { SeriesService } from '../../services/seriesService';
 import { toast } from 'react-hot-toast';
+import ExamImportPreview from './ExamImportPreview';
 
 interface ExamImportModalProps {
     isOpen: boolean;
@@ -14,12 +15,18 @@ interface ExamImportModalProps {
 }
 
 const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: ExamImportModalProps) => {
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [importing, setImporting] = useState(false);
+    const [importProgress, setImportProgress] = useState(0);
+    const [importLabel, setImportLabel] = useState('');
     const [examTitle, setExamTitle] = useState('');
     const [series, setSeries] = useState<any[]>([]);
     const [selectedSeriesId, setSelectedSeriesId] = useState<string>('');
     const [loadingSeries, setLoadingSeries] = useState(false);
+    const [previewing, setPreviewing] = useState(false);
+    const [previewData, setPreviewData] = useState<any>(null);
+    const [showPreview, setShowPreview] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
         if (isOpen) {
@@ -34,12 +41,14 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
         setLoadingSeries(true);
         try {
             const response = await SeriesService.getAll();
-            if (response.success) {
-                setSeries(response.data);
-                // Auto-select first series if available AND no pre-selection
-                if (response.data.length > 0 && !selectedSeriesId && !preSelectedSeriesId) {
-                    setSelectedSeriesId(String(response.data[0].ExamSeriesID));
-                }
+            // Handle both {success, data} wrapper and plain array
+            const list = Array.isArray(response)
+                ? response
+                : (response?.data || []);
+            setSeries(list);
+            // Auto-select first series if available AND no pre-selection
+            if (list.length > 0 && !preSelectedSeriesId && !selectedSeriesId) {
+                setSelectedSeriesId(String(list[0].ExamSeriesID));
             }
         } catch (error) {
             console.error("Failed to fetch series:", error);
@@ -50,9 +59,47 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
     };
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            setSelectedFile(e.target.files[0]);
+        if (!e.target.files || e.target.files.length === 0) return;
+
+        const files = Array.from(e.target.files);
+        const validFiles: File[] = [];
+        let hasPdf = false;
+        let hasWordRtf = false;
+
+        for (const file of files) {
+            const fileName = file.name.toLowerCase();
+            const accepted =
+                fileName.endsWith('.xlsx') ||
+                fileName.endsWith('.xls') ||
+                fileName.endsWith('.csv') ||
+                fileName.endsWith('.pdf') ||
+                fileName.endsWith('.doc') ||
+                fileName.endsWith('.docx') ||
+                fileName.endsWith('.rtf');
+
+            if (!accepted) continue;
+            if (fileName.endsWith('.pdf')) hasPdf = true;
+            if (fileName.endsWith('.doc') || fileName.endsWith('.docx') || fileName.endsWith('.rtf')) hasWordRtf = true;
+            validFiles.push(file);
         }
+
+        if (validFiles.length === 0) {
+            toast.error('Only .xlsx, .xls, .csv, .pdf, .doc, .docx, and .rtf files are supported');
+            return;
+        }
+
+        if (validFiles.length !== files.length) {
+            toast.error(`${files.length - validFiles.length} unsupported file(s) were skipped`);
+        }
+
+        if (hasPdf) {
+            toast('PDF import is best-effort. Please verify the result after import.');
+        }
+        if (hasWordRtf) {
+            toast('Word/RTF import is best-effort. Please verify the result after import.');
+        }
+
+        setSelectedFiles(validFiles);
     };
 
     const handleDownloadTemplate = async () => {
@@ -65,9 +112,35 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
         }
     };
 
-    const handleImport = async () => {
-        if (!selectedFile) {
+    const handlePreview = async () => {
+        if (selectedFiles.length === 0) {
             toast.error('Please select a file first');
+            return;
+        }
+
+        setPreviewing(true);
+        try {
+            const result = await ExamService.previewTimetable(selectedFiles[0]);
+            setPreviewData({
+                ...result,
+                successCount: result.data?.length || 0,
+                updatedCount: 0,
+                errorCount: 0,
+                errors: []
+            });
+            setShowPreview(true);
+        } catch (error: any) {
+            console.error(error);
+            const errorMsg = error.response?.data?.message || 'Failed to preview timetable';
+            toast.error(errorMsg);
+        } finally {
+            setPreviewing(false);
+        }
+    };
+
+    const handleImport = async () => {
+        if (selectedFiles.length === 0) {
+            toast.error('Please select at least one file');
             return;
         }
 
@@ -77,27 +150,66 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
         }
 
         setImporting(true);
+        setImportProgress(0);
+        setImportLabel('Preparing import…');
         try {
-            const result = await ExamService.importTimetable(
-                selectedFile,
-                parseInt(selectedSeriesId),
-                examTitle
-            );
+            let totalCreated = 0;
+            let totalUpdated = 0;
+            let totalRowErrors = 0;
+            let fileFailures = 0;
+            const fileFailureMessages: string[] = [];
+            const rowIssueMessages: string[] = [];
 
-            const created = result.successCount || 0;
-            const updated = result.updatedCount || 0;
+            for (let i = 0; i < selectedFiles.length; i++) {
+                const file = selectedFiles[i];
+                setImportLabel(`Processing ${file.name}…`);
+                setImportProgress(Math.round((i / selectedFiles.length) * 90));
+                try {
+                    const result = await ExamService.importTimetable(
+                        file,
+                        parseInt(selectedSeriesId),
+                        examTitle
+                    );
 
-            if (created > 0 || updated > 0) {
-                toast.success(`Complete: ${created} created, ${updated} updated`);
+                    totalCreated += result.successCount || 0;
+                    totalUpdated += result.updatedCount || 0;
+                    totalRowErrors += result.errorCount || 0;
+                    if (Array.isArray(result.errors) && result.errors.length > 0) {
+                        rowIssueMessages.push(`${file.name}: ${result.errors[0]}`);
+                    }
+                } catch (error: any) {
+                    fileFailures++;
+                    console.error(`Import failed for ${file.name}:`, error);
+                    const serverMessage =
+                        error?.response?.data?.message ||
+                        error?.response?.data?.error ||
+                        error?.message ||
+                        'Unknown import error';
+                    fileFailureMessages.push(`${file.name}: ${serverMessage}`);
+                }
+            }
+
+            setImportProgress(100);
+            setImportLabel('Import complete!');
+            await new Promise(r => setTimeout(r, 600));
+
+            if (totalCreated > 0 || totalUpdated > 0) {
+                toast.success(`Complete: ${totalCreated} created, ${totalUpdated} updated`);
             } else {
-                toast('No changes made', { icon: 'ℹ️' });
+                toast('No changes made');
+            }
+            if (totalRowErrors > 0 || fileFailures > 0) {
+                toast.error(`Completed with issues: ${totalRowErrors} row errors, ${fileFailures} file failures`);
+                if (fileFailureMessages.length > 0) {
+                    toast.error(fileFailureMessages[0] as string);
+                } else if (rowIssueMessages.length > 0) {
+                    toast.error(rowIssueMessages[0] as string);
+                }
             }
 
-            if (result.errorCount > 0) {
-                toast.error(`Failed: ${result.errorCount} errors (Check console)`);
-                console.error("Import Errors:", result.errors);
-            }
-            setSelectedFile(null);
+            setSelectedFiles([]);
+            setShowPreview(false);
+            setPreviewData(null);
             onSuccess();
             onClose();
         } catch (error: any) {
@@ -115,22 +227,27 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
     };
 
     const handleClose = () => {
-        setSelectedFile(null);
+        setSelectedFiles([]);
+        setShowPreview(false);
+        setImportProgress(0);
+        setImportLabel('');
+        setPreviewData(null);
         onClose();
     };
 
     return (
-        <Modal
-            isOpen={isOpen}
-            onOpenChange={handleClose}
-            size="2xl"
-            backdrop="blur"
-            classNames={{
-                wrapper: "z-[999]",
-                backdrop: "z-[998] bg-black/50",
-                base: "bg-white"
-            }}
-        >
+        <>
+            <Modal
+                isOpen={isOpen}
+                onOpenChange={handleClose}
+                size="2xl"
+                backdrop="blur"
+                classNames={{
+                    wrapper: "z-[999]",
+                    backdrop: "z-[998] bg-black/50",
+                    base: "bg-white"
+                }}
+            >
             <ModalContent>
                 {(onClose) => (
                     <>
@@ -152,7 +269,7 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                         <CheckCircle2 className="text-purple-600 flex-shrink-0" size={20} />
                                         <div className="text-sm text-purple-800">
                                             <p className="font-semibold mb-1">Upload Timetable</p>
-                                            <p>Upload your Excel timetable containing Date, Session, and Subject Codes. The system will automatically check for scheduling conflicts.</p>
+                                            <p>Upload timetable files (.xlsx/.xls/.csv/.pdf/.doc/.docx/.rtf). The system will automatically check for scheduling conflicts.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -160,25 +277,38 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                 {/* Exam Series Selection */}
                                 <div className="space-y-2">
                                     <div className="flex justify-between items-end">
-                                        <label className="block text-sm font-medium text-slate-700">
-                                            Target Exam Series <span className="text-red-500">*</span>
-                                        </label>
+                                          <div className="block text-sm font-medium text-slate-700">
+                                              Target Exam Series <span className="text-red-500">*</span>
+                                          </div>
                                     </div>
                                     <div className="flex gap-2">
                                         <div className="flex-1">
                                             <Select
                                                 id="import-series-select"
                                                 name="seriesSelect"
+                                                aria-label="Target Exam Series"
                                                 placeholder="Select an exam series"
-                                                label="Target Exam Series"
-                                                selectedKeys={selectedSeriesId ? [selectedSeriesId] : []}
+                                                selectedKeys={selectedSeriesId && series.some(s => String(s.ExamSeriesID) === String(selectedSeriesId)) ? [selectedSeriesId] : []}
                                                 onChange={(e) => setSelectedSeriesId(e.target.value)}
                                                 variant="bordered"
                                                 isDisabled={loadingSeries}
                                                 className="w-full"
+                                                disableAnimation
+                                                classNames={{
+                                                    trigger: "bg-white border border-slate-300 hover:border-purple-400 rounded-lg shadow-sm h-11 flex justify-between items-center px-3",
+                                                    value: "text-slate-800 font-medium",
+                                                    selectorIcon: "right-3 absolute text-slate-500",
+                                                    popoverContent: "bg-white border border-slate-200 shadow-xl rounded-xl z-[9999] p-1",
+                                                    listboxWrapper: "bg-white",
+                                                    listbox: "bg-white p-0",
+                                                }}
                                             >
                                                 {series.map((s) => (
-                                                    <SelectItem key={String(s.ExamSeriesID)} textValue={s.SeriesName}>
+                                                    <SelectItem
+                                                        key={String(s.ExamSeriesID)}
+                                                        textValue={s.SeriesName}
+                                                        className="rounded-lg text-slate-700 data-[hover=true]:bg-purple-50 data-[hover=true]:text-purple-700 data-[selected=true]:bg-purple-50 data-[selected=true]:text-purple-700 font-medium"
+                                                    >
                                                         {s.SeriesName} ({s.AcademicYear?.YearName || 'Unknown Year'})
                                                     </SelectItem>
                                                 ))}
@@ -192,11 +322,10 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
 
                                 {/* Exam Series Title Input */}
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                                      <div className="block text-sm font-medium text-slate-700 mb-1">
                                         Exam Name Prefix (Optional)
-                                    </label>
-                                    <input
-                                        id="import-exam-title"
+                                    </div>
+                                    <input id="examTitle"
                                         name="examTitle"
                                         type="text"
                                         autoComplete="off"
@@ -214,7 +343,7 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                 <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg bg-slate-50">
                                     <div className="flex flex-col">
                                         <span className="font-medium text-slate-900">Download Template</span>
-                                        <span className="text-sm text-slate-500">Use this Excel format for importing</span>
+                                        <span className="text-sm text-slate-500">Recommended: use this Excel format for highest import accuracy</span>
                                     </div>
                                     <Button
                                         size="sm"
@@ -233,30 +362,31 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                     <input
                                         type="file"
                                         name="fileUpload"
-                                        accept=".xlsx,.xls"
+                                        accept=".xlsx,.xls,.csv,.pdf,.doc,.docx,.rtf"
+                                        multiple
                                         onChange={handleFileSelect}
                                         className="hidden"
                                         id="file-upload"
+                                        ref={fileInputRef}
                                     />
-                                    <label
-                                        htmlFor="file-upload"
-                                        className={`
+                                    <label htmlFor="file-upload" className={`
                                             flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer transition-all
-                                            ${selectedFile
+                                            ${selectedFiles.length > 0
                                                 ? 'border-purple-500 bg-purple-50'
                                                 : 'border-slate-300 hover:border-purple-400 hover:bg-slate-50'
                                             }
                                         `}
                                     >
                                         <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                            {selectedFile ? (
+                                            {selectedFiles.length > 0 ? (
                                                 <>
                                                     <FileSpreadsheet className="w-8 h-8 text-purple-600 mb-2" />
                                                     <p className="text-sm text-purple-900 font-medium">
-                                                        {selectedFile.name}
+                                                        {selectedFiles.length} file(s) selected
                                                     </p>
                                                     <p className="text-xs text-purple-500 mt-1">
-                                                        {(selectedFile.size / 1024).toFixed(2)} KB
+                                                        {selectedFiles.slice(0, 2).map(f => f.name).join(', ')}
+                                                        {selectedFiles.length > 2 ? ` +${selectedFiles.length - 2} more` : ''}
                                                     </p>
                                                 </>
                                             ) : (
@@ -266,7 +396,7 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                                         Click to upload or drag and drop
                                                     </p>
                                                     <p className="text-xs text-slate-500 mt-1">
-                                                        Excel files only (.xlsx, .xls)
+                                                        .xlsx, .xls, .csv, .pdf, .doc, .docx, .rtf
                                                     </p>
                                                 </>
                                             )}
@@ -274,25 +404,84 @@ const ExamImportModal = ({ isOpen, onClose, onSuccess, preSelectedSeriesId }: Ex
                                     </label>
                                 </div>
                             </div>
+
+                            {/* ── Import Progress Bar ── */}
+                            {importing && (
+                                <div className="mt-2 bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            {importProgress === 100 ? (
+                                                <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
+                                            ) : (
+                                                <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin shrink-0" />
+                                            )}
+                                            <span className={`text-sm font-semibold truncate max-w-[280px] ${importProgress === 100 ? 'text-emerald-600' : 'text-slate-700'}`}>
+                                                {importLabel}
+                                            </span>
+                                        </div>
+                                        <span className={`text-sm font-black tabular-nums ${importProgress === 100 ? 'text-emerald-600' : 'text-purple-600'}`}>
+                                            {importProgress}%
+                                        </span>
+                                    </div>
+
+                                    {/* Bar track */}
+                                    <div className="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden">
+                                        <div
+                                            className={`h-full rounded-full transition-all duration-500 ease-out ${importProgress === 100 ? 'bg-emerald-500' : 'bg-purple-600'}`}
+                                            style={{ width: `${importProgress}%` }}
+                                        />
+                                    </div>
+
+                                    {selectedFiles.length > 1 && (
+                                        <p className="text-[11px] text-slate-400 font-medium">
+                                            Processing {Math.min(Math.ceil((importProgress / 90) * selectedFiles.length) + 1, selectedFiles.length)} of {selectedFiles.length} file(s)
+                                        </p>
+                                    )}
+                                </div>
+                            )}
                         </ModalBody>
                         <ModalFooter className="border-t pt-4">
                             <Button variant="light" onPress={onClose}>
                                 Cancel
                             </Button>
+                            {selectedFiles.length > 0 && (
+                                <Button
+                                    color="secondary"
+                                    isLoading={previewing}
+                                    variant="bordered"
+                                    onPress={handlePreview}
+                                    className="font-medium"
+                                >
+                                    {previewing ? 'Loading Preview...' : 'Preview'}
+                                </Button>
+                            )}
                             <Button
                                 color="primary"
                                 isLoading={importing}
-                                isDisabled={!selectedFile}
+                                isDisabled={selectedFiles.length === 0}
                                 onPress={handleImport}
                                 className="font-bold bg-purple-600 text-white shadow-lg shadow-purple-500/20"
                             >
-                                {importing ? 'Importing...' : 'Start Import'}
+                                {importing ? 'Importing...' : `Start Import${selectedFiles.length > 1 ? ` (${selectedFiles.length})` : ''}`}
                             </Button>
                         </ModalFooter>
                     </>
                 )}
             </ModalContent>
-        </Modal>
+            </Modal>
+
+            {/* Preview Modal */}
+            {showPreview && previewData && (
+                <ExamImportPreview
+                    isOpen={showPreview}
+                    onClose={() => setShowPreview(false)}
+                    data={previewData}
+                    headers={previewData.headers || []}
+                    onConfirmImport={handleImport}
+                    isImporting={importing}
+                />
+            )}
+        </>
     );
 };
 

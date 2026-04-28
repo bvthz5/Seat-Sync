@@ -35,19 +35,22 @@ loadDotenvSilently();
 const DB_NAME = process.env.DB_NAME || "";
 const DB_USER = process.env.DB_USER || "";
 const DB_PASS = process.env.DB_PASS || "";
-const DB_HOST = process.env.DB_HOST || "localhost";
+const DB_HOST = process.env.DB_HOST || "127.0.0.1";
 const DB_PORT = Number(process.env.DB_PORT || 1433);
 const DB_ENCRYPT = process.env.DB_ENCRYPT === "true";
+const DB_USE_WINDOWS_AUTH = process.env.DB_USE_WINDOWS_AUTH === "true";
+const DB_FALLBACK_TO_SQLITE = process.env.DB_FALLBACK_TO_SQLITE === "true";
 
 /* ────────────────────────────────────────────── */
 /* SQLite Config                                  */
 /* ────────────────────────────────────────────── */
 
 function createSQLite() {
-    console.warn("Using SQLite fallback (MSSQL not available)");
+    console.warn("Using SQLite fallback (MSSQL not available or connection failed)");
+    const dbPath = path.resolve(process.cwd(), "database.sqlite");
     return new Sequelize({
         dialect: "sqlite",
-        storage: ":memory:",
+        storage: dbPath,
         logging: false
     });
 }
@@ -60,35 +63,52 @@ let sequelize: Sequelize;
 
 const hasMSSQLConfig =
     DB_NAME.length > 0 &&
-    DB_USER.length > 0 &&
-    DB_PASS.length > 0 &&
+    (DB_USE_WINDOWS_AUTH || (DB_USER.length > 0 && DB_PASS.length > 0)) &&
     DB_HOST.length > 0;
 
-// Log the auth decision for debugging
-console.log(`MSSQL Config Check: Host=${DB_HOST}, Encrypt=${DB_ENCRYPT}`);
+console.log(`MSSQL Config Check: Host=${DB_HOST}, Port=${DB_PORT}, Encrypt=${DB_ENCRYPT}, WindowsAuth=${DB_USE_WINDOWS_AUTH}`);
 
 if (hasMSSQLConfig) {
-    console.log("Initializing Sequelize with Standard MSSQL Config...");
-    sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASS, {
-        dialect: "mssql",
-        host: DB_HOST,
-        port: DB_PORT,
-        logging: false,
-        dialectOptions: {
-            options: {
-                encrypt: DB_ENCRYPT,
-                trustServerCertificate: true
+    if (DB_USE_WINDOWS_AUTH) {
+        console.log("Initializing Sequelize with MSSQL Windows Authentication...");
+        sequelize = new Sequelize(DB_NAME, "", "", {
+            dialect: "mssql",
+            host: DB_HOST,
+            port: DB_PORT,
+            logging: false,
+            dialectOptions: {
+                driver: "msnodesqlv8",
+                connectionString: `Driver={ODBC Driver 17 for SQL Server};Server=${DB_HOST},${DB_PORT};Database=${DB_NAME};Trusted_Connection=yes;`,
+                options: {
+                    trustServerCertificate: true
+                }
+            },
+            pool: { max: 10, min: 0, acquire: 30000, idle: 10000 }
+        });
+    } else {
+        console.log("Initializing Sequelize with Standard MSSQL Config...");
+        sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASS, {
+            dialect: "mssql",
+            host: DB_HOST,
+            port: DB_PORT,
+            logging: false,
+            dialectOptions: {
+                options: {
+                    encrypt: DB_ENCRYPT,
+                    trustServerCertificate: true,
+                    connectTimeout: 30000
+                }
+            },
+            pool: {
+                max: 10,
+                min: 0,
+                acquire: 30000,
+                idle: 10000
             }
-        },
-        pool: {
-            max: 10,
-            min: 0,
-            acquire: 30000,
-            idle: 10000
-        }
-    });
+        });
+    }
 } else {
-    console.warn("Missing MSSQL Config. Initializing SQLite Memory DB.");
+    console.warn("Missing MSSQL Config. Initializing SQLite DB.");
     sequelize = createSQLite();
 }
 
@@ -190,6 +210,16 @@ async function ensureSchemaIntegrity() {
                     ALTER TABLE [dbo].[Programs] ADD [DurationYears] INT NULL;
                     PRINT 'Added DurationYears to Programs';
                 END
+
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Programs]') 
+                    AND name = 'TotalSemesters'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Programs] ADD [TotalSemesters] INT NULL;
+                    PRINT 'Added TotalSemesters to Programs';
+                END
             END
         `, { type: QueryTypes.RAW });
 
@@ -229,6 +259,42 @@ async function ensureSchemaIntegrity() {
             END
         `, { type: QueryTypes.RAW });
 
+        // Add missing student columns used by registration and dashboard logic
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Students' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Students]')
+                    AND name = 'AdmissionDate'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Students] ADD [AdmissionDate] DATETIME NULL;
+                    PRINT 'Added AdmissionDate to Students';
+                END
+
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Students]')
+                    AND name = 'BatchYear'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Students] ADD [BatchYear] INT NULL;
+                    PRINT 'Added BatchYear to Students';
+                END
+
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Students]')
+                    AND name = 'SemesterID'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Students] ADD [SemesterID] INT NULL;
+                    PRINT 'Added SemesterID to Students';
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
         // Add Invigilator Columns (Resolution for Delete Admin Error)
         await sequelize.query(`
             IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Invigilators' AND TABLE_SCHEMA = 'dbo')
@@ -258,6 +324,11 @@ async function ensureSchemaIntegrity() {
                 END
 
                 -- Ensure DepartmentID is nullable (Fix for decoupling)
+                IF EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Faculties]') 
+                    AND name = 'DepartmentID'
+                )
                 BEGIN
                     ALTER TABLE [dbo].[Faculties] ALTER COLUMN [DepartmentID] INT NULL;
                     PRINT 'Ensured Faculty.DepartmentID is nullable';
@@ -315,6 +386,24 @@ async function ensureSchemaIntegrity() {
             END
         `, { type: QueryTypes.RAW });
 
+        // Create ExamSeries table if it doesn't exist (MSSQL compatible)
+        await sequelize.query(`
+            IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'ExamSeries' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                CREATE TABLE [dbo].[ExamSeries] (
+                    [ExamSeriesID] INT IDENTITY(1,1) PRIMARY KEY,
+                    [SeriesName]   NVARCHAR(100) NOT NULL,
+                    [ExamType]     NVARCHAR(20)  NOT NULL DEFAULT 'Internal',
+                    [SemesterID]   INT NULL REFERENCES [dbo].[Semesters]([SemesterID]),
+                    [Description]  NVARCHAR(255) NULL,
+                    [IsActive]     BIT NOT NULL DEFAULT 1,
+                    [createdAt]    DATETIME NOT NULL DEFAULT GETDATE(),
+                    [updatedAt]    DATETIME NOT NULL DEFAULT GETDATE()
+                );
+                PRINT 'Created ExamSeries table';
+            END
+        `, { type: QueryTypes.RAW });
+
         // Add ExamSeries SemesterID Nullable Fix
         await sequelize.query(`
             IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'ExamSeries' AND TABLE_SCHEMA = 'dbo')
@@ -328,6 +417,17 @@ async function ensureSchemaIntegrity() {
                 BEGIN
                     ALTER TABLE [dbo].[ExamSeries] ALTER COLUMN [SemesterID] INT NULL;
                     PRINT 'Ensured ExamSeries.SemesterID is nullable';
+                END
+
+                -- Ensure AcademicYearID is nullable
+                IF EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[ExamSeries]') 
+                    AND name = 'AcademicYearID'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[ExamSeries] ALTER COLUMN [AcademicYearID] INT NULL;
+                    PRINT 'Ensured ExamSeries.AcademicYearID is nullable';
                 END
             END
         `, { type: QueryTypes.RAW });
@@ -348,45 +448,298 @@ async function ensureSchemaIntegrity() {
             END
         `, { type: QueryTypes.RAW });
 
-        // Add Notifications and NotificationRecipients Tables
+        // Add Audit Columns to Exams
         await sequelize.query(`
-            IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Notifications' AND TABLE_SCHEMA = 'dbo')
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Exams' AND TABLE_SCHEMA = 'dbo')
             BEGIN
-                CREATE TABLE [dbo].[Notifications] (
-                    [NotificationID] INT IDENTITY(1,1) PRIMARY KEY,
-                    [Title] NVARCHAR(200) NOT NULL,
-                    [Message] NVARCHAR(MAX) NOT NULL,
-                    [Type] NVARCHAR(20) NOT NULL DEFAULT 'INFO',
-                    [Category] NVARCHAR(20) NOT NULL DEFAULT 'SYSTEM',
-                    [TargetType] NVARCHAR(20) NOT NULL DEFAULT 'ALL',
-                    [TargetId] NVARCHAR(255) NULL,
-                    [Priority] NVARCHAR(20) NOT NULL DEFAULT 'NORMAL',
-                    [Metadata] NVARCHAR(MAX) NULL,
-                    [SentBy] INT NOT NULL DEFAULT 0,
-                    [SentAt] DATETIME2 NOT NULL DEFAULT GETDATE(),
-                    [ExpiresAt] DATETIME2 NULL
-                );
-                PRINT 'Created Notifications table';
-            END
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') 
+                    AND name = 'AuditStatus'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Exams] ADD [AuditStatus] NVARCHAR(20) DEFAULT 'Pending' WITH VALUES;
+                    PRINT 'Added AuditStatus to Exams';
+                END
 
-            IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'NotificationRecipients' AND TABLE_SCHEMA = 'dbo')
-            BEGIN
-                CREATE TABLE [dbo].[NotificationRecipients] (
-                    [RecipientID] INT IDENTITY(1,1) PRIMARY KEY,
-                    [NotificationID] INT NOT NULL,
-                    [UserID] INT NOT NULL,
-                    [IsRead] BIT NOT NULL DEFAULT 0,
-                    [ReadAt] DATETIME2 NULL,
-                    CONSTRAINT [FK_NotificationRecipients_Notifications] FOREIGN KEY ([NotificationID]) REFERENCES [Notifications]([NotificationID]) ON DELETE CASCADE,
-                    CONSTRAINT [FK_NotificationRecipients_Users] FOREIGN KEY ([UserID]) REFERENCES [Users]([UserID]) ON DELETE CASCADE
-                );
-                PRINT 'Created NotificationRecipients table';
-                
-                -- Create Indexes for performance
-                CREATE INDEX [IX_NotificationRecipients_UserID_IsRead] ON [dbo].[NotificationRecipients] ([UserID], [IsRead]);
-                CREATE UNIQUE INDEX [UX_NotificationRecipients_Notification_User] ON [dbo].[NotificationRecipients] ([NotificationID], [UserID]);
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') 
+                    AND name = 'ConflictDetails'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Exams] ADD [ConflictDetails] NVARCHAR(MAX) NULL;
+                    PRINT 'Added ConflictDetails to Exams';
+                END
+
+                IF NOT EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') 
+                    AND name = 'ExamDate'
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Exams] ADD [ExamDate] DATE NULL;
+                    PRINT 'Added ExamDate to Exams';
+                END
             END
         `, { type: QueryTypes.RAW });
+
+        // Add Room Columns (Hall Mode)
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Rooms' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'RoomType')
+                BEGIN
+                    ALTER TABLE [dbo].[Rooms] ADD [RoomType] NVARCHAR(20) DEFAULT 'ROOM' WITH VALUES;
+                    PRINT 'Added RoomType to Rooms';
+                END
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'IsLayoutLocked')
+                BEGIN
+                    ALTER TABLE [dbo].[Rooms] ADD [IsLayoutLocked] BIT DEFAULT 0 WITH VALUES;
+                    PRINT 'Added IsLayoutLocked to Rooms';
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
+        // Add Seat Columns (Hall Mode)
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Seats' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                -- Add IsActive if not exists
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'IsActive')
+                BEGIN
+                    ALTER TABLE [dbo].[Seats] ADD [IsActive] BIT DEFAULT 1 WITH VALUES;
+                    PRINT 'Added IsActive to Seats';
+                END
+
+                -- Add ZoneID if not exists
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'ZoneID')
+                BEGIN
+                    ALTER TABLE [dbo].[Seats] ADD [ZoneID] INT NULL;
+                    PRINT 'Added ZoneID to Seats';
+                END
+
+                -- Handle Column Renames for Thaz branch compatibility
+                -- RowLabel -> RowIndex
+                IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'RowLabel')
+                AND NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'RowIndex')
+                BEGIN
+                    EXEC sp_rename 'Seats.RowLabel', 'RowIndex', 'COLUMN';
+                    PRINT 'Renamed Seats.RowLabel to RowIndex';
+                END
+
+                -- BenchNumber -> BenchIndex
+                IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'BenchNumber')
+                AND NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'BenchIndex')
+                BEGIN
+                    EXEC sp_rename 'Seats.BenchNumber', 'BenchIndex', 'COLUMN';
+                    PRINT 'Renamed Seats.BenchNumber to BenchIndex';
+                END
+
+                -- SeatNumber -> SeatIndex
+                IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'SeatNumber')
+                AND NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'SeatIndex')
+                BEGIN
+                    EXEC sp_rename 'Seats.SeatNumber', 'SeatIndex', 'COLUMN';
+                    PRINT 'Renamed Seats.SeatNumber to SeatIndex';
+                END
+
+                -- Ensure new columns exist even if renames didn't happen (fallback)
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'RowIndex')
+                ALTER TABLE [dbo].[Seats] ADD [RowIndex] CHAR(1) NULL;
+                
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'BenchIndex')
+                ALTER TABLE [dbo].[Seats] ADD [BenchIndex] INT NULL;
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'SeatIndex')
+                ALTER TABLE [dbo].[Seats] ADD [SeatIndex] INT NULL;
+            END
+        `, { type: QueryTypes.RAW });
+
+        // Add BenchMode to Rooms (New Feature persistence)
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Rooms' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'BenchMode')
+                BEGIN
+                    ALTER TABLE [dbo].[Rooms] ADD [BenchMode] NVARCHAR(20) NOT NULL CONSTRAINT DF_Rooms_BenchMode DEFAULT 'PAIRED';
+                    PRINT 'Added BenchMode to Rooms';
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
+        // Add Color to Zones (Visualization Feature)
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Zones' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Zones]') AND name = 'Color')
+                BEGIN
+                    ALTER TABLE [dbo].[Zones] ADD [Color] NVARCHAR(20) NULL;
+                    PRINT 'Added Color to Zones';
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
+        // Add Faculty Onboarding fields to Users
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Users' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Users]') AND name = 'IsActivated')
+                BEGIN
+                    ALTER TABLE [dbo].[Users] ADD [IsActivated] BIT NOT NULL DEFAULT 0 WITH VALUES;
+                    PRINT 'Added IsActivated to Users';
+                END
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Users]') AND name = 'ActivationToken')
+                BEGIN
+                    ALTER TABLE [dbo].[Users] ADD [ActivationToken] NVARCHAR(255) NULL;
+                    PRINT 'Added ActivationToken to Users';
+                END
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Users]') AND name = 'ActivationExpires')
+                BEGIN
+                    ALTER TABLE [dbo].[Users] ADD [ActivationExpires] DATETIME NULL;
+                    PRINT 'Added ActivationExpires to Users';
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
+        // Add FacultyID to InvigilatorRequests
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InvigilatorRequests' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[InvigilatorRequests]') AND name = 'FacultyID')
+                BEGIN
+                    ALTER TABLE [dbo].[InvigilatorRequests] ADD [FacultyID] NVARCHAR(50) NOT NULL DEFAULT 'PENDING_ID' WITH VALUES;
+                    PRINT 'Added FacultyID to InvigilatorRequests';
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
+        // Add missing columns to Rooms due to Layout Refactor
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Rooms' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'Capacity')
+                BEGIN
+                    ALTER TABLE [dbo].[Rooms] ADD [Capacity] INT NOT NULL DEFAULT 0;
+                END
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'RoomType')
+                BEGIN
+                    ALTER TABLE [dbo].[Rooms] ADD [RoomType] NVARCHAR(20) NOT NULL DEFAULT 'ROOM';
+                END
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'LayoutType')
+                BEGIN
+                    ALTER TABLE [dbo].[Rooms] ADD [LayoutType] NVARCHAR(20) NOT NULL DEFAULT 'CUSTOM';
+                END
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'RowLayout')
+                BEGIN
+                    ALTER TABLE [dbo].[Rooms] ADD [RowLayout] NVARCHAR(MAX) NOT NULL DEFAULT '[]';
+                END
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'SeatsPerBench')
+                BEGIN
+                    ALTER TABLE [dbo].[Rooms] ADD [SeatsPerBench] INT NOT NULL DEFAULT 2;
+                END
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'Status')
+                BEGIN
+                    ALTER TABLE [dbo].[Rooms] ADD [Status] NVARCHAR(20) NOT NULL DEFAULT 'Active';
+                END
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'ExamUsable')
+                BEGIN
+                    ALTER TABLE [dbo].[Rooms] ADD [ExamUsable] BIT NOT NULL DEFAULT 1;
+                END
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'IsLayoutLocked')
+                BEGIN
+                    ALTER TABLE [dbo].[Rooms] ADD [IsLayoutLocked] BIT NOT NULL DEFAULT 0;
+                END
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'OverrideCap')
+                BEGIN
+                    ALTER TABLE [dbo].[Rooms] ADD [OverrideCap] INT NULL;
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
+        // Ensure ExamSeries has missing fields
+        await sequelize.query(`
+              IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'ExamSeries' AND TABLE_SCHEMA = 'dbo')
+              BEGIN
+                  IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[ExamSeries]') AND name = 'Description')
+                  BEGIN
+                      ALTER TABLE [dbo].[ExamSeries] ADD [Description] NVARCHAR(255) NULL;
+                      PRINT 'Added Description to ExamSeries';
+                  END
+                  IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[ExamSeries]') AND name = 'IsActive')
+                  BEGIN
+                      ALTER TABLE [dbo].[ExamSeries] ADD [IsActive] BIT NOT NULL DEFAULT 1;
+                      PRINT 'Added IsActive to ExamSeries';
+                  END
+                  IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[ExamSeries]') AND name = 'AcademicYearID')
+                  BEGIN
+                      ALTER TABLE [dbo].[ExamSeries] ADD [AcademicYearID] INT NULL;
+                      PRINT 'Added AcademicYearID to ExamSeries';
+                  END
+                  IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[ExamSeries]') AND name = 'ExamType')
+                  BEGIN
+                      ALTER TABLE [dbo].[ExamSeries] ADD [ExamType] NVARCHAR(20) NOT NULL DEFAULT 'Internal';
+                      PRINT 'Added ExamType to ExamSeries';
+                  END
+              END
+          `, { type: QueryTypes.RAW });
+
+        // Ensure Subjects has missing SemesterID
+        await sequelize.query(`
+              IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Subjects' AND TABLE_SCHEMA = 'dbo')
+              BEGIN
+                  IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Subjects]') AND name = 'SemesterID')
+                  BEGIN
+                      ALTER TABLE [dbo].[Subjects] ADD [SemesterID] INT NULL;
+                      PRINT 'Added SemesterID to Subjects';
+                  END
+              END
+          `, { type: QueryTypes.RAW });
+
+        // Ensure Exams has missing fields
+        await sequelize.query(`
+              IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Exams' AND TABLE_SCHEMA = 'dbo')
+              BEGIN
+                  IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') AND name = 'Duration')
+                  BEGIN
+                      ALTER TABLE [dbo].[Exams] ADD [Duration] INT NOT NULL DEFAULT 180;
+                      PRINT 'Added Duration to Exams';
+                  END
+                  IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') AND name = 'Status')
+                  BEGIN
+                      ALTER TABLE [dbo].[Exams] ADD [Status] NVARCHAR(20) NOT NULL DEFAULT 'Scheduled';
+                      PRINT 'Added Status to Exams';
+                  END
+                  IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') AND name = 'RoomAllocationStatus')
+                  BEGIN
+                      ALTER TABLE [dbo].[Exams] ADD [RoomAllocationStatus] NVARCHAR(20) NULL DEFAULT 'Pending';
+                      PRINT 'Added RoomAllocationStatus to Exams';
+                  END
+                  IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') AND name = 'IsEmergencyMode')
+                  BEGIN
+                      ALTER TABLE [dbo].[Exams] ADD [IsEmergencyMode] BIT NOT NULL DEFAULT 0;
+                      PRINT 'Added IsEmergencyMode to Exams';
+                  END
+                  IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') AND name = 'AttendanceLocked')
+                  BEGIN
+                      ALTER TABLE [dbo].[Exams] ADD [AttendanceLocked] BIT NOT NULL DEFAULT 0;
+                      PRINT 'Added AttendanceLocked to Exams';
+                  END
+                  IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') AND name = 'AuditStatus')
+                  BEGIN
+                      ALTER TABLE [dbo].[Exams] ADD [AuditStatus] NVARCHAR(20) NULL DEFAULT 'Pending';
+                      PRINT 'Added AuditStatus to Exams';
+                  END
+                  IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Exams]') AND name = 'ConflictDetails')
+                  BEGIN
+                      ALTER TABLE [dbo].[Exams] ADD [ConflictDetails] NVARCHAR(MAX) NULL;
+                      PRINT 'Added ConflictDetails to Exams';
+                  END
+              END
+          `, { type: QueryTypes.RAW });
 
     } catch (error) {
         console.warn("Schema integrity check warning (non-fatal):", error);
@@ -397,23 +750,43 @@ export async function connectDB() {
     try {
         await sequelize.authenticate();
         console.log(`Connection Connected: ${sequelize.getDialect()} `);
+    } catch (err: any) {
+        console.error("Database Connection Failed:", err.message);
 
+        const isMSSQL = sequelize.getDialect() === 'mssql';
+        if (isMSSQL && DB_FALLBACK_TO_SQLITE) {
+            console.warn("MSSQL connection failed. Falling back to SQLite as configured...");
+            sequelize = createSQLite();
+            await sequelize.authenticate();
+            console.log("Connected to SQLite fallback database.");
+        } else {
+            throw err;
+        }
+    }
+
+    try {
         await ensureSchemaIntegrity();
 
         await import("../models/index.js");
 
-        try {
-            await sequelize.sync({ alter: true });
-            console.log("Database synchronized with alter");
-        } catch (syncErr: any) {
-            console.warn("Database alter sync failed, falling back to standard sync:", syncErr.message);
+        const dialect = sequelize.getDialect();
+        if (dialect === 'mssql') {
             await sequelize.sync();
-            console.log("Database synchronized (standard)");
+            console.log("Database synchronized (standard, alter skipped for MSSQL)");
+        } else {
+            try {
+                await sequelize.sync({ alter: true });
+                console.log("Database synchronized with alter");
+            } catch (syncErr: any) {
+                console.warn("Database alter sync failed, falling back to standard sync:", syncErr.message);
+                await sequelize.sync();
+                console.log("Database synchronized (standard fallback)");
+            }
         }
 
         return true;
     } catch (err: any) {
-        console.error("Database Connection Failed:", err.message);
+        console.error("Database Initialization Failed:", err.message);
         throw err;
     }
 }

@@ -21,7 +21,8 @@ export interface Room {
     FloorID: number;
     RoomCode: string; // New: replaces RoomName
     RoomName?: string; // Legacy support (optional)
-    Capacity: number; // New
+    TotalCapacity: number; // New
+    OverrideCap?: number | null; // Optional override cap
     TotalRows: number;
     BenchesPerRow: number;
     SeatsPerBench: number;
@@ -31,6 +32,7 @@ export interface Room {
     BenchMode?: 'PAIRED' | 'ALTERNATING';
     IsLayoutLocked?: boolean;
     Floor?: Floor;
+    Block?: Block;
 }
 
 // Stats interface for layout visualization

@@ -9,12 +9,14 @@ import { Student } from "./Student.js";
 interface ExamRegistrationAttributes {
   ExamID: number;
   StudentID: number;
+  IsEligible?: boolean;
 }
 
 export class ExamRegistration extends Model<ExamRegistrationAttributes>
   implements ExamRegistrationAttributes {
   declare ExamID: number;
   declare StudentID: number;
+  declare IsEligible: boolean;
 }
 
 ExamRegistration.init(
@@ -36,6 +38,11 @@ ExamRegistration.init(
         model: "Students",
         key: "StudentID",
       },
+    },
+    IsEligible: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: true,
     },
   },
   {
@@ -60,4 +67,4 @@ Student.belongsToMany(Exam, {
   otherKey: "ExamID",
 });
 
-export default ExamRegistration;
+export default ExamRegistration;

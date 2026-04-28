@@ -22,7 +22,7 @@ const SeatSyncLogo = () => (
 // --- CustomInput ---
 const CustomInput = ({ label, value, onChange, placeholder, type = "text", icon, error, id, name, autoComplete }: any) => (
     <div className="group flex flex-col gap-2 w-full">
-        <label htmlFor={id} className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">{label}</label>
+        <div className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">{label}</div>
         <div className={`relative flex items-center w-full h-14 rounded-xl overflow-hidden bg-slate-50 border-none transition-all duration-300 ${error ? 'bg-red-50' : 'hover:bg-slate-100 focus-within:!bg-white focus-within:shadow-xl focus-within:shadow-blue-100'}`}>
             <div className={`w-14 h-full flex items-center justify-center border-r border-transparent transition-colors ${error ? 'text-red-400' : 'text-slate-400 group-focus-within:text-blue-600'}`}>{icon}</div>
             <input

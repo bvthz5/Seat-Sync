@@ -103,4 +103,25 @@ export class AuthMiddleware {
             AuthMiddleware.requireRootAdmin(req, res, next);
         });
     }
+
+    /**
+     * Guard for authenticated student
+     */
+    static requireStudent(req: Request, res: Response, next: NextFunction): void {
+        if (!req.user) {
+            res.status(401).json({
+                error: "Authentication required",
+            });
+            return;
+        }
+
+        if (req.user.Role !== "student") {
+            res.status(403).json({
+                error: "Access denied. Student role required",
+            });
+            return;
+        }
+
+        next();
+    }
 }

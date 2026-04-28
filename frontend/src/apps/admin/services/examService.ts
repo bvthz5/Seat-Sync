@@ -28,6 +28,13 @@ export const ExamService = {
         return response.data;
     },
 
+    deleteAll: async (seriesId?: number | string) => {
+        const response = await api.delete(`${PREFIX}/delete-all`, {
+            params: seriesId ? { seriesId } : undefined
+        });
+        return response.data;
+    },
+
     importTimetable: async (file: File, seriesId?: number, examTitle?: string) => {
         const formData = new FormData();
         formData.append('file', file);
@@ -37,11 +44,7 @@ export const ExamService = {
         if (examTitle) {
             formData.append('title', examTitle);
         }
-        const response = await api.post(`${PREFIX}/import-timetable`, formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data'
-            }
-        });
+        const response = await api.post(`${PREFIX}/import-timetable`, formData);
         return response.data;
     },
 
@@ -58,6 +61,43 @@ export const ExamService = {
 
     allocate: async (examId: number) => {
         const response = await api.post('/allocation/create', { examId });
+        return response.data;
+    },
+
+    previewTimetable: async (file: File) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await api.post(`${PREFIX}/preview-timetable`, formData);
+        return response.data;
+    },
+
+    importEligibleStudents: async (examId: number, file: File) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await api.post(`${PREFIX}/${examId}/eligible-students/import`, formData);
+        return response.data;
+    },
+
+    getEligibleStudents: async (examId: number) => {
+        const response = await api.get(`${PREFIX}/${examId}/eligible-students`);
+        return response.data;
+    },
+
+    bulkImportEligibility: async (date: string, files: File[]) => {
+        const formData = new FormData();
+        formData.append('date', date);
+        files.forEach(file => {
+            formData.append('files', file);
+        });
+        const response = await api.post(`${PREFIX}/bulk-import-eligibility`, formData);
+        return response.data;
+    },
+
+    clearEligibility: async (seriesId?: number, date?: string) => {
+        let params = new URLSearchParams();
+        if (seriesId) params.append('seriesId', String(seriesId));
+        if (date) params.append('date', date);
+        const response = await api.delete(`${PREFIX}/clear-eligibility?${params.toString()}`);
         return response.data;
     }
 };

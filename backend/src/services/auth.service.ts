@@ -13,23 +13,28 @@ interface AuthTokens {
 }
 
 export class AuthService {
+    private static normalizePortalRole(role: string): "exam_admin" | "invigilator" | "student" {
+        if (role === "root_admin" || role === "admin") return "exam_admin";
+        return role as "exam_admin" | "invigilator" | "student";
+    }
     /**
      * Validate admin credentials and generate tokens
      */
     static async login(credentials: LoginRequest): Promise<LoginResponse> {
         const { email, password, role } = credentials;
-
-        // Default role to exam_admin if not provided
-        const requiredRole = role || "exam_admin";
+        const whereClause: any = {
+            Email: email,
+            IsActive: true,
+        };
+        if (role) {
+            whereClause.Role = role;
+        } else {
+            // Admin portal login: support legacy admin role values as well.
+            whereClause.Role = { [Op.in]: ["exam_admin", "root_admin", "admin"] };
+        }
 
         // Find user by email
-        const user = await User.findOne({
-            where: {
-                Email: email,
-                Role: requiredRole,
-                IsActive: true,
-            },
-        });
+        const user = await User.findOne({ where: whereClause });
 
         if (!user) {
             throw new Error("Invalid credentials or account is inactive");
@@ -41,11 +46,13 @@ export class AuthService {
             throw new Error("Invalid credentials");
         }
 
+        const normalizedRole = this.normalizePortalRole(user.Role as string);
+
         // Generate tokens
         const payload: JWTPayload = {
             UserID: user.UserID,
             Email: user.Email,
-            Role: user.Role,
+            Role: normalizedRole,
             IsRootAdmin: user.IsRootAdmin,
             IsPasswordChanged: user.IsPasswordChanged,
         };
@@ -59,7 +66,7 @@ export class AuthService {
             user: {
                 UserID: user.UserID,
                 Email: user.Email,
-                Role: user.Role,
+                Role: normalizedRole,
                 IsRootAdmin: user.IsRootAdmin,
                 IsPasswordChanged: user.IsPasswordChanged,
             },
@@ -79,16 +86,18 @@ export class AuthService {
             throw new Error("Invalid refresh token or user is inactive");
         }
 
-        // Strict role check for refresh: Must be admin or invigilator (students use different auth usually, or same but verified)
-        if (!['exam_admin', 'invigilator'].includes(user.Role)) {
+        // Strict role check for refresh: admin/root admin/invigilator only
+        if (!['exam_admin', 'root_admin', 'admin', 'invigilator'].includes(user.Role as string)) {
             throw new Error("Invalid role for this portal");
         }
+
+        const normalizedRole = this.normalizePortalRole(user.Role as string);
 
         // Generate new access token
         const accessPayload: JWTPayload = {
             UserID: user.UserID,
             Email: user.Email,
-            Role: user.Role,
+            Role: normalizedRole,
             IsRootAdmin: user.IsRootAdmin,
             IsPasswordChanged: user.IsPasswordChanged,
         };

@@ -4,7 +4,7 @@ import { Button, Link } from '@heroui/react'; // Ensure correct import
 import { motion, AnimatePresence, Variants, useMotionValue, useSpring, useTransform, useMotionTemplate } from 'framer-motion';
 import { useAuth } from '../../../hooks/useAuth';
 import { AuthService } from '../../../services/auth.service';
-import { ShieldCheck, UserCheck, Lock, Mail, Eye, EyeOff, FileCheck } from 'lucide-react';
+import { ShieldCheck, UserCheck, Lock, Mail, Eye, EyeOff, FileCheck, AlertTriangle } from 'lucide-react';
 import { Spinner } from '../../../components/GlobalLoader';
 import { InvigilatorHeroSVG } from './InvigilatorHeroSVG';
 
@@ -32,9 +32,9 @@ const CustomInput = ({
 
     return (
         <div className="group flex flex-col gap-2 w-full">
-            <label htmlFor={id} className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">
                 {label}
-            </label>
+            </div>
             <div className={`
                 relative flex items-center w-full h-14 rounded-xl overflow-hidden bg-slate-50 border-none transition-all duration-300
                 ${error ? 'bg-red-50' : 'hover:bg-slate-100 focus-within:!bg-white focus-within:shadow-xl focus-within:shadow-indigo-100'}
@@ -230,7 +230,7 @@ const InvigilatorLogin = () => {
     const [emailError, setEmailError] = useState('');
     const [passwordError, setPasswordError] = useState('');
 
-    const from = location.state?.from?.pathname || '/invigilator/dashboard';
+    const from = '/invigilator/dashboard';
 
     // Auto-redirect if already logged in securely
     useEffect(() => {
@@ -262,8 +262,8 @@ const InvigilatorLogin = () => {
         if (!email) {
             setEmailError('Faculty email is required');
             isValid = false;
-        } else if (!/^[a-zA-Z0-9._%+-]+@sjcetpalai\.ac\.in$/.test(email)) {
-            setEmailError('Must use @sjcetpalai.ac.in email');
+        } else if (!/^[a-zA-Z0-9._%+-]+@([a-zA-Z0-9-]+\.)*sjcetpalai\.ac\.in$/i.test(email)) {
+            setEmailError('Must use your official sjcetpalai.ac.in email (including subdomains)');
             isValid = false;
         }
 
@@ -385,7 +385,7 @@ const InvigilatorLogin = () => {
                                 exit={{ opacity: 0, height: 0 }}
                                 className="bg-red-50 border-l-4 border-red-500 text-red-700 px-4 py-3 rounded shadow-sm text-sm font-medium flex items-center gap-2"
                             >
-                                <span className="flex-shrink-0">⚠️</span>
+                                <span className="flex-shrink-0"><AlertTriangle className="w-4 h-4" /></span>
                                 {formError}
                             </motion.div>
                         )}
@@ -397,7 +397,7 @@ const InvigilatorLogin = () => {
                             <CustomInput
                                 id="email"
                                 label="Official Faculty Email"
-                                placeholder="name@sjcetpalai.ac.in"
+                                placeholder="name@mca.sjcetpalai.ac.in"
                                 type="email"
                                 value={email}
                                 onChange={(e: any) => setEmail(e.target.value)}
@@ -449,6 +449,9 @@ const InvigilatorLogin = () => {
 
                     {/* Footer */}
                     <motion.div variants={itemVariants} className="text-center space-y-4">
+                        <div className="text-sm font-medium text-slate-500 pb-2">
+                            New faculty staff? <Link href="/invigilator/request" className="text-indigo-600 font-bold hover:underline ml-1">Request duty access</Link>
+                        </div>
                         <div className="h-px w-full bg-slate-100"></div>
                         <p className="text-[11px] text-slate-400 font-medium uppercase tracking-widest">
                             Protected by SeatSync Identity Server

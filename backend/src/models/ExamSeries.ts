@@ -1,6 +1,5 @@
 import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from "../config/database.js";
-import { AcademicYear } from "./AcademicYear.js";
 import { Semester } from "./Semester.js";
 
 /**
@@ -9,7 +8,7 @@ import { Semester } from "./Semester.js";
 interface ExamSeriesAttributes {
     ExamSeriesID: number;
     SeriesName: string;
-    AcademicYearID: number;
+    ExamType: 'Internal' | 'EndSemester';
     SemesterID?: number;
     Description?: string;
     IsActive?: boolean;
@@ -24,7 +23,7 @@ export class ExamSeries extends Model<ExamSeriesAttributes, ExamSeriesCreationAt
     implements ExamSeriesAttributes {
     declare ExamSeriesID: number;
     declare SeriesName: string;
-    declare AcademicYearID: number;
+    declare ExamType: 'Internal' | 'EndSemester';
     declare SemesterID?: number;
     declare Description?: string;
     declare IsActive?: boolean;
@@ -40,14 +39,12 @@ ExamSeries.init(
         SeriesName: {
             type: DataTypes.STRING(100),
             allowNull: false,
+            unique: true,
         },
-        AcademicYearID: {
-            type: DataTypes.INTEGER,
+        ExamType: {
+            type: DataTypes.STRING(20),
             allowNull: false,
-            references: {
-                model: "AcademicYears",
-                key: "AcademicYearID",
-            },
+            defaultValue: 'Internal',
         },
         SemesterID: {
             type: DataTypes.INTEGER,
@@ -64,34 +61,26 @@ ExamSeries.init(
         IsActive: {
             type: DataTypes.BOOLEAN,
             defaultValue: true,
-        }
+        },
+
     },
     {
         sequelize,
         tableName: "ExamSeries",
-        timestamps: true,
+        timestamps: false,
     }
 );
 
 /**
  * Associations
  */
-ExamSeries.belongsTo(AcademicYear, {
-    foreignKey: "AcademicYearID",
-});
-
-AcademicYear.hasMany(ExamSeries, {
-    foreignKey: "AcademicYearID",
-    onDelete: 'CASCADE',
-});
-
 ExamSeries.belongsTo(Semester, {
     foreignKey: "SemesterID",
 });
 
 Semester.hasMany(ExamSeries, {
     foreignKey: "SemesterID",
-    onDelete: 'CASCADE',
+    onDelete: 'NO ACTION',
 });
 
 export default ExamSeries;

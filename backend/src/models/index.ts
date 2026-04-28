@@ -7,6 +7,8 @@ export { default as Student } from "./Student.js";
 export { default as Subject } from "./Subject.js";
 export { default as StudentSubject } from "./StudentSubject.js";
 export { default as Exam } from "./Exam.js";
+export { default as ExamSubject } from "./ExamSubject.js";
+export { default as ExamSchedule } from "./ExamSchedule.js";
 export { default as ExamRegistration } from "./ExamRegistration.js";
 export { default as Block } from "./Block.js";
 export { default as Floor } from "./Floor.js";
@@ -26,6 +28,8 @@ export { default as ActiveSession } from "./ActiveSession.js";
 export { default as Faculty } from "./Faculty.js";
 export { default as ExamSeries } from "./ExamSeries.js";
 export { default as Zone } from "./Zone.js";
+export { default as InvigilatorRequest } from "./InvigilatorRequest.js";
+export { default as ProgramDepartment } from "./ProgramDepartment.js";
 
 // Associations
 import ActivityLog from "./ActivityLog.js";
@@ -37,6 +41,7 @@ import Exam from "./Exam.js";
 import InvigilatorAssignment from "./InvigilatorAssignment.js";
 import Room from "./Room.js";
 import Program from "./Program.js";
+import ProgramDepartment from "./ProgramDepartment.js";
 
 // Define associations here to avoid circular imports in model files
 ActivityLog.belongsTo(User, {
@@ -59,16 +64,33 @@ Invigilator.belongsTo(Department, {
     foreignKey: "DepartmentID",
 });
 
-// Department-Program Association
+// Department-Program Association (legacy single FK kept for backward compat)
 Department.hasMany(Program, {
     foreignKey: "DepartmentID",
     as: "Programs",
-    onDelete: 'CASCADE'
+    onDelete: 'NO ACTION'
 });
 
 Program.belongsTo(Department, {
     foreignKey: "DepartmentID",
-    as: "Department"
+    as: "Department",
+    onDelete: 'NO ACTION'
+});
+
+Program.belongsToMany(Department, {
+    through: ProgramDepartment,
+    foreignKey: "ProgramID",
+    otherKey: "DepartmentID",
+    as: "Departments",
+    onDelete: 'NO ACTION'
+});
+
+Department.belongsToMany(Program, {
+    through: ProgramDepartment,
+    foreignKey: "DepartmentID",
+    otherKey: "ProgramID",
+    as: "LinkedPrograms",
+    onDelete: 'NO ACTION'
 });
 
 // Invigilator Associations

@@ -4,8 +4,10 @@ import AdminLayout from './layout/AdminLayout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Exams from './pages/Exams';
+import SeriesSelection from './pages/SeriesSelection';
 import ExamSeriesList from './pages/ExamSeriesList';
 import SeatingPlans from './pages/SeatingPlans';
+import InternalSeatingPage from './pages/InternalSeatingPage';
 import Invigilators from './pages/Invigilators';
 import Attendance from './pages/Attendance';
 import Reports from './pages/Reports';
@@ -24,6 +26,8 @@ import AcademicSetup from './pages/AcademicSetup';
 import Notifications from './pages/Notifications';
 import Security from './pages/Security';
 import ExamControl from './pages/ExamControl';
+import ExamDates from './pages/ExamDates';
+import ExamDateDetail from './pages/ExamDateDetail';
 import AuditLogs from './pages/AuditLogs';
 import DataCleanup from './pages/DataCleanup';
 import Profile from './pages/Profile';
@@ -43,9 +47,12 @@ const AdminApp: React.FC = () => {
                     <Route path="dashboard" element={<Dashboard />} />
                     <Route path="profile" element={<Profile />} />
                     <Route path="students" element={<Students />} />
-                    <Route path="exams" element={<ExamSeriesList />} />
-                    <Route path="exams/:seriesId" element={<Exams />} />
-                    <Route path="seating" element={<SeatingPlans />} />
+                    <Route path="exams" element={<SeriesSelection />} />
+                    <Route path="exams/series/:seriesId" element={<ExamSeriesList />} />
+                    <Route path="exams/series/:seriesId/dates" element={<ExamDates />} />
+                    <Route path="exams/series/:seriesId/dates/:date" element={<ExamDateDetail />} />
+                    <Route path="seating/endsem" element={<SeatingPlans />} />
+                    <Route path="seating/internal" element={<InternalSeatingPage />} />
                     <Route path="invigilators" element={<Invigilators />} />
                     <Route path="attendance" element={<Attendance />} />
                     <Route path="reports" element={<Reports />} />

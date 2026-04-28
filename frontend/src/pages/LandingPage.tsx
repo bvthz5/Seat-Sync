@@ -323,10 +323,9 @@ const LandingPage: React.FC = () => {
                         title="Student Portal"
                         description="Secure access to seating plans, schedules, and personal academic records."
                         icon={<Users className="w-8 h-8" />}
-                        path="#"
+                        path="/student/login"
                         gradient="from-blue-500 to-cyan-500"
                         delay={0.6}
-                        disabled={true}
                     />
 
                 </div>

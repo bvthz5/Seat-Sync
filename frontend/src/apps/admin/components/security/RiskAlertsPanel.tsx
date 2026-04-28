@@ -10,7 +10,7 @@ interface RiskAlertsPanelProps {
 
 export const RiskAlertsPanel: React.FC<RiskAlertsPanelProps> = ({ stats }) => {
     // Generate alerts based on real stats
-    const alerts = [];
+    const alerts: any[] = [];
 
     if (!stats) return null;
 

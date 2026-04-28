@@ -173,8 +173,6 @@ const Reports: React.FC = () => {
     const [seriesList, setSeriesList] = useState<SeriesOption[]>([]);
     const [selectedSeriesId, setSelectedSeriesId] = useState<string>('');
     const [loadingSeries, setLoadingSeries] = useState(true);
-    const [mounted, setMounted] = useState(false);
-    useEffect(() => { setMounted(true); }, []);
 
     // Fetch real series list on mount
     useEffect(() => {
@@ -282,10 +280,7 @@ const Reports: React.FC = () => {
                             {loadingSeries ? (
                                 <Spinner size="sm" />
                             ) : (
-                                <Select
-                                    id="report-series-select"
-                                    name="reportSeriesSelect"
-                                    aria-label="Exam Series"
+                                <Select id="field-mg1nwvt" name="field-mg1nwvt" aria-label="Exam Series"
                                     size="sm"
                                     className="w-56"
                                     variant="flat"
@@ -399,31 +394,28 @@ const Reports: React.FC = () => {
                             <div className="space-y-4">
                                 {/* Filters */}
                                 <div className="flex flex-col sm:flex-row gap-3">
-                                    <Input
-                                        id="search-reports"
-                                        name="searchReports"
-                                        className="sm:max-w-xs"
+                                    <Input id="field-eskce01" name="field-eskce01" aria-label="Search exam, hall, invigilator…" className="sm:max-w-xs"
                                         placeholder="Search exam, hall, invigilator…"
                                         startContent={<Search size={14} className="text-slate-400" />}
                                         value={search}
                                         onValueChange={v => { setSearch(v); setPage(1); }}
                                         classNames={{ inputWrapper: 'bg-slate-50 shadow-none border border-slate-100 group-data-[focus=true]:border-indigo-400 rounded-xl h-10', input: 'text-sm' }}
-                                        aria-label="Search records"
+                                        
                                     />
                                     <div className="flex gap-2 flex-wrap">
-                                        <Select id="filter-dept" name="filterDept" aria-label="Department" placeholder="All Departments" size="sm" className="w-44" variant="bordered"
+                                        <Select id="field-6mp8hht" name="field-6mp8hht" aria-label="Department" placeholder="All Departments" size="sm" className="w-44" variant="bordered"
                                             selectedKeys={deptFilter ? new Set([deptFilter]) : new Set()}
                                             onSelectionChange={k => { setDeptFilter(Array.from(k as Set<string>)[0] || ''); setPage(1); }}
                                             classNames={{ trigger: 'bg-white border-slate-200 rounded-xl h-10', popoverContent: 'bg-white border border-slate-100 shadow-xl rounded-xl' }}>
                                             {departments.map(d => <SelectItem key={d}>{d}</SelectItem>)}
                                         </Select>
-                                        <Select id="filter-status" name="filterStatus" aria-label="Status" placeholder="All Statuses" size="sm" className="w-36" variant="bordered"
+                                        <Select id="field-ut93jrd" name="field-ut93jrd" aria-label="Status" placeholder="All Statuses" size="sm" className="w-36" variant="bordered"
                                             selectedKeys={statusFilter ? new Set([statusFilter]) : new Set()}
                                             onSelectionChange={k => { setStatusFilter(Array.from(k as Set<string>)[0] || ''); setPage(1); }}
                                             classNames={{ trigger: 'bg-white border-slate-200 rounded-xl h-10', popoverContent: 'bg-white border border-slate-100 shadow-xl rounded-xl' }}>
                                             {(['Completed', 'In Progress', 'Scheduled', 'Cancelled'] as ExamStatus[]).map(s => <SelectItem key={s}>{s}</SelectItem>)}
                                         </Select>
-                                        <Select id="filter-session" name="filterSession" aria-label="Session" placeholder="All Sessions" size="sm" className="w-32" variant="bordered"
+                                        <Select id="field-sib88kk" name="field-sib88kk" aria-label="Session" placeholder="All Sessions" size="sm" className="w-32" variant="bordered"
                                             selectedKeys={sessionFilter ? new Set([sessionFilter]) : new Set()}
                                             onSelectionChange={k => { setSessionFilter(Array.from(k as Set<string>)[0] || ''); setPage(1); }}
                                             classNames={{ trigger: 'bg-white border-slate-200 rounded-xl h-10', popoverContent: 'bg-white border border-slate-100 shadow-xl rounded-xl' }}>
@@ -519,38 +511,30 @@ const Reports: React.FC = () => {
                                     {/* Dept bar */}
                                     <div className="lg:col-span-3">
                                         <h3 className="text-sm font-bold text-slate-700 mb-4">Attendance Rate by Department</h3>
-                                        {mounted ? (
-                                            <ResponsiveContainer width="99%" height={230} minWidth={1} minHeight={1}>
-                                                <BarChart data={deptChartData} barSize={26} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
-                                                    <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#f1f5f9" />
-                                                    <XAxis dataKey="dept" tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                                                    <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} domain={[0, 100]} tickFormatter={v => `${v}%`} />
-                                                    <Tooltip content={<ChartTooltip />} />
-                                                    <Bar dataKey="rate" name="Attendance" radius={[5, 5, 0, 0]}>
-                                                        {deptChartData.map((e, i) => <Cell key={i} fill={e.rate >= 90 ? '#10b981' : e.rate >= 75 ? '#4f46e5' : e.rate > 0 ? '#f59e0b' : '#e2e8f0'} />)}
-                                                    </Bar>
-                                                </BarChart>
-                                            </ResponsiveContainer>
-                                        ) : (
-                                            <div className="h-[230px] w-full animate-pulse bg-slate-50 rounded-xl" />
-                                        )}
+                                        <ResponsiveContainer width="100%" height={230} minWidth={1} minHeight={1}>
+                                            <BarChart data={deptChartData} barSize={26} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
+                                                <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#f1f5f9" />
+                                                <XAxis dataKey="dept" tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                                                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} domain={[0, 100]} tickFormatter={v => `${v}%`} />
+                                                <Tooltip content={<ChartTooltip />} />
+                                                <Bar dataKey="rate" name="Attendance" radius={[5, 5, 0, 0]}>
+                                                    {deptChartData.map((e, i) => <Cell key={i} fill={e.rate >= 90 ? '#10b981' : e.rate >= 75 ? '#4f46e5' : e.rate > 0 ? '#f59e0b' : '#e2e8f0'} />)}
+                                                </Bar>
+                                            </BarChart>
+                                        </ResponsiveContainer>
                                     </div>
                                     {/* Donut */}
                                     <div className="lg:col-span-2">
                                         <h3 className="text-sm font-bold text-slate-700 mb-4">Exam Status Breakdown</h3>
-                                        {mounted ? (
-                                            <ResponsiveContainer width="99%" height={230} minWidth={1} minHeight={1}>
-                                                <PieChart>
-                                                    <Pie data={statusDist} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={3} dataKey="value">
-                                                        {statusDist.map((e, i) => <Cell key={i} fill={e.fill} />)}
-                                                    </Pie>
-                                                    <Tooltip formatter={(v, n) => [`${v} exams`, n]} />
-                                                    <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
-                                                </PieChart>
-                                            </ResponsiveContainer>
-                                        ) : (
-                                            <div className="h-[230px] w-full animate-pulse bg-slate-50 rounded-full scale-90" />
-                                        )}
+                                        <ResponsiveContainer width="100%" height={230} minWidth={1} minHeight={1}>
+                                            <PieChart>
+                                                <Pie data={statusDist} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={3} dataKey="value">
+                                                    {statusDist.map((e, i) => <Cell key={i} fill={e.fill} />)}
+                                                </Pie>
+                                                <Tooltip formatter={(v, n) => [`${v} exams`, n]} />
+                                                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
+                                            </PieChart>
+                                        </ResponsiveContainer>
                                     </div>
                                 </div>
 
@@ -696,7 +680,7 @@ const Reports: React.FC = () => {
                                             <span className="text-sm font-bold text-slate-800">{inv.students}</span>
                                             <span className={`text-sm font-bold ${inv.absent > 15 ? 'text-rose-500' : 'text-slate-600'}`}>{inv.absent > 0 ? inv.absent : '—'}</span>
                                             <div className="flex items-center gap-1">
-                                                <span className="text-amber-400 font-black text-sm">★</span>
+                                                <span className="text-amber-400 font-black text-sm">*</span>
                                                 <span className="text-sm font-bold text-slate-700">{inv.rating}</span>
                                             </div>
                                         </div>

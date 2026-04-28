@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, ModalContent, ModalHeader, ModalBody, Button, Input, Select, SelectItem } from "@heroui/react";
 import { ExamService } from '../../services/examService';
+import { academicService } from '../../services/academicService';
 import { toast } from 'react-hot-toast';
 import { Pencil } from 'lucide-react';
 
@@ -13,13 +14,15 @@ interface EditExamModalProps {
 
 const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps) => {
     const [loading, setLoading] = useState(false);
+    const [departments, setDepartments] = useState<any[]>([]);
 
     const [formData, setFormData] = useState({
         ExamName: '',
         ExamDate: '',
         Session: '',
         Duration: '',
-        SubjectID: ''
+        SubjectID: '',
+        DepartmentID: ''
     });
 
     useEffect(() => {
@@ -29,10 +32,28 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
                 ExamDate: exam.ExamDate ? exam.ExamDate.split('T')[0] : '',
                 Session: exam.Session,
                 Duration: String(exam.Duration),
-                SubjectID: String(exam.SubjectID)
+                SubjectID: String(exam.SubjectID),
+                DepartmentID: String(exam?.Subject?.Department?.DepartmentID || '')
             });
         }
     }, [isOpen, exam]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        (async () => {
+            try {
+                const response = await academicService.getDepartments();
+                const items = Array.isArray((response as any)?.data)
+                    ? (response as any).data
+                    : Array.isArray(response)
+                        ? response
+                        : [];
+                setDepartments(items);
+            } catch {
+                setDepartments([]);
+            }
+        })();
+    }, [isOpen]);
 
     const handleChange = (field: string, value: string) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -49,7 +70,8 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
             const payload = {
                 ...formData,
                 Duration: parseInt(formData.Duration),
-                SubjectID: parseInt(formData.SubjectID)
+                SubjectID: parseInt(formData.SubjectID),
+                DepartmentID: formData.DepartmentID ? parseInt(formData.DepartmentID) : undefined
             };
 
             await ExamService.update(exam.ExamID, payload);
@@ -96,7 +118,7 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
 
                             {/* Subject (Read-only) */}
                             <div>
-                                <label className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Subject</label>
+                                <span className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Subject</span>
                                 <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
                                     <p className="text-sm font-semibold text-gray-800">
                                         {exam?.Subject?.SubjectName || 'Unknown Subject'}
@@ -105,11 +127,35 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
                                 </div>
                             </div>
 
+                            <div>
+                                <div className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Department</div>
+                                <Select
+                                    id="department-select-edit"
+                                    name="DepartmentID"
+                                    disableAnimation
+                                    aria-label="Department"
+                                    placeholder="Select department"
+                                    selectedKeys={formData.DepartmentID && departments.some(d => String(d.DepartmentID) === formData.DepartmentID) ? [formData.DepartmentID] : []}
+                                    onSelectionChange={(k) => handleChange('DepartmentID', (Array.from(k)[0] as string) || '')}
+                                    variant="bordered"
+                                    classNames={{
+                                        trigger: "bg-white border-gray-200 h-11 rounded-lg",
+                                        value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-500",
+                                        popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
+                                    }}
+                                >
+                                    {departments.map((d: any) => (
+                                        <SelectItem key={String(d.DepartmentID)} textValue={`${d.DepartmentCode} - ${d.DepartmentName}`}>
+                                            {d.DepartmentCode} - {d.DepartmentName}
+                                        </SelectItem>
+                                    ))}
+                                </Select>
+                            </div>
+
                             {/* Exam Name */}
                             <div>
-                                <label htmlFor="edit-exam-name" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Exam Name</label>
-                                <Input
-                                    id="edit-exam-name"
+                                <div className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Exam Name</div>
+                                <Input aria-label="e.g. End Semester Exam" id="edit-exam-name"
                                     name="ExamName"
                                     autoComplete="off"
                                     placeholder="e.g. End Semester Exam"
@@ -129,7 +175,7 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
                             {/* Date & Session */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <label htmlFor="edit-exam-date" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Date</label>
+                                    <div className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Date</div>
                                     <Input
                                         id="edit-exam-date"
                                         type="date"
@@ -149,36 +195,36 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-3">Session</label>
+                                    <span className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-3">Session</span>
                                     <div className="flex gap-6 h-[48px] items-center">
-                                        <label className="flex items-center gap-2 cursor-pointer group">
+                                        <div className="flex items-center gap-2 cursor-pointer group">
                                             <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${formData.Session === 'FN' ? 'border-blue-600 bg-white' : 'border-gray-300 bg-white group-hover:border-gray-400'}`}>
                                                 {formData.Session === 'FN' && <div className="w-2.5 h-2.5 bg-blue-600 rounded-full" />}
                                             </div>
-                                            <input type="radio" className="hidden" name="Session" value="FN" checked={formData.Session === 'FN'} onChange={() => handleChange('Session', 'FN')} />
+                                            <input id="session-fn" type="radio" className="hidden" name="Session" value="FN" checked={formData.Session === 'FN'} onChange={() => handleChange('Session', 'FN')} />
                                             <div className="text-sm">
                                                 <span className="font-bold text-gray-700 block">Forenoon</span>
                                                 <span className="text-xs text-gray-400 font-medium">(FN)</span>
                                             </div>
-                                        </label>
+                                        </div>
 
-                                        <label className="flex items-center gap-2 cursor-pointer group">
+                                        <div className="flex items-center gap-2 cursor-pointer group">
                                             <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${formData.Session === 'AN' ? 'border-blue-600 bg-white' : 'border-gray-300 bg-white group-hover:border-gray-400'}`}>
                                                 {formData.Session === 'AN' && <div className="w-2.5 h-2.5 bg-blue-600 rounded-full" />}
                                             </div>
-                                            <input type="radio" className="hidden" name="Session" value="AN" checked={formData.Session === 'AN'} onChange={() => handleChange('Session', 'AN')} />
+                                            <input id="session-an" type="radio" className="hidden" name="Session" value="AN" checked={formData.Session === 'AN'} onChange={() => handleChange('Session', 'AN')} />
                                             <div className="text-sm">
                                                 <span className="font-bold text-gray-700 block">Afternoon</span>
                                                 <span className="text-xs text-gray-400 font-medium">(AN)</span>
                                             </div>
-                                        </label>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
                             {/* Duration */}
                             <div>
-                                <label htmlFor="edit-exam-duration" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Duration (Minutes)</label>
+                                <div className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Duration (Minutes)</div>
                                 <Input
                                     id="edit-exam-duration"
                                     type="number"

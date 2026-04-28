@@ -8,35 +8,25 @@ import {
     ModalFooter,
     Button,
     Input,
-    Select,
-    SelectItem,
 } from "@heroui/react";
 import { toast } from "react-hot-toast";
-import { User, Mail, Hash, Building2, GraduationCap, Calendar, BookOpen } from 'lucide-react';
+import { User, Hash, GraduationCap, Mail } from 'lucide-react';
 import api from "../../../../services/api";
 
 interface EditStudentModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSuccess: () => void;
-    student: any; // Using any for now to avoid strict type issues, but ideally should be Student interface
+    student: any;
 }
 
-interface Department {
-    DepartmentID: number;
-    DepartmentCode: string;
-    DepartmentName: string;
-}
-
-interface Program {
+interface ProgramWithDuration {
     ProgramID: number;
+    ProgramCode: string;
     ProgramName: string;
-}
-
-interface Semester {
-    SemesterID: number;
-    SemesterNumber: number;
-    ProgramID: number;
+    DurationYears?: number;
+    TotalSemesters?: number;
+    DepartmentID?: number;
 }
 
 export const EditStudentModal: React.FC<EditStudentModalProps> = ({
@@ -46,41 +36,102 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
     student
 }) => {
     const [loading, setLoading] = useState(false);
-    const [departments, setDepartments] = useState<Department[]>([]);
-    const [programs, setPrograms] = useState<Program[]>([]);
-    const [semesters, setSemesters] = useState<Semester[]>([]);
+    const [departments, setDepartments] = useState<any[]>([]);
+    const [programs, setPrograms] = useState<ProgramWithDuration[]>([]);
+    const [errors, setErrors] = useState<Record<string, string>>({});
+
+    const validateFields = (): boolean => {
+        const newErrors: Record<string, string> = {};
+
+        if (!formData.FullName?.trim()) {
+            newErrors.FullName = "Full Name is required";
+        } else if (formData.FullName.trim().length < 2) {
+            newErrors.FullName = "Full Name must be at least 2 characters";
+        } else if (formData.FullName.trim().length > 100) {
+            newErrors.FullName = "Full Name must not exceed 100 characters";
+        } else if (!/^[a-zA-Z\s\-']+$/.test(formData.FullName.trim())) {
+            newErrors.FullName = "Full Name can only contain letters, spaces, hyphens, and apostrophes";
+        }
+
+        if (!formData.Email?.trim()) {
+            newErrors.Email = "College Email is required";
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.Email)) {
+            newErrors.Email = "Please enter a valid email address";
+        } else if (!formData.Email.toLowerCase().endsWith("@sjcetpalai.ac.in")) {
+            newErrors.Email = "Email must be from the college domain (sjcetpalai.ac.in)";
+        }
+
+        if (!formData.RegisterNumber?.trim()) {
+            newErrors.RegisterNumber = "Register Number is required";
+        } else if (formData.RegisterNumber.trim().length < 4) {
+            newErrors.RegisterNumber = "Register Number must be at least 4 characters";
+        } else if (formData.RegisterNumber.trim().length > 50) {
+            newErrors.RegisterNumber = "Register Number must not exceed 50 characters";
+        } else if (!/^[A-Z0-9\-_]+$/i.test(formData.RegisterNumber.trim())) {
+            newErrors.RegisterNumber = "Register Number can only contain letters, numbers, hyphens, and underscores";
+        }
+
+        if (!formData.BatchYear) {
+            newErrors.BatchYear = "Batch Year is required";
+        } else {
+            const year = Number(formData.BatchYear);
+            const currentYear = new Date().getFullYear();
+            if (!Number.isInteger(year)) {
+                newErrors.BatchYear = "Batch Year must be a valid year";
+            } else if (year < 2000) {
+                newErrors.BatchYear = "Batch Year must be 2000 or later";
+            } else if (year > currentYear + 5) {
+                newErrors.BatchYear = `Batch Year cannot exceed ${currentYear + 5}`;
+            }
+        }
+
+        if (!formData.DepartmentID) {
+            newErrors.DepartmentID = "Department is required";
+        }
+
+        if (!formData.ProgramID) {
+            newErrors.ProgramID = "Program is required";
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
 
     const [formData, setFormData] = useState({
         RegisterNumber: "",
         FullName: "",
+        Email: "",
         DepartmentID: "",
         ProgramID: "",
-        SemesterID: "",
         BatchYear: "",
     });
 
     useEffect(() => {
         if (isOpen) {
-            fetchMasterData();
+            fetchMasterDataAndSetForm();
+        }
+    }, [isOpen, student]);
+
+    const fetchMasterDataAndSetForm = async () => {
+        try {
+            const response = await api.get('/students/meta/create-options');
+            const fetchedDepts = response.data.departments || [];
+            const fetchedProgs = response.data.programs || [];
+            
+            setDepartments(fetchedDepts);
+            setPrograms(fetchedProgs);
+
+            // Set form data after fetching master data
             if (student) {
                 setFormData({
                     RegisterNumber: student.RegisterNumber || "",
                     FullName: student.User?.FullName || "",
+                    Email: student.User?.Email || "",
                     DepartmentID: student.DepartmentID?.toString() || "",
                     ProgramID: student.ProgramID?.toString() || "",
-                    SemesterID: student.SemesterID?.toString() || "",
                     BatchYear: student.BatchYear?.toString() || "",
                 });
             }
-        }
-    }, [isOpen, student]);
-
-    const fetchMasterData = async () => {
-        try {
-            const response = await api.get('/students/meta/create-options');
-            setDepartments(response.data.departments);
-            setPrograms(response.data.programs);
-            setSemesters(response.data.semesters);
         } catch (error) {
             console.error("Failed to fetch master data", error);
             toast.error("Could not load form data options");
@@ -89,39 +140,51 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
 
     const handleChange = (field: string, value: string) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
+        if (errors[field]) {
+            setErrors(prev => {
+                const newErrors = { ...prev };
+                delete newErrors[field];
+                return newErrors;
+            });
+        }
     };
 
     const handleSubmit = async () => {
-        // Basic Validation
-        if (!formData.RegisterNumber || !formData.FullName || !formData.DepartmentID || !formData.ProgramID || !formData.SemesterID || !formData.BatchYear) {
-            toast.error("Please fill all fields");
+        if (!validateFields()) {
+            toast.error("Please correct all validation errors");
             return;
         }
 
         setLoading(true);
         try {
             await api.put(`/students/${student.StudentID}`, {
-                ...formData,
+                RegisterNumber: formData.RegisterNumber.trim().toUpperCase(),
+                FullName: formData.FullName.trim(),
+                Email: formData.Email.trim().toLowerCase(),
                 DepartmentID: parseInt(formData.DepartmentID),
                 ProgramID: parseInt(formData.ProgramID),
-                SemesterID: parseInt(formData.SemesterID),
-                BatchYear: parseInt(formData.BatchYear)
+                BatchYear: parseInt(formData.BatchYear),
             });
             toast.success("Student updated successfully");
             onSuccess();
             onClose();
+            setErrors({});
         } catch (error: any) {
             console.error(error);
-            toast.error(error.response?.data?.message || "Failed to update student");
+            if (error.response?.data?.validationErrors) {
+                const serverErrors: Record<string, string> = {};
+                Object.entries(error.response.data.validationErrors).forEach(([key, value]) => {
+                    serverErrors[key] = value as string;
+                });
+                setErrors(serverErrors);
+                toast.error("Please correct validation errors");
+            } else {
+                toast.error(error.response?.data?.message || "Failed to update student");
+            }
         } finally {
             setLoading(false);
         }
     };
-
-    // Filter semesters based on program
-    const filteredSemesters = formData.ProgramID
-        ? semesters.filter(s => s.ProgramID === parseInt(formData.ProgramID))
-        : semesters;
 
     return (
         <Modal
@@ -131,161 +194,207 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
             backdrop="blur"
             size="2xl"
             classNames={{
-                base: "bg-white  border border-white/20  shadow-2xl rounded-3xl",
-                header: "border-b border-gray-100  p-6 pb-4",
+                base: "bg-white border border-white/20 shadow-2xl rounded-3xl",
+                header: "p-0 border-none",
                 body: "p-0",
-                footer: "border-t border-gray-100  p-6 pt-4 bg-gray-50/50 ",
-                closeButton: "hover:bg-gray-100  active:bg-gray-200  p-2 rounded-full transition-colors right-4 top-4"
+                footer: "border-t border-gray-100 py-4 px-7",
+                closeButton: "hover:bg-white/20 active:bg-white/30 text-white p-2 rounded-full transition-colors right-4 top-4 z-50"
             }}
             motionProps={{
                 variants: {
-                    enter: { y: 0, opacity: 1, transition: { duration: 0.3, ease: "easeOut" } },
-                    exit: { y: 20, opacity: 0, transition: { duration: 0.2, ease: "easeIn" } },
+                    enter: {
+                        y: 0,
+                        opacity: 1,
+                        transition: { duration: 0.3, ease: "easeOut" },
+                    },
+                    exit: {
+                        y: 20,
+                        opacity: 0,
+                        transition: { duration: 0.2, ease: "easeIn" },
+                    },
                 }
             }}
         >
             <ModalContent>
-                <ModalHeader className="flex flex-col gap-1 items-center justify-center pt-8 pb-6 bg-gradient-to-b from-white to-gray-50  ">
-                    <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mb-3 shadow-sm ring-4 ring-primary/5">
-                        <User size={24} strokeWidth={2.5} />
+                <ModalHeader>
+                    <div className="w-full bg-gradient-to-r from-slate-900 via-blue-900 to-cyan-900 rounded-t-3xl px-7 py-6">
+                        <div className="flex items-center gap-4">
+                            <div className="w-11 h-11 rounded-xl bg-white/15 backdrop-blur-sm flex items-center justify-center border border-white/20">
+                                <GraduationCap size={22} className="text-white" />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-bold text-white tracking-tight">Edit Student</h2>
+                                <p className="text-sm text-blue-200/60 font-normal mt-0.5">Update student information</p>
+                            </div>
+                        </div>
                     </div>
-                    <h2 className="text-2xl font-bold text-gray-900  tracking-tight">Edit Student</h2>
-                    <p className="text-sm font-medium text-gray-400  text-center max-w-xs">
-                        Update {formData.FullName || "student"}'s profile details below.
-                    </p>
                 </ModalHeader>
                 <ModalBody>
-                    <div className="p-6 space-y-8">
-                        {/* Section 1: Personal Info */}
-                        <div className="space-y-4">
-                            <div className="flex items-center gap-2 text-sm font-semibold text-gray-900 ">
-                                <div className="h-1.5 w-1.5 rounded-full bg-primary" />
-                                Personal Information
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <Input
-                                    startContent={<Hash className="text-gray-400 mr-2" size={16} />}
-                                    placeholder="Register Number"
-                                    value={formData.RegisterNumber}
-                                    onValueChange={(v) => handleChange("RegisterNumber", v)}
-                                    classNames={{
-                                        inputWrapper: "h-12 bg-white border-1 border-slate-200 shadow-sm hover:border-blue-400 focus-within:border-blue-600 focus-within:shadow-md rounded-xl transition-all",
-                                        input: "text-small bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0",
-                                    }}
-                                />
-                                <Input
-                                    startContent={<User className="text-gray-400 mr-2" size={16} />}
-                                    placeholder="Full Name"
-                                    value={formData.FullName}
-                                    onValueChange={(v) => handleChange("FullName", v)}
-                                    classNames={{
-                                        inputWrapper: "h-12 bg-white border-1 border-slate-200 shadow-sm hover:border-blue-400 focus-within:border-blue-600 focus-within:shadow-md rounded-xl transition-all",
-                                        input: "text-small bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0",
-                                    }}
-                                />
+                    <div className="px-7 py-6 space-y-6">
+                        {/* PERSONAL INFORMATION */}
+                        <div>
+                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Personal Information</h3>
+                            <div className="grid grid-cols-2 gap-5">
+                                <div className="space-y-1.5">
+                                    <div className="text-sm font-semibold text-gray-700 ml-1">
+                                        Full Name <span className="text-red-500">*</span>
+                                    </div>
+                                    <Input aria-label="Input" id="full-name"
+                                        autoComplete="name"
+                                        startContent={<User className="text-gray-400" size={15} />}
+                                        placeholder="John Doe"
+                                        value={formData.FullName}
+                                        onValueChange={(v) => handleChange("FullName", v)}
+                                        isInvalid={!!errors.FullName}
+                                        errorMessage={errors.FullName}
+                                        classNames={{
+                                            inputWrapper: `h-12 bg-gray-50/80 border-1 ${errors.FullName ? 'border-red-500 bg-red-50/30' : 'border-gray-200'} hover:border-blue-300 focus-within:!border-blue-500 focus-within:bg-white focus-within:shadow-sm rounded-xl transition-all`,
+                                            input: "text-sm bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0 placeholder:text-gray-400",
+                                            errorMessage: "text-red-500 text-xs font-medium mt-1"
+                                        }}
+                                        variant="bordered"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <div className="text-sm font-semibold text-gray-700 ml-1">
+                                        College Email <span className="text-red-500">*</span>
+                                    </div>
+                                    <Input aria-label="Input" id="college-email"
+                                        autoComplete="email"
+                                        type="email"
+                                        startContent={<Mail className="text-gray-400" size={15} />}
+                                        placeholder="john@sjcetpalai.ac.in"
+                                        value={formData.Email}
+                                        onValueChange={(v) => handleChange("Email", v)}
+                                        isInvalid={!!errors.Email}
+                                        errorMessage={errors.Email}
+                                        classNames={{
+                                            inputWrapper: `h-12 bg-gray-50/80 border-1 ${errors.Email ? 'border-red-500 bg-red-50/30' : 'border-gray-200'} hover:border-blue-300 focus-within:!border-blue-500 focus-within:bg-white focus-within:shadow-sm rounded-xl transition-all`,
+                                            input: "text-sm bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0 placeholder:text-gray-400",
+                                            errorMessage: "text-red-500 text-xs font-medium mt-1"
+                                        }}
+                                        variant="bordered"
+                                    />
+                                </div>
                             </div>
                         </div>
 
-                        <div className="h-px bg-gray-100 " />
+                        {/* ACADEMIC INFORMATION */}
+                        <div>
+                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Academic Information</h3>
+                            <div className="space-y-5">
+                                <div className="grid grid-cols-2 gap-5">
+                                    <div className="space-y-1.5">
+                                        <div className="text-sm font-semibold text-gray-700 ml-1">
+                                            Register Number <span className="text-red-500">*</span>
+                                        </div>
+                                        <Input aria-label="Input" id="register-number"
+                                            autoComplete="off"
+                                            startContent={<Hash className="text-gray-400" size={15} />}
+                                            placeholder="SJC24MCA001"
+                                            value={formData.RegisterNumber}
+                                            onValueChange={(v) => handleChange("RegisterNumber", v)}
+                                            isInvalid={!!errors.RegisterNumber}
+                                            errorMessage={errors.RegisterNumber}
+                                            classNames={{
+                                                inputWrapper: `h-12 bg-gray-50/80 border-1 ${errors.RegisterNumber ? 'border-red-500 bg-red-50/30' : 'border-gray-200'} hover:border-blue-300 focus-within:!border-blue-500 focus-within:bg-white focus-within:shadow-sm rounded-xl transition-all`,
+                                                input: "text-sm bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0 placeholder:text-gray-400",
+                                                errorMessage: "text-red-500 text-xs font-medium mt-1"
+                                            }}
+                                            variant="bordered"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <div className="text-sm font-semibold text-gray-700 ml-1">
+                                            Batch Year <span className="text-red-500">*</span>
+                                        </div>
+                                        <Input aria-label="2026" id="batch-year"
+                                            type="number"
+                                            placeholder="2026"
+                                            value={formData.BatchYear}
+                                            onValueChange={(v) => handleChange("BatchYear", v)}
+                                            isInvalid={!!errors.BatchYear}
+                                            errorMessage={errors.BatchYear}
+                                            classNames={{
+                                                inputWrapper: `h-12 bg-gray-50/80 border-1 ${errors.BatchYear ? 'border-red-500 bg-red-50/30' : 'border-gray-200'} hover:border-blue-300 focus-within:!border-blue-500 focus-within:bg-white focus-within:shadow-sm rounded-xl transition-all`,
+                                                input: "text-sm bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0 placeholder:text-gray-400",
+                                                errorMessage: "text-red-500 text-xs font-medium mt-1"
+                                            }}
+                                            variant="bordered"
+                                        />
+                                        <p className="text-xs text-gray-400 ml-1">Year when student joined the program</p>
+                                    </div>
+                                </div>
 
-                        {/* Section 2: Academic Info */}
-                        <div className="space-y-4">
-                            <div className="flex items-center gap-2 text-sm font-semibold text-gray-900 ">
-                                <div className="h-1.5 w-1.5 rounded-full bg-primary" />
-                                Academic Details
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <Select
-                                    startContent={<Building2 className="text-gray-400 mr-2" size={16} />}
-                                    placeholder="Select Department"
-                                    selectedKeys={formData.DepartmentID ? [formData.DepartmentID] : []}
-                                    onChange={(e) => handleChange("DepartmentID", e.target.value)}
-                                    aria-label="Department"
-                                    classNames={{
-                                        trigger: "h-12 bg-white border-1 border-slate-200 shadow-sm data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 rounded-xl transition-all",
-                                        popoverContent: "bg-white border border-gray-100 shadow-xl",
-                                        value: "text-small group-data-[has-value=true]:text-gray-900",
-                                        selectorIcon: "hidden"
-                                    }}
-                                >
-                                    {departments.map((dept) => (
-                                        <SelectItem key={dept.DepartmentID} textValue={dept.DepartmentCode}>
-                                            {dept.DepartmentName}
-                                        </SelectItem>
-                                    ))}
-                                </Select>
-
-                                <Select
-                                    startContent={<GraduationCap className="text-gray-400 mr-2" size={16} />}
-                                    placeholder="Select Program"
-                                    selectedKeys={formData.ProgramID ? [formData.ProgramID] : []}
-                                    onChange={(e) => handleChange("ProgramID", e.target.value)}
-                                    aria-label="Program"
-                                    classNames={{
-                                        trigger: "h-12 bg-white border-1 border-slate-200 shadow-sm data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 rounded-xl transition-all",
-                                        popoverContent: "bg-white border border-gray-100 shadow-xl",
-                                        value: "text-small group-data-[has-value=true]:text-gray-900",
-                                        selectorIcon: "hidden"
-                                    }}
-                                >
-                                    {programs.map((prog) => (
-                                        <SelectItem key={prog.ProgramID} textValue={prog.ProgramName}>
-                                            {prog.ProgramName}
-                                        </SelectItem>
-                                    ))}
-                                </Select>
-
-                                <Select
-                                    startContent={<BookOpen className="text-gray-400 mr-2" size={16} />}
-                                    placeholder="Select Semester"
-                                    selectedKeys={formData.SemesterID ? [formData.SemesterID] : []}
-                                    onChange={(e) => handleChange("SemesterID", e.target.value)}
-                                    isDisabled={!formData.ProgramID}
-                                    aria-label="Semester"
-                                    classNames={{
-                                        trigger: "h-12 bg-white border-1 border-slate-200 shadow-sm data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 rounded-xl transition-all",
-                                        popoverContent: "bg-white border border-gray-100 shadow-xl",
-                                        selectorIcon: "hidden"
-                                    }}
-                                >
-                                    {filteredSemesters.map((sem) => (
-                                        <SelectItem key={sem.SemesterID} textValue={sem.SemesterNumber.toString()}>
-                                            Semester {sem.SemesterNumber}
-                                        </SelectItem>
-                                    ))}
-                                </Select>
-
-                                <Input
-                                    startContent={<Calendar className="text-gray-400 mr-2" size={16} />}
-                                    placeholder="Batch Year"
-                                    type="number"
-                                    value={formData.BatchYear}
-                                    onValueChange={(v) => handleChange("BatchYear", v)}
-                                    classNames={{
-                                        inputWrapper: "h-12 bg-white border-1 border-slate-200 shadow-sm hover:border-blue-400 focus-within:border-blue-600 focus-within:shadow-md rounded-xl transition-all",
-                                        input: "text-small bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0",
-                                    }}
-                                />
+                                <div className="grid grid-cols-2 gap-5">
+                                    <div className="space-y-1.5">
+                                        <div className="text-sm font-semibold text-gray-700 ml-1">
+                                            Department <span className="text-red-500">*</span>
+                                        </div>
+                                        <select
+                                            id="department"
+                                            value={formData.DepartmentID}
+                                            onChange={(e) => handleChange("DepartmentID", e.target.value)}
+                                            className={`w-full h-12 bg-gray-50/80 border rounded-xl text-sm px-3 focus:ring-1 outline-none transition-all ${errors.DepartmentID ? 'border-red-500 bg-red-50/30 focus:border-red-500 focus:ring-red-500' : 'border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-blue-500'}`}
+                                        >
+                                            <option value="">Select Department...</option>
+                                            {departments.map(dept => (
+                                                <option key={dept.DepartmentID} value={dept.DepartmentID}>
+                                                    {dept.DepartmentCode} - {dept.DepartmentName}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {errors.DepartmentID && <p className="text-red-500 text-xs font-medium mt-1">{errors.DepartmentID}</p>}
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <div className="text-sm font-semibold text-gray-700 ml-1">
+                                            Program <span className="text-red-500">*</span>
+                                        </div>
+                                        <select
+                                            id="program"
+                                            value={formData.ProgramID}
+                                            onChange={(e) => handleChange("ProgramID", e.target.value)}
+                                            className={`w-full h-12 bg-gray-50/80 border rounded-xl text-sm px-3 focus:ring-1 outline-none transition-all ${errors.ProgramID ? 'border-red-500 bg-red-50/30 focus:border-red-500 focus:ring-red-500' : 'border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-blue-500'}`}
+                                        >
+                                            <option value="">Select Program...</option>
+                                            {programs
+                                                .filter(prog => {
+                                                    // Always show the currently selected program
+                                                    if (formData.ProgramID && prog.ProgramID?.toString() === formData.ProgramID.toString()) {
+                                                        return true;
+                                                    }
+                                                    // Also show programs from selected department or all if no department selected
+                                                    if (!formData.DepartmentID) return true;
+                                                    return prog.DepartmentID?.toString() === formData.DepartmentID.toString();
+                                                })
+                                                .map(prog => (
+                                                    <option key={prog.ProgramID} value={prog.ProgramID}>
+                                                        {prog.ProgramName}
+                                                    </option>
+                                                ))}
+                                        </select>
+                                        {errors.ProgramID && <p className="text-red-500 text-xs font-medium mt-1">{errors.ProgramID}</p>}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </ModalBody>
-                <ModalFooter className="flex justify-between items-center bg-gray-50/50  p-6">
-                    <div className="text-xs text-gray-400 font-medium">
-                        * All fields are required
-                    </div>
-                    <div className="flex gap-3">
+                <ModalFooter className="flex justify-end items-center">
+                    <div className="flex gap-2.5">
                         <Button
-                            variant="light"
+                            variant="bordered"
                             onPress={onClose}
-                            className="font-semibold text-gray-500 hover:text-gray-700  "
+                            className="font-semibold text-gray-600 border-gray-200 hover:bg-gray-50 px-5"
+                            radius="lg"
                         >
                             Cancel
                         </Button>
                         <Button
-                            className="bg-black  text-white  font-bold shadow-lg shadow-black/20  px-8"
+                            className="bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold shadow-lg shadow-blue-600/25 hover:shadow-xl hover:shadow-blue-600/30 px-7"
                             onPress={handleSubmit}
                             isLoading={loading}
+                            radius="lg"
                         >
                             Update Student
                         </Button>

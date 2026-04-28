@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React from 'react';
 import { Card, CardHeader, CardBody } from "@heroui/react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
 import { BarChart as BarChartIcon } from 'lucide-react';
@@ -31,10 +32,6 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export const LoginActivityChart: React.FC<LoginActivityChartProps> = ({ data }) => {
-    const [mounted, setMounted] = useState(false);
-    useEffect(() => { setMounted(true); }, []);
-    if (!mounted) return <div className="animate-pulse bg-slate-100 rounded-2xl h-[400px] w-full" />;
-
     return (
         <Card className="border border-slate-200 shadow-sm rounded-2xl overflow-hidden h-[400px]">
             <CardHeader className="flex justify-between items-center p-4 bg-slate-50/50 border-b border-slate-100">
@@ -44,7 +41,7 @@ export const LoginActivityChart: React.FC<LoginActivityChartProps> = ({ data }) 
                 </h3>
             </CardHeader>
             <CardBody className="p-4 h-full">
-                <ResponsiveContainer width="99%" height="100%" minWidth={1} minHeight={1}>
+                <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                     <AreaChart
                         data={data}
                         margin={{

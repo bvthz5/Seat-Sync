@@ -25,11 +25,10 @@ export const AuditFilters: React.FC<AuditFiltersProps> = ({ filters, onFilterCha
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                 {/* Search */}
                 <div className="md:col-span-4 flex flex-col gap-1.5">
-                    <span id="label-search" className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Log Search</span>
-                    <Input
-                        id="search-input"
+                    <div className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Log Search</div>
+                    <Input aria-label="Log Search" id="search-input"
                         name="search"
-                        aria-labelledby="label-search"
+                        
                         placeholder="Search by ID, User, or Content..."
                         startContent={<Search className="w-4 h-4 text-slate-400" />}
                         value={filters.search || ''}
@@ -45,11 +44,10 @@ export const AuditFilters: React.FC<AuditFiltersProps> = ({ filters, onFilterCha
 
                 {/* Role Filter */}
                 <div className="md:col-span-2 flex flex-col gap-1.5">
-                    <span id="label-role" className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Actor Role</span>
-                    <Select
-                        id="role-select"
+                    <div className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Actor Role</div>
+                    <Select aria-label="Actor Role" id="role-select"
                         name="role"
-                        aria-labelledby="label-role"
+                        
                         placeholder="Any Role"
                         selectedKeys={filters.role ? [filters.role] : []}
                         onSelectionChange={(keys) => handleChange('role', Array.from(keys)[0])}
@@ -78,11 +76,10 @@ export const AuditFilters: React.FC<AuditFiltersProps> = ({ filters, onFilterCha
 
                 {/* Action Type */}
                 <div className="md:col-span-3 flex flex-col gap-1.5">
-                    <span id="label-action" className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Action Type</span>
-                    <Input
-                        id="action-input"
+                    <div className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Action Type</div>
+                    <Input aria-label="Action Type" id="action-input"
                         name="action"
-                        aria-labelledby="label-action"
+                        
                         placeholder="e.g. EXAM_PUBLISHED"
                         value={filters.action || ''}
                         onValueChange={(val) => handleChange('action', val)}
@@ -97,11 +94,10 @@ export const AuditFilters: React.FC<AuditFiltersProps> = ({ filters, onFilterCha
 
                 {/* Severity */}
                 <div className="md:col-span-2 flex flex-col gap-1.5">
-                    <span id="label-severity" className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Severity</span>
-                    <Select
-                        id="severity-select"
+                    <div className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Severity</div>
+                    <Select aria-label="Severity" id="severity-select"
                         name="severity"
-                        aria-labelledby="label-severity"
+                        
                         placeholder="All Levels"
                         selectedKeys={filters.severity ? [filters.severity] : []}
                         onSelectionChange={(keys) => handleChange('severity', Array.from(keys)[0])}

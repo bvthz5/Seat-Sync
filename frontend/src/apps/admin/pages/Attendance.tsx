@@ -250,8 +250,6 @@ const ROWS_PER_PAGE = 4;
 const Attendance: React.FC = () => {
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
-    const [mounted, setMounted] = useState(false);
-    React.useEffect(() => { setMounted(true); }, []);
 
     const filtered = useMemo(() => {
         const q = search.toLowerCase();
@@ -354,10 +352,7 @@ const Attendance: React.FC = () => {
                 {/* ── Search & Filter Bar ── */}
                 <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-3 flex flex-col sm:flex-row items-center gap-3">
                     <div className="flex-1 w-full">
-                        <Input
-                            id="search-attendance"
-                            name="searchAttendance"
-                            placeholder="Search by Hall or Invigilator..."
+                        <Input id="field-v9fpend" name="field-v9fpend" aria-label="Search by Hall or Invigilator..." placeholder="Search by Hall or Invigilator..."
                             startContent={<Search size={16} className="text-gray-400" />}
                             value={search}
                             onValueChange={(v) => { setSearch(v); setPage(1); }}
@@ -365,7 +360,7 @@ const Attendance: React.FC = () => {
                                 inputWrapper: 'bg-gray-50 shadow-none border border-gray-100 group-data-[focus=true]:border-blue-400 rounded-xl h-10',
                                 input: 'text-sm text-gray-700',
                             }}
-                            aria-label="Search attendance"
+                            
                         />
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -498,37 +493,33 @@ const Attendance: React.FC = () => {
                                 <TrendingUp size={18} className="text-gray-700" />
                                 <h2 className="text-base font-bold text-gray-900">Attendance Trends</h2>
                             </div>
-                            {mounted ? (
-                                <ResponsiveContainer width="99%" height={220} minWidth={1} minHeight={1}>
-                                    <BarChart data={WEEKLY_DATA} barSize={32} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
-                                        <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#f1f5f9" />
-                                        <XAxis
-                                            dataKey="day"
-                                            tick={{ fontSize: 11, fontWeight: 700, fill: '#94a3b8' }}
-                                            axisLine={false}
-                                            tickLine={false}
-                                        />
-                                        <YAxis
-                                            tick={{ fontSize: 11, fill: '#94a3b8' }}
-                                            axisLine={false}
-                                            tickLine={false}
-                                            domain={[0, 100]}
-                                            tickFormatter={(v) => `${v}%`}
-                                        />
-                                        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(99,102,241,0.04)' }} />
-                                        <Bar dataKey="rate" radius={[6, 6, 0, 0]}>
-                                            {WEEKLY_DATA.map((entry, index) => (
-                                                <Cell
-                                                    key={`cell-${index}`}
-                                                    fill={entry.today ? '#4f46e5' : entry.rate === 0 ? '#e2e8f0' : '#c7d2fe'}
-                                                />
-                                            ))}
-                                        </Bar>
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            ) : (
-                                <div className="h-[220px] w-full animate-pulse bg-slate-50 rounded-xl" />
-                            )}
+                            <ResponsiveContainer width="100%" height={220} minWidth={1} minHeight={1}>
+                                <BarChart data={WEEKLY_DATA} barSize={32} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
+                                    <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#f1f5f9" />
+                                    <XAxis
+                                        dataKey="day"
+                                        tick={{ fontSize: 11, fontWeight: 700, fill: '#94a3b8' }}
+                                        axisLine={false}
+                                        tickLine={false}
+                                    />
+                                    <YAxis
+                                        tick={{ fontSize: 11, fill: '#94a3b8' }}
+                                        axisLine={false}
+                                        tickLine={false}
+                                        domain={[0, 100]}
+                                        tickFormatter={(v) => `${v}%`}
+                                    />
+                                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(99,102,241,0.04)' }} />
+                                    <Bar dataKey="rate" radius={[6, 6, 0, 0]}>
+                                        {WEEKLY_DATA.map((entry, index) => (
+                                            <Cell
+                                                key={`cell-${index}`}
+                                                fill={entry.today ? '#4f46e5' : entry.rate === 0 ? '#e2e8f0' : '#c7d2fe'}
+                                            />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
                             {/* Today label under chart */}
                             <div className="flex items-center gap-2 mt-2">
                                 <span className="w-3 h-3 rounded bg-indigo-600 inline-block" />

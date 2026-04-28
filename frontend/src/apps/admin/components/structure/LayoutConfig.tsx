@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Autocomplete, AutocompleteItem, Input, Button, Card, CardBody, CardHeader, Divider, Tooltip, Chip, Switch, Select, SelectItem, Badge, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from '@heroui/react';
-import { Trash2, MousePointer2, CheckCircle2, RotateCcw, Save, Layers, Building2, Armchair, Layout, Check, X, Shield, Plus, Grid3X3, Spline, ArrowRight, ArrowLeft, MonitorPlay, AlertTriangle, MapPin, ChevronRight, Hash, Maximize2, Minimize2, Eye, EyeOff, Ban } from 'lucide-react';
+import { Trash2, MousePointer2, CheckCircle2, RotateCcw, Save, Layers, Building, Building2, Armchair, Layout, Check, X, Shield, Plus, Grid3X3, Spline, ArrowRight, ArrowLeft, MonitorPlay, AlertTriangle, MapPin, ChevronRight, Hash, Maximize2, Minimize2, Eye, Ban, Minus, DoorOpen, Box, Grid } from 'lucide-react';
 import { structureService } from '../../services/structureService';
 import { Block, Floor, Room, Zone } from '../../types/collegeStructure';
 import { toast } from '../../../../utils/toast';
@@ -9,19 +9,15 @@ interface LayoutConfigProps {
     readOnly?: boolean;
 }
 
-// Internal extended types for the Atomic Seat Model
 type RoomType = 'ROOM' | 'HALL';
-type BenchMode = 'PAIRED' | 'ALTERNATING';
-type ViewMode = 'PHYSICAL' | 'LOGICAL' | 'ZONE_EDIT';
-
-// Removed local Zone interface as it is now imported
+type ViewMode = 'PHYSICAL' | 'LOGICAL' | 'DISABLE';
 
 interface SeatConfig {
-    id: string; // e.g., "A-1-1" (Col-Bench-Seat)
+    id: string;
     colIndex: number;
     colLabel: string;
     benchIndex: number;
-    seatIndex: number; // 1-based index within bench
+    seatIndex: number;
     isActive: boolean;
     logicalRow: number;
     zoneId?: number;
@@ -39,12 +35,9 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
 
     // --- Configuration State ---
     const [config, setConfig] = useState({
-        rows: 0,
-        benchesPerRow: 0,
-        seatsPerBench: 0,
-        // Extended attributes
-        roomType: 'ROOM' as RoomType,
-        benchMode: 'PAIRED' as BenchMode
+        rowLayout: [] as number[],
+        seatsPerBench: 1,
+        roomType: 'ROOM' as RoomType
     });
 
     const [viewMode, setViewMode] = useState<ViewMode>('PHYSICAL');
@@ -56,21 +49,15 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
     const [zones, setZones] = useState<Zone[]>([]);
     const [seatZoneMap, setSeatZoneMap] = useState<Map<string, number>>(new Map());
     const [seatIdMap, setSeatIdMap] = useState<Map<string, number>>(new Map());
-    const [selectedZoneId, setSelectedZoneId] = useState<number | null>(null);
-    // Removed unused selectedSeatIds state and handleAssignZone function
+    // Cleaned up manual zone states
 
-    // Zone Creation Inputs
-    const [newZoneName, setNewZoneName] = useState("");
-    const [newZoneCode, setNewZoneCode] = useState("");
-    const [newZoneColor, setNewZoneColor] = useState("blue");
-
+    const [isSaved, setIsSaved] = useState(true);
     const [loading, setLoading] = useState(false);
-    const [initialConfig, setInitialConfig] = useState<any>(null); // To detect changes
+    const [initialConfig, setInitialConfig] = useState<any>(null);
     const [initialSeatZoneMap, setInitialSeatZoneMap] = useState<Map<string, number> | null>(null);
+    const [initialDisabledSeatIds, setInitialDisabledSeatIds] = useState<Set<string>>(new Set());
     const [isFullScreen, setIsFullScreen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
-
-    // --- Loading Effects ---
 
     useEffect(() => {
         const handleFullScreenChange = () => {
@@ -84,12 +71,12 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
         if (!isFullScreen) {
             setIsFullScreen(true);
             if (containerRef.current) {
-                containerRef.current.requestFullscreen().catch((err) => console.warn("Error attempting to enable full-screen mode:", err));
+                containerRef.current.requestFullscreen().catch((err) => console.warn(err));
             }
         } else {
             setIsFullScreen(false);
             if (document.fullscreenElement) {
-                document.exitFullscreen().catch((err) => console.warn("Error attempting to exit full-screen mode:", err));
+                document.exitFullscreen().catch((err) => console.warn(err));
             }
         }
     };
@@ -116,78 +103,65 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
         }
     }, [selectedFloorId, selectedBlockId]);
 
-    // When room is selected, load its config and layout
     useEffect(() => {
         const fetchRoomDetails = async () => {
             if (selectedRoomId) {
                 try {
                     setLoading(true);
+
                     const data = await structureService.getRoomLayout(Number(selectedRoomId));
                     const room = data.room;
 
+                    let parsedRowLayout = (room as any).RowLayout;
+                    if (typeof parsedRowLayout === 'string') {
+                        try { parsedRowLayout = JSON.parse(parsedRowLayout); } catch (e) { parsedRowLayout = []; }
+                    }
+                    if (!Array.isArray(parsedRowLayout)) {
+                        if (room.TotalRows && room.BenchesPerRow) {
+                            parsedRowLayout = Array(room.TotalRows).fill(room.BenchesPerRow);
+                        } else {
+                            parsedRowLayout = [];
+                        }
+                    }
+
                     const newConfig = {
-                        rows: room.TotalRows,
-                        benchesPerRow: room.BenchesPerRow,
-                        seatsPerBench: room.SeatsPerBench,
-                        roomType: ((room as any).RoomType || 'ROOM') as RoomType,
-                        benchMode: ((room as any).BenchMode || 'PAIRED') as BenchMode
+                        rowLayout: parsedRowLayout,
+                        seatsPerBench: room.SeatsPerBench || 2,
+                        roomType: (room.RoomType || 'ROOM') as RoomType
                     };
                     setConfig(newConfig);
                     setInitialConfig(newConfig);
 
-                    // Populate Seat State
                     const newDisabledSet = new Set<string>();
                     const newZoneMap = new Map<string, number>();
-
-                    if (data.seats) {
-                        data.seats.forEach((s: any) => {
-                            // Ensure RowLabel is trimmed to match frontend generation (A, B, C...)
-                            const rowLabel = s.RowLabel ? s.RowLabel.trim() : '';
-                            const seatId = `${rowLabel}-${s.BenchNumber}-${s.SeatNumber}`;
-
-                            console.log('Loading Seat:', { seatId, IsActive: s.IsActive, ZoneID: s.ZoneID });
-
-                            if (s.IsActive === false) newDisabledSet.add(seatId);
-                            if (s.ZoneID) {
-                                newZoneMap.set(seatId, Number(s.ZoneID));
-                                console.log('Mapped Zone:', seatId, '→ Zone', s.ZoneID);
-                            }
-                        });
-                    }
-
-                    console.log('Total Zone Mappings:', newZoneMap.size, Array.from(newZoneMap.entries()));
-
-                    setDisabledSeatIds(newDisabledSet);
-                    setSeatZoneMap(newZoneMap);
-                    setInitialSeatZoneMap(newZoneMap);
-
-                    // Populate Seat ID Map (Essential for handleSave)
                     const newSeatIdMap = new Map<string, number>();
+
                     if (data.seats) {
                         data.seats.forEach((s: any) => {
                             const rowLabel = s.RowLabel ? s.RowLabel.trim() : '';
                             const seatId = `${rowLabel}-${s.BenchNumber}-${s.SeatNumber}`;
                             newSeatIdMap.set(seatId, s.SeatID);
+                            if (s.IsActive === false) newDisabledSet.add(seatId);
+                            if (s.ZoneID) {
+                                newZoneMap.set(seatId, Number(s.ZoneID));
+                            }
                         });
                     }
-                    setSeatIdMap(newSeatIdMap);
 
-                    // Populate Zones
-                    if (data.zones) {
-                        console.log('Zones Loaded:', data.zones);
-                        setZones(data.zones);
-                    } else {
-                        setZones([]);
-                    }
+                    setDisabledSeatIds(newDisabledSet);
+                    setInitialDisabledSeatIds(new Set(newDisabledSet)); // baseline for dirty check
+                    setSeatZoneMap(newZoneMap);
+                    setInitialSeatZoneMap(newZoneMap);
+                    setSeatIdMap(newSeatIdMap);
+                    setZones(data.zones || []);
 
                 } catch (error) {
-                    console.error("Failed to load room layout", error);
                     toast.error("Failed to load room layout");
                 } finally {
                     setLoading(false);
                 }
             } else {
-                setConfig({ rows: 0, benchesPerRow: 0, seatsPerBench: 0, roomType: 'ROOM', benchMode: 'PAIRED' });
+                setConfig({ rowLayout: [], seatsPerBench: 2, roomType: 'ROOM' });
                 setInitialConfig(null);
                 setInitialSeatZoneMap(null);
                 setDisabledSeatIds(new Set());
@@ -199,8 +173,6 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
         fetchRoomDetails();
     }, [selectedRoomId]);
 
-    // --- Data Fetching ---
-
     const loadBlocks = async () => {
         try {
             const response: any = await structureService.getBlocks({ limit: 100 });
@@ -210,7 +182,6 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                 if (data.length > 0 && !selectedBlockId) setSelectedBlockId(data[0].BlockID.toString());
             } else setBlocks([]);
         } catch (error) {
-            console.error("Failed to load blocks", error);
             toast.error("Failed to load building blocks");
         }
     };
@@ -219,40 +190,30 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
         try {
             const response: any = await structureService.getFloors({ blockId, limit: 100 });
             setFloors(Array.isArray(response.data || response) ? (response.data || response) : []);
-        } catch (error) { console.error("Failed to load floors", error); }
+        } catch (error) { }
     };
 
     const loadRooms = async (blockId: number, floorId: number) => {
         try {
             const response: any = await structureService.getRooms({ blockId, floorId });
             setRooms(Array.isArray(response) ? response : (response.data || []));
-        } catch (error) { console.error("Failed to load rooms", error); }
+        } catch (error) { }
     };
 
-    // --- Logic: Atomic Seat Generation ---
     const generatedSeats = useMemo(() => {
         const seats: SeatConfig[] = [];
-        if (!selectedRoomId || config.rows === 0) return seats;
+        if (!selectedRoomId || !config.rowLayout.length) return seats;
 
-        for (let r = 0; r < config.rows; r++) {
-            const colLabel = String.fromCharCode(65 + r); // A, B, C...
+        config.rowLayout.forEach((benches, r) => {
+            const colLabel = String.fromCharCode(65 + r);
 
-            for (let b = 0; b < config.benchesPerRow; b++) {
+            for (let b = 0; b < benches; b++) {
                 for (let s = 1; s <= config.seatsPerBench; s++) {
                     const seatId = `${colLabel}-${b + 1}-${s}`;
                     const isActive = !disabledSeatIds.has(seatId);
                     const zoneId = seatZoneMap.get(seatId);
 
-                    // Logical Row Calculation
-                    // If Paired: All seats in bench are same logical row (roughly) -> Actually usually row depends on bench index
-                    // If Alternating: Odd seats = One row, Even seats = Next row
-                    let logicalRow = (b * 2) + 1; // Default simplistic mapping: Bench 1 -> Row 1, Bench 2 -> Row 3... (Visual rows)
-
-                    if (config.benchMode === 'ALTERNATING') {
-                        logicalRow = (b * 2) + (s % 2 === 0 ? 2 : 1);
-                    } else {
-                        logicalRow = b + 1; // Standard: Bench 1 is Row 1, Bench 2 is Row 2
-                    }
+                    const logicalRow = b + 1;
 
                     seats.push({
                         id: seatId,
@@ -261,335 +222,211 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                         benchIndex: b,
                         seatIndex: s,
                         isActive,
-                        logicalRow: logicalRow,
+                        logicalRow,
                         zoneId
                     });
                 }
             }
-        }
+        });
         return seats;
     }, [config, disabledSeatIds, selectedRoomId, seatZoneMap]);
 
     const activeSeatCount = generatedSeats.filter(s => s.isActive).length;
-
-    // --- Actions ---
+    const capacityCount = config.rowLayout.reduce((acc, curr) => acc + (curr * config.seatsPerBench), 0);
 
     const toggleSeat = (seatId: string) => {
         if (readOnly) return;
 
-        if (viewMode === 'ZONE_EDIT') {
-            if (!selectedZoneId) {
-                toast.error("Please select a zone to paint seats.");
-                return;
-            }
 
-            const newMap = new Map(seatZoneMap);
-            const currentZone = newMap.get(seatId);
 
-            if (currentZone === selectedZoneId) {
-                // Toggle off if clicking the same zone
-                newMap.delete(seatId);
+        if (viewMode === 'DISABLE') {
+            const newSet = new Set(disabledSeatIds);
+            if (newSet.has(seatId)) {
+                newSet.delete(seatId);
             } else {
-                // Paint with new zone
-                newMap.set(seatId, selectedZoneId);
+                newSet.add(seatId);
+                const newMap = new Map(seatZoneMap);
+                newMap.delete(seatId);
+                setSeatZoneMap(newMap);
             }
-            setSeatZoneMap(newMap);
+            setDisabledSeatIds(newSet);
             return;
         }
-
-        const newSet = new Set(disabledSeatIds);
-        if (newSet.has(seatId)) {
-            newSet.delete(seatId);
-        } else {
-            newSet.add(seatId);
-        }
-        setDisabledSeatIds(newSet);
     };
 
-    const handleAddZone = async () => {
-        if (!selectedRoomId || !newZoneName || !newZoneCode) return;
-        try {
-            setLoading(true);
-            const newZone = await structureService.createZone(Number(selectedRoomId), {
-                ZoneCode: newZoneCode,
-                ZoneName: newZoneName,
-                Color: newZoneColor
-            });
-            setZones([...zones, newZone]);
-            setNewZoneName("");
-            setNewZoneCode("");
-            setSelectedZoneId(newZone.ZoneID); // Auto-select for painting
-            toast.success("Zone created and selected for painting");
-        } catch (error) {
-            console.error("Failed to create zone", error);
-            toast.error("Failed to create zone");
-        } finally {
-            setLoading(false);
-        }
+    const handleAddRow = () => {
+
+        const lastBenchCount = config.rowLayout.length > 0 ? config.rowLayout[config.rowLayout.length - 1] : 5;
+        setConfig({ ...config, rowLayout: [...config.rowLayout, lastBenchCount] });
     };
 
-    const handleDeleteZone = async (zoneId: number) => {
-        try {
-            setLoading(true);
-            await structureService.deleteZone(zoneId);
-            setZones(zones.filter(z => z.ZoneID !== zoneId));
-
-            // Remove zone assignments locally
-            const newMap = new Map(seatZoneMap);
-            let changed = false;
-            for (const [seatId, zid] of newMap.entries()) {
-                if (zid === zoneId) {
-                    newMap.delete(seatId);
-                    changed = true;
-                }
-            }
-            if (changed) setSeatZoneMap(newMap);
-
-            toast.success("Zone deleted");
-        } catch (error: any) {
-            toast.error(error.response?.data?.message || "Failed to delete zone");
-        } finally {
-            setLoading(false);
-        }
+    const handleRemoveRow = (index: number) => {
+        setIsSaved(false);
+        const newLayout = [...config.rowLayout];
+        newLayout.splice(index, 1);
+        setConfig({ ...config, rowLayout: newLayout });
     };
 
-    const handleAutoZone = async (zoneCount: number) => {
-        if (!selectedRoomId || config.rows === 0 || config.benchesPerRow === 0) {
-            toast.error("Please configure room dimensions first");
-            return;
-        }
+    const handleBenchCountChange = (index: number, value: number) => {
+        const newLayout = [...config.rowLayout];
+        newLayout[index] = value;
+        setConfig({ ...config, rowLayout: newLayout });
+    };
 
+    const handleAutoZone = async () => {
+        if (!selectedRoomId) return;
         try {
             setLoading(true);
+            await structureService.autoZoneRoom(Number(selectedRoomId), selectedZoneCount);
+            toast.success("Room auto-zoned successfully");
             setShowZoneModal(false);
 
-            // STEP 1: Clear ALL seat zone assignments first (so zones can be deleted)
-            console.log('Clearing all seat zone assignments');
+            // Refresh logic - unmount and remount room
+            const currentId = selectedRoomId;
+            setSelectedRoomId("");
+            setTimeout(() => setSelectedRoomId(currentId), 50);
+
+        } catch (error: any) {
+            toast.error(error.response?.data?.message || "Failed to auto-zone room");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+
+
+
+    /**
+     * autoSaveSeatStates — called by the debounce effect.
+     * NEVER calls updateRoomLayout (never blocked by exam allocations).
+     * Only persists seat enable/disable and zone assignments.
+     */
+    const autoSaveSeatStates = async () => {
+        if (!selectedRoomId || seatIdMap.size === 0) return;
+
+        // Internal guard: skip if nothing actually changed from saved baseline
+        const disabledChanged = disabledSeatIds.size !== initialDisabledSeatIds.size ||
+            [...disabledSeatIds].some(id => !initialDisabledSeatIds.has(id));
+        const zonesChanged = seatZoneMap.size !== (initialSeatZoneMap?.size ?? 0) ||
+            [...seatZoneMap.entries()].some(([k, v]) => initialSeatZoneMap?.get(k) !== v);
+        if (!disabledChanged && !zonesChanged) return;
+
+        try {
             const updates: any[] = [];
-            generatedSeats.forEach(seat => {
-                const dbSeatId = seatIdMap.get(seat.id);
-                if (dbSeatId) {
-                    updates.push({
-                        SeatID: dbSeatId,
-                        ZoneID: null,
-                        IsActive: seat.isActive
-                    });
+            config.rowLayout.forEach((benches, r) => {
+                const colLabel = String.fromCharCode(65 + r);
+                for (let b = 0; b < benches; b++) {
+                    for (let s = 1; s <= config.seatsPerBench; s++) {
+                        const seatId = `${colLabel}-${b + 1}-${s}`;
+                        const dbSeatId = seatIdMap.get(seatId);
+                        if (dbSeatId) {
+                            updates.push({
+                                SeatID: dbSeatId,
+                                IsActive: !disabledSeatIds.has(seatId),
+                                ZoneID: seatZoneMap.get(seatId) || null,
+                            });
+                        }
+                    }
                 }
             });
+            if (updates.length > 0) {
+                await structureService.updateSeatZones(Number(selectedRoomId), updates);
+                setInitialDisabledSeatIds(new Set(disabledSeatIds));
+                setInitialSeatZoneMap(new Map(seatZoneMap));
+                setIsSaved(true);
 
+                // Dispatch event for auto-refresh on Seating Plans
+                window.dispatchEvent(new Event('ROOM_LAYOUT_UPDATED'));
+                try {
+                    const channel = new BroadcastChannel('seating_sync');
+                    channel.postMessage({ type: 'ROOM_LAYOUT_UPDATED', roomId: selectedRoomId });
+                } catch (e) { }
+            }
+        } catch (error: any) {
+            console.warn('[auto-save] failed:', error?.response?.data?.message || error?.message);
+        }
+    };
+
+    /**
+     * handleSave — called by the explicit Save button.
+     * Saves BOTH structural layout (updateRoomLayout) AND seat states.
+     * May return 400 if room has future exam allocations AND layout changed.
+     */
+    const handleSave = async () => {
+        if (!selectedRoomId) return;
+
+        const layoutChanged = initialConfig &&
+            (JSON.stringify(config.rowLayout) !== JSON.stringify(initialConfig.rowLayout) ||
+                config.seatsPerBench !== initialConfig.seatsPerBench);
+
+        setLoading(true);
+        try {
+            if (layoutChanged) {
+                await structureService.updateRoomLayout(Number(selectedRoomId), {
+                    RowLayout: config.rowLayout,
+                    SeatsPerBench: config.seatsPerBench,
+                    TotalRows: config.rowLayout.length,
+                    BenchesPerRow: config.rowLayout.length > 0 ? config.rowLayout[0] : 0,
+                } as any);
+            }
+
+            // Persist seat states
+            const updates: any[] = [];
+            config.rowLayout.forEach((benches, r) => {
+                const colLabel = String.fromCharCode(65 + r);
+                for (let b = 0; b < benches; b++) {
+                    for (let s = 1; s <= config.seatsPerBench; s++) {
+                        const seatId = `${colLabel}-${b + 1}-${s}`;
+                        const dbSeatId = seatIdMap.get(seatId);
+                        if (dbSeatId) {
+                            updates.push({
+                                SeatID: dbSeatId,
+                                IsActive: !disabledSeatIds.has(seatId),
+                                ZoneID: seatZoneMap.get(seatId) || null,
+                            });
+                        }
+                    }
+                }
+            });
             if (updates.length > 0) {
                 await structureService.updateSeatZones(Number(selectedRoomId), updates);
             }
 
-            // Clear local zone map
-            setSeatZoneMap(new Map());
+            toast.success('Layout saved successfully');
+            
+            window.dispatchEvent(new Event('ROOM_LAYOUT_UPDATED'));
+            try {
+                const channel = new BroadcastChannel('seating_sync');
+                channel.postMessage({ type: 'ROOM_LAYOUT_UPDATED', roomId: selectedRoomId });
+            } catch (e) { }
 
-            // STEP 2: Delete ALL existing zones (now that seats are unassigned)
-            const allZones = await structureService.getZones(Number(selectedRoomId));
-            console.log('Deleting', allZones.length, 'existing zones');
-
-            for (const zone of allZones) {
-                try {
-                    await structureService.deleteZone(zone.ZoneID);
-                } catch (error) {
-                    console.error('Failed to delete zone:', zone.ZoneID, error);
-                }
-            }
-
-            // STEP 2: Determine grid layout
-            const gridLayout = calculateGridLayout(zoneCount, config.rows, config.benchesPerRow);
-            console.log('Grid layout for', zoneCount, 'zones:', gridLayout);
-
-            // STEP 3: Create new zones
-            const colorPalette = ['blue', 'red', 'green', 'yellow', 'purple', 'orange', 'cyan', 'pink', 'indigo', 'teal', 'lime', 'amber', 'rose', 'violet', 'fuchsia', 'sky'];
-            const createdZones: Zone[] = [];
-
-            for (let i = 0; i < zoneCount; i++) {
-                const zoneLetter = String.fromCharCode(65 + i); // A, B, C, D...
-                const newZone = await structureService.createZone(Number(selectedRoomId), {
-                    ZoneCode: zoneLetter,
-                    ZoneName: `Zone ${zoneLetter}`,
-                    Color: colorPalette[i % colorPalette.length]
-                });
-                createdZones.push(newZone);
-            }
-
-            console.log('Created', createdZones.length, 'new zones');
-
-            // STEP 4: Assign seats to zones based on grid
-            const newZoneMap = new Map<string, number>();
-            const rowsPerZoneRow = Math.ceil(config.rows / gridLayout.rows);
-            const benchesPerZoneCol = Math.ceil(config.benchesPerRow / gridLayout.cols);
-
-            generatedSeats.forEach(seat => {
-                if (!seat.isActive) return;
-
-                const zoneRow = Math.floor(seat.colIndex / rowsPerZoneRow);
-                const zoneCol = Math.floor(seat.benchIndex / benchesPerZoneCol);
-                const zoneIndex = Math.min(zoneRow * gridLayout.cols + zoneCol, zoneCount - 1);
-
-                const zone = createdZones[zoneIndex];
-                if (zone) {
-                    newZoneMap.set(seat.id, zone.ZoneID);
-                }
-            });
-
-            setSeatZoneMap(newZoneMap);
-            setZones(await structureService.getZones(Number(selectedRoomId)));
-
-            toast.success(`Created ${zoneCount} zones and assigned ${newZoneMap.size} seats`);
-
-        } catch (error: any) {
-            console.error("Failed to auto-zone", error);
-            toast.error(error.response?.data?.message || "Failed to auto-zone");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Helper function to calculate optimal grid layout
-    const calculateGridLayout = (zoneCount: number, rows: number, cols: number) => {
-        const layouts: Record<number, { rows: number; cols: number }> = {
-            2: { rows: 1, cols: 2 },
-            4: { rows: 2, cols: 2 },
-            6: rows >= cols ? { rows: 3, cols: 2 } : { rows: 2, cols: 3 },
-            8: rows >= cols ? { rows: 4, cols: 2 } : { rows: 2, cols: 4 },
-            9: { rows: 3, cols: 3 },
-            12: rows >= cols ? { rows: 4, cols: 3 } : { rows: 3, cols: 4 },
-            16: { rows: 4, cols: 4 }
-        };
-        return layouts[zoneCount] || { rows: 2, cols: 2 };
-    };
-
-
-
-    const handleSave = async () => {
-        if (!selectedRoomId) return;
-
-        if (activeSeatCount === 0) {
-            toast.error("Layout must have at least one active seat.");
-            return;
-        }
-
-        const room = rooms.find(r => r.RoomID === Number(selectedRoomId));
-        if (!room) return;
-
-        if (activeSeatCount > room.Capacity) {
-            toast.error(`Configuration exceeds room capacity (${room.Capacity} seats). Please increase room capacity first.`);
-            return;
-        }
-
-        setLoading(true);
-        try {
-            // 1. Update Layout Structure
-            const updatedRoom = await structureService.updateRoomLayout(Number(selectedRoomId), {
-                ...room,
-                TotalRows: config.rows,
-                BenchesPerRow: config.benchesPerRow,
-                SeatsPerBench: config.seatsPerBench,
-                RoomType: config.roomType, // Save RoomType
-                BenchMode: config.benchMode // Save BenchMode
-            });
-
-            // 2. Persist Seat Statuses & Zones
-            const dimensionsChanged =
-                room.TotalRows !== config.rows ||
-                room.BenchesPerRow !== config.benchesPerRow ||
-                room.SeatsPerBench !== config.seatsPerBench;
-
-
-            if (!dimensionsChanged) {
-                // Push updates for IsActive and ZoneID
-                // Build seat updates from current state
-                const updates: any[] = [];
-
-                // Generate all possible seat IDs based on current config (A, B, C...)
-                for (let r = 0; r < config.rows; r++) {
-                    const colLabel = String.fromCharCode(65 + r);
-                    for (let b = 0; b < config.benchesPerRow; b++) {
-                        for (let s = 0; s < config.seatsPerBench; s++) {
-                            const seatIndex = s + 1;
-                            const seatId = `${colLabel}-${b + 1}-${seatIndex}`;
-                            const dbSeatId = seatIdMap.get(seatId);
-
-                            if (dbSeatId) {
-                                const isActive = !disabledSeatIds.has(seatId);
-                                const zoneId = seatZoneMap.get(seatId);
-
-                                updates.push({
-                                    SeatID: dbSeatId,
-                                    IsActive: isActive,
-                                    ZoneID: zoneId || null // Send null if undefined to clear zone
-                                });
-                            }
-                        }
-                    }
-                }
-
-                console.log('Saving seat updates:', updates.length, 'seats');
-                console.log('  - Disabled seats:', disabledSeatIds.size);
-                console.log('  - Zone assignments:', seatZoneMap.size);
-                console.log('  - Sample updates:', updates.slice(0, 3));
-
-                if (updates.length > 0) {
-                    await structureService.updateSeatZones(Number(selectedRoomId), updates);
-                }
-            } else {
-                // If dimensions changed, seats were reset to Active/NoZone.
-                // We should warn user or just accept it.
-                // The new seats don't have IDs in our map yet, so we can't update them.
-                // We just refresh.
-                if (disabledSeatIds.size > 0 || seatZoneMap.size > 0) {
-                    toast.success("Layout dimensions changed. Seat statuses and zones were reset.");
-                }
-            }
-
-            toast.success("Seating layout updated successfully");
+            setIsSaved(true);
             setInitialConfig(config);
+            setInitialDisabledSeatIds(new Set(disabledSeatIds));
 
-            // Refresh logic and reset initial states
             const data = await structureService.getRoomLayout(Number(selectedRoomId));
-            console.log('Reloaded room data after save:', {
-                seatsCount: data.seats?.length,
-                zonesCount: data.zones?.length,
-                sampleSeats: data.seats?.slice(0, 3)
-            });
-
             const newSeatIdMap = new Map<string, number>();
-            const currentZoneMap = new Map<string, number>(); // Capture current state for initial
-
+            const currentZoneMap = new Map<string, number>();
             if (data.seats) {
                 data.seats.forEach((s: any) => {
                     const rowLabel = s.RowLabel ? s.RowLabel.trim() : '';
                     const seatId = `${rowLabel}-${s.BenchNumber}-${s.SeatNumber}`;
                     newSeatIdMap.set(seatId, s.SeatID);
-                    if (s.ZoneID) {
-                        currentZoneMap.set(seatId, s.ZoneID);
-                        console.log('Re-mapping zone after save:', seatId, '→', s.ZoneID);
-                    }
+                    if (s.ZoneID) currentZoneMap.set(seatId, s.ZoneID);
                 });
             }
-
-            console.log('Populated currentZoneMap size:', currentZoneMap.size, 'from', data.seats?.length, 'seats');
-            console.log('Sample zone mappings:', Array.from(currentZoneMap.entries()).slice(0, 5));
-
             setSeatIdMap(newSeatIdMap);
 
-            if (dimensionsChanged) {
-                console.log('Dimensions changed - clearing zone map');
+            if (layoutChanged) {
                 setSeatZoneMap(new Map());
                 setInitialSeatZoneMap(new Map());
                 setDisabledSeatIds(new Set());
             } else {
-                // Sync with server state
-                console.log('Dimensions unchanged - syncing zone map with server state');
-                console.log('Setting seatZoneMap to currentZoneMap with size:', currentZoneMap.size);
                 setSeatZoneMap(currentZoneMap);
                 setInitialSeatZoneMap(currentZoneMap);
             }
-
         } catch (error: any) {
-            toast.error(error.response?.data?.message || "Failed to save layout");
+            toast.error(error.response?.data?.message || 'Failed to save layout');
         } finally {
             setLoading(false);
         }
@@ -598,7 +435,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
     const handleReset = () => {
         if (initialConfig) {
             setConfig(initialConfig);
-            setDisabledSeatIds(new Set());
+            setDisabledSeatIds(new Set(initialDisabledSeatIds));
             if (initialSeatZoneMap) setSeatZoneMap(new Map(initialSeatZoneMap));
             toast.success("Layout reset to saved state");
         }
@@ -606,125 +443,95 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
 
     const isDirty = useMemo(() => {
         if (!initialConfig) return false;
-
-        const configChanged =
-            config.rows !== initialConfig.rows ||
-            config.benchesPerRow !== initialConfig.benchesPerRow ||
-            config.seatsPerBench !== initialConfig.seatsPerBench ||
-            config.roomType !== initialConfig.roomType ||
-            config.benchMode !== initialConfig.benchMode ||
-            disabledSeatIds.size > 0; // Simplified for disabled seats, assuming start empty or consistent
-
-        if (configChanged) return true;
-
-        // Check Zone Map Changes
+        if (JSON.stringify(config.rowLayout) !== JSON.stringify(initialConfig.rowLayout) ||
+            config.seatsPerBench !== initialConfig.seatsPerBench) return true;
+        if (disabledSeatIds.size !== initialDisabledSeatIds.size) return true;
+        for (const id of disabledSeatIds) {
+            if (!initialDisabledSeatIds.has(id)) return true;
+        }
         if (!initialSeatZoneMap) return seatZoneMap.size > 0;
         if (seatZoneMap.size !== initialSeatZoneMap.size) return true;
-
         for (const [key, val] of seatZoneMap) {
             if (initialSeatZoneMap.get(key) !== val) return true;
         }
-
         return false;
-    }, [config, initialConfig, disabledSeatIds, seatZoneMap, initialSeatZoneMap]);
+    }, [config, initialConfig, disabledSeatIds, initialDisabledSeatIds, seatZoneMap, initialSeatZoneMap]);
+
+    // ── Auto-save: watches ONLY seat state, never layout dims ──
+    // Depends directly on the state values — no computed memo needed.
+    // autoSaveSeatStates has its own guard to skip if nothing really changed.
+    useEffect(() => {
+        if (!selectedRoomId || seatIdMap.size === 0) return;
+        const timer = setTimeout(() => { autoSaveSeatStates(); }, 1000);
+        return () => clearTimeout(timer);
+    }, [disabledSeatIds, seatZoneMap, selectedRoomId]);
+
 
     return (
         <div className="flex flex-col gap-8 pb-12 relative">
-            {/* Header */}
+            <Modal isOpen={showZoneModal} onClose={() => setShowZoneModal(false)} size="sm" classNames={{ backdrop: "bg-slate-900/50 backdrop-blur-sm", base: "bg-white border border-slate-200 shadow-2xl" }}>
+                <ModalContent>
+                    <ModalHeader className="flex flex-col gap-1 text-slate-800">Auto-Zone Room</ModalHeader>
+                    <ModalBody>
+                        <p className="text-sm text-slate-500 mb-2">Evenly divide the room into zones column-by-column.</p>
+                        <Input name="custom-input" type="number" label="Number of Zones" labelPlacement="outside" min={2} max={6} value={selectedZoneCount.toString()} onValueChange={(val) => setSelectedZoneCount(Number(val))} classNames={{ inputWrapper: "bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors shadow-sm" }} />
+                    </ModalBody>
+                    <ModalFooter>
+                        <Button color="danger" variant="light" onPress={() => setShowZoneModal(false)}>Cancel</Button>
+                        <Button color="primary" onPress={handleAutoZone} isLoading={loading}>Execute</Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
                 <div className="flex items-center gap-5 z-10 w-full">
                     <div className="p-3 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-200">
                         <Layout size={24} strokeWidth={2} />
                     </div>
                     <div>
                         <h3 className="text-xl font-bold text-slate-800 tracking-tight">Room Layout Designer</h3>
-                        <p className="text-slate-500 font-medium">Configure seating arrangements and bench grids</p>
+                        <p className="text-slate-500 font-medium">Configure manual room entry and 3D visual mapping</p>
                     </div>
                 </div>
             </div>
 
             <div className="flex flex-col xl:flex-row gap-8 items-start relative">
-                {/* CONFIGURATION PANEL (LEFT) */}
                 <div className="w-full xl:w-[400px] shrink-0 xl:sticky xl:top-[140px] transition-all z-10">
                     <Card className="border border-slate-200 shadow-xl shadow-slate-200/50 bg-white/95 backdrop-blur-xl">
                         <CardHeader className="flex gap-3 bg-slate-50/50 border-b border-slate-100 p-6">
-                            <div className="p-2 bg-white rounded-lg border border-slate-200 shadow-sm text-indigo-600">
+                            <div className="p-2 bg-white rounded-lg border border-slate-200 text-indigo-600">
                                 <MonitorPlay size={20} />
                             </div>
                             <div>
-                                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Configuration</h3>
-                                <p className="text-xs text-slate-500 font-medium">Define room parameters</p>
+                                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Layout Builder</h3>
+                                <p className="text-xs text-slate-500 font-medium">Manual row & bench entry</p>
                             </div>
                         </CardHeader>
 
                         <CardBody className="p-6 flex flex-col gap-8">
-                            {/* Location Selectors */}
-                            <div className="space-y-4">
-                                <div className="space-y-1.5">
-                                    <span id="lbl-building" className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1 flex items-center gap-1.5">
-                                        <Building2 size={12} /> Building Block
-                                    </span>
-                                    <Autocomplete
-                                        aria-labelledby="lbl-building"
-                                        aria-label="Building Block"
-                                        name="building"
-                                        placeholder="Search building..."
-                                        variant="bordered"
-                                        selectedKey={selectedBlockId}
-                                        onSelectionChange={(k) => setSelectedBlockId(k as string)}
-                                        inputProps={{
-                                            classNames: { inputWrapper: "bg-slate-50 border-none shadow-inner rounded-xl data-[hover=true]:bg-slate-100 group-data-[focus=true]:bg-white group-data-[focus=true]:shadow-lg group-data-[focus=true]:ring-2 ring-indigo-500/20 transition-all", input: "!text-slate-700 !font-bold" }
-                                        }}
-                                        listboxProps={{
-                                            emptyContent: "No buildings found"
-                                        }}
-                                        popoverProps={{ classNames: { content: "bg-white/80 backdrop-blur-xl rounded-xl border border-white/20 shadow-2xl" } }}
-                                    >
-                                        {blocks.map(b => <AutocompleteItem key={b.BlockID} textValue={b.BlockName}>{b.BlockName}</AutocompleteItem>)}
+                            <div className="space-y-5">
+                                <div className="flex flex-col gap-2">
+                                    <div className="text-sm font-semibold text-slate-700 flex items-center gap-2 px-1">
+                                        <Building size={16} className="text-indigo-500" /> Building Block
+                                    </div>
+                                    <Autocomplete id="select-block" aria-label="Building Block" placeholder="Select a block..." size="md" variant="bordered" selectedKey={selectedBlockId} onSelectionChange={(k) => setSelectedBlockId(k as string)} popoverProps={{ classNames: { content: "bg-white border border-slate-200 shadow-xl rounded-xl z-50 p-1" } }} inputProps={{ classNames: { inputWrapper: "bg-white hover:bg-slate-50 transition-colors shadow-sm" } }}>
+                                        {blocks.map(b => <AutocompleteItem key={b.BlockID} textValue={b.BlockName} className="text-slate-700 data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700">{b.BlockName}</AutocompleteItem>)}
                                     </Autocomplete>
                                 </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="space-y-1.5">
-                                        <span id="lbl-floor" className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1 flex items-center gap-1.5">
-                                            <Layers size={12} /> Floor
-                                        </span>
-                                        <Autocomplete
-                                            aria-labelledby="lbl-floor"
-                                            aria-label="Floor"
-                                            name="floor"
-                                            isDisabled={!selectedBlockId}
-                                            placeholder="Floor..."
-                                            variant="bordered"
-                                            selectedKey={selectedFloorId}
-                                            onSelectionChange={(k) => setSelectedFloorId(k as string)}
-                                            inputProps={{
-                                                classNames: { inputWrapper: "bg-slate-50 border-none shadow-inner rounded-xl data-[hover=true]:bg-slate-100 group-data-[focus=true]:bg-white group-data-[focus=true]:shadow-lg group-data-[focus=true]:ring-2 ring-indigo-500/20 transition-all", input: "!text-slate-700 !font-bold" }
-                                            }}
-                                            popoverProps={{ classNames: { content: "bg-white/80 backdrop-blur-xl rounded-xl border border-white/20 shadow-2xl" } }}
-                                        >
-                                            {floors.map(f => <AutocompleteItem key={f.FloorID} textValue={`Floor ${f.FloorNumber}`}>{`Floor ${f.FloorNumber}`}</AutocompleteItem>)}
+                                <div className="flex flex-col gap-4">
+                                    <div className="flex flex-col gap-2">
+                                        <div className="text-sm font-semibold text-slate-700 flex items-center gap-2 px-1">
+                                            <Layers size={16} className="text-indigo-500" /> Floor
+                                        </div>
+                                        <Autocomplete id="select-floor" aria-label="Floor" placeholder="Select floor..." isDisabled={!selectedBlockId} size="md" variant="bordered" selectedKey={selectedFloorId} onSelectionChange={(k) => setSelectedFloorId(k as string)} popoverProps={{ classNames: { content: "bg-white border border-slate-200 shadow-xl rounded-xl z-50 p-1" } }} inputProps={{ classNames: { inputWrapper: "bg-white hover:bg-slate-50 transition-colors shadow-sm" } }}>
+                                            {floors.map(f => <AutocompleteItem key={f.FloorID} textValue={`Floor ${f.FloorNumber}`} className="text-slate-700 data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700">{`Floor ${f.FloorNumber}`}</AutocompleteItem>)}
                                         </Autocomplete>
                                     </div>
-                                    <div className="space-y-1.5">
-                                        <span id="lbl-room" className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1 flex items-center gap-1.5">
-                                            <Armchair size={12} /> Room
-                                        </span>
-                                        <Autocomplete
-                                            aria-labelledby="lbl-room"
-                                            aria-label="Room"
-                                            name="room"
-                                            isDisabled={!selectedFloorId}
-                                            placeholder="Room..."
-                                            variant="bordered"
-                                            selectedKey={selectedRoomId}
-                                            onSelectionChange={(k) => setSelectedRoomId(k as string)}
-                                            inputProps={{
-                                                classNames: { inputWrapper: "bg-slate-50 border-none shadow-inner rounded-xl data-[hover=true]:bg-slate-100 group-data-[focus=true]:bg-white group-data-[focus=true]:shadow-lg group-data-[focus=true]:ring-2 ring-indigo-500/20 transition-all", input: "!text-slate-700 !font-bold" }
-                                            }}
-                                            popoverProps={{ classNames: { content: "bg-white/80 backdrop-blur-xl rounded-xl border border-white/20 shadow-2xl" } }}
-                                        >
-                                            {rooms.map(r => <AutocompleteItem key={r.RoomID} textValue={r.RoomCode}>{r.RoomCode || r.RoomName}</AutocompleteItem>)}
+                                    <div className="flex flex-col gap-2">
+                                        <div className="text-sm font-semibold text-slate-700 flex items-center gap-2 px-1">
+                                            <DoorOpen size={16} className="text-indigo-500" /> Room
+                                        </div>
+                                        <Autocomplete id="select-room" aria-label="Room" placeholder="Select room..." isDisabled={!selectedFloorId} size="md" variant="bordered" selectedKey={selectedRoomId} onSelectionChange={(k) => setSelectedRoomId(k as string)} popoverProps={{ classNames: { content: "bg-white border border-slate-200 shadow-xl rounded-xl z-50 p-1" } }} inputProps={{ classNames: { inputWrapper: "bg-white hover:bg-slate-50 transition-colors shadow-sm" } }}>
+                                            {rooms.map(r => <AutocompleteItem key={r.RoomID} textValue={r.RoomCode || r.RoomName || 'Room'} className="text-slate-700 data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700">{r.RoomCode || r.RoomName}</AutocompleteItem>)}
                                         </Autocomplete>
                                     </div>
                                 </div>
@@ -733,599 +540,227 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                             <Divider className="opacity-50" />
 
                             {selectedRoomId ? (
-                                <div className="space-in fade-in slide-in-from-bottom-2">
+                                <div className="space-y-6">
+                                    {/* Auto Zone removed ZONE_EDIT branch, just showing generic config now */}
+                                    <div className="space-y-6">
 
-                                    {viewMode === 'ZONE_EDIT' ? (
-                                        // --- ZONE MANAGER UI ---
-                                        <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-                                            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                                                <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                                                    <Shield size={16} className="text-indigo-500" />
-                                                    Zone Management
-                                                </h4>
-                                                <Button
-                                                    size="sm"
-                                                    variant="light"
-                                                    className="h-6 text-[10px] font-bold text-slate-500 hover:text-indigo-600 px-2"
-                                                    startContent={<ArrowLeft size={12} />}
-                                                    onPress={() => setViewMode('LOGICAL')}
-                                                >
-                                                    Back to Config
-                                                </Button>
+                                        <div className="flex flex-col gap-3">
+                                            <div className="flex items-center justify-between">
+                                                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-widest">Row Configuration</h4>
+                                                <Button size="sm" variant="flat" color="primary" startContent={<Plus size={14} />} onPress={handleAddRow}>Add Row</Button>
                                             </div>
-
-                                            {/* Auto-Zone for Halls */}
-                                            {config.roomType === 'HALL' && (
-                                                <div className="p-5 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl border-2 border-purple-200 shadow-sm space-y-3">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="p-2 bg-purple-100 rounded-lg">
-                                                            <Grid3X3 size={16} className="text-purple-600" />
+                                            <div className="bg-slate-50 p-2 rounded-xl border border-slate-200 max-h-[250px] overflow-y-auto custom-scrollbar flex flex-col gap-2">
+                                                {config.rowLayout.map((benches, i) => (
+                                                    <div key={i} className="flex gap-2 items-center bg-white p-2 rounded-lg border shadow-sm">
+                                                        <div className="w-8 h-8 rounded-md bg-slate-800 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                                                            {String.fromCharCode(65 + i)}
                                                         </div>
-                                                        <div>
-                                                            <h5 className="text-xs font-bold text-purple-700 uppercase tracking-wide">Quick Auto-Zone</h5>
-                                                            <p className="text-[10px] text-purple-600/70">Exam Hall Mode</p>
+                                                        <div className="flex-1 flex gap-2 items-center">
+                                                            <span id={`bench-label-${i}`} className="text-[10px] uppercase font-bold text-slate-500">Benches:</span>
+                                                            <Input name="custom-input" aria-labelledby={`bench-label-${i}`} size="sm" type="number" min={1} value={benches.toString()} onValueChange={(val) => handleBenchCountChange(i, Number(val))} classNames={{ inputWrapper: "bg-slate-50 hover:bg-slate-100 transition-colors shadow-none border border-slate-200" }} className="w-20" />
                                                         </div>
+                                                        <Button isIconOnly size="sm" variant="light" color="danger" onPress={() => handleRemoveRow(i)}><Minus size={14} /></Button>
                                                     </div>
-                                                    <p className="text-xs text-purple-600/80 leading-relaxed">
-                                                        Automatically divide this hall into <span className="font-bold">multiple zones</span> with one click
-                                                    </p>
-                                                    <Button
-                                                        id="auto-zone-btn"
-                                                        size="lg"
-                                                        isLoading={loading}
-                                                        className="w-full font-bold text-white shadow-lg shadow-purple-500/30 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-xl"
-                                                        onPress={() => setShowZoneModal(true)}
-                                                        startContent={<Grid3X3 size={20} />}
-                                                    >
-                                                        Auto-Zone
-                                                    </Button>
-                                                </div>
-                                            )}
-
-                                            {/* Create Zone */}
-                                            <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                                                <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                                    <Plus size={12} /> Create New Zone
-                                                </h5>
-                                                <div className="space-y-4">
-                                                    <div className="space-y-1">
-                                                        <span id="lbl-zone-name" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Zone Name</span>
-                                                        <Input
-                                                            aria-labelledby="lbl-zone-name"
-                                                            aria-label="Zone Name"
-                                                            name="zoneName"
-                                                            size="sm"
-                                                            placeholder="e.g. Front Row"
-                                                            value={newZoneName}
-                                                            onValueChange={setNewZoneName}
-                                                            classNames={{
-                                                                inputWrapper: "bg-slate-50 border-none shadow-inner rounded-xl group-data-[focus=true]:bg-white group-data-[focus=true]:shadow-lg ring-1 ring-slate-200 group-data-[focus=true]:ring-indigo-500 transition-all",
-                                                                input: "font-semibold text-slate-700 placeholder:text-slate-400"
-                                                            }}
-                                                        />
-                                                    </div>
-
-                                                    <div className="grid grid-cols-2 gap-3">
-                                                        <div className="space-y-1">
-                                                            <span id="lbl-zone-code" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Code</span>
-                                                            <Input
-                                                                aria-labelledby="lbl-zone-code"
-                                                                aria-label="Zone Code"
-                                                                name="zoneCode"
-                                                                size="sm"
-                                                                placeholder="e.g. Z1"
-                                                                value={newZoneCode}
-                                                                onValueChange={setNewZoneCode}
-                                                                classNames={{
-                                                                    inputWrapper: "bg-slate-50 border-none shadow-inner rounded-xl group-data-[focus=true]:bg-white group-data-[focus=true]:shadow-lg ring-1 ring-slate-200 group-data-[focus=true]:ring-indigo-500 transition-all",
-                                                                    input: "font-semibold text-slate-700 placeholder:text-slate-400"
-                                                                }}
-                                                            />
-                                                        </div>
-                                                        <div className="space-y-1">
-                                                            <span id="lbl-zone-color" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider ml-1">Color</span>
-                                                            <Select
-                                                                aria-labelledby="lbl-zone-color"
-                                                                aria-label="Zone Color"
-                                                                name="zoneColor"
-                                                                size="sm"
-                                                                placeholder="Select color"
-                                                                selectedKeys={[newZoneColor]}
-                                                                onChange={(e) => setNewZoneColor(e.target.value)}
-                                                                classNames={{
-                                                                    trigger: "bg-slate-50 border-none shadow-inner rounded-xl h-10 group-data-[focus=true]:bg-white ring-1 ring-slate-200",
-                                                                    popoverContent: "bg-white/90 backdrop-blur-xl border border-slate-200 shadow-xl rounded-xl"
-                                                                }}
-                                                            >
-                                                                <SelectItem key="blue" textValue="Blue" startContent={<div className="w-3 h-3 rounded-full bg-blue-500" />}>Blue</SelectItem>
-                                                                <SelectItem key="red" textValue="Red" startContent={<div className="w-3 h-3 rounded-full bg-red-500" />}>Red</SelectItem>
-                                                                <SelectItem key="green" textValue="Green" startContent={<div className="w-3 h-3 rounded-full bg-green-500" />}>Green</SelectItem>
-                                                                <SelectItem key="yellow" textValue="Yellow" startContent={<div className="w-3 h-3 rounded-full bg-yellow-500" />}>Yellow</SelectItem>
-                                                                <SelectItem key="purple" textValue="Purple" startContent={<div className="w-3 h-3 rounded-full bg-purple-500" />}>Purple</SelectItem>
-                                                            </Select>
-                                                        </div>
-                                                    </div>
-
-                                                    <Button
-                                                        id="add-zone-btn"
-                                                        size="md"
-                                                        className="w-full font-bold text-white shadow-lg shadow-indigo-500/30 bg-indigo-600 hover:bg-indigo-700 rounded-xl mt-2"
-                                                        onPress={handleAddZone}
-                                                        startContent={<Plus size={18} />}
-                                                    >
-                                                        Add Zone
-                                                    </Button>
-                                                </div>
+                                                ))}
+                                                {config.rowLayout.length === 0 && <p className="text-xs text-slate-400 text-center py-4">No rows defined</p>}
                                             </div>
-
-                                            {/* Existing Zones */}
-                                            <div className="space-y-3">
-                                                <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2 px-1">
-                                                    <Layers size={12} /> Existing Zones
-                                                </h5>
-
-                                                {zones.length === 0 ? (
-                                                    <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
-                                                        <p className="text-xs font-semibold text-slate-400 mb-1">No zones created</p>
-                                                        <p className="text-[10px] text-slate-300">Add a zone above to get started</p>
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex flex-col gap-2 max-h-[250px] overflow-y-auto pr-1 custom-scrollbar">
-                                                        {zones.map(z => (
-                                                            <div
-                                                                key={z.ZoneID}
-                                                                className={`group flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all duration-200
-                                                                    ${selectedZoneId === z.ZoneID
-                                                                        ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-500 shadow-md shadow-indigo-100'
-                                                                        : 'bg-white border-slate-100 hover:border-indigo-200 hover:shadow-sm'}`}
-                                                                onClick={() => setSelectedZoneId(z.ZoneID)}
-                                                                role="button"
-                                                                tabIndex={0}
-                                                                aria-selected={selectedZoneId === z.ZoneID}
-                                                            >
-                                                                <div className="flex items-center gap-3">
-                                                                    {(() => {
-                                                                        const color = z.Color?.toLowerCase() || 'blue';
-                                                                        const bgMap: Record<string, string> = {
-                                                                            blue: 'bg-blue-100 border-blue-200',
-                                                                            red: 'bg-red-100 border-red-200',
-                                                                            green: 'bg-green-100 border-green-200',
-                                                                            yellow: 'bg-yellow-100 border-yellow-200',
-                                                                            purple: 'bg-purple-100 border-purple-200',
-                                                                            orange: 'bg-orange-100 border-orange-200',
-                                                                            teal: 'bg-teal-100 border-teal-200',
-                                                                        };
-                                                                        const dotMap: Record<string, string> = {
-                                                                            blue: 'bg-blue-500',
-                                                                            red: 'bg-red-500',
-                                                                            green: 'bg-green-500',
-                                                                            yellow: 'bg-yellow-500',
-                                                                            purple: 'bg-purple-500',
-                                                                            orange: 'bg-orange-500',
-                                                                            teal: 'bg-teal-500',
-                                                                        };
-                                                                        return (
-                                                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center border shadow-sm ${bgMap[color] || bgMap['blue']}`}>
-                                                                                <div className={`w-3 h-3 rounded-full ring-2 ring-white ${dotMap[color] || dotMap['blue']}`} />
-                                                                            </div>
-                                                                        );
-                                                                    })()}
-                                                                    <div className="flex flex-col">
-                                                                        <span className={`text-xs font-bold ${selectedZoneId === z.ZoneID ? 'text-indigo-700' : 'text-slate-700'}`}>{z.ZoneName}</span>
-                                                                        <span className="text-[10px] text-slate-400 font-mono font-medium tracking-tight">Code: {z.ZoneCode}</span>
-                                                                    </div>
-                                                                </div>
-                                                                <Button
-                                                                    isIconOnly
-                                                                    size="sm"
-                                                                    variant="light"
-                                                                    className="text-slate-300 opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all"
-                                                                    onPress={(e) => {
-                                                                        e.continuePropagation(); // Prevent selecting the zone when deleting
-                                                                        handleDeleteZone(z.ZoneID);
-                                                                    }}
-                                                                    aria-label={`Delete zone ${z.ZoneName}`}
-                                                                >
-                                                                    <Trash2 size={16} />
-                                                                </Button>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            <div className={`p-4 rounded-xl border transition-all duration-300 ${selectedZoneId ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-500/20' : 'bg-slate-50 border-slate-200'}`}>
-                                                <div className="flex items-start gap-3">
-                                                    <div className={`p-2 rounded-lg ${selectedZoneId ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-200 text-slate-400'}`}>
-                                                        <MousePointer2 size={16} />
-                                                    </div>
-                                                    <div>
-                                                        <h6 className={`text-xs font-bold uppercase tracking-wider mb-1 ${selectedZoneId ? 'text-indigo-700' : 'text-slate-500'}`}>
-                                                            {selectedZoneId ? 'Painting Mode Active' : 'Select a Zone'}
-                                                        </h6>
-                                                        <p className="text-[10px] text-slate-500 leading-relaxed">
-                                                            {selectedZoneId
-                                                                ? "Click any seat on the grid to paint it with the selected zone color."
-                                                                : "Select a zone from the list above to start painting seats."}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Save Button for Zone Edit */}
-                                            <Button
-                                                color="primary"
-                                                isLoading={loading}
-                                                isDisabled={!isDirty || activeSeatCount === 0}
-                                                onPress={handleSave}
-                                                startContent={<Save size={18} />}
-                                                className="w-full h-12 font-bold shadow-lg shadow-indigo-500/20 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:to-indigo-600 mt-2"
-                                            >
-                                                Save Zone Layout
-                                            </Button>
                                         </div>
-                                    ) : (
-                                        // --- CONFIGURATION UI ---
-                                        <div className="space-y-6">
-                                            {/* A. Room Type & Bench Mode */}
-                                            <div className="space-y-4">
-                                                <div className="flex items-center justify-between">
-                                                    <h4 className="text-sm font-bold text-slate-700">Room Strategy</h4>
-                                                    {isDirty && <Chip size="sm" color="warning" variant="flat" className="h-5 text-[10px] font-bold">Modified</Chip>}
-                                                </div>
 
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <div className="space-y-1.5">
-                                                        <span id="lbl-room-type" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Room Type</span>
-                                                        <Select
-                                                            aria-labelledby="lbl-room-type"
-                                                            aria-label="Room Type"
-                                                            id="room-type-select"
-                                                            name="roomType"
-                                                            selectedKeys={[config.roomType]}
-                                                            onChange={(e) => setConfig({ ...config, roomType: e.target.value as RoomType })}
-                                                            variant="bordered"
-                                                            classNames={{
-                                                                trigger: "bg-slate-50 border-none shadow-inner rounded-xl h-11 data-[hover=true]:bg-slate-100 pr-2",
-                                                                popoverContent: "bg-white/80 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg",
-                                                                selectorIcon: "right-3"
-                                                            }}
-                                                        >
-                                                            <SelectItem key="ROOM" startContent={<Grid3X3 size={14} />} textValue="Classroom">Classroom</SelectItem>
-                                                            <SelectItem key="HALL" startContent={<Layout size={14} />} textValue="Exam Hall">Exam Hall</SelectItem>
-                                                        </Select>
-                                                    </div>
-                                                    <div className="space-y-1.5">
-                                                        <span id="lbl-bench-mode" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Bench Mode</span>
-                                                        <Select
-                                                            aria-labelledby="lbl-bench-mode"
-                                                            aria-label="Bench Mode"
-                                                            id="bench-mode-select"
-                                                            name="benchMode"
-                                                            selectedKeys={[config.benchMode]}
-                                                            onChange={(e) => setConfig({ ...config, benchMode: e.target.value as BenchMode })}
-                                                            variant="bordered"
-                                                            classNames={{
-                                                                trigger: "bg-slate-50 border-none shadow-inner rounded-xl h-11 data-[hover=true]:bg-slate-100 pr-2",
-                                                                popoverContent: "bg-white/80 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg",
-                                                                selectorIcon: "right-3"
-                                                            }}
-                                                        >
-                                                            <SelectItem key="PAIRED" startContent={<CheckCircle2 size={14} />} textValue="Standard">Standard</SelectItem>
-                                                            <SelectItem key="ALTERNATING" startContent={<Spline size={14} />} textValue="Split Logic">Split Logic</SelectItem>
-                                                        </Select>
-                                                    </div>
+                                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col gap-3">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Total Benches</span>
+                                                <span className="font-mono font-bold text-slate-800">{config.rowLayout.reduce((acc, curr) => acc + curr, 0)}</span>
+                                            </div>
+                                            <div className="flex flex-col gap-2">
+                                                <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Seats Per Bench</span>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <button onClick={() => setConfig({ ...config, seatsPerBench: 1 })} className={`py-2 rounded-lg text-xs font-bold border-2 transition-all ${config.seatsPerBench === 1 ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>Single (1)</button>
+                                                    <button onClick={() => setConfig({ ...config, seatsPerBench: 2 })} className={`py-2 rounded-lg text-xs font-bold border-2 transition-all ${config.seatsPerBench === 2 ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>Dual (2)</button>
                                                 </div>
                                             </div>
-
-                                            {/* B. Grid Dimensions */}
-                                            <div className="space-y-4">
-                                                <h4 className="text-sm font-bold text-slate-700">Grid Dimensions</h4>
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <div className="space-y-1.5">
-                                                        <span id="lbl-columns" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Columns</span>
-                                                        <Input
-                                                            aria-labelledby="lbl-columns"
-                                                            aria-label="Columns"
-                                                            id="columns-input"
-                                                            name="columns"
-                                                            type="number"
-                                                            min={1}
-                                                            value={config.rows.toString()}
-                                                            onValueChange={(v) => setConfig({ ...config, rows: Number(v) })}
-                                                            classNames={{
-                                                                inputWrapper: "bg-slate-50 border-none shadow-inner rounded-xl group-data-[focus=true]:bg-white group-data-[focus=true]:shadow-lg transition-all",
-                                                                input: "!font-bold text-slate-700"
-                                                            }}
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-1.5">
-                                                        <span id="lbl-benches-col" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Benches/Col</span>
-                                                        <Input
-                                                            aria-labelledby="lbl-benches-col"
-                                                            aria-label="Benches per Column"
-                                                            id="benches-per-row-input"
-                                                            name="benchesPerRow"
-                                                            type="number"
-                                                            min={1}
-                                                            value={config.benchesPerRow.toString()}
-                                                            onValueChange={(v) => setConfig({ ...config, benchesPerRow: Number(v) })}
-                                                            classNames={{
-                                                                inputWrapper: "bg-slate-50 border-none shadow-inner rounded-xl group-data-[focus=true]:bg-white group-data-[focus=true]:shadow-lg transition-all",
-                                                                input: "!font-bold text-slate-700"
-                                                            }}
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <div className="space-y-1.5">
-                                                    <span id="lbl-seats-bench" className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Seats/Bench</span>
-                                                    <Input
-                                                        aria-labelledby="lbl-seats-bench"
-                                                        aria-label="Seats per Bench"
-                                                        id="seats-per-bench-input"
-                                                        name="seatsPerBench"
-                                                        type="number"
-                                                        min={1}
-                                                        value={config.seatsPerBench.toString()}
-                                                        onValueChange={(v) => setConfig({ ...config, seatsPerBench: Number(v) })}
-                                                        classNames={{
-                                                            label: "text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1",
-                                                            inputWrapper: "bg-slate-50 border-none shadow-inner rounded-xl group-data-[focus=true]:bg-white group-data-[focus=true]:shadow-lg transition-all",
-                                                            input: "!font-bold text-slate-700"
-                                                        }}
-                                                        startContent={<Hash size={14} className="text-slate-400" />}
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            {/* Capacity Summary */}
-                                            <div className={`mt-2 p-4 rounded-2xl border flex items-center justify-between group transition-colors ${activeSeatCount > (rooms.find(r => r.RoomID === Number(selectedRoomId))?.Capacity || 0) ? 'bg-red-50 border-red-200' : 'bg-gradient-to-br from-slate-50 to-indigo-50/30 border-slate-200'}`}>
+                                            <Divider className="my-1" />
+                                            <div className="flex justify-between items-center">
                                                 <div className="flex flex-col">
-                                                    <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Active Capacity</span>
-                                                    <span className="text-[10px] font-medium text-slate-400">Max: {rooms.find(r => r.RoomID === Number(selectedRoomId))?.Capacity || 0}</span>
+                                                    <span className="text-xs font-bold uppercase tracking-widest text-indigo-600">Final Capacity</span>
+                                                    <span className="text-[10px] text-slate-400">Auto-calculated from layout</span>
                                                 </div>
-                                                <div className="flex items-baseline gap-1">
-                                                    <span className={`text-3xl font-black ${activeSeatCount > (rooms.find(r => r.RoomID === Number(selectedRoomId))?.Capacity || 0) ? 'text-red-600' : 'text-indigo-600'}`}>{activeSeatCount}</span>
-                                                    <span className="text-xs font-bold uppercase text-indigo-400">Seats</span>
-                                                </div>
+                                                <span className="text-2xl font-black text-indigo-600">{capacityCount}</span>
                                             </div>
+                                        </div>
+                                    </div>
 
-                                            {/* Hall Mode Navigation */}
-                                            {config.roomType === 'HALL' && (
-                                                <div className="space-y-3 mt-4">
-                                                    {isDirty && (
-                                                        <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-700 animate-in fade-in slide-in-from-bottom-2">
-                                                            <AlertTriangle size={16} className="shrink-0" />
-                                                            <p className="text-[10px] font-bold uppercase tracking-wide leading-tight">
-                                                                Please save seat layout before configuring zones
-                                                            </p>
-                                                        </div>
-                                                    )}
-                                                    <Button
-                                                        className="w-full font-bold shadow-sm bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100"
-                                                        size="lg"
-                                                        endContent={<ArrowRight size={16} />}
-                                                        onPress={() => setViewMode('ZONE_EDIT')}
-                                                    >
-                                                        Next: Configure Zones
-                                                    </Button>
-                                                </div>
-                                            )}
-
-                                            {/* Actions */}
-                                            {!readOnly && (
-                                                <div className="grid grid-cols-2 gap-3 pt-2">
-                                                    <Button variant="flat" color="danger" isDisabled={!isDirty || loading} onPress={handleReset} startContent={<RotateCcw size={16} />} className="h-12 font-semibold rounded-xl">Reset</Button>
-                                                    <Button color="primary" isLoading={loading} isDisabled={!isDirty || activeSeatCount === 0} onPress={handleSave} startContent={<Save size={18} />} className="h-12 font-bold shadow-lg shadow-indigo-500/20 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:to-indigo-600">Save Layout</Button>
-                                                </div>
-                                            )}
+                                    {!readOnly && (
+                                        <div className="grid grid-cols-2 gap-3 pt-4 border-t border-slate-100">
+                                            <Button variant="flat" color="danger" isDisabled={!isDirty || loading} onPress={handleReset} startContent={<RotateCcw size={16} />}>Reset</Button>
+                                            <Button className={!isSaved ? "animate-pulse" : ""} color={isSaved ? "success" : "primary"} isLoading={loading} isDisabled={!isDirty || capacityCount === 0} onPress={handleSave} startContent={!isSaved ? <Save size={18} /> : null}>{isSaved ? "Saved ✓" : "Save"}</Button>
                                         </div>
                                     )}
                                 </div>
                             ) : (
-                                <div className="py-12 flex flex-col items-center text-center gap-4 text-slate-400 opacity-60">
-                                    <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center"><Layout size={24} /></div>
-                                    <p className="text-sm font-medium">Select a room to begin configuration.</p>
-                                </div>
+                                <div className="py-10 text-center opacity-50"><Armchair size={48} className="mx-auto mb-4" /><p className="text-sm font-medium">Select a room</p></div>
                             )}
                         </CardBody>
                     </Card>
                 </div>
 
-                {/* VISUALIZATION PANEL (RIGHT) */}
-                <div
-                    ref={containerRef}
-                    className={`${isFullScreen ? 'fixed inset-0 z-[100] rounded-none h-screen w-screen' : 'flex-1 xl:h-[calc(100vh-220px)] xl:min-h-[700px] rounded-3xl border border-slate-200 shadow-2xl shadow-slate-900/10 ring-1 ring-slate-900/5'} flex flex-col bg-[#0F172A] relative transition-all duration-500 overflow-hidden`}
-                >
-                    {/* Navbar */}
-                    <div className="relative z-20 flex justify-between items-center p-6 border-b border-white/5 bg-[#0F172A]/90 backdrop-blur-xl">
-                        <div className="flex items-center gap-4">
-                            <div className={`w-2.5 h-2.5 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.5)] ${selectedRoomId ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`} />
+                {/* VISUAL EDITOR */}
+                <div ref={containerRef} className={`${isFullScreen ? 'fixed inset-0 z-[100] h-screen w-screen rounded-none' : 'flex-1 xl:h-[calc(100vh-220px)] xl:min-h-[700px] rounded-3xl border border-indigo-900/40'} flex flex-col relative transition-all overflow-hidden`} style={{ background: 'linear-gradient(145deg, #0f1c3a 0%, #111d3d 40%, #0e1830 70%, #131e3f 100%)' }}>
+
+                    {/* ── Header ── */}
+                    <div className="relative z-20 flex justify-between items-center px-6 py-3.5 border-b border-white/8"
+                        style={{ background: 'rgba(10,18,50,0.85)', backdropFilter: 'blur(16px)' }}>
+                        <div className="flex items-center gap-3">
+                            <div className="relative">
+                                <div className={`w-2.5 h-2.5 rounded-full ${selectedRoomId ? 'bg-emerald-400' : 'bg-slate-600'}`}
+                                    style={selectedRoomId ? { boxShadow: '0 0 0 3px rgba(52,211,153,0.18), 0 0 10px rgba(52,211,153,0.55)' } : {}} />
+                                {selectedRoomId && <div className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-25" />}
+                            </div>
                             <div>
-                                <h3 className="text-white font-bold tracking-tight text-sm">Layout Designer <span className="text-xs font-normal text-slate-500 ml-2 border border-slate-700 px-2 py-0.5 rounded-full">{config.roomType} / {config.benchMode}</span></h3>
-                                <p className="text-[10px] text-slate-400 font-mono tracking-wider uppercase mt-0.5">
-                                    {selectedRoomId ? `Editing: ${rooms.find(r => r.RoomID === Number(selectedRoomId))?.RoomCode}` : 'No Room Selected'}
+                                <h3 className="text-sm font-black tracking-tight" style={{ background: 'linear-gradient(90deg,#c7d2fe,#a5b4fc,#818cf8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>3D Visual Map</h3>
+                                <p className="text-[10px] font-mono tracking-widest uppercase mt-0.5 text-indigo-400/60">
+                                    {selectedRoomId ? `Editing: ${rooms.find(r => r.RoomID === Number(selectedRoomId))?.RoomCode}` : 'No room selected'}
                                 </p>
                             </div>
                         </div>
-                        <div className="flex items-center gap-4">
-                            {/* View Toggle */}
-                            <div className="flex bg-slate-800/50 p-1 rounded-lg border border-slate-700/50">
-                                <button onClick={() => setViewMode('PHYSICAL')} className={`px-3 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all flex items-center gap-2 ${viewMode === 'PHYSICAL' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
-                                    <Eye size={12} /> Physical
-                                </button>
-                                <button onClick={() => setViewMode('LOGICAL')} className={`px-3 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all flex items-center gap-2 ${viewMode === 'LOGICAL' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
-                                    <Spline size={12} /> Logical
-                                </button>
-                                <button onClick={() => setViewMode('ZONE_EDIT')} className={`px-3 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all flex items-center gap-2 ${viewMode === 'ZONE_EDIT' ? 'bg-amber-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
-                                    <Shield size={12} /> Zones
-                                </button>
-                            </div>
-
-                            <Tooltip content={isFullScreen ? "Exit Full Screen" : "Enter Full Screen"} closeDelay={0}>
-                                <button onClick={toggleFullScreen} className="p-2 rounded-full bg-white/5 border border-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all">
-                                    {isFullScreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-                                </button>
+                        <div className="flex items-center gap-1.5 p-1 rounded-xl border border-white/8" style={{ background: 'rgba(99,102,241,0.06)' }}>
+                            <Button size="sm" onPress={() => setViewMode('PHYSICAL')} startContent={<Eye size={13}/>}
+                                className={viewMode === 'PHYSICAL' ? 'text-white font-bold uppercase text-[10px]' : 'bg-transparent text-indigo-400/70 font-bold uppercase text-[10px] hover:text-indigo-200'}
+                                style={viewMode === 'PHYSICAL' ? { background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', boxShadow: '0 0 14px rgba(99,102,241,0.5)' } : {}}>View</Button>
+                            <Button size="sm" onPress={() => setViewMode('DISABLE')} startContent={<Ban size={13}/>}
+                                className={viewMode === 'DISABLE' ? 'text-white font-bold uppercase text-[10px]' : 'bg-transparent text-rose-400/70 font-bold uppercase text-[10px] hover:text-rose-300'}
+                                style={viewMode === 'DISABLE' ? { background: 'linear-gradient(135deg,#be123c,#9f1239)', boxShadow: '0 0 14px rgba(244,63,94,0.4)' } : {}}>Disable</Button>
+                            <Button size="sm" className="bg-transparent text-amber-400/80 font-bold uppercase text-[10px] hover:text-amber-300 hover:bg-amber-400/10" onPress={() => setShowZoneModal(true)} startContent={<Grid3X3 size={13}/>}>Auto-Zone</Button>
+                            <div className="w-px h-4 bg-white/10 mx-0.5" />
+                            <Tooltip content="Toggle Fullscreen">
+                                <Button isIconOnly variant="light" size="sm" className="text-indigo-400/60 hover:text-white" onPress={toggleFullScreen}>
+                                    {isFullScreen ? <Minimize2 size={14}/> : <Maximize2 size={14}/>}
+                                </Button>
                             </Tooltip>
                         </div>
                     </div>
 
-                    {/* Canvas */}
-                    <div className="flex-1 relative overflow-auto custom-scrollbar p-12 bg-opacity-5">
-                        {/* Background Grid */}
-                        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[length:40px_40px] pointer-events-none" />
-
+                    <div className="flex-1 relative overflow-auto p-12" style={{
+                        backgroundImage: 'linear-gradient(rgba(99,102,241,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(99,102,241,0.06) 1px, transparent 1px)',
+                        backgroundSize: '36px 36px',
+                    }}>
                         {!selectedRoomId ? (
                             <div className="h-full flex flex-col items-center justify-center opacity-20">
                                 <Grid3X3 size={80} className="text-white mb-4" />
-                                <h3 className="text-2xl font-bold text-white uppercase tracking-widest">Select Room</h3>
+                                <h3 className="text-2xl font-bold text-white uppercase tracking-widest">Select Room To Edit</h3>
                             </div>
                         ) : (
                             <div className="min-w-min mx-auto pb-24">
-                                {/* Teacher Desk */}
-                                <div className="flex flex-col items-center gap-4 mb-16">
-                                    <div className="w-80 h-20 bg-gradient-to-b from-slate-800 to-slate-900 border border-slate-700/50 rounded-2xl shadow-2xl flex items-center justify-center relative overflow-hidden group">
-                                        <div className="absolute inset-0 bg-indigo-500/5" />
-                                        <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent" />
-                                        <span className="text-xs font-bold text-slate-500 uppercase tracking-[0.2em] group-hover:text-indigo-400 transition-colors">Teacher's Podium</span>
+                                {/* ── Blackboard ── */}
+                                <div className="flex flex-col items-center mb-10">
+                                    <div className="w-full max-w-4xl h-14 rounded-2xl flex items-center justify-center relative overflow-hidden"
+                                        style={{
+                                            background: 'linear-gradient(180deg,#1a1f3a 0%,#131730 55%,#0f1228 100%)',
+                                            border: '1.5px solid rgba(129,140,248,0.25)',
+                                            boxShadow: '0 4px 24px rgba(0,0,0,0.45), 0 0 40px rgba(99,102,241,0.05), inset 0 1px 0 rgba(129,140,248,0.12)',
+                                        }}>
+                                        <div className="absolute top-0 left-6 right-6 h-px" style={{ background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.09),transparent)' }} />
+                                        <span className="text-[11px] font-black uppercase tracking-[0.4em] select-none" style={{ color: 'rgba(165,180,252,0.5)', textShadow: '0 0 20px rgba(99,102,241,0.2)' }}>✦ Front Blackboard ✦</span>
+                                        <div className="absolute bottom-0 left-0 right-0 h-[2.5px]" style={{ background: 'linear-gradient(90deg,transparent,rgba(99,102,241,0.5),rgba(139,92,246,0.4),transparent)' }} />
                                     </div>
-                                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 uppercase tracking-widest">
-                                        <ChevronRight className="rotate-90" size={12} /> Front <ChevronRight className="rotate-90" size={12} />
-                                    </div>
+                                    <div className="w-4/5 h-3 -mt-0.5" style={{ background: 'radial-gradient(ellipse,rgba(99,102,241,0.08) 0%,transparent 70%)' }} />
                                 </div>
 
-                                {/* Seating Layout */}
-                                <div className="flex gap-12 justify-center">
-                                    {Array.from({ length: config.rows }).map((_, r) => {
-                                        const colLabel = String.fromCharCode(65 + r);
+                                {/* Bench Pillars — one pill per column (A, B, C…) */}
+                                <div className="flex gap-8 justify-center items-start flex-wrap">
+                                    {config.rowLayout.map((benches, r) => {
+                                        const colLetter = String.fromCharCode(65 + r);
+                                        const colLetterLower = colLetter.toLowerCase();
+
                                         return (
-                                            <div key={r} className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4" style={{ animationDelay: `${r * 50}ms` }}>
-                                                {/* Col Header */}
-                                                <div className="w-full text-center mb-2">
-                                                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-800 border border-slate-700 text-slate-400 text-xs font-bold shadow-xl">{colLabel}</span>
+                                            <div key={r} className="flex flex-col items-center gap-3">
+                                                {/* Column header */}
+                                                <div className="flex flex-col items-center gap-1">
+                                                    <span className="text-xl font-black tracking-[0.3em] select-none"
+                                                        style={{ background: 'linear-gradient(180deg,#a5b4fc 0%,#818cf8 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 0 10px rgba(129,140,248,0.6))' }}>
+                                                        {colLetter}
+                                                    </span>
+                                                    <span className="w-6 h-[2px] rounded-full" style={{ background: 'linear-gradient(90deg,transparent,#818cf8,transparent)' }} />
                                                 </div>
 
-                                                {/* Benches in Column */}
-                                                <div className="p-3 bg-white/[0.02] border border-white/5 rounded-[2rem] flex flex-col gap-4">
-                                                    {Array.from({ length: config.benchesPerRow }).map((_, b) => (
-                                                        <div key={b} className="relative group/bench">
+                                                {/* Pill container */}
+                                                <div className="relative rounded-[2rem] flex flex-col gap-2.5 transition-all duration-300"
+                                                    style={{
+                                                        minWidth: '72px',
+                                                        padding: '18px 16px',
+                                                        background: 'linear-gradient(175deg, rgba(99,102,241,0.12) 0%, rgba(15,28,74,0.7) 100%)',
+                                                        border: '1px solid rgba(129,140,248,0.2)',
+                                                        boxShadow: '0 8px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)',
+                                                        backdropFilter: 'blur(8px)',
+                                                    }}
+                                                    onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.border = '1px solid rgba(129,140,248,0.5)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 12px 40px rgba(0,0,0,0.4), 0 0 20px rgba(99,102,241,0.12), inset 0 1px 0 rgba(255,255,255,0.08)'; }}
+                                                    onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.border = '1px solid rgba(129,140,248,0.2)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 8px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)'; }}
+                                                >
+                                                    <div className="absolute top-2.5 left-4 right-4 h-px pointer-events-none" style={{ background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.07),transparent)' }} />
 
-                                                            {/* Bench Container */}
-                                                            <div className="bg-slate-800/80 border border-slate-700/50 rounded-2xl p-3 shadow-lg hover:border-indigo-500/30 transition-colors">
-                                                                {/* Desk Surface */}
-                                                                <div className="h-1.5 w-full bg-slate-700 rounded-full mb-3 opacity-50" />
+                                                    {Array.from({ length: benches }).map((_, b) => {
+                                                        const benchNum = b + 1;
+                                                        const isDual = config.seatsPerBench === 2;
 
-                                                                {/* Seats */}
-                                                                <div className="flex gap-3 justify-center">
-                                                                    {Array.from({ length: config.seatsPerBench }).map((_, s) => {
-                                                                        const seatIndex = s + 1;
-                                                                        const seatId = `${colLabel}-${b + 1}-${seatIndex}`;
-                                                                        const isActive = !disabledSeatIds.has(seatId);
+                                                        const makeSeatCell = (seatIndex: number) => {
+                                                            const seatId = `${colLetter}-${benchNum}-${seatIndex}`;
+                                                            const isActive = !disabledSeatIds.has(seatId);
+                                                            const zoneId = seatZoneMap.get(seatId);
+                                                            const seatLabel = isDual
+                                                                ? `${colLetterLower}${benchNum}${seatIndex === 1 ? 'l' : 'r'}`
+                                                                : `${colLetterLower}${benchNum}`;
 
-                                                                        // Calculated logical data
-                                                                        let logicalRow = b + 1;
-                                                                        if (config.benchMode === 'ALTERNATING') logicalRow = (b * 2) + (seatIndex % 2 === 0 ? 2 : 1);
+                                                            const base = isDual
+                                                                ? 'w-10 h-10 rounded-xl flex items-center justify-center cursor-pointer transition-all duration-150 text-[10px] font-bold select-none border '
+                                                                : 'w-12 h-12 rounded-2xl flex items-center justify-center cursor-pointer transition-all duration-150 text-[11px] font-bold select-none border ';
+                                                            let seatCls = base;
+                                                            let seatStyle: React.CSSProperties = {};
 
-                                                                        const zoneId = seatZoneMap.get(seatId);
+                                                            if (!isActive) {
+                                                                seatCls += 'opacity-20 cursor-not-allowed ';
+                                                                seatStyle = { background: 'repeating-linear-gradient(45deg,#111d3a,#111d3a 3px,#0e1830 3px,#0e1830 6px)', borderColor: 'rgba(255,255,255,0.05)', color: '#334155' };
+                                                            } else if (viewMode === 'DISABLE') {
+                                                                seatCls += 'hover:scale-110 active:scale-95 ';
+                                                                seatStyle = { background: 'linear-gradient(135deg,#3730a3,#4338ca)', borderColor: '#818cf8', color: '#e0e7ff', boxShadow: '0 0 16px rgba(99,102,241,0.5), inset 0 1px 0 rgba(255,255,255,0.15)' };
+                                                            } else if (viewMode === 'PHYSICAL' && zoneId) {
+                                                                const z = zones.find(zn => zn.ZoneID === zoneId);
+                                                                const zoneMap: Record<string, React.CSSProperties> = {
+                                                                    red:    { background: 'linear-gradient(135deg,#7f1d1d,#991b1b)', borderColor: '#f87171', color: '#fecaca', boxShadow: '0 0 14px rgba(248,113,113,0.35)' },
+                                                                    green:  { background: 'linear-gradient(135deg,#14532d,#166534)', borderColor: '#4ade80', color: '#bbf7d0', boxShadow: '0 0 14px rgba(74,222,128,0.35)' },
+                                                                    yellow: { background: 'linear-gradient(135deg,#713f12,#854d0e)', borderColor: '#fbbf24', color: '#fef08a', boxShadow: '0 0 14px rgba(251,191,36,0.35)' },
+                                                                    purple: { background: 'linear-gradient(135deg,#4a1d96,#5b21b6)', borderColor: '#c084fc', color: '#e9d5ff', boxShadow: '0 0 14px rgba(192,132,252,0.35)' },
+                                                                };
+                                                                seatStyle = z ? (zoneMap[z.Color?.toLowerCase() ?? ''] ?? { background: 'linear-gradient(135deg,#1e3a8a,#1e40af)', borderColor: '#60a5fa', color: '#bfdbfe', boxShadow: '0 0 12px rgba(96,165,250,0.3)' }) : { background: '#0e1830', borderColor: 'rgba(255,255,255,0.08)', color: '#475569' };
+                                                                seatCls += 'hover:scale-105 active:scale-95 ';
+                                                            } else {
+                                                                seatCls += 'hover:scale-110 active:scale-95 ';
+                                                                seatStyle = { background: 'linear-gradient(135deg,rgba(99,102,241,0.18) 0%,rgba(15,28,74,0.85) 100%)', borderColor: 'rgba(129,140,248,0.3)', color: '#a5b4fc', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.07)' };
+                                                            }
 
-                                                                        // DEBUG: Log zone lookup for first seat of first bench
-                                                                        if (b === 0 && s === 0) {
-                                                                            console.log('🔍 Sample Seat Rendering:', {
-                                                                                seatId,
-                                                                                zoneId,
-                                                                                seatZoneMapSize: seatZoneMap.size,
-                                                                                viewMode,
-                                                                                zonesCount: zones.length
-                                                                            });
-                                                                        }
+                                                            return (
+                                                                <Tooltip key={seatId} content={`${seatId}${!isActive ? ' · disabled' : ''}`}
+                                                                    classNames={{ content: 'bg-slate-900/95 border border-indigo-500/30 text-indigo-200 rounded-lg text-[10px] font-mono px-2 py-1' }}>
+                                                                    <div className={seatCls} style={seatStyle} onClick={() => toggleSeat(seatId)}>
+                                                                        {isActive
+                                                                            ? zoneId
+                                                                                ? <span className="font-black text-[9px]">{zones.find(zn => zn.ZoneID === zoneId)?.ZoneCode}</span>
+                                                                                : <span className="font-bold tracking-tight">{seatLabel}</span>
+                                                                            : <Ban size={11} className="opacity-50" />}
+                                                                    </div>
+                                                                </Tooltip>
+                                                            );
+                                                        };
 
-                                                                        // Calculate styles based on ViewMode
-                                                                        let seatClass = "w-10 h-10 rounded-lg border-2 flex items-center justify-center cursor-pointer transition-all duration-200 relative overflow-hidden group/seat";
-
-                                                                        if (isActive) {
-                                                                            // ACTIVE SEAT STYLING
-                                                                            const hasZone = !!zoneId;
-                                                                            const showZoneColor = viewMode === 'ZONE_EDIT' || (viewMode === 'PHYSICAL' && hasZone);
-
-                                                                            if (showZoneColor) {
-                                                                                const zone = zones.find(z => z.ZoneID === zoneId);
-                                                                                seatClass += " shadow-sm font-bold text-xs";
-
-                                                                                if (zone) {
-                                                                                    const colorMap: Record<string, string> = {
-                                                                                        blue: "bg-blue-500/20 border-blue-500/50 text-blue-300 hover:bg-blue-500/30",
-                                                                                        red: "bg-red-500/20 border-red-500/50 text-red-300 hover:bg-red-500/30",
-                                                                                        green: "bg-green-500/20 border-green-500/50 text-green-300 hover:bg-green-500/30",
-                                                                                        yellow: "bg-yellow-500/20 border-yellow-500/50 text-yellow-300 hover:bg-yellow-500/30",
-                                                                                        purple: "bg-purple-500/20 border-purple-500/50 text-purple-300 hover:bg-purple-500/30",
-                                                                                        orange: "bg-orange-500/20 border-orange-500/50 text-orange-300 hover:bg-orange-500/30",
-                                                                                        teal: "bg-teal-500/20 border-teal-500/50 text-teal-300 hover:bg-teal-500/30",
-                                                                                    };
-                                                                                    const zoneColor = zone.Color || 'blue';
-                                                                                    const zoneColorClass = colorMap[zoneColor.toLowerCase()] || colorMap['blue'];
-                                                                                    seatClass += ` ${zoneColorClass}`;
-                                                                                } else if (viewMode === 'PHYSICAL') {
-                                                                                    // Default Physical (No Zone)
-                                                                                    seatClass += " bg-slate-900 border-indigo-500/30 text-indigo-400 hover:bg-indigo-600 hover:border-indigo-500 hover:text-white shadow-[0_0_15px_rgba(99,102,241,0.15)]";
-                                                                                } else {
-                                                                                    // Zone Edit (No Zone)
-                                                                                    seatClass += " bg-slate-800 border-slate-700 text-slate-500 hover:border-indigo-500/50 hover:text-indigo-400 hover:bg-slate-700";
-                                                                                }
-
-                                                                            } else if (viewMode === 'LOGICAL') {
-                                                                                if (logicalRow % 2 === 0) seatClass += " bg-emerald-900/20 border-emerald-600/50 text-emerald-400";
-                                                                                else seatClass += " bg-blue-900/20 border-blue-600/50 text-blue-400";
-                                                                            } else {
-                                                                                // Fallback (Physical No Zone)
-                                                                                seatClass += " bg-slate-900 border-indigo-500/30 text-indigo-400 hover:bg-indigo-600 hover:border-indigo-500 hover:text-white shadow-[0_0_15px_rgba(99,102,241,0.15)]";
-                                                                            }
-                                                                        } else {
-                                                                            // Inactive
-                                                                            seatClass += " bg-slate-900/50 border-slate-800 text-slate-700 hover:border-red-500/50 hover:text-red-500";
-                                                                        }
-
-                                                                        return (
-                                                                            <Tooltip key={seatIndex} content={
-                                                                                <div className="px-2 py-1">
-                                                                                    <div className="font-black text-sm text-white mb-0.5 shadow-black drop-shadow-md">{seatId}</div>
-                                                                                    <div className={`text-[11px] font-medium ${isActive ? 'text-emerald-400' : 'text-slate-400'}`}>Status: {isActive ? 'Active' : 'Inactive'}</div>
-                                                                                    {viewMode === 'LOGICAL' && <div className="text-[10px] text-indigo-400 mt-0.5">Logical Row: {logicalRow}</div>}
-                                                                                    {zoneId && <div className="text-[10px] text-amber-400 mt-0.5">Zone: {zones.find(z => z.ZoneID === zoneId)?.ZoneName || zoneId}</div>}
-                                                                                </div>
-                                                                            } closeDelay={0}>
-                                                                                <div
-                                                                                    onClick={() => toggleSeat(seatId)}
-                                                                                    className={seatClass}
-                                                                                >
-                                                                                    {isActive ? (
-                                                                                        <div className="flex flex-col items-center justify-center z-10">
-                                                                                            {viewMode === 'ZONE_EDIT' && zoneId ? (
-                                                                                                <>
-                                                                                                    <span className="text-[9px] font-black opacity-70">{zones.find(z => z.ZoneID === zoneId)?.ZoneCode || seatIndex}</span>
-                                                                                                    <span className="text-[6px] font-medium opacity-50">{seatIndex}</span>
-                                                                                                </>
-                                                                                            ) : (
-                                                                                                <span>{seatIndex}</span>
-                                                                                            )}
-                                                                                        </div>
-                                                                                    ) : (
-                                                                                        <Ban size={14} strokeWidth={3} />
-                                                                                    )}
-
-                                                                                    {isActive && !zoneId && viewMode !== 'ZONE_EDIT' && <div className="absolute inset-0 bg-current opacity-0 group-hover/seat:opacity-10 transition-opacity" />}
-                                                                                </div>
-                                                                            </Tooltip>
-                                                                        );
-                                                                    })}
+                                                        if (isDual) {
+                                                            return (
+                                                                <div key={benchNum} className="flex gap-1.5 items-center">
+                                                                    {makeSeatCell(1)}
+                                                                    <div className="w-px h-4 rounded-full shrink-0" style={{ background: 'linear-gradient(180deg,transparent,rgba(129,140,248,0.25),transparent)' }} />
+                                                                    {makeSeatCell(2)}
                                                                 </div>
-                                                            </div>
-
-                                                            {/* Bench ID Label */}
-                                                            <div className="absolute -left-10 top-1/2 -translate-y-1/2 text-xs font-black text-white/80 drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] tracking-wider">
-                                                                B{b + 1}
-                                                            </div>
-                                                        </div>
-                                                    ))}
+                                                            );
+                                                        }
+                                                        return <React.Fragment key={benchNum}>{makeSeatCell(1)}</React.Fragment>;
+                                                    })}
                                                 </div>
                                             </div>
                                         );
@@ -1334,117 +769,8 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                             </div>
                         )}
                     </div>
-
-                    {/* Legend Footer */}
-                    <div className="bg-[#0F172A] border-t border-white/5 p-4 flex justify-between items-center text-[10px] text-slate-500 font-medium uppercase tracking-wider relative z-20">
-                        <div className="flex gap-6">
-                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-slate-900 border border-indigo-500/30" /> Active Seat</div>
-                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-slate-900/50 border border-slate-800" /> Inactive (Click to toggle)</div>
-                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-slate-800 border border-slate-700" /> Bench Container</div>
-                        </div>
-                        <div>
-                            Values: {config.benchMode === 'ALTERNATING' ? 'Split-Bench Logic Enabled' : 'Standard Logic'} • Zones Loaded: {zones.length}
-                        </div>
-                    </div>
                 </div>
             </div>
-
-            {/* Zone Count Selection Modal */}
-            <Modal
-                isOpen={showZoneModal}
-                onClose={() => setShowZoneModal(false)}
-                size="2xl"
-                classNames={{
-                    base: "bg-gradient-to-br from-slate-900 to-slate-800",
-                    header: "border-b border-slate-700",
-                    body: "py-6",
-                    footer: "border-t border-slate-700"
-                }}
-            >
-                <ModalContent>
-                    {(onClose) => (
-                        <>
-                            <ModalHeader className="flex flex-col gap-1 text-white">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-purple-600/20 rounded-lg">
-                                        <Grid3X3 size={24} className="text-purple-400" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-bold">Auto-Zone Configuration</h3>
-                                        <p className="text-xs text-slate-400 font-normal">Choose how many zones to create</p>
-                                    </div>
-                                </div>
-                            </ModalHeader>
-                            <ModalBody>
-                                <div className="space-y-4">
-                                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 flex items-start gap-3">
-                                        <AlertTriangle size={18} className="text-amber-400 shrink-0 mt-0.5" />
-                                        <div className="text-xs text-amber-200">
-                                            <p className="font-bold mb-1">All existing zones will be deleted</p>
-                                            <p className="text-amber-300/80">This action will remove {zones.length} current zones and create {selectedZoneCount} new zones with fresh assignments.</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-4 gap-3">
-                                        {[2, 4, 6, 8, 9, 12, 16].map(count => {
-                                            const layout = calculateGridLayout(count, config.rows, config.benchesPerRow);
-                                            return (
-                                                <button
-                                                    key={count}
-                                                    onClick={() => setSelectedZoneCount(count)}
-                                                    className={`p-4 rounded-xl border-2 transition-all ${selectedZoneCount === count
-                                                        ? 'bg-purple-600 border-purple-500 shadow-lg shadow-purple-500/30'
-                                                        : 'bg-slate-800 border-slate-700 hover:border-purple-500/50 hover:bg-slate-700'
-                                                        }`}
-                                                >
-                                                    <div className="text-center">
-                                                        <div className="text-2xl font-bold text-white mb-1">{count}</div>
-                                                        <div className="text-[10px] text-slate-400">zones</div>
-                                                        <div className="text-[9px] text-slate-500 mt-1">{layout.rows}×{layout.cols} grid</div>
-                                                    </div>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-
-                                    <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                                        <div className="text-xs text-slate-300 mb-2 font-semibold">Preview: {selectedZoneCount} Zone Layout</div>
-                                        <div className="text-[10px] text-slate-400 mb-3">
-                                            Grid: {calculateGridLayout(selectedZoneCount, config.rows, config.benchesPerRow).rows} rows × {calculateGridLayout(selectedZoneCount, config.rows, config.benchesPerRow).cols} columns
-                                        </div>
-                                        <div className="flex items-center justify-center gap-2 text-[10px] text-slate-500">
-                                            <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-blue-500" /> Zone A</div>
-                                            <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-red-500" /> Zone B</div>
-                                            {selectedZoneCount >= 3 && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-green-500" /> Zone C</div>}
-                                            {selectedZoneCount >= 4 && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-yellow-500" /> Zone D</div>}
-                                            {selectedZoneCount > 4 && <div className="text-slate-600">+{selectedZoneCount - 4} more</div>}
-                                        </div>
-                                    </div>
-                                </div>
-                            </ModalBody>
-                            <ModalFooter>
-                                <Button
-                                    color="default"
-                                    variant="light"
-                                    onPress={onClose}
-                                    className="text-slate-400"
-                                >
-                                    Cancel
-                                </Button>
-                                <Button
-                                    color="secondary"
-                                    onPress={() => handleAutoZone(selectedZoneCount)}
-                                    isLoading={loading}
-                                    className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold"
-                                    startContent={!loading && <Grid3X3 size={18} />}
-                                >
-                                    Create {selectedZoneCount} Zones
-                                </Button>
-                            </ModalFooter>
-                        </>
-                    )}
-                </ModalContent>
-            </Modal>
         </div>
     );
 };

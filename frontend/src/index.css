@@ -53,10 +53,21 @@ body {
 
 /* Landing Page: Blob Animation */
 @keyframes blob {
-  0%   { transform: translate(0px, 0px) scale(1); }
-  33%  { transform: translate(30px, -50px) scale(1.1); }
-  66%  { transform: translate(-20px, 20px) scale(0.9); }
-  100% { transform: translate(0px, 0px) scale(1); }
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
 }
 
 .animate-blob {
@@ -73,9 +84,17 @@ body {
 
 /* Landing Page: Gradient-X animation for title */
 @keyframes gradient-x {
-  0%   { background-position: 0% 50%; }
-  50%  { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
 .animate-gradient-x {
@@ -101,48 +120,69 @@ body {
   background: #94a3b8;
 }
 
-/* Dark-themed scrollbar for dark panels (e.g., seating page) */
-.dark-scrollbar::-webkit-scrollbar {
-  width: 6px;
+/* ─── ERP Shared Utilities (AcademicSetup etc.) ─────────── */
+.input {
+  display: block;
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  color: #1e293b;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  outline: none;
 }
 
-.dark-scrollbar::-webkit-scrollbar-track {
-  background: #1e293b;
-  border-radius: 3px;
+.input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
 }
 
-.dark-scrollbar::-webkit-scrollbar-thumb {
-  background: #64748b;
-  border-radius: 3px;
+.input::placeholder {
+  color: #94a3b8;
 }
 
-.dark-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.625rem 1.25rem;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
 }
 
-/* ─── Print: show only the seating document ─────────────────── */
-@media print {
-  /* Hide everything via visibility so display:none on parent
-     doesn't block visibility:visible on the child */
-  body, body * { visibility: hidden !important; }
+.btn-primary:hover {
+  background: #1d4ed8;
+}
 
-  #seat-sync-print-area,
-  #seat-sync-print-area * {
-    visibility: visible !important;
-  }
+.btn-primary:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
 
-  #seat-sync-print-area {
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100% !important;
-    height: auto !important;
-    background: #fff !important;
-    z-index: 999999 !important;
-    overflow: visible !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.625rem 1.25rem;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
 
-  @page { size: A4 landscape; margin: 12mm 14mm; }
+.btn-ghost:hover {
+  background: #f1f5f9;
+  color: #334155;
 }

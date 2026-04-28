@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Button, useDisclosure, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Input, Autocomplete, AutocompleteItem, Tooltip } from '@heroui/react';
+import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, Button, useDisclosure, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Input, Autocomplete, AutocompleteItem, Tooltip, Select, SelectItem } from '@heroui/react';
 import { Plus, Edit, Trash2, Layers, Building2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { structureService } from '../../services/structureService';
 import { Block, Floor } from '../../types/collegeStructure';
@@ -37,11 +37,7 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
     }, []);
 
     useEffect(() => {
-        if (selectedBlockId) {
-            loadFloors(Number(selectedBlockId), page, searchQuery, statusFilter);
-        } else {
-            setFloors([]);
-        }
+        loadFloors(selectedBlockId ? Number(selectedBlockId) : undefined, page, searchQuery, statusFilter);
     }, [selectedBlockId, page, searchQuery, statusFilter]);
 
     const loadBlocks = async () => {
@@ -49,24 +45,21 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
             const response = await structureService.getBlocks({ limit: 100 });
             const data = response && response.data ? response.data : (Array.isArray(response) ? response : []);
             setBlocks(data);
-            if (data.length > 0 && !selectedBlockId) {
-                // Auto-select first block for better UX
-                setSelectedBlockId(data[0].BlockID.toString());
-            }
+             // We do not auto-select the first block, so the user sees all floors.
         } catch (error) {
             console.error(error);
             setBlocks([]);
         }
     };
 
-    const loadFloors = async (blockId: number, currentPage = 1, search = "", status = "all") => {
+    const loadFloors = async (blockId: number | undefined, currentPage = 1, search = "", status = "all") => {
         setLoading(true);
         try {
             const params: any = {
-                blockId,
                 page: currentPage,
                 limit,
             };
+            if (blockId) params.blockId = blockId;
             if (search) params.search = search;
             if (status !== "all") params.status = status;
 
@@ -103,7 +96,7 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
         } else {
             setEditingFloor(null);
             setFormData({
-                BlockID: Number(selectedBlockId),
+                BlockID: selectedBlockId ? Number(selectedBlockId) : 0,
                 FloorNumber: ((floors?.length || 0) > 0 ? Math.max(...floors.map(f => f.FloorNumber)) + 1 : 1), // Suggest next floor
                 Status: 'Active'
             });
@@ -129,7 +122,7 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                 await structureService.createFloor(formData);
                 toast.success("Floor created");
             }
-            loadFloors(Number(selectedBlockId), page, searchQuery, statusFilter);
+            loadFloors(selectedBlockId ? Number(selectedBlockId) : undefined, page, searchQuery, statusFilter);
             onClose();
         } catch (error: any) {
             toast.error(error.response?.data?.message || "Operation failed");
@@ -142,7 +135,7 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
         try {
             await structureService.deleteFloor(id);
             toast.success("Floor deleted");
-            loadFloors(Number(selectedBlockId), page, searchQuery, statusFilter);
+            loadFloors(selectedBlockId ? Number(selectedBlockId) : undefined, page, searchQuery, statusFilter);
         } catch (error: any) {
             toast.error(error.response?.data?.message || "Delete failed");
         }
@@ -172,13 +165,13 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
     return (
         <div className="h-full flex flex-col gap-6">
             {/* Control Panel */}
-            <div className={`flex-none p-6 rounded-3xl border flex flex-col md:flex-row gap-6 justify-between items-end transition-all relative overflow-hidden ${!selectedBlockId ? 'bg-amber-50 border-amber-200' : 'bg-gradient-to-br from-white to-blue-50/20 border-slate-200 shadow-xl shadow-slate-100/50'}`}>
-                {selectedBlockId && <div className="absolute top-0 right-0 w-64 h-64 bg-blue-100/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />}
+            <div className="flex-none p-6 rounded-3xl border flex flex-col md:flex-row gap-6 justify-between items-end transition-all relative overflow-hidden bg-gradient-to-br from-white to-blue-50/20 border-slate-200 shadow-xl shadow-slate-100/50">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-blue-100/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
 
                 <div className="flex flex-col gap-2 w-full md:w-1/2 z-10">
-                    <label htmlFor="block-select" className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">
-                        Select Building Block
-                    </label>
+                    <div className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">
+                        Filter by Building Block
+                    </div>
                     <Autocomplete
                         id="block-select"
                         name="block-select"
@@ -186,13 +179,18 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                         placeholder="Choose a building block..."
                         className="max-w-md w-full"
                         variant="bordered"
-                        selectedKey={selectedBlockId}
-                        onSelectionChange={(key) => setSelectedBlockId(key ? key.toString() : "")}
+                        selectedKey={selectedBlockId || "all"}
+                        onSelectionChange={(key) => setSelectedBlockId(!key || key.toString() === "all" ? "" : key.toString())}
                         classNames={{
                             base: "max-w-md",
                             listboxWrapper: "max-h-[320px]",
-                            selectorButton: "text-slate-500",
-                            popoverContent: "bg-white p-2 border border-slate-100 shadow-2xl rounded-xl w-full"
+                            selectorButton: "text-slate-500"
+                        }}
+                        popoverProps={{
+                            classNames: {
+                                base: "before:bg-white",
+                                content: "bg-white p-2 border border-slate-100 shadow-xl rounded-xl"
+                            }
                         }}
                         inputProps={{
                             id: "block-select-input",
@@ -209,11 +207,17 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                             }
                         }}
                     >
-                        {(blocks || []).map((b) => (
-                            <AutocompleteItem key={b.BlockID} textValue={b.BlockName} description={`${b.floorCount || 0} floors available`} startContent={<Building2 size={18} className="text-slate-400" />}>
-                                {b.BlockName}
-                            </AutocompleteItem>
-                        ))}
+                        {/* We use an array so we can cleanly add 'All' item at the top */}
+                        {[
+                            <AutocompleteItem key="all" textValue="All Building Blocks" description="View floors from all blocks" startContent={<Layers size={18} className="text-blue-500" />}>
+                                All Building Blocks
+                            </AutocompleteItem>,
+                            ...(blocks || []).map((b) => (
+                                <AutocompleteItem key={b.BlockID.toString()} textValue={b.BlockName} description={`${b.floorCount || 0} floors available`} startContent={<Building2 size={18} className="text-slate-400" />}>
+                                    {b.BlockName}
+                                </AutocompleteItem>
+                            ))
+                        ]}
                     </Autocomplete>
                 </div>
 
@@ -235,7 +239,7 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                                 input: "bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
                             }}
                         />
-                        <Autocomplete
+                        <Select
                             id="floor-status-filter"
                             name="floor-status-filter"
                             placeholder="Status"
@@ -243,26 +247,36 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                             size="sm"
                             className="w-[140px]"
                             variant="bordered"
-                            selectedKey={statusFilter}
-                            onSelectionChange={(key) => { setStatusFilter(key ? key.toString() : "all"); setPage(1); }}
-                            classNames={{
-                                base: "w-[140px]",
-                                selectorButton: "text-slate-500"
+                            selectedKeys={new Set([statusFilter])}
+                            onSelectionChange={(keys) => { 
+                                const val = Array.from(keys)[0]?.toString() || "all";
+                                setStatusFilter(val); 
+                                setPage(1); 
                             }}
-                            inputProps={{
+                            classNames={{
+                                trigger: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 shadow-sm rounded-xl h-11 transition-all",
+                                value: "text-slate-700 font-medium"
+                            }}
+                            popoverProps={{
                                 classNames: {
-                                    inputWrapper: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 shadow-sm rounded-xl h-11 transition-all",
-                                    input: "text-slate-700 font-medium"
+                                    base: "before:bg-white",
+                                    content: "bg-white p-1 border border-slate-100 shadow-xl rounded-xl"
+                                }
+                            }}
+                            listboxProps={{
+                                itemClasses: {
+                                    base: "rounded-lg data-[hover=true]:bg-blue-50 data-[hover=true]:text-blue-600 px-3 py-2 transition-colors",
+                                    title: "font-medium text-slate-700"
                                 }
                             }}
                         >
-                            <AutocompleteItem key="all" textValue="All">All</AutocompleteItem>
-                            <AutocompleteItem key="Active" textValue="Active">Active</AutocompleteItem>
-                            <AutocompleteItem key="Inactive" textValue="Inactive">Inactive</AutocompleteItem>
-                        </Autocomplete>
+                            <SelectItem key="all" textValue="All">All</SelectItem>
+                            <SelectItem key="Active" textValue="Active">Active</SelectItem>
+                            <SelectItem key="Inactive" textValue="Inactive">Inactive</SelectItem>
+                        </Select>
                     </div>
 
-                    {!readOnly && selectedBlockId && (
+                    {!readOnly && (
                         <Button
                             onPress={() => handleOpen()}
                             color="primary"
@@ -277,32 +291,18 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
             </div>
 
             {/* Pagination Info Top */}
-            {selectedBlockId && (
-                <div className="flex-none flex justify-between items-center px-4 -mb-2 z-10">
-                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                        Showing <span className="text-slate-900">{(floors?.length || 0) === 0 ? 0 : (page - 1) * limit + 1}</span> - <span className="text-slate-900">{Math.min(page * limit, totalItems)}</span> of <span className="text-slate-900">{totalItems}</span>
-                    </div>
+            <div className="flex-none flex justify-between items-center px-4 -mb-2 z-10">
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Showing <span className="text-slate-900">{(floors?.length || 0) === 0 ? 0 : (page - 1) * limit + 1}</span> - <span className="text-slate-900">{Math.min(page * limit, totalItems)}</span> of <span className="text-slate-900">{totalItems}</span>
                 </div>
-            )}
+            </div>
 
             <div className="flex-1 min-h-0 relative z-0">
-                {!selectedBlockId ? (
-                    // Empty State
-                    <div className="h-full flex flex-col items-center justify-center bg-slate-50/50 rounded-3xl border-2 border-dashed border-slate-200">
-                        <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-lg shadow-slate-200/50 mb-6 ring-1 ring-slate-100">
-                            <Building2 className="text-slate-400" size={36} strokeWidth={1.5} />
-                        </div>
-                        <h3 className="text-xl font-bold text-slate-800 mb-2">Select a Building</h3>
-                        <p className="text-slate-500 max-w-sm text-center font-medium leading-relaxed">
-                            Please select a building block from the dropdown above to view and manage its floors.
-                        </p>
-                    </div>
-                ) : (
-                    // Table
-                    <Table
-                        isHeaderSticky
-                        aria-label="Floors table"
-                        classNames={{
+                {/* Table */}
+                <Table
+                    isHeaderSticky
+                    aria-label="Floors table"
+                    classNames={{
                             base: "h-full",
                             wrapper: "bg-white shadow-sm border border-slate-200 rounded-3xl p-0 h-full overflow-auto custom-scrollbar",
                             th: "bg-slate-50/50 text-slate-500 font-bold text-[11px] uppercase tracking-wider py-4 px-6 border-b border-slate-100",
@@ -331,7 +331,7 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                                     </div>
                                     <h4 className="text-lg font-bold text-slate-700 mb-1">No floors found</h4>
                                     <p className="text-slate-400 text-sm max-w-xs mx-auto">
-                                        This block doesn't have any floors yet.
+                                        {selectedBlockId ? "This block doesn't have any floors yet." : "There are no floors configured in the system."}
                                     </p>
                                     {!readOnly && <Button variant="light" color="primary" className="mt-4 font-bold" onPress={() => handleOpen()}>Create First Floor</Button>}
                                 </div>
@@ -383,11 +383,10 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                             )}
                         </TableBody>
                     </Table>
-                )}
-            </div>
+                </div>
 
-            {/* Floating Pagination */}
-            {selectedBlockId && totalPages > 1 && (
+                {/* Floating Pagination */}
+                {totalPages > 1 && (
                 <div className="flex-none flex justify-center pb-2">
                     <div className="flex items-center gap-4 p-2 pl-6 pr-2 bg-white border border-slate-200 rounded-full shadow-xl shadow-slate-200/50">
                         <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mr-2">
@@ -459,9 +458,9 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                             </ModalHeader>
                             <ModalBody className="space-y-6">
                                 <div className="flex flex-col gap-1.5">
-                                    <label htmlFor="modal-floor-block" className="text-sm font-semibold text-slate-700 ml-1">
+                                    <div className="text-sm font-semibold text-slate-700 ml-1">
                                         Building Block
-                                    </label>
+                                    </div>
                                     <Autocomplete
                                         id="modal-floor-block"
                                         name="BlockID"
@@ -507,9 +506,9 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                                 </div>
 
                                 <div className="flex flex-col gap-1.5">
-                                    <label htmlFor="modal-floor-number" className="text-sm font-semibold text-slate-700 ml-1">
+                                    <div className="text-sm font-semibold text-slate-700 ml-1">
                                         Floor Number
-                                    </label>
+                                    </div>
                                     <Input
                                         id="modal-floor-number"
                                         name="FloorNumber"

@@ -2,7 +2,6 @@
 import api from '../../../services/api';
 import { io, Socket } from 'socket.io-client';
 import toast from 'react-hot-toast';
-import { startTransition } from 'react';
 
 // --- Types ---
 
@@ -37,40 +36,51 @@ const SOCKET_URL = 'http://localhost:5000'; // Adjust for production
 export const initNotificationSocket = (userId: number, onNewNotification: (n: Notification) => void) => {
     if (socket) return socket;
 
-    socket = io(SOCKET_URL);
+    socket = io(SOCKET_URL, {
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        reconnectionAttempts: 5
+    });
 
     socket.on('connect', () => {
+        console.log('Notification Socket Connected');
         socket?.emit('join_room', `user_${userId}`);
     });
 
     socket.on('notification', (payload: any) => {
-        // Defer out of the socket.io 'message' handler immediately
-        setTimeout(() => {
+        // Queue heavy work to avoid blocking socket handler
+        const processNotification = () => {
             const notification: Notification = {
                 id: payload.id,
                 title: payload.title,
                 message: payload.message,
-                type: payload.type.toLowerCase(),
-                category: payload.category,
-                priority: payload.priority,
-                sentAt: payload.createdAt,
+                type: payload.type?.toLowerCase?.() || 'info',
+                category: payload.category || 'SYSTEM',
+                priority: payload.priority || 'NORMAL',
+                sentAt: payload.createdAt || new Date().toISOString(),
                 isRead: false,
                 metadata: payload.metadata,
                 audience: ['Me'],
                 status: 'Delivered'
             };
 
-            // Mark as a non-urgent transition so React doesn't render
-            // synchronously inside this setTimeout callback
-            startTransition(() => onNewNotification(notification));
+            onNewNotification(notification);
+        };
 
-            // Toast is urgent — stays outside the transition
-            if (notification.priority === 'CRITICAL' || notification.type === 'EMERGENCY') {
-                toast.error(`EMERGENCY: ${notification.title}`, { duration: 10000 });
+        // Use Promise for non-blocking deferred execution
+        Promise.resolve().then(processNotification).catch(err => 
+            console.error('Failed to process notification:', err)
+        );
+
+        // Toast asynchronously
+        Promise.resolve().then(() => {
+            if (payload.priority === 'CRITICAL' || payload.type === 'EMERGENCY') {
+                toast.error(`EMERGENCY: ${payload.title}`, { duration: 10000 });
             } else {
-                toast(`New Notification: ${notification.title}`, { icon: '🔔' });
+                toast(`New Notification: ${payload.title}`, { icon: '🔔' });
             }
-        }, 0);
+        });
     });
 
     return socket;
@@ -120,12 +130,17 @@ export const getAllNotificationsAdmin = async (params: any = {}): Promise<{ data
 
 // --- Legacy Support Mocks (to prevent breaking other modules) ---
 export const getRecipientCount = async (filters: any) => {
+    // Mock logic: Simulate DB query delay
+    await new Promise(resolve => setTimeout(resolve, 600));
+
+    // Return mock counts based on filters for realism
     if (filters.type === 'all') return 2450;
     if (filters.type === 'student') return 2200;
     if (filters.type === 'invigilator') return 150;
     if (filters.type === 'admin') return 12;
-    if (filters.type === 'exam') return Math.floor(Math.random() * (400 - 50) + 50);
+    if (filters.type === 'exam') return Math.floor(Math.random() * (400 - 50) + 50); // Random class size
     if (filters.type === 'department') return Math.floor(Math.random() * (600 - 100) + 100);
+
     return 0;
 };
 

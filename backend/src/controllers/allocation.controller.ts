@@ -87,15 +87,15 @@ export const allocateSeats = async (req: Request, res: Response) => {
                         return (a.ZoneID || 999999) - (b.ZoneID || 999999);
                     }
                     // Within Zone, normal sort
-                    if (a.RowLabel !== b.RowLabel) return a.RowLabel.localeCompare(b.RowLabel);
-                    return a.SeatNumber - b.SeatNumber;
+                    if (a.RowIndex !== b.RowIndex) return a.RowIndex.localeCompare(b.RowIndex);
+                    return a.SeatIndex - b.SeatIndex;
                 });
             } else {
                 // Standard Room: Sort by Row, then Bench, then Seat (Standard exam order)
                 seats.sort((a: any, b: any) => {
-                    if (a.RowLabel !== b.RowLabel) return a.RowLabel.localeCompare(b.RowLabel);
-                    if (a.BenchNumber !== b.BenchNumber) return a.BenchNumber - b.BenchNumber;
-                    return a.SeatNumber - b.SeatNumber;
+                    if (a.RowIndex !== b.RowIndex) return a.RowIndex.localeCompare(b.RowIndex);
+                    if (a.BenchIndex !== b.BenchIndex) return a.BenchIndex - b.BenchIndex;
+                    return a.SeatIndex - b.SeatIndex;
                 });
             }
 

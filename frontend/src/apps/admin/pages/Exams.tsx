@@ -41,6 +41,21 @@ const Exams: React.FC = () => {
     const [deptFilter, setDeptFilter] = useState('All');
     const [sessionFilter, setSessionFilter] = useState('All');
     const [statusFilter, setStatusFilter] = useState('All');
+    const [dateFilter, setDateFilter] = useState('');
+
+    // FRONTEND GROUPING / UI FILTERING ONLY
+    // Since backend does not natively support session and exact date filtering in some APIs, we filter visually here.
+    const uiFilteredExams = React.useMemo(() => {
+        return exams.filter((exam: any) => {
+            if (sessionFilter !== 'All' && exam.Session !== sessionFilter) return false;
+            // HTML Date input returns YYYY-MM-DD. ExamDate is usually a full ISO string from backend.
+            if (dateFilter) {
+                const examDateStr = new Date(exam.ExamDate).toISOString().split('T')[0];
+                if (examDateStr !== dateFilter) return false;
+            }
+            return true;
+        });
+    }, [exams, sessionFilter, dateFilter]);
 
     useEffect(() => {
         fetchDepartments();
@@ -196,11 +211,12 @@ const Exams: React.FC = () => {
             <div className="bg-white p-2 rounded-xl border border-gray-200 shadow-sm flex flex-col lg:flex-row justify-between items-center gap-3">
                 <div className="flex items-center flex-1 gap-2 w-full lg:w-auto p-1">
                     {/* View Toggle */}
-                    <div className="flex bg-gray-100 rounded-lg p-1 mr-2">
+                    <div className="flex bg-gray-100 rounded-lg p-1 mr-2" role="group" aria-label="View Toggle Options">
                         <button
                             onClick={() => setViewMode('list')}
                             className={`p-2 rounded-md transition-all ${viewMode === 'list' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
                             title="List View"
+                            aria-label="Switch to List View"
                         >
                             <ListIcon size={18} />
                         </button>
@@ -208,6 +224,7 @@ const Exams: React.FC = () => {
                             onClick={() => setViewMode('calendar')}
                             className={`p-2 rounded-md transition-all ${viewMode === 'calendar' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
                             title="Calendar View"
+                            aria-label="Switch to Calendar View"
                         >
                             <LayoutGrid size={18} />
                         </button>
@@ -215,9 +232,8 @@ const Exams: React.FC = () => {
 
                     {/* Search */}
                     <div className="w-full lg:w-72">
-                        <Input
-                            id="search-exams"
-                            name="search-exams"
+                        <Input 
+                            aria-label="Search exams"
                             placeholder="Search subject or code..."
                             startContent={<Search size={18} className="text-gray-400" />}
                             value={searchQuery}
@@ -231,11 +247,25 @@ const Exams: React.FC = () => {
 
                     <div className="h-8 w-px bg-gray-200 mx-2 hidden lg:block"></div>
 
+                    {/* Date Picker Filter (UI ONLY) */}
+                    <div className="w-full lg:w-44">
+                        <Input
+                            type="date"
+                            size="sm"
+                            aria-label="Filter by date"
+                            placeholder="Select Date"
+                            value={dateFilter}
+                            onValueChange={setDateFilter}
+                            classNames={{
+                                inputWrapper: "bg-white border-gray-200 hover:border-blue-400 h-10 transition-all rounded-lg shadow-sm"
+                            }}
+                        />
+                    </div>
+
                     {/* Dropdowns */}
                     <div className="flex gap-2 w-full lg:w-auto overflow-x-auto pb-1 lg:pb-0">
-                        <Select
-                            id="filter-department"
-                            name="filter-department"
+                        <Select 
+                            aria-label="Filter by Department"
                             placeholder="Department: All"
                             size="sm"
                             className="w-48"
@@ -247,7 +277,6 @@ const Exams: React.FC = () => {
                             }}
                             selectedKeys={[deptFilter]}
                             onChange={(e) => setDeptFilter(e.target.value)}
-                            aria-label="Filter by Department"
                             disallowEmptySelection
                         >
                             {[
@@ -274,9 +303,8 @@ const Exams: React.FC = () => {
                             ))}
                         </Select>
 
-                        <Select
-                            id="filter-session"
-                            name="filter-session"
+                        <Select 
+                            aria-label="Filter by Session"
                             placeholder="Session"
                             size="sm"
                             className="w-40"
@@ -288,7 +316,6 @@ const Exams: React.FC = () => {
                             }}
                             selectedKeys={[sessionFilter]}
                             onChange={(e) => setSessionFilter(e.target.value)}
-                            aria-label="Filter by Session"
                             disallowEmptySelection
                         >
                             <SelectItem
@@ -301,28 +328,27 @@ const Exams: React.FC = () => {
                                 Session: All
                             </SelectItem>
                             <SelectItem
-                                key="Morning"
+                                key="FN"
                                 textValue="Morning"
                                 startContent={<div className="p-1.5 rounded-md bg-orange-50 text-orange-600 flex items-center justify-center shrink-0"><Sun size={16} /></div>}
-                                description="09:00 AM - 12:00 PM"
+                                description="Forenoon Session"
                                 classNames={{ base: "rounded-lg data-[hover=true]:bg-gray-50 mb-1", title: "text-sm font-semibold text-slate-700", description: "text-xs text-slate-400" }}
                             >
                                 Morning
                             </SelectItem>
                             <SelectItem
-                                key="Afternoon"
+                                key="AN"
                                 textValue="Afternoon"
                                 startContent={<div className="p-1.5 rounded-md bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0"><Moon size={16} /></div>}
-                                description="01:00 PM - 04:00 PM"
+                                description="Afternoon Session"
                                 classNames={{ base: "rounded-lg data-[hover=true]:bg-gray-50 mb-1", title: "text-sm font-semibold text-slate-700", description: "text-xs text-slate-400" }}
                             >
                                 Afternoon
                             </SelectItem>
                         </Select>
 
-                        <Select
-                            id="filter-status"
-                            name="filter-status"
+                        <Select 
+                            aria-label="Filter by Status"
                             placeholder="Status"
                             size="sm"
                             className="w-40"
@@ -334,7 +360,6 @@ const Exams: React.FC = () => {
                             }}
                             selectedKeys={[statusFilter]}
                             onChange={(e) => setStatusFilter(e.target.value)}
-                            aria-label="Filter by Status"
                             disallowEmptySelection
                         >
                             <SelectItem
@@ -369,14 +394,14 @@ const Exams: React.FC = () => {
                 </div>
 
                 <div className="px-4 text-xs font-semibold text-gray-400 hidden lg:block">
-                    Showing {exams.length} exams
+                    Showing {uiFilteredExams.length} exams
                 </div>
             </div>
 
             {/* Content Area */}
             {viewMode === 'list' ? (
                 <ExamListTable
-                    exams={exams}
+                    exams={uiFilteredExams}
                     loading={loading}
                     onEdit={handleEdit}
                     onDelete={handleDeleteClick}
@@ -386,7 +411,7 @@ const Exams: React.FC = () => {
             ) : (
                 <div className="border border-gray-200 rounded-xl shadow-sm bg-white min-h-[600px]">
                     <ExamCalendar
-                        exams={exams}
+                        exams={uiFilteredExams}
                         onExamClick={handleRowClick}
                     />
                 </div>
@@ -397,6 +422,7 @@ const Exams: React.FC = () => {
                 isOpen={isCreateModalOpen}
                 onClose={() => setIsCreateModalOpen(false)}
                 onSuccess={fetchData}
+                seriesId={seriesId}
             />
 
             {/* Edit Modal */}

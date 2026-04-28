@@ -11,16 +11,19 @@ import { Op } from "sequelize";
 
 export const getAllAcademicYears = async (req: Request, res: Response): Promise<void> => {
     try {
+        console.log("[getAllAcademicYears] Fetching all academic years...");
         const years = await AcademicYear.findAll({
             order: [['StartDate', 'DESC']]
         });
+        console.log("[getAllAcademicYears] Found", years.length, "years");
 
         res.status(200).json({
             success: true,
             data: years
         });
     } catch (error: any) {
-        console.error("Error fetching academic years:", error);
+        console.error("[getAllAcademicYears] Error:", error);
+        console.error("[getAllAcademicYears] Stack:", error.stack);
         res.status(500).json({
             success: false,
             message: "Failed to fetch academic years",
@@ -34,8 +37,11 @@ export const createAcademicYear = async (req: Request, res: Response): Promise<v
         const { YearName, StartDate, EndDate, IsCurrent } = req.body;
         const currentUser = (req as any).user;
 
+        console.log("[createAcademicYear] Starting with payload:", { YearName, StartDate, EndDate, IsCurrent, userID: currentUser?.UserID });
+
         // Validation
         if (!YearName || !StartDate || !EndDate) {
+            console.log("[createAcademicYear] Validation failed: missing required fields");
             res.status(400).json({
                 success: false,
                 message: "YearName, StartDate, and EndDate are required"
@@ -45,12 +51,14 @@ export const createAcademicYear = async (req: Request, res: Response): Promise<v
 
         // If setting as current, unset all others
         if (IsCurrent) {
+            console.log("[createAcademicYear] Unsetting all other current years...");
             await AcademicYear.update(
                 { IsCurrent: false },
                 { where: { IsCurrent: true } }
             );
         }
 
+        console.log("[createAcademicYear] Creating academic year...");
         const year = await AcademicYear.create({
             YearName,
             StartDate,
@@ -58,29 +66,56 @@ export const createAcademicYear = async (req: Request, res: Response): Promise<v
             IsCurrent: IsCurrent || false,
             IsActive: true
         });
+        console.log("[createAcademicYear] Academic year created:", year.AcademicYearID);
 
-        // Log activity
-        await ActivityLog.create({
-            UserID: currentUser.UserID,
-            Action: 'CREATE_ACADEMIC_YEAR',
-            EntityType: 'AcademicYear',
-            EntityID: year.AcademicYearID,
-            Details: `Created academic year: ${YearName}`,
-            IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
-        });
+        // Log activity (non-blocking - don't fail if logging fails)
+        try {
+            console.log("[createAcademicYear] Creating activity log...");
+            await ActivityLog.create({
+                UserID: currentUser.UserID,
+                Action: 'CREATE_ACADEMIC_YEAR',
+                EntityType: 'AcademicYear',
+                EntityID: year.AcademicYearID,
+                Details: `Created academic year: ${YearName}`,
+                IPAddress: req.ip || 'unknown',
+                UserAgent: req.get('user-agent') || 'unknown',
+                Severity: 'Info',
+                Status: 'Success'
+            });
+            console.log("[createAcademicYear] Activity log created");
+        } catch (logError: any) {
+            console.warn("[createAcademicYear] Failed to log activity:", logError.message);
+            // Don't fail the request if logging fails
+        }
 
+        console.log("[createAcademicYear] Sending success response");
         res.status(201).json({
             success: true,
             message: "Academic year created successfully",
             data: year
         });
     } catch (error: any) {
-        console.error("Error creating academic year:", error);
+        console.error("[createAcademicYear] Error:", error);
+        console.error("[createAcademicYear] Error stack:", error.stack);
+        console.error("[createAcademicYear] Sequelize errors:", error.errors);
+
+        // Handle unique constraint violation
+        if (error.name === 'SequelizeUniqueConstraintError') {
+            console.log("[createAcademicYear] Unique constraint violation detected");
+            res.status(400).json({
+                success: false,
+                message: `Academic year '${error.fields?.UQ__Academic__294C4DA93FF6F462 || error.fields?.YearName || 'N/A'}' already exists. Please choose a different year name.`,
+                error: "Duplicate academic year"
+            });
+            return;
+        }
+
+        // Generic error response
         res.status(500).json({
             success: false,
             message: "Failed to create academic year",
-            error: error.message
+            error: error.message,
+            details: error.errors ? error.errors.map((e: any) => e.message) : undefined
         });
     }
 };
@@ -109,16 +144,22 @@ export const setCurrentAcademicYear = async (req: Request, res: Response): Promi
         year.IsCurrent = true;
         await year.save();
 
-        // Log activity
-        await ActivityLog.create({
-            UserID: currentUser.UserID,
-            Action: 'SET_CURRENT_YEAR',
-            EntityType: 'AcademicYear',
-            EntityID: year.AcademicYearID,
-            Details: `Set current academic year: ${year.YearName}`,
-            IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
-        });
+        // Log activity (non-blocking)
+        try {
+            await ActivityLog.create({
+                UserID: currentUser.UserID,
+                Action: 'SET_CURRENT_YEAR',
+                EntityType: 'AcademicYear',
+                EntityID: year.AcademicYearID,
+                Details: `Set current academic year: ${year.YearName}`,
+                IPAddress: req.ip || 'unknown',
+                UserAgent: req.get('user-agent') || 'unknown',
+                Severity: 'Info',
+                Status: 'Success'
+            });
+        } catch (logError: any) {
+            console.warn("Failed to log activity:", logError.message);
+        }
 
         res.status(200).json({
             success: true,
@@ -161,16 +202,22 @@ export const deleteAcademicYear = async (req: Request, res: Response): Promise<v
         // For now, we will just attempt to delete. If FK constraints fail, the catch block handles it.
         await year.destroy();
 
-        // Log activity
-        await ActivityLog.create({
-            UserID: currentUser.UserID,
-            Action: 'DELETE_ACADEMIC_YEAR',
-            EntityType: 'AcademicYear',
-            EntityID: year.AcademicYearID,
-            Details: `Deleted academic year: ${year.YearName}`,
-            IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
-        });
+        // Log activity (non-blocking)
+        try {
+            await ActivityLog.create({
+                UserID: currentUser.UserID,
+                Action: 'DELETE_ACADEMIC_YEAR',
+                EntityType: 'AcademicYear',
+                EntityID: year.AcademicYearID,
+                Details: `Deleted academic year: ${year.YearName}`,
+                IPAddress: req.ip || 'unknown',
+                UserAgent: req.get('user-agent') || 'unknown',
+                Severity: 'Info',
+                Status: 'Success'
+            });
+        } catch (logError: any) {
+            console.warn("Failed to log activity:", logError.message);
+        }
 
         res.status(200).json({
             success: true,
@@ -180,7 +227,7 @@ export const deleteAcademicYear = async (req: Request, res: Response): Promise<v
         console.error("Error deleting academic year:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to delete academic year. It may differenced by other records.",
+            message: "Failed to delete academic year. It may referenced by other records.",
             error: error.message
         });
     }
@@ -243,7 +290,9 @@ export const createDepartment = async (req: Request, res: Response): Promise<voi
             EntityID: department.DepartmentID,
             Details: `Created department: ${DepartmentName}`,
             IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
+            UserAgent: req.get('user-agent') || 'unknown',
+            Severity: 'Info',
+            Status: 'Success'
         });
 
         res.status(201).json({
@@ -319,7 +368,9 @@ export const createProgram = async (req: Request, res: Response): Promise<void> 
             EntityID: program.ProgramID,
             Details: `Created program: ${ProgramName}`,
             IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
+            UserAgent: req.get('user-agent') || 'unknown',
+            Severity: 'Info',
+            Status: 'Success'
         });
 
         res.status(201).json({
@@ -394,7 +445,9 @@ export const createSemester = async (req: Request, res: Response): Promise<void>
             EntityID: semester.SemesterID,
             Details: `Created semester: ${SemesterName}`,
             IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
+            UserAgent: req.get('user-agent') || 'unknown',
+            Severity: 'Info',
+            Status: 'Success'
         });
 
         res.status(201).json({
@@ -444,13 +497,13 @@ export const getAllSubjects = async (req: Request, res: Response): Promise<void>
 
 export const createSubject = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { SubjectCode, SubjectName, DepartmentID, SemesterID, ProgramID, AcademicYearID, Credits } = req.body;
+        const { SubjectCode, SubjectName, DepartmentID, ProgramID, AcademicYearID, Credits } = req.body;
         const currentUser = (req as any).user;
 
-        if (!SubjectCode || !SubjectName || !DepartmentID || !SemesterID || !ProgramID || !AcademicYearID) {
+        if (!SubjectCode || !SubjectName || !DepartmentID || !ProgramID || !AcademicYearID) {
             res.status(400).json({
                 success: false,
-                message: "SubjectCode, SubjectName, DepartmentID, SemesterID, ProgramID, and AcademicYearID are required"
+                message: "SubjectCode, SubjectName, DepartmentID, ProgramID, and AcademicYearID are required"
             });
             return;
         }
@@ -458,8 +511,7 @@ export const createSubject = async (req: Request, res: Response): Promise<void> 
         const subject = await Subject.create({
             SubjectCode,
             SubjectName,
-            DepartmentID,
-            SemesterID
+            DepartmentID
         });
 
         // Log activity
@@ -470,7 +522,9 @@ export const createSubject = async (req: Request, res: Response): Promise<void> 
             EntityID: subject.SubjectID,
             Details: `Created subject: ${SubjectName}`,
             IPAddress: req.ip || 'unknown',
-            UserAgent: req.get('user-agent') || 'unknown'
+            UserAgent: req.get('user-agent') || 'unknown',
+            Severity: 'Info',
+            Status: 'Success'
         });
 
         res.status(201).json({

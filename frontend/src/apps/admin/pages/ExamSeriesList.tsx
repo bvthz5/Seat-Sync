@@ -1,224 +1,383 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Card, CardBody, Button, Chip } from "@heroui/react";
-import { BookOpen, Calendar, ChevronRight, Plus, Clock, FileText, Sparkles } from "lucide-react";
+import { useNavigate, useParams } from 'react-router-dom';
+import { Card, CardBody, Button } from "@heroui/react";
+import { BookOpen, Plus, Clock, FileText, AlertCircle, ArrowLeft, CheckCircle, CalendarDays, Upload, Pencil, Trash2 } from "lucide-react";
+import { toast } from 'react-hot-toast';
+import { ExamService } from '../services/examService';
 import { SeriesService } from '../services/seriesService';
-import ExamSeriesManagementModal from '../components/exams/ExamSeriesManagementModal';
+import CreateExamModal from '../components/exams/CreateExamModal';
+import ExamImportModal from '../components/exams/ExamImportModal';
+import EditExamModal from '../components/exams/EditExamModal';
+import ConfirmationModal from '../components/ConfirmationModal';
+
+const isMissingDepartment = (exam: any) => {
+    const code = String(exam?.Subject?.Department?.DepartmentCode || '').trim().toUpperCase();
+    const name = String(exam?.Subject?.Department?.DepartmentName || '').trim().toUpperCase();
+    return !code || code === 'GEN' || code === 'GENERAL' || name === 'GENERAL';
+};
 
 const ExamSeriesList: React.FC = () => {
     const navigate = useNavigate();
-    const [series, setSeries] = useState<any[]>([]);
+    const { seriesId } = useParams<{ seriesId: string }>();
+    const [exams, setExams] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [isSeriesModalOpen, setIsSeriesModalOpen] = useState(false);
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [deleteExamId, setDeleteExamId] = useState<number | null>(null);
+    const [isDeleteAllOpen, setIsDeleteAllOpen] = useState(false);
+    const [selectedExam, setSelectedExam] = useState<any>(null);
+    const [seriesName, setSeriesName] = useState<string>('');
+    const [examType, setExamType] = useState<'Internal' | 'EndSemester'>('Internal');
 
     useEffect(() => {
-        fetchSeries();
-    }, []);
+        if (seriesId) {
+            fetchSeriesDetails();
+            fetchExams();
+        }
+    }, [seriesId]);
 
-    const fetchSeries = async () => {
-        setLoading(true);
+    const fetchSeriesDetails = async () => {
         try {
             const response = await SeriesService.getAll();
-            if (response.success) {
-                setSeries(response.data);
+            const series = Array.isArray(response) ? response : response.data || [];
+            const found = series.find((s: any) => String(s.ExamSeriesID) === seriesId);
+            if (found) {
+                setSeriesName(found.SeriesName);
+                setExamType(found.ExamType);
             }
         } catch (error) {
-            console.error("Failed to fetch series", error);
+            console.error("Failed to fetch series details", error);
+        }
+    };
+
+    const fetchExams = async () => {
+        setLoading(true);
+        try {
+            const response = await ExamService.getAll({ seriesId });
+            setExams(response || []);
+        } catch (error) {
+            console.error("Failed to fetch exams", error);
+            toast.error("Failed to load exams");
         } finally {
             setLoading(false);
         }
     };
 
-    const handleSeriesClick = (seriesId: number) => {
-        navigate(`/admin/exams/${seriesId}`);
+    const handleCreateExam = () => {
+        setIsCreateModalOpen(true);
     };
 
-    // Accent colors for cards
-    const cardAccents = [
-        { bg: 'bg-blue-500', light: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-200', gradient: 'from-blue-500 to-blue-600' },
-        { bg: 'bg-indigo-500', light: 'bg-indigo-50', text: 'text-indigo-600', border: 'border-indigo-200', gradient: 'from-indigo-500 to-indigo-600' },
-        { bg: 'bg-violet-500', light: 'bg-violet-50', text: 'text-violet-600', border: 'border-violet-200', gradient: 'from-violet-500 to-violet-600' },
-        { bg: 'bg-cyan-500', light: 'bg-cyan-50', text: 'text-cyan-600', border: 'border-cyan-200', gradient: 'from-cyan-500 to-cyan-600' },
-        { bg: 'bg-emerald-500', light: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-200', gradient: 'from-emerald-500 to-emerald-600' },
-        { bg: 'bg-rose-500', light: 'bg-rose-50', text: 'text-rose-600', border: 'border-rose-200', gradient: 'from-rose-500 to-rose-600' },
-    ];
+    const handleEdit = (exam: any) => {
+        setSelectedExam(exam);
+        setIsEditModalOpen(true);
+    };
+
+    const handleDeleteClick = (id: number) => {
+        setDeleteExamId(id);
+    };
+
+    const confirmDelete = async () => {
+        if (!deleteExamId) return;
+        try {
+            await ExamService.delete(deleteExamId);
+            toast.success("Exam deleted successfully");
+            fetchExams();
+        } catch (error) {
+            toast.error("Failed to delete exam");
+            throw error;
+        }
+    };
+
+    const confirmDeleteAll = async () => {
+        try {
+            await ExamService.deleteAll(seriesId);
+            toast.success("All exams deleted successfully");
+            fetchExams();
+        } catch (error) {
+            toast.error("Failed to delete all exams");
+            throw error;
+        }
+    };
 
     return (
-        <div className="p-8 max-w-[1600px] mx-auto space-y-8 bg-[#F8F9FA] min-h-screen">
-
-            {/* Hero Header */}
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 p-8 md:p-10">
-                {/* Decorative Elements */}
-                <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-                <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4"></div>
-                <div className="absolute top-4 right-8 opacity-[0.03]">
-                    <BookOpen size={200} strokeWidth={0.5} />
-                </div>
-
-                <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                    <div>
-                        <div className="flex items-center gap-2 mb-3">
-                            <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
-                            <span className="text-blue-300 text-xs font-semibold uppercase tracking-widest">Examination Management</span>
-                        </div>
-                        <h1 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight">
-                            Exam Series
-                        </h1>
-                        <p className="text-blue-200/70 mt-2 text-sm max-w-md">
-                            Select an exam series to manage timetables, view schedules, and track examination progress.
-                        </p>
-                    </div>
-                    <Button
-                        className="bg-white text-slate-900 font-bold shadow-lg shadow-black/20 hover:shadow-xl hover:scale-[1.02] transition-all px-6"
-                        startContent={<Plus size={16} />}
-                        onPress={() => setIsSeriesModalOpen(true)}
-                        size="lg"
-                        radius="lg"
-                    >
-                        Manage Series
-                    </Button>
-                </div>
-
-                {/* Quick Stats */}
-                <div className="relative z-10 mt-8 flex flex-wrap gap-6">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-sm flex items-center justify-center border border-white/10">
-                            <FileText size={18} className="text-blue-300" />
+        <div className="min-h-screen bg-[#f4f6f9] pb-12">
+            {/* Page Header (consistent with light theme Dashboards) */}
+            <div className="bg-white border-b border-slate-200/80 px-8 py-8 mb-8 shadow-sm">
+                <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                    <div className="flex items-center gap-4">
+                        <Button
+                            isIconOnly
+                            variant="light"
+                            className="text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all"
+                            onPress={() => navigate('/admin/exams')}
+                        >
+                            <ArrowLeft size={24} />
+                        </Button>
+                        <div className="w-14 h-14 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0 border border-indigo-100 hidden sm:flex">
+                            <BookOpen className="text-indigo-600" size={30} />
                         </div>
                         <div>
-                            <p className="text-2xl font-bold text-white">{series.length}</p>
-                            <p className="text-xs text-blue-300/70">Total Series</p>
-                        </div>
-                    </div>
-                    <div className="w-px bg-white/10 self-stretch"></div>
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-sm flex items-center justify-center border border-white/10">
-                            <Sparkles size={18} className="text-emerald-300" />
-                        </div>
-                        <div>
-                            <p className="text-2xl font-bold text-white">{series.filter(s => s.IsActive).length}</p>
-                            <p className="text-xs text-emerald-300/70">Active</p>
-                        </div>
-                    </div>
-                    <div className="w-px bg-white/10 self-stretch"></div>
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-sm flex items-center justify-center border border-white/10">
-                            <Clock size={18} className="text-amber-300" />
-                        </div>
-                        <div>
-                            <p className="text-2xl font-bold text-white">{series.filter(s => !s.IsActive).length}</p>
-                            <p className="text-xs text-amber-300/70">Archived</p>
+                            <p className="text-indigo-600 text-xs font-bold uppercase tracking-widest mb-1">
+                                Examination Management
+                            </p>
+                            <h1 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
+                                {seriesName || 'Exams'}
+                            </h1>
+                            <p className="text-slate-500 font-medium mt-1 max-w-xl">
+                                Create and manage exams for {seriesName}
+                            </p>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Series Grid */}
-            {loading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {[1, 2, 3].map(i => (
-                        <div key={i} className="h-52 bg-white rounded-2xl border border-gray-100 animate-pulse">
-                            <div className="h-1.5 rounded-t-2xl bg-gray-200"></div>
-                            <div className="p-6 space-y-4">
-                                <div className="w-12 h-12 rounded-xl bg-gray-100"></div>
-                                <div className="h-5 w-3/4 bg-gray-100 rounded-lg"></div>
-                                <div className="h-3 w-1/2 bg-gray-50 rounded-lg"></div>
+            {/* Content Container */}
+            <div className="px-8 max-w-[1600px] mx-auto">
+                
+                {/* Action & Stats Bar */}
+                <div className="flex flex-col lg:flex-row gap-6 justify-between items-start lg:items-center mb-8">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-6 w-full lg:w-auto flex-1">
+                        <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-slate-500 text-sm font-semibold uppercase tracking-wider mb-1">Total Exams</p>
+                                    <h3 className="text-4xl font-extrabold text-slate-900">{exams.length}</h3>
+                                </div>
+                                <div className="w-14 h-14 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hidden xl:flex">
+                                    <FileText size={28} />
+                                </div>
                             </div>
                         </div>
-                    ))}
-                </div>
-            ) : series.length === 0 ? (
-                <div className="text-center py-24 bg-white rounded-2xl border-2 border-dashed border-gray-200">
-                    <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gray-50 flex items-center justify-center">
-                        <BookOpen size={28} className="text-gray-300" />
+                        <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-slate-500 text-sm font-semibold uppercase tracking-wider mb-1">Scheduled</p>
+                                    <h3 className="text-4xl font-extrabold text-blue-600">{exams.filter((e: any) => e.Status === 'Scheduled').length}</h3>
+                                </div>
+                                <div className="w-14 h-14 rounded-full bg-blue-50 flex items-center justify-center text-blue-500 hidden xl:flex">
+                                    <Clock size={28} />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow col-span-2 md:col-span-1">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-slate-500 text-sm font-semibold uppercase tracking-wider mb-1">Completed</p>
+                                    <h3 className="text-4xl font-extrabold text-emerald-600">{exams.filter((e: any) => e.Status === 'Completed').length}</h3>
+                                </div>
+                                <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-500 hidden xl:flex">
+                                    <CheckCircle size={28} />
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <p className="text-gray-600 font-semibold text-lg">No Exam Series Found</p>
-                    <p className="text-sm text-gray-400 mt-1 mb-6">Create your first exam series to get started.</p>
-                    <Button
-                        className="bg-blue-600 text-white font-semibold shadow-lg shadow-blue-600/20 px-6"
-                        startContent={<Plus size={16} />}
-                        onPress={() => setIsSeriesModalOpen(true)}
-                    >
-                        Create First Series
-                    </Button>
-                </div>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {series.map((item, index) => {
-                        const accent = cardAccents[index % cardAccents.length]!;
-                        return (
-                            <Card
-                                key={item.ExamSeriesID}
-                                isPressable
-                                onPress={() => handleSeriesClick(item.ExamSeriesID)}
-                                className="border border-gray-100 bg-white hover:shadow-xl hover:shadow-gray-200/50 hover:-translate-y-1 transition-all duration-300 group rounded-2xl overflow-hidden"
+                    <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+                        <Button
+                            onPress={() => setIsImportModalOpen(true)}
+                            variant="flat"
+                            className="bg-white text-slate-700 border border-slate-300 font-semibold hover:bg-slate-50 transition-all px-6 rounded-xl h-14 w-full lg:w-auto"
+                            startContent={<Upload size={18} />}
+                        >
+                            Import Timetable
+                        </Button>
+                        {examType !== 'Internal' && (
+                            <Button
+                                onPress={() => navigate(`/admin/exams/series/${seriesId}/dates`)}
+                                variant="flat"
+                                className="bg-white text-slate-700 border border-slate-300 font-semibold hover:bg-slate-50 transition-all px-6 rounded-xl h-14 w-full lg:w-auto"
+                                startContent={<CalendarDays size={18} />}
                             >
-                                {/* Top accent bar */}
-                                <div className={`h-1.5 bg-gradient-to-r ${accent.gradient}`}></div>
+                                Date View
+                            </Button>
+                        )}
+                        <Button
+                            onPress={() => setIsDeleteAllOpen(true)}
+                            variant="flat"
+                            className="bg-red-50 text-red-600 border border-red-200 font-semibold hover:bg-red-100 transition-all px-6 rounded-xl h-14 w-full lg:w-auto"
+                            startContent={<Trash2 size={18} />}
+                        >
+                            Delete All Exams
+                        </Button>
+                        <Button
+                            onPress={handleCreateExam}
+                            className="bg-indigo-600 text-white font-bold shadow-md hover:bg-indigo-700 transition-all px-8 rounded-xl h-14 w-full lg:w-auto"
+                            startContent={<Plus size={20} strokeWidth={3} />}
+                        >
+                            Create Pattern
+                        </Button>
+                    </div>
+                </div>
 
+                {/* Exams Grid or Empty State */}
+                {loading ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {[1, 2, 3, 4, 5, 6].map((i) => (
+                            <div key={i} className="h-64 bg-slate-100/50 border border-slate-200 rounded-2xl animate-pulse"></div>
+                        ))}
+                    </div>
+                ) : exams.length === 0 ? (
+                    <div className="text-center py-24 bg-white border border-slate-200 rounded-2xl shadow-sm">
+                        <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <BookOpen className="w-10 h-10 text-slate-400" />
+                        </div>
+                        <p className="text-slate-800 font-bold text-xl mb-2">No exams yet</p>
+                        <p className="text-slate-500 text-sm mb-8">Create your first exam configuration to get started</p>
+                        <Button
+                            onPress={handleCreateExam}
+                            className="bg-indigo-600 text-white font-bold shadow-md hover:bg-indigo-700"
+                            startContent={<Plus size={18} />}
+                        >
+                            Create First Exam
+                        </Button>
+                        <Button
+                            onPress={() => setIsImportModalOpen(true)}
+                            variant="light"
+                            className="mt-3 text-slate-700"
+                            startContent={<Upload size={16} />}
+                        >
+                            Import Timetable
+                        </Button>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        {exams.map((exam) => (
+                            <Card
+                                key={exam.ExamID}
+                                className={`bg-white border hover:shadow-lg transition-all duration-300 group rounded-2xl overflow-hidden ${
+                                    isMissingDepartment(exam)
+                                        ? 'border-amber-300 hover:border-amber-400 ring-1 ring-amber-200'
+                                        : 'border-slate-200 hover:border-slate-300'
+                                }`}
+                            >
+                                <div className={`h-1.5 w-full ${isMissingDepartment(exam) ? 'bg-amber-500' : 'bg-indigo-500'}`}></div>
                                 <CardBody className="p-6 space-y-5">
-                                    <div className="flex justify-between items-start">
-                                        <div className={`p-3 rounded-xl ${accent.light} ${accent.text} group-hover:scale-110 transition-transform duration-300`}>
-                                            <BookOpen size={24} />
+                                    <div className="min-h-[4rem]">
+                                        <h3 className="text-xl font-bold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-2">
+                                            {exam.ExamName}
+                                        </h3>
+                                        <div className="flex items-center gap-2 mt-2">
+                                            <span className="text-slate-500 font-medium text-sm flex-1 truncate" title={exam.Subject?.SubjectName || exam.Subject?.SubjectCode}>
+                                                {exam.Subject?.SubjectCode} 
+                                                {exam.Subject?.SubjectName ? ` - ${exam.Subject?.SubjectName}` : ''}
+                                            </span>
                                         </div>
-                                        <Chip
+                                        <div className="mt-2">
+                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold border ${
+                                                isMissingDepartment(exam)
+                                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                    : 'bg-indigo-50 text-indigo-700 border-indigo-100'
+                                            }`}>
+                                                Dept: {exam.Subject?.Department?.DepartmentCode || exam.Subject?.Department?.DepartmentName || 'General'}
+                                            </span>
+                                            {isMissingDepartment(exam) && (
+                                                <span className="ml-2 inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold bg-red-50 text-red-700 border border-red-200">
+                                                    Missing/Review Dept
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex flex-wrap gap-2">
+                                        <span className={`px-2.5 py-1 rounded-md text-xs font-bold border ${
+                                            exam.Status === 'Scheduled' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                            exam.Status === 'Completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                            'bg-purple-50 text-purple-700 border-purple-200'
+                                        }`}>
+                                            {exam.Status}
+                                        </span>
+                                        <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                            {exam.Session === 'FN' ? 'Morning' : 'Afternoon'}
+                                        </span>
+                                    </div>
+                                    
+                                    {/* Divider */}
+                                    <div className="h-px bg-slate-100"></div>
+
+                                    <div className="flex items-center justify-between text-slate-500 text-sm font-medium pt-1 group-hover:text-indigo-600 transition-colors">
+                                        <div className="flex items-center gap-1.5">
+                                            <CalendarDays size={16} />
+                                            <span>{new Date(exam.ExamDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 pt-1">
+                                        <Button
                                             size="sm"
                                             variant="flat"
-                                            className={item.IsActive
-                                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold"
-                                                : "bg-gray-50 text-gray-500 border border-gray-200 font-semibold"
-                                            }
+                                            className="bg-slate-100 text-slate-700 hover:bg-slate-200 font-medium"
+                                            startContent={<Pencil size={14} />}
+                                            onPress={() => handleEdit(exam)}
                                         >
-                                            <span className="flex items-center gap-1.5">
-                                                <span className={`w-1.5 h-1.5 rounded-full ${item.IsActive ? 'bg-emerald-500' : 'bg-gray-400'}`}></span>
-                                                {item.IsActive ? "Active" : "Archived"}
-                                            </span>
-                                        </Chip>
-                                    </div>
-
-                                    <div>
-                                        <h3 className={`text-lg font-bold text-gray-900 group-hover:${accent.text} transition-colors`}>
-                                            {item.SeriesName}
-                                        </h3>
-                                        <p className="text-sm text-gray-500 mt-1.5 line-clamp-2 leading-relaxed">
-                                            {item.Description || "No description provided."}
-                                        </p>
-                                    </div>
-
-                                    <div className="flex items-center gap-4 pt-1">
-                                        <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                                            <Calendar size={13} />
-                                            <span className="font-medium">{item.AcademicYear?.YearName || "–"}</span>
-                                        </div>
-                                        {item.Semester && (
-                                            <>
-                                                <span className="text-gray-200">•</span>
-                                                <span className="text-xs text-gray-400 font-medium">{item.Semester.SemesterName}</span>
-                                            </>
-                                        )}
-                                    </div>
-
-                                    {/* Bottom action bar */}
-                                    <div className={`flex justify-between items-center pt-4 border-t border-gray-100`}>
-                                        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider group-hover:text-gray-600 transition-colors">
-                                            View Timetable
-                                        </span>
-                                        <div className={`w-8 h-8 rounded-lg ${accent.light} ${accent.text} flex items-center justify-center group-hover:translate-x-1 transition-transform duration-300`}>
-                                            <ChevronRight size={16} />
-                                        </div>
+                                            Edit
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="flat"
+                                            className="bg-red-50 text-red-600 hover:bg-red-100 font-medium"
+                                            startContent={<Trash2 size={14} />}
+                                            onPress={() => handleDeleteClick(exam.ExamID)}
+                                        >
+                                            Delete
+                                        </Button>
                                     </div>
                                 </CardBody>
                             </Card>
-                        );
-                    })}
-                </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Create Exam Modal */}
+            <CreateExamModal
+                isOpen={isCreateModalOpen}
+                onClose={() => setIsCreateModalOpen(false)}
+                onSuccess={() => {
+                    setIsCreateModalOpen(false);
+                    fetchExams();
+                }}
+                seriesId={seriesId}
+            />
+
+            <ExamImportModal
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                onSuccess={fetchExams}
+                preSelectedSeriesId={seriesId}
+            />
+
+            {selectedExam && (
+                <EditExamModal
+                    isOpen={isEditModalOpen}
+                    onClose={() => setIsEditModalOpen(false)}
+                    onSuccess={() => {
+                        setIsEditModalOpen(false);
+                        fetchExams();
+                    }}
+                    exam={selectedExam}
+                />
             )}
 
-            {/* Management Modal */}
-            <ExamSeriesManagementModal
-                isOpen={isSeriesModalOpen}
-                onClose={() => setIsSeriesModalOpen(false)}
-                onSuccess={fetchSeries}
+            <ConfirmationModal
+                isOpen={!!deleteExamId}
+                onClose={() => setDeleteExamId(null)}
+                onConfirm={confirmDelete}
+                title="Delete Exam"
+                message="Are you sure you want to delete this exam? This action cannot be undone."
+                confirmText="Delete Exam"
+                cancelText="Cancel"
+                type="danger"
+            />
+
+            <ConfirmationModal
+                isOpen={isDeleteAllOpen}
+                onClose={() => setIsDeleteAllOpen(false)}
+                onConfirm={confirmDeleteAll}
+                title="Delete All Exams"
+                message="Are you sure you want to delete all exams in this series? This action cannot be undone."
+                confirmText="Delete All"
+                cancelText="Cancel"
+                type="danger"
             />
         </div>
     );

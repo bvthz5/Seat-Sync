@@ -5,15 +5,14 @@ import { sequelize } from "../config/database.js";
 import { Transaction, Op } from "sequelize";
 
 export class RoomRepository {
-    async findByLocation(blockId: number, floorId: number, options: { page?: number, limit?: number, search?: string, status?: string } = {}) {
+    async findByLocation(blockId: number | undefined, floorId: number | undefined, options: { page?: number, limit?: number, search?: string, status?: string } = {}) {
         const { page = 1, limit = 10, search, status } = options;
         const offset = (page - 1) * limit;
 
-        const whereClause: any = {
-            BlockID: blockId,
-            FloorID: floorId,
-        };
-
+        const whereClause: any = {};
+        
+        if (blockId) whereClause.BlockID = blockId;
+        if (floorId) whereClause.FloorID = floorId;
         if (search) {
             whereClause.RoomCode = { [Op.like]: `%${search}%` };
         }
@@ -23,6 +22,10 @@ export class RoomRepository {
 
         return Room.findAndCountAll({
             where: whereClause,
+            include: [
+                { model: Block, attributes: ['BlockName'] },
+                { model: Floor, attributes: ['FloorNumber'] }
+            ],
             order: [['RoomCode', 'ASC']],
             limit,
             offset,

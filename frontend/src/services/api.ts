@@ -13,7 +13,14 @@ const api: AxiosInstance = axios.create({
 // Token storage using localStorage (persists across refreshes)
 export const AccessTokenStore = {
     get token() { return localStorage.getItem('accessToken'); },
-    setToken: (t: string) => { localStorage.setItem('accessToken', t); },
+    setToken: (t: string) => {
+        const token = (t || '').trim();
+        if (!token || token === 'undefined' || token === 'null') {
+            localStorage.removeItem('accessToken');
+            return;
+        }
+        localStorage.setItem('accessToken', token);
+    },
     clear: () => { localStorage.removeItem('accessToken'); }
 };
 
@@ -39,7 +46,7 @@ const processQueue = (error: any, token: string | null = null) => {
 // Request Interceptor: Attach Access Token
 api.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
-        const token = localStorage.getItem('accessToken');
+        const token = (localStorage.getItem('accessToken') || '').trim();
         if (token && config.headers) {
             config.headers.Authorization = `Bearer ${token}`;
         }
@@ -85,10 +92,13 @@ api.interceptors.response.use(
                     withCredentials: true
                 });
 
-                const { accessToken } = response.data;
+                const rawAccessToken = (response.data as any)?.accessToken;
+                const accessToken = typeof rawAccessToken === 'string' ? rawAccessToken.trim() : '';
+                if (!accessToken) {
+                    throw new Error('Refresh did not return a valid access token');
+                }
 
-                localStorage.setItem('accessToken', accessToken);
-                // Also update the memory store wrapper
+                // Update the storage wrapper (also sanitizes values)
                 AccessTokenStore.setToken(accessToken);
 
                 api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
@@ -108,11 +118,11 @@ api.interceptors.response.use(
                 if (!window.location.pathname.includes('/login')) {
                     const currentPath = window.location.pathname.toLowerCase();
                     if (currentPath.startsWith('/invigilator')) {
-                        window.location.href = '/invigilator/login';
+                        window.location.replace('/invigilator/login');
                     } else if (currentPath.startsWith('/student')) {
-                        window.location.href = '/student/login';
+                        window.location.replace('/student/login');
                     } else {
-                        window.location.href = '/admin/login';
+                        window.location.replace('/admin/login');
                     }
                 }
 
@@ -127,11 +137,11 @@ api.interceptors.response.use(
             if (!window.location.pathname.includes('/login')) {
                 const currentPath = window.location.pathname.toLowerCase();
                 if (currentPath.startsWith('/invigilator')) {
-                    window.location.href = '/invigilator/login';
+                    window.location.replace('/invigilator/login');
                 } else if (currentPath.startsWith('/student')) {
-                    window.location.href = '/student/login';
+                    window.location.replace('/student/login');
                 } else {
-                    window.location.href = '/admin/login';
+                    window.location.replace('/admin/login');
                 }
             }
             return Promise.reject(error);
@@ -158,11 +168,11 @@ api.interceptors.response.use(
             if (!window.location.pathname.includes('/login')) {
                 const currentPath = window.location.pathname.toLowerCase();
                 if (currentPath.startsWith('/invigilator')) {
-                    window.location.href = '/invigilator/login';
+                    window.location.replace('/invigilator/login');
                 } else if (currentPath.startsWith('/student')) {
-                    window.location.href = '/student/login';
+                    window.location.replace('/student/login');
                 } else {
-                    window.location.href = '/admin/login';
+                    window.location.replace('/admin/login');
                 }
             }
         }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Upload, FileSpreadsheet, CheckCircle, AlertCircle, Info, Hash } from 'lucide-react';
 import academicService from '../../services/academicService';
@@ -14,41 +14,76 @@ interface StudentImportModalProps {
 const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose, onSuccess }) => {
     const [file, setFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
-    const [uploadStats, setUploadStats] = useState<{ success: number; errors: number; active: boolean }>({
+    const [progress, setProgress] = useState(0);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const [uploadStats, setUploadStats] = useState<{ success: number; errors: number; active: boolean; errorList?: Array<any> }>({
         success: 0,
         errors: 0,
-        active: false
+        active: false,
+        errorList: []
     });
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             setFile(e.target.files[0]);
             setUploadStats({ ...uploadStats, active: false });
+            setProgress(0);
         }
     };
+
+    useEffect(() => {
+        if (!isOpen) {
+            setFile(null);
+            setUploadStats({ success: 0, errors: 0, active: false, errorList: [] });
+            setProgress(0);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    }, [isOpen]);
 
     const handleUpload = async () => {
         if (!file) return;
 
         setIsUploading(true);
+        setProgress(10);
+        
+        // Progress bar simulation
+        const progressInterval = setInterval(() => {
+            setProgress(prev => {
+                const step = Math.random() * 15;
+                return prev + step < 90 ? prev + step : prev;
+            });
+        }, 500);
+
         try {
             const response = await academicService.importStudents(file);
+            clearInterval(progressInterval);
+            setProgress(100);
+            
+            const errorCount = response.failedCount || response.errorCount || 0;
+            
             setUploadStats({
-                success: response.successCount,
-                errors: response.errorCount,
-                active: true
+                success: response.successCount || 0,
+                errors: errorCount,
+                active: true,
+                errorList: response.errors || []
             });
 
-            if (response.errorCount === 0) {
+            if (errorCount === 0) {
                 toast.success(`Successfully imported ${response.successCount} students!`);
+                setFile(null);
+                if (fileInputRef.current) fileInputRef.current.value = '';
                 setTimeout(() => {
                     onSuccess();
                     onClose();
                 }, 2000);
             } else {
-                toast.error(`Imported ${response.successCount} students with ${response.errorCount} errors.`);
+                toast.error(`Imported ${response.successCount} students with ${errorCount} errors.`);
+                setFile(null);
+                if (fileInputRef.current) fileInputRef.current.value = '';
             }
         } catch (error: any) {
+            clearInterval(progressInterval);
+            setProgress(0);
             console.error(error);
             const errorMessage = error.response?.data?.message || "Failed to upload file. Please check the format.";
             toast.error(errorMessage);
@@ -83,6 +118,32 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
                     </div>
 
                     <div className="p-8 space-y-8 overflow-y-auto">
+                        
+                    {uploadStats.active && (
+                        <div className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100">
+                            <h3 className="text-lg font-bold mb-4">Import Results</h3>
+                            <div className="flex gap-4 mb-4">
+                                <div className="bg-green-50 p-4 rounded-lg flex-1">
+                                    <p className="text-sm text-green-600 font-semibold">✔ Imported</p>
+                                    <p className="text-2xl font-bold text-green-700">{uploadStats.success}</p>
+                                </div>
+                                <div className="bg-red-50 p-4 rounded-lg flex-1">
+                                    <p className="text-sm text-red-600 font-semibold">✖ Failed</p>
+                                    <p className="text-2xl font-bold text-red-700">{uploadStats.errors}</p>
+                                </div>
+                            </div>
+                            {uploadStats.errors > 0 && uploadStats.errorList && uploadStats.errorList.length > 0 && (
+                                <div className="bg-red-50 p-4 rounded-lg">
+                                    <p className="text-sm text-red-800 font-bold mb-2">Error List:</p>
+                                    <ul className="list-disc list-inside text-xs text-red-700 space-y-1 max-h-32 overflow-y-auto">
+                                        {uploadStats.errorList.map((e: any, i: number) => (
+                                            <li key={i}>Row {e.row}: {e.reason}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                         {/* Smart Features Info */}
                         <div className="bg-blue-50 border border-blue-100 rounded-xl p-5 relative overflow-hidden">
@@ -112,11 +173,15 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
               border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center text-center transition-all group cursor-pointer
               ${file ? 'border-green-500/30 bg-green-50' : 'border-gray-200 hover:border-blue-400 hover:bg-blue-50/50'}
             `}
-                            onClick={() => document.getElementById('file-upload')?.click()}
+                            onClick={() => {
+                                if (fileInputRef.current) {
+                                    fileInputRef.current.click();
+                                }
+                            }}
                         >
                             <input
                                 type="file"
-                                id="file-upload"
+                                ref={fileInputRef}
                                 name="fileUpload"
                                 aria-label="Upload Excel File"
                                 className="hidden"
@@ -141,19 +206,44 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
                             )}
                         </div>
 
+                        {/* Progress Bar */}
+                        {isUploading && (
+                            <div className="mt-4 p-4 bg-white rounded-xl shadow-sm border border-gray-100">
+                                <div className="flex justify-between mb-2">
+                                    <span className="text-sm font-semibold text-gray-700">Uploading and Parsing...</span>
+                                    <span className="text-sm font-bold text-blue-600">{Math.round(progress)}%</span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-2.5">
+                                    <motion.div 
+                                        className="bg-blue-600 h-2.5 rounded-full" 
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${progress}%` }}
+                                        transition={{ ease: "easeOut", duration: 0.5 }}
+                                    ></motion.div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Formatting Guide */}
                         <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                            <h4 className="text-gray-700 text-sm font-bold mb-3">Required Columns</h4>
-                            <div className="grid grid-cols-2 gap-x-8 gap-y-2">
-                                <ul className="space-y-2 text-xs text-gray-500">
-                                    <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-gray-900 rounded-full"></div>Register Number</li>
-                                    <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-gray-900 rounded-full"></div>Name</li>
-                                </ul>
-                                <ul className="space-y-2 text-xs text-gray-500">
-                                    <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-gray-900 rounded-full"></div>Program</li>
-                                    <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-gray-900 rounded-full"></div>Semester</li>
-                                </ul>
-                            </div>
+                            <h4 className="text-blue-900 text-base font-semibold mb-3 flex items-center gap-2">
+  <Info className="w-4 h-4 text-blue-500" /> Expected Excel Columns
+</h4>
+<div className="grid grid-cols-2 md:grid-cols-3 gap-x-10 gap-y-2">
+  <ul className="space-y-2 text-sm text-blue-900/80 font-medium">
+    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Name</li>
+    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Register Number</li>
+    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Email</li>
+  </ul>
+  <ul className="space-y-2 text-sm text-blue-900/80 font-medium">
+    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Program</li>
+    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Semester</li>
+    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Batch</li>
+  </ul>
+  <ul className="space-y-2 text-sm text-blue-900/80 font-medium">
+    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Department</li>
+  </ul>
+</div>
                         </div>
 
                         {/* Results */}

@@ -246,6 +246,118 @@ export class EmailService {
             throw new Error('Failed to send admin creation email');
         }
     }
+    async sendInvigilatorActivationEmail(to: string, name: string, token: string): Promise<void> {
+        const appUrl = process.env.APP_URL || 'http://localhost:5173';
+        const activationUrl = new URL('/activate', appUrl).toString() + `?token=${encodeURIComponent(token)}`;
+
+        const content = `
+            <h2 style="color: #1e293b; margin-top: 0; font-size: 20px;">Invigilator Onboarding - Activate Your Account</h2>
+            <p style="color: #475569;">
+                Hello <strong>${name}</strong>,<br><br>
+                Your invigilator account has been created on the SeatSync Examination System. 
+                Please activate your account securely by setting up your access password using the link below.
+            </p>
+            
+            <div style="text-align: center;">
+                <a href="${activationUrl}" class="btn-primary">Activate Account</a>
+            </div>
+            
+            <p style="margin-top: 32px; font-size: 14px; color: #64748b;">
+                Or copy and paste this secure link into your browser:
+                <br>
+                <a href="${activationUrl}" style="color: #2563eb; word-break: break-all;">${activationUrl}</a>
+            </p>
+
+            <div class="warning-box">
+                <p class="warning-text">
+                    <strong>Security Notice:</strong> This activation link is unique to you and will expire in exactly 24 hours. 
+                    If you encounter any issues, please reach out to the examination control cell.
+                </p>
+            </div>
+        `;
+
+        const mailOptions = {
+            from: `"SeatSync Administrative Cell" <${process.env.FROM_EMAIL}>`,
+            to,
+            subject: 'Action Required: Activate Your SeatSync Faculty Account',
+            html: this.getBaseTemplate(content),
+        };
+
+        try {
+            const info = await this.transporter.sendMail(mailOptions);
+            console.log(`[EmailService] Faculty activation email sent: ${info.messageId}`);
+        } catch (error: any) {
+            console.error('[EmailService] Error sending email:', error.message);
+            throw new Error('Failed to send faculty activation email');
+        }
+    }
+
+    async sendStudentCredentialsEmail(to: string, name: string, email: string, plainTextPassword: string, registerNumber: string): Promise<void> {
+        const loginUrl = process.env.APP_URL || 'http://localhost:5173';
+
+        const content = `
+            <h2 style="color: #1e293b; margin-top: 0; font-size: 20px;">Welcome to SeatSync!</h2>
+            <p style="color: #475569;">
+                Hello <strong>${name}</strong>,<br><br>
+                Your student account has been successfully created in the SeatSync Examination Control System. 
+                Please find your secure login credentials below. 
+                You can use these credentials to access the student portal and view examination schedules, allocations, and important notices.
+            </p>
+            
+            <div class="credential-box">
+                <div class="credential-row">
+                    <span class="label">Student Portal</span>
+                    <span class="value" style="color: #2563eb; text-decoration: underline;">${loginUrl}/student</span>
+                </div>
+                <div class="credential-row">
+                    <span class="label">Register Number</span>
+                    <span class="value">${registerNumber}</span>
+                </div>
+                <div class="credential-row">
+                    <span class="label">College Email (Username)</span>
+                    <span class="value">${email}</span>
+                </div>
+                <div class="credential-row">
+                    <span class="label">Temporary Password</span>
+                    <span class="value" style="letter-spacing: 1px; font-weight: bold;">${plainTextPassword}</span>
+                </div>
+            </div>
+
+            <div style="text-align: center;">
+                <a href="${loginUrl}/student" class="btn-primary">Login to Portal</a>
+            </div>
+
+            <div class="warning-box">
+                <p class="warning-text">
+                    <strong>Important Security Notice:</strong> 
+                    <ul style="margin: 8px 0; padding-left: 20px;">
+                        <li>For your security, you will be required to change your password immediately upon your first login.</li>
+                        <li>Keep your username and password confidential and never share them with anyone.</li>
+                        <li>If you did not request this account, please contact your department administrator immediately.</li>
+                    </ul>
+                </p>
+            </div>
+
+            <p style="margin-top: 24px; font-size: 13px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 24px;">
+                <strong>Need Help?</strong> If you encounter any issues accessing your account, please reach out to the examination control cell at your campus.
+            </p>
+        `;
+
+        const mailOptions = {
+            from: `"SeatSync Exam Cell" <${process.env.FROM_EMAIL}>`,
+            to,
+            subject: `Welcome to SeatSync - Your Student Account Credentials (${registerNumber})`,
+            html: this.getBaseTemplate(content),
+        };
+
+        try {
+            const info = await this.transporter.sendMail(mailOptions);
+            console.log(`[EmailService] Student credentials email sent to: ${to}, messageId: ${info.messageId}`);
+        } catch (error: any) {
+            console.error('[EmailService] Error sending student credentials email:', error.message);
+            throw new Error('Failed to send student credentials email');
+        }
+    }
 }
 
 export const emailService = new EmailService();

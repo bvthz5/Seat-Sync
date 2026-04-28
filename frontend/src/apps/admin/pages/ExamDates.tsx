@@ -1,0 +1,425 @@
+import React, { useEffect, useState, useMemo } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Card, Button, Select, SelectItem, Input, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/react";
+import { ArrowLeft, Filter, CalendarCheck, CalendarDays, ArrowRight, Search, X, Trash2, AlertTriangle, Upload } from "lucide-react";
+import { toast } from 'react-hot-toast';
+import { ExamService } from '../services/examService';
+import { SeriesService } from '../services/seriesService';
+import BulkEligibleImportModal from '../components/exams/BulkEligibleImportModal';
+
+const ExamDates: React.FC = () => {
+    const navigate = useNavigate();
+    const { seriesId } = useParams<{ seriesId: string }>();
+    const [dates, setDates] = useState<{ date: string; count: number; hasRegistrations: boolean; subjects: { name: string; code: string }[] }[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [selectedMonth, setSelectedMonth] = useState<string>('All');
+    const [exactDate, setExactDate] = useState<string>('');
+    const [subjectSearch, setSubjectSearch] = useState<string>('');
+    const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+    const [isClearing, setIsClearing] = useState(false);
+    const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
+
+    useEffect(() => {
+        if (seriesId) {
+            checkSeriesType();
+            fetchDates();
+        }
+    }, [seriesId]);
+
+    const checkSeriesType = async () => {
+        try {
+            const response = await SeriesService.getAll();
+            const series = Array.isArray(response) ? response : response.data || [];
+            const found = series.find((s: any) => String(s.ExamSeriesID) === seriesId);
+            if (found && found.ExamType === 'Internal') {
+                toast.error("Date View is not available for Internal Exams");
+                navigate(`/admin/exams/series/${seriesId}`);
+            }
+        } catch (error) {
+            console.error("Failed to check series type", error);
+        }
+    };
+
+    const fetchDates = async () => {
+        setLoading(true);
+        try {
+            const response = await ExamService.getAll({ seriesId });
+            const exams = response || [];
+            const groups: Record<string, { sessions: Set<string>; subjects: Map<string, string>; hasReg: boolean }> = {};
+            exams.forEach((ex: any) => {
+                const d = new Date(ex.ExamDate).toISOString().split('T')[0];
+                if (!groups[d]) groups[d] = { sessions: new Set(), subjects: new Map(), hasReg: false };
+                groups[d].sessions.add(`${String(ex.ExamName || '').trim()}::${String(ex.Session || '').trim().toUpperCase()}`);
+                const code = String(ex.SubjectCode || ex.ExamCode || '').trim();
+                const name = String(ex.ExamName || ex.SubjectName || '').trim();
+                if (name) groups[d].subjects.set(code || name, name);
+                if (ex.registrationCount > 0) groups[d].hasReg = true;
+            });
+            const entries = Object.keys(groups)
+                .sort()
+                .map(k => ({
+                    date: k,
+                    count: groups[k].sessions.size,
+                    hasRegistrations: groups[k].hasReg,
+                    subjects: Array.from(groups[k].subjects.entries()).map(([code, name]) => ({ code, name }))
+                }));
+            setDates(entries);
+        } catch (e: any) {
+            console.error("Failed to load dates", e);
+            toast.error("Failed to load date-wise schedule");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleClearEligibility = async () => {
+        setIsClearing(true);
+        try {
+            await ExamService.clearEligibility(Number(seriesId));
+            toast.success('Successfully cleared all eligibility data');
+            fetchDates(); // Refresh to update any necessary state
+            setIsClearConfirmOpen(false);
+        } catch (error: any) {
+            console.error('Failed to clear eligibility', error);
+            toast.error(error.response?.data?.message || 'Failed to clear eligibility data');
+        } finally {
+            setIsClearing(false);
+        }
+    };
+
+    const availableMonths = useMemo(() => {
+        const months = new Set<string>();
+        dates.forEach(d => {
+            const dateObj = new Date(d.date);
+            const m = dateObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            months.add(m);
+        });
+        return Array.from(months).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+    }, [dates]);
+
+    const filteredDates = useMemo(() => {
+        let result = dates;
+        if (selectedMonth !== 'All') {
+            result = result.filter(d => {
+                const m = new Date(d.date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                return m === selectedMonth;
+            });
+        }
+        if (exactDate) {
+            result = result.filter(d => d.date === exactDate);
+        }
+        if (subjectSearch.trim()) {
+            const q = subjectSearch.trim().toLowerCase();
+            result = result.filter(d =>
+                d.subjects.some(s =>
+                    s.name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q)
+                )
+            );
+        }
+        return result;
+    }, [dates, selectedMonth, exactDate, subjectSearch]);
+
+    const getLoadInfo = (count: number) => {
+        // Updated colors for a softer, more ultra-premium enterprise appearance
+        if (count <= 3) return { 
+            bg: 'bg-emerald-50 text-emerald-600', 
+            text: 'text-emerald-500', 
+            border: 'border-emerald-100', 
+            hoverBorder: 'group-hover:border-emerald-300'
+        };
+        if (count <= 8) return { 
+            bg: 'bg-amber-50 text-amber-600', 
+            text: 'text-amber-500', 
+            border: 'border-amber-100', 
+            hoverBorder: 'group-hover:border-amber-300'
+        };
+        return { 
+            bg: 'bg-rose-50 text-rose-600', 
+            text: 'text-rose-500', 
+            border: 'border-rose-100', 
+            hoverBorder: 'group-hover:border-rose-300'
+        };
+    };
+
+    return (
+        <div className="min-h-screen bg-[#F8F9FA] pb-12">
+            {/* Header Area */}
+            <div className="bg-white border-b border-slate-200/80 px-8 py-8 md:py-10 mb-8 shadow-sm relative overflow-hidden">
+                <div className="absolute right-0 top-0 w-64 h-64 bg-indigo-50 rounded-full blur-3xl opacity-60 -translate-y-1/2 translate-x-1/3"></div>
+                <div className="max-w-[1600px] mx-auto flex flex-col gap-6 relative z-10">
+                    {/* Top Row: Title */}
+                    <div className="flex items-center gap-5">
+                        <Button
+                            isIconOnly
+                            variant="light"
+                            className="bg-slate-50 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-2xl shadow-sm border border-slate-100 transition-all w-12 h-12 shrink-0"
+                            onPress={() => navigate(`/admin/exams/series/${seriesId}`)}
+                        >
+                            <ArrowLeft size={20} className="stroke-[2.5]" />
+                        </Button>
+                        <div>
+                            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+                                Date-wise Schedule
+                            </h1>
+                            <p className="text-slate-500 mt-1.5 font-medium text-sm">Visually monitor your daily exam load and density.</p>
+                        </div>
+                    </div>
+
+                    {/* Bottom Row: Actions & Filters */}
+                    <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 w-full">
+                        <div className="flex items-center gap-3 shrink-0">
+                            <Button
+                                className="bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 font-bold rounded-xl px-5 hover:-translate-y-0.5 transition-all"
+                                startContent={<Trash2 size={16} className="stroke-[2.5]" />}
+                                onPress={() => setIsClearConfirmOpen(true)}
+                            >
+                                Clear Eligibility
+                            </Button>
+                            <Button
+                                className="bg-indigo-600 text-white font-bold rounded-xl shadow-md px-5 hover:-translate-y-0.5 transition-transform"
+                                startContent={<Upload size={16} className="stroke-[2.5]" />}
+                                onPress={() => setIsBulkImportOpen(true)}
+                            >
+                                Bulk Import
+                            </Button>
+                        </div>
+                        
+                        {/* UI Only Filters */}
+                        {!loading && dates.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-3 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm shrink-0">
+                            <div className="hidden sm:flex items-center justify-center p-2 rounded-xl bg-slate-50 text-slate-400">
+                                <Filter size={18} className="stroke-[2.5]" />
+                            </div>
+                            
+                            {/* Subject Search */}
+                            <div className="w-full sm:w-56">
+                                <Input
+                                    aria-label="Search by course name or code"
+                                    placeholder="Search course name / code…"
+                                    value={subjectSearch}
+                                    onValueChange={(val) => setSubjectSearch(val)}
+                                    startContent={<Search size={14} className="text-slate-400 shrink-0" />}
+                                    isClearable
+                                    onClear={() => setSubjectSearch('')}
+                                    classNames={{
+                                        inputWrapper: "bg-slate-50 hover:bg-white border border-slate-200 shadow-none h-10 transition-colors"
+                                    }}
+                                />
+                            </div>
+
+                            <div className="flex gap-2 w-full sm:w-auto">
+                                <div className="w-full sm:w-44">
+                                    <Input
+                                        type="date"
+                                        aria-label="Filter specific date"
+                                        placeholder="Jump to date"
+                                        value={exactDate}
+                                        onValueChange={(val) => {
+                                            setExactDate(val);
+                                            if (val) setSelectedMonth('All');
+                                        }}
+                                        classNames={{
+                                            inputWrapper: "bg-white hover:bg-slate-50 border-slate-200 shadow-none h-10 transition-colors"
+                                        }}
+                                    />
+                                </div>
+                                <div className="w-full sm:w-48 text-left">
+                                    <Select 
+                                        aria-label="Filter by month"
+                                        placeholder="Select Month"
+                                        classNames={{
+                                            trigger: "bg-white hover:bg-slate-50 border-slate-200 shadow-none h-10 min-h-10 transition-colors",
+                                            popoverContent: "bg-white border border-slate-100 shadow-xl rounded-xl p-1"
+                                        }}
+                                        selectedKeys={[selectedMonth]}
+                                        onChange={(e) => {
+                                            setSelectedMonth(e.target.value);
+                                            if (e.target.value !== 'All') setExactDate('');
+                                        }}
+                                        disallowEmptySelection
+                                    >
+                                        <SelectItem
+                                            key="All"
+                                            textValue="All Months"
+                                            classNames={{ base: "rounded-lg data-[hover=true]:bg-slate-50 mb-1", title: "text-sm font-bold text-slate-700" }}
+                                        >
+                                            All Months
+                                        </SelectItem>
+                                        {availableMonths.map((m) => (
+                                            <SelectItem
+                                                key={m}
+                                                textValue={m}
+                                                classNames={{ base: "rounded-lg data-[hover=true]:bg-slate-50 mb-1", title: "text-sm font-bold text-slate-700" }}
+                                            >
+                                                {m}
+                                            </SelectItem>
+                                        ))}
+                                    </Select>
+                                </div>
+                            </div>
+
+                            {/* Clear All Filters */}
+                            {(subjectSearch.trim() || exactDate || selectedMonth !== 'All') && (
+                                <button
+                                    onClick={() => { setSubjectSearch(''); setExactDate(''); setSelectedMonth('All'); }}
+                                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-500 bg-rose-50 hover:bg-rose-100 border border-rose-100 transition-all whitespace-nowrap shrink-0"
+                                >
+                                    <X size={13} className="stroke-[3]" />
+                                    Clear All
+                                </button>
+                            )}
+                        </div>
+                    )}
+                    </div>
+                </div>
+            </div>
+
+            <div className="px-8 max-w-[1600px] mx-auto">
+                {loading ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 animate-pulse">
+                         {[...Array(10)].map((_, i) => (
+                             <div key={i} className="h-56 bg-slate-200/60 rounded-[28px]"></div>
+                         ))}
+                    </div>
+                ) : dates.length === 0 ? (
+                    <div className="text-center py-24 bg-white border border-slate-200/60 rounded-[32px] shadow-sm max-w-3xl mx-auto">
+                        <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-5 text-indigo-400">
+                            <CalendarCheck size={32} />
+                        </div>
+                        <h2 className="text-slate-900 font-extrabold text-2xl mb-2 tracking-tight">No exams scheduled</h2>
+                        <p className="text-slate-500 font-medium text-sm">There are no dates allocated in your current series.</p>
+                    </div>
+                ) : filteredDates.length === 0 ? (
+                    <div className="text-center py-24 bg-white border border-slate-200/60 rounded-[32px] shadow-sm max-w-3xl mx-auto">
+                        <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-5 text-slate-400">
+                            <Search size={28} />
+                        </div>
+                        <h2 className="text-slate-900 font-extrabold text-xl mb-2 tracking-tight">No matching dates</h2>
+                        <p className="text-slate-500 font-medium text-sm">Try clearing your filters or searching a different course name.</p>
+                        <Button 
+                            color="primary" variant="flat" size="sm" className="mt-5 font-bold" 
+                            onPress={() => { setSelectedMonth('All'); setExactDate(''); setSubjectSearch(''); }}
+                        >
+                            Clear Filters
+                        </Button>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                        {filteredDates.map(d => {
+                            const load = getLoadInfo(d.count);
+                            const dateObj = new Date(d.date);
+                            
+                            return (
+                                <Card
+                                    key={d.date}
+                                    className={`cursor-pointer bg-white shadow-[0_4px_12px_-4px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_40px_-8px_rgba(0,0,0,0.1)] hover:-translate-y-1.5 transition-all duration-400 rounded-[28px] overflow-hidden group w-full ring-0 outline-none border-2 border-transparent ${load.hoverBorder}`}
+                                    isPressable
+                                    onPress={() => navigate(`/admin/exams/series/${seriesId}/dates/${d.date}`)}
+                                >
+                                    <div className="flex flex-col h-full w-full">
+                                        <div className="p-7">
+                                            {/* Top Status & Arrow */}
+                                            <div className="flex justify-between items-center mb-6">
+                                                <div className="flex items-center gap-2">
+                                                    {d.hasRegistrations && (
+                                                        <div className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1 rounded-lg border border-green-100 shadow-sm" title="Eligibility Imported">
+                                                            <CalendarCheck size={13} className="stroke-[3]" />
+                                                            <span className="text-[10px] font-extrabold uppercase tracking-widest">Registered</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-300 opacity-0 group-hover:opacity-100 bg-white ${load.text} ${load.hoverBorder}`}>
+                                                    <ArrowRight size={14} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                                                </div>
+                                            </div>
+                                            
+                                            {/* Epic Typography Date Layout */}
+                                            <div className="mb-8 flex items-baseline gap-2">
+                                                <h2 className={`text-6xl font-black leading-none tracking-tighter transition-colors duration-400 ${load.text} group-hover:drop-shadow-sm`}>
+                                                    {String(dateObj.getDate()).padStart(2, '0')}
+                                                </h2>
+                                                <div className="flex flex-col mb-1.5">
+                                                    <p className="text-slate-400 font-extrabold uppercase tracking-[0.15em] text-xs leading-none mb-1">
+                                                        {dateObj.toLocaleDateString('en-US', { month: 'short' })}
+                                                    </p>
+                                                    <p className="text-slate-800 font-black text-sm leading-none">
+                                                        {dateObj.toLocaleDateString('en-US', { weekday: 'long' })}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            
+                                            {/* Bottom Metrics */}
+                                            <div className="pt-5 border-t border-slate-100 flex items-center gap-3">
+                                                <div className={`w-10 h-10 rounded-[12px] flex flex-shrink-0 items-center justify-center border bg-opacity-30 ${load.bg} ${load.border}`}>
+                                                    <CalendarDays size={18} className="stroke-[2.5]" />
+                                                </div>
+                                                <div className="flex flex-col justify-center translate-y-[2px]">
+                                                    <p className="text-[10px] uppercase tracking-widest text-slate-400 font-extrabold mb-0.5 leading-none shadow-none">Total Exams</p>
+                                                    <div className="flex items-baseline gap-1 leading-none shadow-none">
+                                                        <p className={`text-lg font-black leading-none ${load.text}`}>{d.count}</p>
+                                                        <span className="text-[11px] font-bold text-slate-400 leading-none">Scheduled</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Card>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+
+            <Modal 
+                isOpen={isClearConfirmOpen} 
+                onClose={() => setIsClearConfirmOpen(false)} 
+                size="md"
+                backdrop="blur"
+                classNames={{
+                    base: "bg-white rounded-[24px] shadow-2xl border border-slate-100",
+                    backdrop: "bg-slate-900/30 backdrop-blur-md"
+                }}
+            >
+                <ModalContent>
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-500 shrink-0">
+                                <AlertTriangle size={20} className="stroke-[2.5]" />
+                            </div>
+                            <h2 className="text-xl font-bold text-slate-800">Clear Eligibility Data</h2>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="px-6 py-4">
+                        <p className="text-slate-600 font-medium leading-relaxed">
+                            Are you sure you want to completely clear <strong className="text-red-500">ALL imported eligibility lists</strong> for this series?
+                        </p>
+                        <p className="text-slate-500 text-sm mt-1 leading-relaxed">
+                            This action is permanent. All mapped students will be wiped from these exams.
+                        </p>
+                    </ModalBody>
+                    <ModalFooter className="px-6 pb-6 pt-2">
+                        <Button variant="light" onPress={() => setIsClearConfirmOpen(false)} className="font-bold text-slate-500">
+                            Cancel
+                        </Button>
+                        <Button 
+                            color="danger" 
+                            onPress={handleClearEligibility} 
+                            isLoading={isClearing} 
+                            className="font-bold shadow-md shadow-red-200"
+                        >
+                            Yes, Clear All
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            <BulkEligibleImportModal
+                isOpen={isBulkImportOpen}
+                onClose={() => setIsBulkImportOpen(false)}
+                onSuccess={fetchDates}
+            />
+        </div>
+    );
+};
+
+export default ExamDates;
