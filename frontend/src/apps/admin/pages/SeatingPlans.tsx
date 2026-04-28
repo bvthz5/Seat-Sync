@@ -25,7 +25,7 @@ interface SeatInfo { SeatID: number; RowLabel: string; BenchNumber: number; Seat
 interface Bench { rowLabel: string; benchNumber: number; seats: SeatInfo[]; }
 interface Assignment { seatId: number; studentId: number; studentName: string; registerNumber: string; deptCode: string; side: 'left' | 'right'; isEligible?: boolean; isBlocked?: boolean; subjectCode?: string; subjectName?: string; }
 interface Series { ExamSeriesID: number; SeriesName: string; IsActive: boolean; ExamType: 'Internal' | 'EndSemester'; }
-interface ExamDateSlot { examDate: string; session: string; examCount: number; }
+interface ExamDateSlot { examDate: string; session: string; examCount: number; examName?: string; }
 interface HallSummary { hallId: number; hallCode: string; capacity: number; totalSeats: number; filledSeats: number; }
 interface SeriesTask {
     date: string;
@@ -141,7 +141,7 @@ const SeatingPlans: React.FC = () => {
     const [secondaryDept, setSecondaryDept] = useState<string>('');
     const [avoidSameDeptBench, setAvoidSameDeptBench] = useState(true);
     const [shuffleRooms, setShuffleRooms] = useState(false);
-    const [roomCapacityLimit, setRoomCapacityLimit] = useState<string>('');
+    const [roomCapacityLimit, setRoomCapacityLimit] = useState<string>('30');
     const [selectedHallIds, setSelectedHallIds] = useState<Set<number>>(new Set());
     const [hallSearch, setHallSearch] = useState('');
     const [hallFilter, setHallFilter] = useState<'all' | 'empty' | 'partial' | 'full'>('all');
@@ -182,7 +182,15 @@ const SeatingPlans: React.FC = () => {
     const [seriesRunning, setSeriesRunning] = useState(false);
 
     /* derived */
-    const availableDates = [...new Set(examDates.filter(d => d.session === selectedSession).map(d => d.examDate))].sort();
+    const filteredExamDates = useMemo(() => {
+        return examDates
+            .filter(d => d.session === selectedSession)
+            .sort((a, b) => a.examDate.localeCompare(b.examDate));
+    }, [examDates, selectedSession]);
+
+    const availableDates = useMemo(() => {
+        return [...new Set(filteredExamDates.map(d => d.examDate))];
+    }, [filteredExamDates]);
     // Calculate the number of unique exams for the selected date/session
     const filteredExams = exams.filter(e => String(e.ExamDate).split('T')[0] === selectedDate && String(e.Session).toUpperCase() === selectedSession);
     const uniqueExamNames = Array.from(new Set(filteredExams.map(e => e.ExamName)));
@@ -2151,8 +2159,26 @@ const SeatingPlans: React.FC = () => {
                                             selectorIcon: "text-slate-400 absolute w-4 right-3",
                                             popoverContent: "bg-white border text-slate-800 border-slate-200 shadow-xl font-medium"
                                         }}>
-                                        {availableDates.map(d => (
-                                            <SelectItem key={String(d)} textValue={fmtDate(d)} className="data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700 font-semibold text-slate-800">{fmtDate(d)}</SelectItem>
+                                        {filteredExamDates.map(d => (
+                                            <SelectItem 
+                                                key={String(d.examDate)} 
+                                                textValue={`${fmtDate(d.examDate)}`} 
+                                                className="data-[hover=true]:bg-indigo-50 data-[hover=true]:text-indigo-700 font-semibold text-slate-800"
+                                            >
+                                                <div className="flex flex-col py-0.5">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-[13px] font-bold">{fmtDate(d.examDate)}</span>
+                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${selectedSession === 'FN' ? 'bg-indigo-50 text-indigo-600' : 'bg-orange-50 text-orange-600'}`}>
+                                                            {selectedSession}
+                                                        </span>
+                                                    </div>
+                                                    {d.examName && (
+                                                        <span className="text-[11px] text-slate-500 font-medium truncate mt-0.5 max-w-[280px]">
+                                                            {d.examName}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </SelectItem>
                                         ))}
                                     </Select>
 
@@ -2207,43 +2233,56 @@ const SeatingPlans: React.FC = () => {
                                                 </button>
                                             </div>
                                         ))}
-                                        {/* End Sem: per-room seat cap */}
-                                        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 border border-slate-200">
-                                            <div className="flex flex-col">
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className="text-[11px] text-slate-600 font-medium leading-tight">Room cap</span>
-                                                    <Tooltip content="Sets a maximum student limit per hall for this specific allocation run." placement="right" showArrow classNames={{ content: "text-[10px] font-medium" }}>
-                                                        <span className="cursor-help text-slate-400 hover:text-indigo-500 transition-colors">
-                                                            <Info size={11} />
-                                                        </span>
-                                                    </Tooltip>
+                                        {/* End Sem: per-room seat cap (Hidden when default 30) */}
+                                        {roomCapacityLimit !== '30' ? (
+                                            <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-200 animate-in fade-in zoom-in duration-300">
+                                                <div className="flex flex-col">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="text-[11px] text-indigo-700 font-bold leading-tight">Room Cap</span>
+                                                        <Tooltip content="Sets a maximum student limit per hall for this specific allocation run." placement="right" showArrow classNames={{ content: "text-[10px] font-medium" }}>
+                                                            <span className="cursor-help text-indigo-400 hover:text-indigo-600 transition-colors">
+                                                                <Info size={11} />
+                                                            </span>
+                                                        </Tooltip>
+                                                    </div>
+                                                    <span className="text-[9px] text-indigo-500 leading-tight">Custom limit active</span>
                                                 </div>
-                                                <span className="text-[9px] text-slate-400 leading-tight">seats per hall (End Sem)</span>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-1 bg-white p-0.5 rounded-lg border border-indigo-200">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setRoomCapacityLimit(v => String(Math.max(1, (Number(v) || 0) - 1)))}
+                                                            className="w-5 h-5 rounded-md bg-slate-50 border border-slate-200 text-slate-500 hover:bg-slate-100 flex items-center justify-center text-xs font-bold transition-colors"
+                                                        >−</button>
+                                                        <input
+                                                            id="room-capacity-limit-wizard"
+                                                            name="roomCapacityLimitWizard"
+                                                            type="number" min={1} max={200}
+                                                            value={roomCapacityLimit}
+                                                            onChange={e => setRoomCapacityLimit(e.target.value)}
+                                                            className="w-10 h-5 text-center text-[12px] font-bold text-indigo-700 focus:outline-none placeholder:text-slate-400 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setRoomCapacityLimit(v => String(Math.min(200, (Number(v) || 0) + 1)))}
+                                                            className="w-5 h-5 rounded-md bg-slate-50 border border-slate-200 text-slate-500 hover:bg-slate-100 flex items-center justify-center text-xs font-bold transition-colors"
+                                                        >+</button>
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => setRoomCapacityLimit('30')}
+                                                        className="text-[9px] font-extrabold text-indigo-600 hover:bg-indigo-100 px-2 py-1 rounded-md transition-colors uppercase"
+                                                    >Default</button>
+                                                </div>
                                             </div>
-                                            <div className="flex items-center gap-1">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setRoomCapacityLimit(v => String(Math.max(1, (Number(v) || 0) - 1)))}
-                                                    className="w-6 h-6 rounded-md bg-white border border-slate-300 text-slate-500 hover:bg-slate-100 hover:border-slate-400 flex items-center justify-center text-sm font-bold transition-colors"
-                                                    aria-label="Decrease room cap"
-                                                >−</button>
-                                                <input
-                                                    id="room-capacity-limit-wizard"
-                                                    name="roomCapacityLimitWizard"
-                                                    type="number" min={1} max={200}
-                                                    value={roomCapacityLimit}
-                                                    placeholder="40"
-                                                    onChange={e => setRoomCapacityLimit(e.target.value)}
-                                                    className="w-12 h-6 text-center text-[12px] font-bold text-indigo-700 border border-indigo-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400/50 focus:border-indigo-500 placeholder:text-slate-400 placeholder:font-normal [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setRoomCapacityLimit(v => String(Math.min(200, (Number(v) || 0) + 1)))}
-                                                    className="w-6 h-6 rounded-md bg-white border border-slate-300 text-slate-500 hover:bg-slate-100 hover:border-slate-400 flex items-center justify-center text-sm font-bold transition-colors"
-                                                    aria-label="Increase room cap"
-                                                >+</button>
-                                            </div>
-                                        </div>
+                                        ) : (
+                                            <button 
+                                                onClick={() => setRoomCapacityLimit('29')}
+                                                className="w-full flex items-center justify-center gap-2 py-2 border border-dashed border-slate-300 rounded-xl text-slate-400 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50/30 transition-all text-[11px] font-semibold"
+                                            >
+                                                <LayoutGrid size={12} />
+                                                Set Custom Room Capacity (Default: 30)
+                                            </button>
+                                        )}
                                     </div>
 
                                 </div>

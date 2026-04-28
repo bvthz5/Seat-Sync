@@ -330,10 +330,15 @@ const ensureSeatsExist = async (room: Room, transaction?: any): Promise<void> =>
  *  GET /api/seating/series
  *  Returns all exam series for the optional filter dropdown
  * ════════════════════════════════════════════════════════════ */
-export const getSeries = async (_req: Request, res: Response) => {
+export const getSeries = async (req: Request, res: Response) => {
     try {
+        const { examType } = req.query;
+        const where: any = {};
+        if (examType) where.ExamType = String(examType);
+
         const series = await ExamSeries.findAll({
-            attributes: ["ExamSeriesID", "SeriesName", "IsActive"],
+            attributes: ["ExamSeriesID", "SeriesName", "IsActive", "ExamType"],
+            where,
             order: [["ExamSeriesID", "DESC"]],
         });
         res.json(series);
@@ -355,20 +360,20 @@ export const getExamDates = async (req: Request, res: Response) => {
         if (seriesId) where.ExamSeriesID = Number(seriesId);
 
         const exams = await Exam.findAll({
-            attributes: ["ExamDate", "Session"],
+            attributes: ["ExamDate", "Session", "ExamName"],
             where,
             order: [["ExamDate", "ASC"]],
         });
 
         // Group by date+session to get counts
-        const slotMap = new Map<string, { examDate: string; session: string; examCount: number }>();
+        const slotMap = new Map<string, { examDate: string; session: string; examCount: number; examName: string }>();
         for (const exam of exams) {
             const dateStr = typeof exam.ExamDate === "string"
                 ? (exam.ExamDate as string).split("T")[0]
                 : new Date(exam.ExamDate).toISOString().split("T")[0];
             const key = `${dateStr}_${exam.Session}`;
             if (!slotMap.has(key)) {
-                slotMap.set(key, { examDate: dateStr!, session: exam.Session, examCount: 0 });
+                slotMap.set(key, { examDate: dateStr!, session: exam.Session, examCount: 0, examName: exam.ExamName });
             }
             slotMap.get(key)!.examCount++;
         }
@@ -1245,7 +1250,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
          * ══════════════════════════════════════════════════════ */
         if (examType === 'EndSemester') {
             const rawCap = Number(roomCapacityLimit);
-            const capLimit = roomCapacityLimit && !isNaN(rawCap) && rawCap > 0 ? rawCap : 40;
+            const capLimit = roomCapacityLimit && !isNaN(rawCap) && rawCap > 0 ? rawCap : 30;
 
             // ── Already-allocated excludes ──
             const selectedHallSetES = new Set<number>((hallIds as number[]).map((id: number) => Number(id)));
@@ -1359,8 +1364,8 @@ export const bulkAssign = async (req: Request, res: Response) => {
                 cappedByRoom.get(rid)!.push(seat);
             }
 
-            const targetHallsES = await Room.findAll({ where: { RoomID: { [Op.in]: hallIds } }, transaction });
-            let hallIdsToUseES = [...(hallIds as number[]).map(Number)];
+            const targetHallsES = await Room.findAll({ where: { RoomID: { [Op.in]: safeHallIds } }, transaction });
+            let hallIdsToUseES = [...safeHallIds];
             if (shuffleRooms) {
                 for (let i = hallIdsToUseES.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
@@ -1413,30 +1418,23 @@ export const bulkAssign = async (req: Request, res: Response) => {
                 pool.students = createInterleavedQueue(regular, supply);
             }
 
-            // Enhanced pool picker with continuous column filling
-            const pickPoolForContinuousColumn = (colIdx: number, excludeCode?: string): { code: string; students: any[] } | null => {
-                const availablePools = excludeCode 
-                    ? subjectPools.filter(p => p.code !== excludeCode && p.students.length > 0)
-                    : subjectPools.filter(p => p.students.length > 0);
+            // Adaptive Dynamic Pool Picker (Weighted Locked-Column Model)
+            const getBestAvailablePool = (excludeCodes: string[]): { code: string; students: any[] } | null => {
+                const activePools = subjectPools.filter(p => p.students.length > 0);
+                if (activePools.length === 0) return null;
                 
-                if (availablePools.length === 0) return null;
+                // Rule 8: Final Stage Relaxation - If only 1 subject remains, allow adjacency to fill seats
+                if (activePools.length === 1) return activePools[0] || null;
+
+                // Rule 3: Continuity & Adjacency - Largest pool that isn't in excludeCodes
+                const candidates = activePools
+                    .filter(p => !excludeCodes.includes(p.code))
+                    .sort((a, b) => b.students.length - a.students.length);
                 
-                // If only one pool available, use it (prevents column breaking)
-                if (availablePools.length === 1) return availablePools[0]!;
+                if (candidates.length > 0) return candidates[0] || null;
                 
-                // Column striping: even columns prioritize largest pool, odd columns rotate
-                if (colIdx % 2 === 0) {
-                    // Even columns: prioritize largest pool (primary subject)
-                    return availablePools.sort((a, b) => b.students.length - a.students.length)[0]!;
-                } else {
-                    // Odd columns: rotate through remaining pools
-                    const largestPool = availablePools.sort((a, b) => b.students.length - a.students.length)[0]!;
-                    const otherPools = availablePools.filter(p => p.code !== largestPool.code);
-                    if (otherPools.length > 0) {
-                        return otherPools[colIdx % otherPools.length]!;
-                    }
-                    return largestPool; // Fallback to largest if only one left
-                }
+                // No valid non-conflicting pool found — return null to signal a necessary gap
+                return null;
             };
 
             // Smart backfill: find next best pool when current pool is exhausted
@@ -1504,96 +1502,95 @@ export const bulkAssign = async (req: Request, res: Response) => {
                 let hallFilledES = 0;
                 let columnContinues = true;
 
-                // Process each row (column) continuously
+                // Process each row (column) continuously using Locked-Column logic
+                let lastColumnSubjectCode: string | undefined = undefined;
                 for (const row of allRowsES) {
-                    if (totalRemaining() === 0) break; // Global stop condition
+                    if (totalRemaining() === 0) break;
 
-                    const colIdx = String(row).toUpperCase().charCodeAt(0) - 65;
-                    let currentPool = pickPoolForContinuousColumn(colIdx);
+                    // Pick primary subject for this column (Avoid previous column subject)
+                    let currentPool = getBestAvailablePool(lastColumnSubjectCode ? [lastColumnSubjectCode] : []);
                     
                     if (!currentPool) {
-                        // No pool available - try smart backfill
-                        currentPool = getSmartBackfillPool();
-                        if (!currentPool) break; // Truly no students left
+                        // Unavoidable gap: only one subject remains and it was in the previous column
+                        lastColumnSubjectCode = undefined;
+                        continue;
                     }
 
-                    // Record primary subject for this row
-                    const sampleStudent = currentPool.students[0];
-                    rowPrimarySubjectMap[hallIdNum][row] = sampleStudent
-                        ? `${sampleStudent._subjectName ?? ''} (${currentPool.code})`
-                        : currentPool.code;
+                    const columnStartSubjectCode = currentPool.code;
+                    let lastAssignedCodeInColumn: string | undefined = undefined;
+
+                    // Record primary subject label for this row (UI display)
+                    rowPrimarySubjectMap[hallIdNum][row] = `${currentPool.students[0]?._subjectName ?? ''} (${currentPool.code})`;
 
                     const benchNums = Object.keys(rowBenchMap[row]!).map(Number).sort((a, b) => a - b);
                     
-                    // CONTINUOUS COLUMN FILLING - No breaking mid-column
                     for (const benchNum of benchNums) {
                         const benchSeats = (rowBenchMap[row]![benchNum] ?? []).sort(sortSeatsByPosition);
                         const benchKey = `${hallIdNum}-${row}-${benchNum}`;
                         
                         for (const seat of benchSeats) {
-                            // HALL FILL GUARANTEE: Keep trying until seat is filled or no students remain
                             let studentAssigned = false;
                             let attempts = 0;
-                            const maxAttempts = subjectPools.length + 1; // Prevent infinite loops
+                            const maxAttempts = subjectPools.length + 1;
                             
                             while (!studentAssigned && attempts < maxAttempts && totalRemaining() > 0) {
                                 attempts++;
                                 
-                                // If current pool exhausted, get smart backfill
+                                // MID-COLUMN EXHAUSTION: If pool ends mid-column, pick next best non-conflicting
                                 if (!currentPool || currentPool.students.length === 0) {
-                                    const prevPoolCode = currentPool?.code;
-                                    currentPool = getSmartBackfillPool(prevPoolCode);
-                                    if (!currentPool) break; // No students left
+                                    // Try to avoid what we started this column with AND what was in the previous column
+                                    const exclusions = [columnStartSubjectCode];
+                                    if (lastColumnSubjectCode) exclusions.push(lastColumnSubjectCode);
+                                    
+                                    currentPool = getBestAvailablePool(exclusions);
+                                    if (!currentPool) break; 
                                 }
-
-                                // Double-check we have a valid pool
-                                if (!currentPool || currentPool.students.length === 0) break;
 
                                 const candidateStudent = currentPool.students[0];
                                 const subjExamId = examIdBySubjectCode[currentPool.code];
                                 
                                 if (subjExamId === undefined) {
-                                    console.warn(`[EndSem] No ExamID for "${currentPool.code}" — student discarded`);
-                                    currentPool.students.shift(); // Remove invalid student
+                                    currentPool.students.shift();
                                     continue;
                                 }
 
-                                // DEPARTMENT CONFLICT CHECK
+                                // BENCH SAFETY: Keep department separation
                                 const benchAssignments = benchAssignmentTracker.get(benchKey) || [];
-                                if (hasDepartmentConflict(candidateStudent, benchAssignments)) {
-                                    // Try next student in same pool
+                                // Relaxation rule: If only 1 subject remains, we may allow same dept if unavoidable (at end of room)
+                                const activePoolCount = subjectPools.filter(p => p.students.length > 0).length;
+                                const isFinalStage = activePoolCount === 1;
+
+                                if (!isFinalStage && hasDepartmentConflict(candidateStudent, benchAssignments)) {
                                     if (currentPool.students.length > 1) {
-                                        // Move conflicting student to back and try next
-                                        const conflictStudent = currentPool.students.shift()!;
-                                        currentPool.students.push(conflictStudent);
+                                        currentPool.students.push(currentPool.students.shift()!);
                                         continue;
                                     } else {
-                                        // Only one student in pool and it conflicts, switch pools
-                                        const prevPoolCode = currentPool.code;
-                                        currentPool = getSmartBackfillPool(prevPoolCode);
-                                        if (!currentPool || currentPool.students.length === 0) break;
-                                        continue;
+                                        // Try switching pool mid-bench if possible
+                                        const exclusions = [currentPool.code];
+                                        if (lastColumnSubjectCode) exclusions.push(lastColumnSubjectCode);
+                                        const altPool = getBestAvailablePool(exclusions);
+                                        if (altPool) {
+                                            currentPool = altPool;
+                                            continue;
+                                        }
+                                        break; 
                                     }
                                 }
 
-                                // ASSIGN STUDENT
                                 const student = currentPool.students.shift();
                                 if (student) {
                                     pushAllocation(allNewAllocsES, subjExamId, seat, student);
-                                    
-                                    // Track bench assignment for conflict detection
                                     benchAssignments.push({ student, seat });
                                     benchAssignmentTracker.set(benchKey, benchAssignments);
-                                    
                                     hallFilledES++;
                                     studentAssigned = true;
+                                    lastAssignedCodeInColumn = currentPool.code;
                                 }
                             }
-                            
-                            // If still no student assigned after all attempts, break (global exhaustion)
-                            if (!studentAssigned && totalRemaining() === 0) break;
                         }
                     }
+                    // Update continuity tracker for NEXT column
+                    lastColumnSubjectCode = lastAssignedCodeInColumn;
                 }
 
                 hallResultsES.push({
