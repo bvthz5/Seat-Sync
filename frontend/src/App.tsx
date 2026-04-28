@@ -33,7 +33,7 @@ function App() {
           <Route path="/invigilator/request" element={<InvigilatorRequest />} />
           <Route element={<RequireAuth allowedRoles={['invigilator']} redirectTo="/invigilator/login" />}>
             <Route path="/invigilator/dashboard" element={<InvigilatorDashboard />} />
-            <Route path="/invigilator/attendance" element={<AttendanceConsole />} />
+            <Route path="/invigilator/attendance/:id?" element={<AttendanceConsole />} />
             <Route path="/invigilator/profile" element={<InvigilatorProfile />} />
           </Route>
 

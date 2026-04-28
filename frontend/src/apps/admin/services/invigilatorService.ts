@@ -90,6 +90,18 @@ export const invigilatorService = {
     getAssignments: async (date: string, session: string) => {
         const response = await api.get('/invigilators/assignments', { params: { date, session } });
         return response.data as { hallId: number; hallName: string; invigilatorId: number; invigilatorName: string; department?: string }[];
+    },
+    getDashboardData: async () => {
+        const response = await api.get('/invigilators/dashboard');
+        return response.data;
+    },
+    getAssignmentDetails: async (id: string | number) => {
+        const response = await api.get(`/invigilators/assignments/${id}`);
+        return response.data;
+    },
+    saveAttendance: async (examId: number, students: { StudentID: number, IsPresent: boolean }[]) => {
+        const response = await api.post('/invigilators/attendance/save', { examId, students });
+        return response.data;
     }
 };
 

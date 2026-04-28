@@ -1,103 +1,156 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    ArrowLeft, Users, CheckCircle2, UserX, AlertCircle,
+    ArrowLeft, Users, CheckCircle2, UserX, AlertCircle, AlertTriangle,
     Search, Filter, Save, FileSignature,
-    ChevronDown, Printer, FileText, Upload, LayoutGrid
+    ChevronDown, Printer, FileText, Upload, LayoutGrid, RefreshCcw, ClipboardList
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { invigilatorService } from '../../admin/services/invigilatorService';
+import { SeatingService } from '../../admin/services/seatingService';
 
-// --- MOCK DATA ---
-const ROOM_INFO = {
-    roomCode: "A-204",
-    block: "Block 2",
-    exam: "OS – MCA (FN Session)",
-    time: "9:30 - 12:30",
-    totalSeats: 32,
-    supervisor: "Prof. John Mathew",
-};
-
+// --- TYPES ---
 type AttendanceStatus = 'present' | 'absent' | 'unmarked';
 
-interface StudentSeat {
-    id: string; // e.g., "A1"
-    col: string; // "A"
-    row: number; // 1
-    studentId: string; // e.g., "MCA204"
-    name: string;
-    photoUrl?: string;
-    status: AttendanceStatus;
+interface SeatInfo {
+    SeatID: number;
+    RowLabel: string;
+    BenchNumber: number;
+    SeatNumber: number;
+    IsActive: boolean;
 }
 
-const generateMockSeats = (): StudentSeat[] => {
-    const cols = ['A', 'B', 'C', 'D'];
-    const rows = 8; // 32 total
-    let seats: StudentSeat[] = [];
-    let studentCounter = 100;
+interface Bench {
+    rowLabel: string;
+    benchNumber: number;
+    seats: SeatInfo[];
+}
 
-    cols.forEach(col => {
-        for (let i = 1; i <= rows; i++) {
-            seats.push({
-                id: `${col}${i}`,
-                col,
-                row: i,
-                studentId: `MCA2026${studentCounter++}`,
-                name: `Student ${col}${i}`,
-                status: 'unmarked'
-            });
-        }
-    });
-    return seats;
-};
-
-// --- ANIMATIONS ---
-const containerVariants = {
-    hidden: { opacity: 0 },
-    show: {
-        opacity: 1,
-        transition: { staggerChildren: 0.03 }
-    }
-};
-
-const itemVariants: any = {
-    hidden: { opacity: 0, scale: 0.9 },
-    show: { opacity: 1, scale: 1, transition: { type: "spring", stiffness: 300, damping: 20 } }
-};
+interface Assignment {
+    seatId: number;
+    studentId: number;
+    studentName: string;
+    registerNumber: string;
+    deptCode: string;
+    side: 'left' | 'right';
+    isEligible?: boolean;
+    isBlocked?: boolean;
+    subjectCode?: string;
+    subjectName?: string;
+    attendanceStatus?: AttendanceStatus;
+}
 
 export default function AttendanceConsole() {
+    const { id: assignmentId } = useParams();
     const navigate = useNavigate();
-    const [seats, setSeats] = useState<StudentSeat[]>(generateMockSeats());
+    
+    // States
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [assignment, setAssignment] = useState<any>(null);
+    const [benches, setBenches] = useState<Bench[]>([]);
+    const [studentAllocations, setStudentAllocations] = useState<Record<number, Assignment>>({});
+    const [localAttendance, setLocalAttendance] = useState<Record<number, AttendanceStatus>>({});
+    
     const [searchQuery, setSearchQuery] = useState('');
     const [filter, setFilter] = useState<'all' | 'present' | 'absent' | 'unmarked'>('all');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showSignatureModal, setShowSignatureModal] = useState(false);
 
-    // Derived Stats
-    const stats = {
-        total: seats.length,
-        present: seats.filter(s => s.status === 'present').length,
-        absent: seats.filter(s => s.status === 'absent').length,
-        unmarked: seats.filter(s => s.status === 'unmarked').length,
+    useEffect(() => {
+        if (assignmentId) fetchData();
+    }, [assignmentId]);
+
+    const fetchData = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            
+            // 1. Get assignment details
+            const duty = await invigilatorService.getAssignmentDetails(assignmentId!);
+            setAssignment(duty);
+
+            const examDate = duty.Exam.ExamDate;
+            const session = duty.Exam.Session;
+            const roomId = duty.RoomID;
+
+            // 2. Get hall layout
+            const layout = await SeatingService.getHallLayout(roomId);
+            setBenches(layout.benches || []);
+
+            // 3. Get student allocations
+            const alloc = await SeatingService.getAllocationForHall(examDate, session, roomId);
+            const assignments = alloc.assignments || {};
+            setStudentAllocations(assignments);
+
+            // Initialize local attendance state
+            const initialAttendance: Record<number, AttendanceStatus> = {};
+            Object.values(assignments).forEach((a: any) => {
+                initialAttendance[a.seatId] = a.attendanceStatus || 'unmarked';
+            });
+            setLocalAttendance(initialAttendance);
+
+        } catch (err: any) {
+            console.error("Failed to fetch attendance data:", err);
+            setError(err.response?.data?.message || err.message || "Failed to load console");
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const handleSeatClick = (seatId: string) => {
-        setSeats(prev => prev.map(seat => {
-            if (seat.id === seatId) {
-                // Cycle: unmarked -> present -> absent -> unmarked
-                let nextStatus: AttendanceStatus = 'present';
-                if (seat.status === 'present') nextStatus = 'absent';
-                if (seat.status === 'absent') nextStatus = 'unmarked'; // or present, if you don't allow returning to unmarked
+    // Derived Bench Rows for Layout
+    const benchRows = useMemo(() => {
+        const rows: Record<string, Bench[]> = {};
+        for (const bench of benches) {
+            if (!rows[bench.rowLabel]) rows[bench.rowLabel] = [];
+            rows[bench.rowLabel].push(bench);
+        }
+        return Object.keys(rows)
+            .sort()
+            .map((rowLabel) => ({
+                rowLabel,
+                benches: (rows[rowLabel] || []).sort((a, b) => a.benchNumber - b.benchNumber),
+            }));
+    }, [benches]);
 
-                // Play sound or haptic optionally here
-                return { ...seat, status: nextStatus };
-            }
-            return seat;
-        }));
+    // Derived Stats
+    const stats = useMemo(() => {
+        const allAllocatedSeatIds = Object.keys(studentAllocations).map(Number);
+        const present = allAllocatedSeatIds.filter(sid => localAttendance[sid] === 'present').length;
+        const absent = allAllocatedSeatIds.filter(sid => localAttendance[sid] === 'absent').length;
+        const unmarked = allAllocatedSeatIds.filter(sid => !localAttendance[sid] || localAttendance[sid] === 'unmarked').length;
+        
+        return {
+            total: allAllocatedSeatIds.length,
+            present,
+            absent,
+            unmarked,
+        };
+    }, [studentAllocations, localAttendance]);
+
+    const handleSeatClick = (seatId: number) => {
+        if (!studentAllocations[seatId]) return; // No student assigned to this seat
+
+        setLocalAttendance(prev => {
+            const current = prev[seatId] || 'unmarked';
+            let next: AttendanceStatus = 'present';
+            if (current === 'present') next = 'absent';
+            else if (current === 'absent') next = 'unmarked';
+            
+            return { ...prev, [seatId]: next };
+        });
     };
 
     const handleMarkAllPresent = () => {
-        setSeats(prev => prev.map(s => s.status === 'unmarked' ? { ...s, status: 'present' } : s));
+        const nextAttendance = { ...localAttendance };
+        Object.keys(studentAllocations).forEach(seatIdStr => {
+            const seatId = Number(seatIdStr);
+            if (!nextAttendance[seatId] || nextAttendance[seatId] === 'unmarked') {
+                nextAttendance[seatId] = 'present';
+            }
+        });
+        setLocalAttendance(nextAttendance);
         toast.success("Remaining unmarked students set to Present.");
     };
 
@@ -109,28 +162,95 @@ export default function AttendanceConsole() {
         setShowSignatureModal(true);
     };
 
-    const confirmSubmission = () => {
+    const confirmSubmission = async () => {
         setIsSubmitting(true);
-        setTimeout(() => {
-            setIsSubmitting(false);
-            setShowSignatureModal(false);
+        try {
+            const students = Object.values(studentAllocations).map(a => ({
+                StudentID: a.studentId,
+                IsPresent: localAttendance[a.seatId] === 'present'
+            }));
+
+            await invigilatorService.saveAttendance(Number(assignmentId), students);
+            
             toast.success("Attendance locked and submitted successfully.");
             navigate('/invigilator/dashboard');
-        }, 1500);
+        } catch (error: any) {
+            console.error("Submission error:", error);
+            toast.error(error.response?.data?.message || "Failed to submit attendance");
+        } finally {
+            setIsSubmitting(false);
+            setShowSignatureModal(false);
+        }
+    };
+
+    if (!assignmentId) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center font-sans">
+                <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center text-blue-600 mb-4 shadow-sm border border-blue-200">
+                    <ClipboardList size={32} />
+                </div>
+                <h2 className="text-xl font-bold text-slate-800 mb-2">Duty Not Selected</h2>
+                <p className="text-slate-500 max-w-md mb-6">Please select an active duty from your dashboard to mark attendance for a specific room.</p>
+                <button onClick={() => navigate('/invigilator/dashboard')} className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all">
+                    Go to Dashboard
+                </button>
+            </div>
+        );
+    }
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4 font-sans">
+                <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+                <p className="text-slate-500 font-bold animate-pulse uppercase tracking-widest text-xs">Initializing Console...</p>
+            </div>
+        );
+    }
+
+    if (error || !assignment) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center font-sans">
+                <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center text-red-600 mb-4 shadow-sm border border-red-200">
+                    <AlertTriangle size={32} />
+                </div>
+                <h2 className="text-xl font-bold text-slate-800 mb-2">Console Error</h2>
+                <p className="text-slate-500 max-w-md mb-6">{error || "Assignment details not found."}</p>
+                <button onClick={fetchData} className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center gap-2">
+                    <RefreshCcw size={18} /> Retry
+                </button>
+            </div>
+        );
+    }
+
+    const ROOM_INFO = {
+        roomCode: assignment.Room?.RoomCode || "Unknown",
+        block: assignment.Room?.Block?.BlockName || "Main Block",
+        exam: assignment.Exam?.ExamName || "Internal Exam",
+        time: assignment.Exam?.Session === "FN" ? "9:30 - 12:30" : "13:30 - 16:30",
+        totalSeats: stats.total,
+        supervisor: "Faculty Invigilator",
     };
 
     // Filter Logic
-    const filteredSeats = seats.filter(s => {
-        if (filter !== 'all' && s.status !== filter) return false;
+    const filteredAllocations = Object.values(studentAllocations).filter(a => {
+        const status = localAttendance[a.seatId] || 'unmarked';
+        if (filter !== 'all' && status !== filter) return false;
         if (searchQuery) {
-            return s.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                s.studentId.toLowerCase().includes(searchQuery.toLowerCase());
+            const q = searchQuery.toLowerCase();
+            return a.registerNumber.toLowerCase().includes(q) ||
+                   a.studentName.toLowerCase().includes(q);
         }
         return true;
+    }).sort((a, b) => {
+        // Sort by seat label (Row + Bench + Side)
+        const seatA = benches.flatMap(b => b.seats).find(s => s.SeatID === a.seatId);
+        const seatB = benches.flatMap(b => b.seats).find(s => s.SeatID === b.seatId);
+        if (!seatA || !seatB) return 0;
+        if (seatA.RowLabel !== seatB.RowLabel) return seatA.RowLabel.localeCompare(seatB.RowLabel);
+        return seatA.BenchNumber - seatB.BenchNumber;
     });
 
-    // Grouping by columns for layout
-    const cols = ['A', 'B', 'C', 'D'];
+    // Grouping for layout is handled by benchRows state
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] flex flex-col font-sans selection:bg-blue-200">
@@ -258,38 +378,69 @@ export default function AttendanceConsole() {
 
                     {/* Student List View */}
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-1.5 bg-slate-50/50">
-                        {filteredSeats.map(seat => (
-                            <div
-                                key={seat.id}
-                                onClick={() => handleSeatClick(seat.id)}
-                                className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer select-none group ${seat.status === 'present' ? 'bg-emerald-50/50 border-emerald-100 hover:border-emerald-200' :
-                                    seat.status === 'absent' ? 'bg-red-50/50 border-red-100 hover:border-red-200' :
-                                        'bg-white border-slate-200 hover:border-blue-300 hover:shadow-sm'
+                        {filteredAllocations.map(alloc => {
+                            const status = localAttendance[alloc.seatId] || 'unmarked';
+                            const seat = benches.flatMap(b => b.seats).find(s => s.SeatID === alloc.seatId);
+                            const seatLabel = seat ? `${seat.RowLabel}${seat.BenchNumber}` : '--';
+                            
+                            return (
+                                <div
+                                    key={alloc.seatId}
+                                    className={`flex items-center justify-between p-3 rounded-xl border transition-all select-none group ${
+                                        status === 'present' ? 'bg-emerald-50/50 border-emerald-100' :
+                                        status === 'absent' ? 'bg-red-50/50 border-red-100' :
+                                        'bg-white border-slate-200'
                                     }`}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${seat.status === 'present' ? 'bg-emerald-100 text-emerald-700' :
-                                        seat.status === 'absent' ? 'bg-red-100 text-red-700' :
-                                            'bg-slate-100 text-slate-600 group-hover:bg-blue-50 group-hover:text-blue-700'
-                                        }`}>
-                                        {seat.id}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div 
+                                            onClick={() => handleSeatClick(alloc.seatId)}
+                                            className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all cursor-pointer ${
+                                                status === 'present' ? 'bg-emerald-500 border-emerald-500 text-white' :
+                                                status === 'absent' ? 'bg-red-500 border-red-500 text-white' :
+                                                'bg-white border-slate-300 hover:border-blue-400'
+                                            }`}
+                                        >
+                                            {status === 'present' && <CheckCircle2 size={14} strokeWidth={3} />}
+                                            {status === 'absent' && <UserX size={14} strokeWidth={3} />}
+                                        </div>
+                                        
+                                        <div 
+                                            onClick={() => handleSeatClick(alloc.seatId)}
+                                            className="flex flex-col cursor-pointer"
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded uppercase">{seatLabel}</span>
+                                                <span className={`font-black text-sm ${
+                                                    status === 'present' ? 'text-emerald-900' :
+                                                    status === 'absent' ? 'text-red-900' :
+                                                    'text-slate-700'
+                                                }`}>{alloc.registerNumber}</span>
+                                            </div>
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight truncate max-w-[150px]">{alloc.studentName}</span>
+                                        </div>
                                     </div>
-                                    <div className="flex flex-col">
-                                        <span className={`font-bold text-sm ${seat.status === 'present' ? 'text-emerald-900' :
-                                            seat.status === 'absent' ? 'text-red-900' :
-                                                'text-slate-700'
-                                            }`}>{seat.studentId}</span>
-                                        <span className="text-[10px] font-semibold text-slate-400">{seat.name}</span>
+                                    
+                                    <div className="flex gap-1">
+                                        <button 
+                                            onClick={() => setLocalAttendance(prev => ({ ...prev, [alloc.seatId]: 'present' }))}
+                                            className={`p-1.5 rounded-lg transition-all ${status === 'present' ? 'bg-emerald-100 text-emerald-600' : 'text-slate-300 hover:text-emerald-500 hover:bg-emerald-50'}`}
+                                            title="Mark Present"
+                                        >
+                                            <CheckCircle2 size={16} />
+                                        </button>
+                                        <button 
+                                            onClick={() => setLocalAttendance(prev => ({ ...prev, [alloc.seatId]: 'absent' }))}
+                                            className={`p-1.5 rounded-lg transition-all ${status === 'absent' ? 'bg-red-100 text-red-600' : 'text-slate-300 hover:text-red-500 hover:bg-red-50'}`}
+                                            title="Mark Absent"
+                                        >
+                                            <UserX size={16} />
+                                        </button>
                                     </div>
                                 </div>
-                                <div>
-                                    {seat.status === 'present' && <CheckCircle2 size={18} className="text-emerald-500" strokeWidth={3} />}
-                                    {seat.status === 'absent' && <UserX size={18} className="text-red-500" strokeWidth={3} />}
-                                    {seat.status === 'unmarked' && <div className="w-4 h-4 rounded-full border-2 border-slate-300 group-hover:border-blue-400"></div>}
-                                </div>
-                            </div>
-                        ))}
-                        {filteredSeats.length === 0 && (
+                            );
+                        })}
+                        {filteredAllocations.length === 0 && (
                             <div className="py-10 text-center flex flex-col items-center opacity-50">
                                 <Search className="w-8 h-8 text-slate-400 mb-2" />
                                 <span className="text-sm font-bold text-slate-500">No students match filter</span>
@@ -323,59 +474,124 @@ export default function AttendanceConsole() {
                         <div className="max-w-5xl mx-auto">
 
                             {/* Teacher Desk indicator */}
-                            <div className="w-64 h-12 bg-[#0F172A] mx-auto rounded-t-xl rounded-b-sm border-b-4 border-slate-800 shadow-xl flex items-center justify-center mb-16 relative">
-                                <span className="text-white font-bold text-sm tracking-widest uppercase opacity-80">Teacher's Desk</span>
-                                <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-slate-400">
-                                    <ChevronDown size={20} className="animate-bounce" />
-                                </div>
+                            <div className="w-48 h-8 bg-[#0F172A] mx-auto rounded-t-xl rounded-b-sm border-b-2 border-slate-800 shadow-xl flex items-center justify-center mb-10 relative">
+                                <span className="text-white font-bold text-[8px] tracking-widest uppercase opacity-80">Teacher's Desk</span>
                             </div>
 
-                            {/* Column Grid Layout */}
-                            <motion.div variants={containerVariants} initial="hidden" animate="show" className="flex justify-center gap-8 sm:gap-12 md:gap-16">
-                                {cols.map(col => (
-                                    <div key={col} className="flex flex-col gap-3">
-                                        <div className="text-center font-black text-slate-300 text-2xl mb-2">{col}</div>
-                                        {/* Sort seats for this column by row */}
-                                        {seats.filter(s => s.col === col).sort((a, b) => a.row - b.row).map(seat => (
-                                            <motion.button
-                                                variants={itemVariants}
-                                                key={seat.id}
-                                                onClick={() => handleSeatClick(seat.id)}
-                                                className={`
-                                                    relative w-[70px] h-[75px] sm:w-[85px] sm:h-[90px] rounded-xl flex flex-col items-center justify-center p-2 shadow-sm transition-all active:scale-95 group focus:outline-none focus:ring-4 focus:ring-blue-500/30
-                                                    ${seat.status === 'present' ? 'bg-gradient-to-br from-emerald-400 to-emerald-500 text-white shadow-emerald-500/20 shadow-lg border-b-4 border-emerald-600' :
-                                                        seat.status === 'absent' ? 'bg-gradient-to-br from-red-500 to-red-600 text-white shadow-red-500/20 shadow-lg border-b-4 border-red-700' :
-                                                            'bg-white text-slate-700 hover:bg-slate-50 border-b-4 border-slate-200 hover:border-blue-200'}
-                                                    ${(searchQuery && (seat.id.toLowerCase().includes(searchQuery.toLowerCase()) || seat.studentId.toLowerCase().includes(searchQuery.toLowerCase()))) ? 'ring-2 ring-indigo-500 ring-offset-2' : ''}
-                                                    ${(filter !== 'all' && seat.status !== filter) ? 'opacity-20 grayscale' : 'opacity-100'}
-                                                `}
-                                            >
-                                                {/* Seat Badge */}
-                                                <div className={`absolute -top-2.5 -left-2.5 w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black shadow-sm ${seat.status === 'present' ? 'bg-emerald-700 text-emerald-100' :
-                                                    seat.status === 'absent' ? 'bg-red-800 text-red-100' :
-                                                        'bg-[#0F172A] text-white'
-                                                    }`}>
-                                                    {seat.id}
+                            {/* Rotated Grid Layout - Unified Grid for Perfect Alignment */}
+                            <div className="pb-32 flex justify-center">
+                                {benchRows.length === 0 ? (
+                                    <div className="py-20 text-center opacity-30 flex flex-col items-center justify-center min-w-[600px]">
+                                        <DoorOpen size={40} className="mb-4 stroke-1" />
+                                        <h3 className="text-base font-black uppercase tracking-widest text-slate-500">No Active Layout</h3>
+                                    </div>
+                                ) : (
+                                    <div 
+                                        className="grid gap-x-8 gap-y-6 items-center"
+                                        style={{ 
+                                            gridTemplateColumns: `min-content repeat(${benchRows.length}, min-content)`,
+                                            justifyContent: 'center'
+                                        }}
+                                    >
+                                        {/* COLUMN HEADERS ROW */}
+                                        <div /> {/* Row Number Spacer */}
+                                        {benchRows.map(({ rowLabel }) => (
+                                            <div key={rowLabel} className="flex justify-center pb-4">
+                                                <div className="w-10 h-10 rounded-xl bg-slate-900 shadow-xl flex items-center justify-center text-lg font-black text-white border border-slate-800/50 transform -rotate-1">
+                                                    {rowLabel}
+                                                </div>
+                                            </div>
+                                        ))}
+
+                                        {/* GRID BODY */}
+                                        {Array.from({ length: Math.max(...benchRows.map(r => r.benches.length), 0) }).map((_, benchIdx) => (
+                                            <React.Fragment key={benchIdx}>
+                                                {/* Row Number Label */}
+                                                <div className="flex flex-col items-center justify-center pr-4">
+                                                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">ROW</span>
+                                                    <div className="w-7 h-7 flex items-center justify-center text-[11px] font-black text-blue-600 bg-blue-50 border border-blue-100 rounded-lg shadow-sm">
+                                                        {benchIdx + 1}
+                                                    </div>
                                                 </div>
 
-                                                {/* Content */}
-                                                {seat.status === 'unmarked' ? (
-                                                    <span className="text-[10px] font-bold text-slate-400 mt-1">{seat.studentId}</span>
-                                                ) : seat.status === 'present' ? (
-                                                    <CheckCircle2 size={28} className="text-emerald-100 mt-1" strokeWidth={2.5} />
-                                                ) : (
-                                                    <UserX size={28} className="text-red-100 mt-1" strokeWidth={2.5} />
-                                                )}
+                                                {/* Benches for this index across all columns */}
+                                                {benchRows.map(({ rowLabel, benches: colBenches }) => {
+                                                    const bench = colBenches[benchIdx];
+                                                    if (!bench) return <div key={rowLabel} className="w-[168px]" />; // Matching width of bench + padding
 
-                                            </motion.button>
+                                                    return (
+                                                        <div key={`${rowLabel}-${bench.benchNumber}`} className="flex gap-2.5 p-1.5 bg-white rounded-[2rem] border border-slate-200/80 shadow-sm relative group hover:border-blue-300 transition-all backdrop-blur-sm">
+                                                            {bench.seats.map((seat: any) => {
+                                                                const alloc = studentAllocations[seat.SeatID];
+                                                                const status = localAttendance[seat.SeatID] || 'unmarked';
+                                                                const isSearching = searchQuery && alloc && (
+                                                                    alloc.registerNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                                                    alloc.studentName.toLowerCase().includes(searchQuery.toLowerCase())
+                                                                );
+                                                                const isFiltered = filter !== 'all' && status !== filter;
+
+                                                                return (
+                                                                    <button
+                                                                        key={seat.SeatID}
+                                                                        onClick={() => handleSeatClick(seat.SeatID)}
+                                                                        disabled={!alloc}
+                                                                        className={`
+                                                                            relative w-[75px] h-[100px] rounded-2xl flex flex-col items-center justify-between p-2.5 transition-all active:scale-95 group/seat focus:outline-none border-2
+                                                                            ${!alloc ? 'bg-slate-50 border-2 border-dashed border-slate-100 cursor-not-allowed opacity-20' : 
+                                                                              status === 'present' ? 'bg-emerald-500 border-emerald-600 text-white shadow-emerald-500/20 shadow-lg' :
+                                                                              status === 'absent' ? 'bg-red-500 border-red-600 text-white shadow-red-500/20 shadow-lg' :
+                                                                              'bg-white border-slate-200 text-slate-700 hover:border-blue-400 hover:shadow-md'}
+                                                                            ${isSearching ? 'ring-2 ring-blue-500 ring-offset-2' : ''}
+                                                                            ${isFiltered ? 'opacity-20 grayscale' : 'opacity-100'}
+                                                                        `}
+                                                                    >
+                                                                        {/* Side Indicator */}
+                                                                        <div className={`absolute top-1.5 ${seat.SeatNumber === 1 ? 'left-2' : 'right-2'} text-[7px] font-black uppercase opacity-40`}>
+                                                                            {seat.SeatNumber === 1 ? 'L' : 'R'}
+                                                                        </div>
+
+                                                                        {alloc ? (
+                                                                            <div className="mt-2.5 flex flex-col items-center">
+                                                                                <span className={`text-[9px] font-black tracking-tighter leading-none mb-1 ${status === 'unmarked' ? 'text-[#0F172A]' : 'text-white'}`}>
+                                                                                    {alloc.registerNumber}
+                                                                                </span>
+                                                                                <span className={`text-[7px] font-bold uppercase tracking-tighter truncate w-full text-center ${status === 'unmarked' ? 'text-slate-400' : 'text-white/80'}`}>
+                                                                                    {alloc.studentName.split(' ')[0]}
+                                                                                </span>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div className="flex-1 flex items-center justify-center">
+                                                                                <span className="text-[7px] font-black text-slate-200 tracking-widest uppercase">Vacant</span>
+                                                                            </div>
+                                                                        )}
+
+                                                                        {alloc && (
+                                                                            <div className="mt-auto">
+                                                                                {status === 'present' && <CheckCircle2 size={16} className="text-white" strokeWidth={3} />}
+                                                                                {status === 'absent' && <UserX size={16} className="text-white" strokeWidth={3} />}
+                                                                                {status === 'unmarked' && <div className="w-4 h-4 rounded-full border-2 border-slate-200"></div>}
+                                                                            </div>
+                                                                        )}
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </React.Fragment>
                                         ))}
                                     </div>
-                                ))}
-                            </motion.div>
+                                )}
+                            </div>
 
-                            {/* Room Info Footer in Map */}
-                            <div className="mt-16 text-center text-slate-400 font-medium text-xs">
-                                End of Zone
+
+                            {/* End of Zone */}
+                            <div className="mt-24 text-center">
+                                <div className="inline-flex items-center gap-4 px-6 py-2 bg-slate-200/50 rounded-full text-slate-400 font-bold text-xs uppercase tracking-widest border border-slate-300/50">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-pulse"></div>
+                                    End of Hall Zone
+                                    <div className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-pulse"></div>
+                                </div>
                             </div>
                         </div>
                     </div>

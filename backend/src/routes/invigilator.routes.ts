@@ -4,7 +4,7 @@ import {
     toggleInvigilatorFlag, toggleInvigilatorEligibility, bulkImportInvigilators, clearAllFaculties,
     activateInvigilator, verifyInvigilatorActivationToken, resendInvigilatorActivationLink, requestInvigilatorAccess, getInvigilatorRequests, 
     approveInvigilatorRequest, rejectInvigilatorRequest, getInvigilatorLoadStats, autoAssignInvigilators,
-    saveInvigilatorAssignments, getInvigilatorAssignments
+    saveInvigilatorAssignments, getInvigilatorAssignments, getInvigilatorDashboardData, getAssignmentDetails, saveAttendance
 } from "../controllers/invigilator.controller.js";
 import { AuthMiddleware } from "../middlewares/auth.middleware.js";
 import rateLimit from "express-rate-limit";
@@ -45,20 +45,20 @@ router.post("/activate/resend", resendLimiter, resendInvigilatorActivationLink);
 router.post("/request", requestInvigilatorAccess);
 
 // ==========================================
+// INVIGILATOR PORTAL ROUTES
+// ==========================================
+router.get("/dashboard", AuthMiddleware.authenticated, getInvigilatorDashboardData);
+router.get("/assignments/:id", AuthMiddleware.authenticated, getAssignmentDetails);
+router.post("/attendance/save", AuthMiddleware.authenticated, saveAttendance);
+
+// ==========================================
 // PROTECTED ADMIN ROUTES
 // ==========================================
 // Protect all below routes - accessible by Exam Admin
 router.use((req, res, next) => AuthMiddleware.requireAuth(req, res, next));
 
-
-/**
- * @swagger
- * tags:
- *   name: Invigilator
- *   description: Invigilator management (Root Admin only)
- */
-
 router.get("/", getAllInvigilators);
+// router.get("/dashboard", getInvigilatorDashboardData); // Moved above
 router.get("/stats", getInvigilatorStats);
 router.post("/", createInvigilator);
 router.post("/bulk-import", bulkImportInvigilators);

@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { User, Invigilator, Faculty, InvigilatorAssignment, Exam, UserProfile, SeatAllocation, Seat, Room, InvigilatorRequest, ActivityLog, NotificationRecipient } from "../models/index.js";
+import { User, Invigilator, Faculty, InvigilatorAssignment, Exam, UserProfile, SeatAllocation, Seat, Room, InvigilatorRequest, ActivityLog, NotificationRecipient, Block, Attendance, Student, Subject } from "../models/index.js";
 import { Op } from "sequelize";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
@@ -342,7 +342,8 @@ export const bulkImportInvigilators = async (req: Request, res: Response) => {
                     FullName: nameStr,
                     PasswordHash: await bcrypt.hash("Sjcet@123", 10),
                     Role: "invigilator",
-                    Status: "Active"
+                    IsActive: true,
+                    IsActivated: true
                 } as any, { transaction: t });
 
                 // 2. Create Faculty
@@ -361,11 +362,12 @@ export const bulkImportInvigilators = async (req: Request, res: Response) => {
                 const faculty = await Faculty.create(facultyData, { transaction: t });
 
                 // 3. Create Invigilator link
-                await Invigilator.create({
-                    UserID: user.UserID,
-                    IsEligible: true,
-                    IsFlagged: false
-                }, { transaction: t });
+            await Invigilator.create({
+                UserID: user.UserID,
+                FacultyID: faculty.FacultyID,
+                IsEligible: true,
+                IsFlagged: false
+            }, { transaction: t });
 
                 created.push(faculty.FacultyID);
 
@@ -615,6 +617,7 @@ export const approveInvigilatorRequest = async (req: Request, res: Response) => 
         // 3. Create Invigilator link
         await Invigilator.create({
             UserID: user.UserID,
+            FacultyID: faculty.FacultyID,
             IsEligible: true,
             IsFlagged: false
         }, { transaction: t });
@@ -876,3 +879,265 @@ export const getInvigilatorAssignments = async (req: Request, res: Response) => 
         res.status(500).json({ message: "Internal server error" });
     }
 };
+
+/**
+ * Get real-time dashboard data for the logged-in invigilator
+ */
+export const getInvigilatorDashboardData = async (req: Request, res: Response) => {
+    try {
+        const userId = (req as any).user?.UserID;
+        if (!userId) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+        
+        // 1. Get User and associated Invigilator profile
+        const user = await User.findByPk(userId, {
+            include: [{
+                model: Invigilator,
+                include: [{ model: Faculty }]
+            }]
+        });
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        // Try to get faculty from formal link first
+        let faculty = (user as any).Invigilator?.Faculty;
+
+        // Fallback to searching by Email or Name for legacy records
+        if (!faculty) {
+            faculty = await Faculty.findOne({
+                where: {
+                    [Op.or]: [
+                        { StaffCode: user.Email },
+                        { Name: user.FullName }
+                    ]
+                }
+            });
+        }
+
+        if (!faculty) {
+            return res.status(404).json({ message: "Faculty profile not found for this account" });
+        }
+
+        const today = new Date().toISOString().split('T')[0];
+        const now = new Date();
+        const currentHour = now.getHours();
+        const currentMinute = now.getMinutes();
+        const currentTimeVal = currentHour * 60 + currentMinute;
+
+        // 2. Get duties from today onwards
+        const duties = await InvigilatorAssignment.findAll({
+            where: { InvigilatorID: faculty.FacultyID },
+            include: [
+                {
+                    model: Exam,
+                    where: { ExamDate: { [Op.gte]: today } }
+                },
+                { 
+                    model: Room,
+                    include: [{ model: Block }]
+                }
+            ],
+            order: [[Exam, 'ExamDate', 'ASC'], [Exam, 'Session', 'ASC']]
+        });
+
+        // 3. Get all time assignments for metrics
+        const allAssignmentsCount = await InvigilatorAssignment.count({
+            where: { InvigilatorID: faculty.FacultyID }
+        });
+
+        // 4. Format response
+        const formattedDuties = [];
+        for (const d of duties) {
+            // Get total students in this room for this exam
+            const studentCount = await SeatAllocation.count({
+                where: { ExamID: d.ExamID },
+                include: [{
+                    model: Seat,
+                    where: { RoomID: d.RoomID },
+                    required: true
+                }]
+            });
+
+            // Get present students count
+            const presentCount = await Attendance.count({
+                where: { ExamID: d.ExamID, IsPresent: true },
+                include: [{
+                    model: Student,
+                    required: true,
+                    include: [{
+                        model: SeatAllocation,
+                        where: { ExamID: d.ExamID },
+                        required: true,
+                        include: [{
+                            model: Seat,
+                            where: { RoomID: d.RoomID },
+                            required: true
+                        }]
+                    }]
+                }]
+            });
+
+            const examDate = typeof d.Exam?.ExamDate === 'string' 
+                ? d.Exam.ExamDate 
+                : (d.Exam?.ExamDate as Date).toISOString().split('T')[0];
+
+            let status = "Upcoming";
+            if (examDate === today) {
+                if (d.Exam?.Session === "FN") {
+                    if (currentTimeVal >= 9 * 60 + 0 && currentTimeVal <= 12 * 60 + 30) status = "In Progress";
+                    else if (currentTimeVal > 12 * 60 + 30) status = "Completed";
+                } else if (d.Exam?.Session === "AN") {
+                    if (currentTimeVal >= 13 * 60 + 0 && currentTimeVal <= 16 * 60 + 30) status = "In Progress";
+                    else if (currentTimeVal > 16 * 60 + 30) status = "Completed";
+                }
+            } else if (examDate > today) {
+                status = "Upcoming";
+            }
+
+            formattedDuties.push({
+                id: d.ExamID,
+                exam: d.Exam?.ExamName || "Exam",
+                session: d.Exam?.Session || "FN",
+                date: examDate,
+                roomID: d.RoomID,
+                room: d.Room?.RoomCode || `Room ${d.RoomID}`,
+                block: d.Room?.Block?.BlockName || "Main Block",
+                time: d.Exam?.Session === "FN" ? "9:30 - 12:30" : "13:30 - 16:30",
+                students: studentCount,
+                presentCount: presentCount,
+                status: status
+            });
+        }
+
+        const todayExams = formattedDuties.filter(d => d.date === today);
+        const activeDuty = todayExams.find(d => d.status === "In Progress") || todayExams.find(d => d.status === "Upcoming") || (formattedDuties.length > 0 ? formattedDuties[0] : null);
+        
+        const totalStudentsToday = todayExams.reduce((acc, curr) => acc + curr.students, 0);
+        const totalPresentToday = todayExams.reduce((acc, curr) => acc + curr.presentCount, 0);
+
+        res.json({
+            user: {
+                name: faculty.Name,
+                email: user.Email,
+                department: faculty.Department,
+                designation: faculty.Designation,
+                date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+                status: todayExams.some(d => d.status === "In Progress") ? "active" : "inactive"
+            },
+            metrics: [
+                { title: "Today's Exams", value: todayExams.length.toString(), icon: "Calendar", color: "blue", label: "Scheduled" },
+                { title: "Current Location", value: activeDuty?.room || "None", icon: "MapPin", color: "green", label: activeDuty?.block || "Room" },
+                { title: "Total Students", value: totalStudentsToday.toString(), icon: "Users", color: "indigo", label: "Supervising" },
+                { title: "Attendance", value: `${totalPresentToday}/${totalStudentsToday}`, icon: "ClipboardCheck", color: "amber", label: "Today's Status" },
+            ],
+            duties: formattedDuties,
+            swaps: [] 
+        });
+
+    } catch (error: any) {
+        console.error("Dashboard data error:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+export const getAssignmentDetails = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params; // This is actually the ExamID from our dashboard mapping
+        const user = (req as any).user;
+        
+        // Find faculty profile for the logged in user
+        const invigilator = await Invigilator.findOne({ where: { UserID: user.UserID } });
+        if (!invigilator) return res.status(404).json({ message: "Invigilator profile not found" });
+
+        const assignment = await InvigilatorAssignment.findOne({
+            where: { 
+                ExamID: id,
+                InvigilatorID: invigilator.FacultyID
+            },
+            include: [
+                {
+                    model: Exam,
+                    include: [Subject]
+                },
+                { 
+                    model: Room,
+                    include: [Block]
+                }
+            ]
+        });
+
+        if (!assignment) {
+            return res.status(404).json({ message: "Assignment not found" });
+        }
+
+        res.json(assignment);
+    } catch (error: any) {
+        console.error("Fetch assignment error:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+export const saveAttendance = async (req: Request, res: Response) => {
+    try {
+        const { examId, students } = req.body;
+        const user = (req as any).user;
+
+        if (!examId || !Array.isArray(students)) {
+            return res.status(400).json({ message: "Invalid request payload" });
+        }
+
+        const invigilator = await Invigilator.findOne({ where: { UserID: user.UserID } });
+        if (!invigilator) return res.status(404).json({ message: "Invigilator profile not found" });
+
+        // Verify assignment
+        const assignment = await InvigilatorAssignment.findOne({
+            where: { 
+                ExamID: Number(examId), 
+                InvigilatorID: invigilator.FacultyID 
+            }
+        });
+        
+        if (!assignment) {
+            return res.status(403).json({ message: "Access Denied: You are not assigned to this exam hall." });
+        }
+
+        // Upsert attendance records
+        const attendanceData = students.map(s => ({
+            ExamID: Number(examId),
+            StudentID: Number(s.StudentID),
+            IsPresent: Boolean(s.IsPresent),
+            MarkedByInvigilatorID: invigilator.FacultyID,
+            MarkedAt: new Date()
+        }));
+
+        for (const data of attendanceData) {
+            await Attendance.upsert(data);
+        }
+
+        // Log activity
+        await ActivityLog.create({
+            UserID: user.UserID,
+            Action: "SUBMIT_ATTENDANCE",
+            Details: `Submitted attendance for ExamID ${examId} in Room ${assignment.RoomID}`,
+            IPAddress: req.ip,
+            UserAgent: req.headers['user-agent']
+        });
+
+        res.json({ 
+            success: true, 
+            message: "Attendance locked and submitted successfully.",
+            summary: {
+                present: students.filter(s => s.IsPresent).length,
+                absent: students.filter(s => !s.IsPresent).length
+            }
+        });
+
+    } catch (error: any) {
+        console.error("Save attendance error:", error);
+        res.status(500).json({ message: "Failed to save attendance. Please try again." });
+    }
+};
+

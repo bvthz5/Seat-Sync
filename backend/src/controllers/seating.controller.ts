@@ -527,9 +527,9 @@ export const getHallLayout = async (req: Request, res: Response) => {
             // BOUNDARY CHECK: Ensure seat is physically within the current Room Layout
             const rowNumericIndex = rowLabel.toUpperCase().charCodeAt(0) - 65;
 
-            if (rowNumericIndex >= parsedLayout.length || rowNumericIndex < 0) continue; // Out of column bounds
-            if (benchNumber > (parsedLayout[rowNumericIndex] ?? 0)) continue; // Out of bench bounds for this column
-            if (seatNumber > seatsPerBench) continue; // Out of seat bounds for this bench
+            if (rowNumericIndex >= parsedLayout.length || rowNumericIndex < 0) continue;
+            if (benchNumber > (parsedLayout[rowNumericIndex] ?? 0)) continue;
+            if (seatNumber > seatsPerBench) continue;
 
 
             const normalizedSeat = {
