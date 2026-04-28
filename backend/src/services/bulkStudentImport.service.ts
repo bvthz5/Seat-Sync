@@ -9,6 +9,7 @@ import { normalizeProgram, parseBatchString, mapProgramToDepartment, resolveOrCr
 import { Semester } from '../models/Semester.js';
 import bcrypt from 'bcrypt';
 import { emailService } from './email.service.js';
+import { generateDefaultPassword } from '../utils/student.utils.js';
 
 interface StudentCSVRow {
     FullName?: string;
@@ -269,8 +270,8 @@ const rowProgramRaw = row.ProgramName?.trim() || '';
                         });
 
                         if (!user) {
-                            // Generate default password: first 4 chars of name + @123
-                            plainPassword = fullName.replace(/\s/g, '').substring(0, 4) + '@123';
+                            // Generate standardized default password
+                            plainPassword = generateDefaultPassword(fullName, registerNumber);
                             const passwordHash = await bcrypt.hash(plainPassword, 10);
 
                             user = await User.create({

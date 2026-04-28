@@ -11,27 +11,11 @@ import * as XLSX from 'xlsx';
 import { BulkStudentImportService } from '../services/bulkStudentImport.service.js';
 import { emailService } from '../services/email.service.js';
 import { normalizeProgram, parseBatchString, mapProgramToDepartment, resolveOrCreateProgram, resolveOrCreateDepartment } from '../services/academicNormalizer.service.js';
+import { generateDefaultPassword } from '../utils/student.utils.js';
 
 const STUDENT_EMAIL_DOMAIN = 'sjcetpalai.ac.in';
 
-const normalizeEmailToken = (value: string) =>
-    value.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-const buildImportedStudentEmail = (
-    fullName: string,
-    departmentCode: string,
-    batchYear: number,
-    programDurationYears?: number | null
-) => {
-    const nameToken = normalizeEmailToken(fullName) || 'student';
-    const deptToken = normalizeEmailToken(departmentCode) || 'dept';
-    const durationYears =
-        typeof programDurationYears === 'number' && programDurationYears > 0
-            ? programDurationYears
-            : 2;
-    const passoutYear = batchYear + durationYears;
-    return `${nameToken}${passoutYear}@${deptToken}.${STUDENT_EMAIL_DOMAIN}`;
-};
+// Removed buildImportedStudentEmail to stop generating fake/placeholder emails
 
 export const getAllStudents = async (req: Request, res: Response) => {
     try {
@@ -81,7 +65,7 @@ export const getAllStudents = async (req: Request, res: Response) => {
             include: [
                 {
                     model: User,
-                    attributes: ['Email', 'Role', 'FullName', 'IsActive'],
+                    attributes: ['Email', 'Role', 'FullName', 'IsActive', 'IsPasswordChanged'],
                     required: true
                 },
                 {
@@ -496,7 +480,6 @@ export const importStudents = async (req: Request, res: Response) => {
         
         // Hash default password once to avoid O(N) bcrypt delay
         const bcrypt = await import('bcryptjs');
-        const defaultPasswordHash = await bcrypt.hash('12345678', 10);
 
         // Normalize keys helper
         const normalizeKey = (row: any, keys: string[]) => {
@@ -513,8 +496,14 @@ export const importStudents = async (req: Request, res: Response) => {
         const passwordsToHash = new Set<string>();
         for (const row of data) {
             const name = normalizeKey(row, ['Name', 'Student Name', 'Full Name', 'StudentName']);
-            if (name) {
-                const passwordStr = (String(name).trim().replace(/\s/g, '').substring(0, 4) + '@123');
+            const regNoRaw = normalizeKey(row, [
+                'Register Number', 'RegisterNumber', 'Reg No', 'RegNo', 'Register', 'Register', 
+                'Register No', 'University RegNo', 'University Reg No', 'UniversityRegNo'
+            ]);
+            const regNo = String(regNoRaw ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+            if (name && regNo) {
+                const passwordStr = generateDefaultPassword(String(name), regNo);
                 passwordsToHash.add(passwordStr);
             }
         }
@@ -527,7 +516,7 @@ export const importStudents = async (req: Request, res: Response) => {
         const BATCH_SIZE = 50;
         for (let i = 0; i < passwordChunks.length; i += BATCH_SIZE) {
             const batch = passwordChunks.slice(i, i + BATCH_SIZE);
-            const hashedBatch = await Promise.all(batch.map(pass => bcrypt.hash(pass, 10)));
+            const hashedBatch = await Promise.all(batch.map(pass => bcrypt.hash(pass, 12)));
             batch.forEach((pass, index) => {
                 const hashValue = hashedBatch[index];
                 if (hashValue) {
@@ -642,32 +631,13 @@ export const importStudents = async (req: Request, res: Response) => {
                     semestersMap.set(`${targetProgram.ProgramID}_${parsedSemester}`, targetSemester);
                 }
 
-                // 3. Resolve User
-                const passwordStr = (normalizedName.replace(/\s/g, '').substring(0, 4) + '@123');
-                const defaultPassword = precomputedHashes.get(passwordStr) || defaultPasswordHash;
+                // 3. Resolve User (Use null if email missing, no fake generation)
+                const rawPassword = generateDefaultPassword(normalizedName, regNo);
+                const defaultPassword = precomputedHashes.get(rawPassword) || await bcrypt.hash(rawPassword, 12);
 
-                const baseEmail = buildImportedStudentEmail(
-                    normalizedName,
-                    targetDept.DepartmentCode || targetDept.DepartmentName || '',
-                    effectiveBatchYear,
-                    targetProgram.DurationYears
-                );
+                const studentEmail = (email && String(email).includes('@')) ? String(email).trim().toLowerCase() : null;
 
-                let generatedEmail = baseEmail;
-                let suffixCounter = 1;
-
-                while (
-                    (existingUsersMapByEmail.has(generatedEmail) && existingUsersMapByEmail.get(generatedEmail)!.UserID !== existingStudent?.UserID) || 
-                    processedBatchEmails.has(generatedEmail)
-                ) {
-                    let [namePart, domainPart] = baseEmail.split('@');
-                    generatedEmail = `${namePart}${suffixCounter}@${domainPart}`;
-                    suffixCounter++;
-                }
-
-                processedBatchEmails.add(generatedEmail);
-
-                let user = existingStudent?.UserID ? existingUsersMap.get(existingStudent.UserID) : existingUsersMapByEmail.get(generatedEmail);
+                let user = existingStudent?.UserID ? existingUsersMap.get(existingStudent.UserID) : (studentEmail ? existingUsersMapByEmail.get(studentEmail) : null);
                 
                 rowManifests.push({
                     row,
@@ -678,7 +648,7 @@ export const importStudents = async (req: Request, res: Response) => {
                     targetSemester,
                     batchYear: effectiveBatchYear,
                     user,
-                    email: generatedEmail,
+                    email: studentEmail,
                     password: defaultPassword,
                     existingStudent
                 });
@@ -699,12 +669,14 @@ export const importStudents = async (req: Request, res: Response) => {
                     let currentUser = m.user;
                     if (!currentUser) {
                         currentUser = await User.create({
-                            Email: m.email,
+                            Email: m.email, // can be null now
                             FullName: m.normalizedName,
                             PasswordHash: m.password,
-                            Role: 'student'
+                            Role: 'student',
+                            IsActive: true,
+                            IsPasswordChanged: false // Force change on first login
                         }, { transaction: t });
-                        existingUsersMapByEmail.set(m.email, currentUser);
+                        if (m.email) existingUsersMapByEmail.set(m.email, currentUser);
                     } else if (currentUser.FullName !== m.normalizedName) {
                         await currentUser.update({ FullName: m.normalizedName }, { transaction: t });
                     }
@@ -914,20 +886,25 @@ export const createStudent = async (req: Request, res: Response) => {
         }
 
         // Create minimal User to hold FullName (required by DB schema constraint on UserID)
-        const plainTextPassword = FullName.replace(/\s/g, '').substring(0, 4) + '@123';
-        const hashedPassword = await bcrypt.hash(plainTextPassword, 10);
+        const plainTextPassword = generateDefaultPassword(FullName, regNo);
+        const hashedPassword = await bcrypt.hash(plainTextPassword, 12);
 
-        // Use provided email or fall back to RegisterNumber
-        const userEmail = collegeEmail || regNo;
+        // Use provided email or null
+        const userEmail = collegeEmail || null;
 
-        let user = await User.findOne({ where: { Email: userEmail }, transaction: t });
+        let user = null;
+        if (userEmail) {
+            user = await User.findOne({ where: { Email: userEmail }, transaction: t });
+        }
+
         if (!user) {
             user = await User.create({
-                Email: userEmail,
+                Email: userEmail as string | null,
                 FullName,
                 PasswordHash: hashedPassword,
                 Role: 'student',
-                IsRootAdmin: false
+                IsRootAdmin: false,
+                IsPasswordChanged: false // Force change on first login
             }, { transaction: t });
         } else {
             if (FullName) {
@@ -949,7 +926,7 @@ export const createStudent = async (req: Request, res: Response) => {
 
         // Send credentials email asynchronously (don't wait for it)
         if (collegeEmail) {
-            emailService.sendStudentCredentialsEmail(collegeEmail, FullName, userEmail, plainTextPassword, regNo)
+            emailService.sendStudentCredentialsEmail(collegeEmail, FullName, userEmail as string, plainTextPassword, regNo)
                 .catch(err => console.error('Failed to send credentials email:', err.message));
         }
 
@@ -1374,15 +1351,18 @@ export const resetStudentPassword = async (req: Request, res: Response) => {
             return res.status(404).json({ message: "Associated user not found" });
         }
 
-        // Generate temporary password: First 4 chars of name + @123
-        let firstName = (user.FullName || 'User').split(' ')[0] || 'User';
-        const tempPassword = firstName.substring(0, 4) + '@123';
+        // Generate temporary password: Standard Formula (with aggressive trimming)
+        const cleanFullName = (user.FullName || 'Student').trim();
+        const cleanRegNo = (student.RegisterNumber || '').trim().toUpperCase();
+        const tempPassword = generateDefaultPassword(cleanFullName, cleanRegNo);
 
         // Hash and update password
-        const hashedPassword = await bcrypt.hash(tempPassword, 10);
+        const hashedPassword = await bcrypt.hash(tempPassword, 12);
         await user.update({
             PasswordHash: hashedPassword,
-            IsPasswordChanged: false // Reset the flag to force change on next login
+            IsPasswordChanged: false, // Reset the flag to force change on next login
+            FailedLoginAttempts: 0,   // Reset failed attempts
+            AccountLockedUntil: null  // Unlock account if it was locked
         }, { transaction: t });
 
         await t.commit();
@@ -1456,6 +1436,85 @@ export const softDeleteStudent = async (req: Request, res: Response) => {
         await t.rollback();
         console.error("Soft Delete Student Error:", error);
         res.status(500).json({ message: "Failed to delete student", error: error.message });
+    }
+};
+
+export const exportStudentCredentials = async (req: Request, res: Response) => {
+    try {
+        const { dept } = req.query;
+        const whereClause: any = { Status: 'ACTIVE' };
+        
+        if (dept && !isNaN(parseInt(dept as string))) {
+            whereClause.DepartmentID = parseInt(dept as string);
+        }
+
+        const students = await Student.findAll({
+            include: [
+                { model: User, attributes: ['FullName', 'IsPasswordChanged'] },
+                { model: Department, attributes: ['DepartmentName'] }
+            ],
+            where: whereClause,
+            order: [
+                ['DepartmentID', 'ASC'],
+                ['RegisterNumber', 'ASC']
+            ]
+        });
+
+        const wb = XLSX.utils.book_new();
+
+        // Group students by department
+        const deptGroups = new Map<string, any[]>();
+        
+        students.forEach(s => {
+            const deptName = s.Department?.DepartmentName || 'General';
+            if (!deptGroups.has(deptName)) {
+                deptGroups.set(deptName, []);
+            }
+            
+            const fullName = (s.FullName || s.User?.FullName || 'Student').trim();
+            const regNo = (s.RegisterNumber || '').trim().toUpperCase();
+            const isChanged = s.User?.IsPasswordChanged;
+            
+            deptGroups.get(deptName)?.push({
+                'Register Number': regNo,
+                'Full Name': fullName,
+                'Default Password': generateDefaultPassword(fullName, regNo),
+                'Password Status': isChanged ? 'Changed' : 'Initial Default',
+                'Note': isChanged 
+                    ? 'Password already changed by student. If login fails, student must use their new password.' 
+                    : 'Initial default password. If login fails, check if the student has already changed it.'
+            });
+        });
+
+        if (deptGroups.size === 0) {
+            const ws = XLSX.utils.json_to_sheet([{ Message: 'No active students found' }]);
+            XLSX.utils.book_append_sheet(wb, ws, "Empty");
+        } else {
+            deptGroups.forEach((data, deptName) => {
+                const safeSheetName = deptName.substring(0, 31).replace(/[\[\]\*\?\/\\\:]/g, '');
+                const ws = XLSX.utils.json_to_sheet(data);
+                
+                const colWidths = [
+                    { wch: 20 }, // Register Number
+                    { wch: 30 }, // Full Name
+                    { wch: 20 }, // Default Password
+                    { wch: 15 }, // Password Status
+                    { wch: 80 }  // Note
+                ];
+                ws['!cols'] = colWidths;
+                
+                XLSX.utils.book_append_sheet(wb, ws, safeSheetName);
+            });
+        }
+
+        const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+        res.setHeader('Content-Disposition', 'attachment; filename=Student_Credentials_List.xlsx');
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.send(buf);
+    } catch (error: any) {
+        console.error("Export Credentials Error:", error);
+        res.status(500).json({ message: "Failed to export credentials", error: error.message });
     }
 };
 

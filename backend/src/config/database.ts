@@ -602,6 +602,46 @@ async function ensureSchemaIntegrity() {
                     ALTER TABLE [dbo].[Users] ADD [ActivationExpires] DATETIME NULL;
                     PRINT 'Added ActivationExpires to Users';
                 END
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Users]') AND name = 'FailedLoginAttempts')
+                BEGIN
+                    ALTER TABLE [dbo].[Users] ADD [FailedLoginAttempts] INT NOT NULL DEFAULT 0;
+                    PRINT 'Added FailedLoginAttempts to Users';
+                END
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Users]') AND name = 'AccountLockedUntil')
+                BEGIN
+                    ALTER TABLE [dbo].[Users] ADD [AccountLockedUntil] DATETIME NULL;
+                    PRINT 'Added AccountLockedUntil to Users';
+                END
+
+                -- Ensure Email is nullable
+                IF EXISTS (
+                    SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID(N'[dbo].[Users]') 
+                    AND name = 'Email'
+                    AND is_nullable = 0
+                )
+                BEGIN
+                    ALTER TABLE [dbo].[Users] ALTER COLUMN [Email] NVARCHAR(150) NULL;
+                    PRINT 'Ensured User.Email is nullable';
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
+        // Add Unique Composite Index to ExamRegistrations
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'ExamRegistrations' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT * FROM sys.indexes 
+                    WHERE name = 'UQ_ExamRegistrations_Student_Exam' 
+                    AND object_id = OBJECT_ID(N'[dbo].[ExamRegistrations]')
+                )
+                BEGIN
+                    CREATE UNIQUE INDEX [UQ_ExamRegistrations_Student_Exam] ON [dbo].[ExamRegistrations] ([StudentID], [ExamID]);
+                    PRINT 'Added unique index to ExamRegistrations';
+                END
             END
         `, { type: QueryTypes.RAW });
 
@@ -740,6 +780,44 @@ async function ensureSchemaIntegrity() {
                   END
               END
           `, { type: QueryTypes.RAW });
+
+        // Ensure UserProfiles table exists
+        await sequelize.query(`
+            IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'UserProfiles' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                CREATE TABLE [dbo].[UserProfiles] (
+                    [UserID] INT PRIMARY KEY,
+                    [FullName] NVARCHAR(150) NOT NULL,
+                    [Phone] NVARCHAR(20) NULL,
+                    [Avatar] NVARCHAR(MAX) NULL,
+                    [DateOfBirth] DATE NULL,
+                    [Gender] NVARCHAR(20) NULL,
+                    CONSTRAINT [FK_UserProfiles_Users] FOREIGN KEY ([UserID]) REFERENCES [dbo].[Users] ([UserID]) ON DELETE CASCADE
+                );
+                PRINT 'Created UserProfiles table';
+            END
+            ELSE
+            BEGIN
+                -- Add missing columns if table already exists
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[UserProfiles]') AND name = 'Avatar')
+                BEGIN
+                    ALTER TABLE [dbo].[UserProfiles] ADD [Avatar] NVARCHAR(MAX) NULL;
+                    PRINT 'Added Avatar to UserProfiles';
+                END
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[UserProfiles]') AND name = 'DateOfBirth')
+                BEGIN
+                    ALTER TABLE [dbo].[UserProfiles] ADD [DateOfBirth] DATE NULL;
+                    PRINT 'Added DateOfBirth to UserProfiles';
+                END
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[UserProfiles]') AND name = 'Gender')
+                BEGIN
+                    ALTER TABLE [dbo].[UserProfiles] ADD [Gender] NVARCHAR(20) NULL;
+                    PRINT 'Added Gender to UserProfiles';
+                END
+            END
+        `, { type: QueryTypes.RAW });
 
     } catch (error) {
         console.warn("Schema integrity check warning (non-fatal):", error);

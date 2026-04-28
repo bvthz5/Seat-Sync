@@ -20,6 +20,7 @@ import os from 'os';
 import path from 'path';
 import mammoth from 'mammoth';
 import { sequelize } from '../config/database.js';
+import { generateDefaultPassword } from '../utils/student.utils.js';
 
 const require = createRequire(import.meta.url);
 
@@ -1401,12 +1402,16 @@ export class ExamController {
         let createdStudents = 0;
         let updatedStudents = 0;
         let registrationsCreated = 0;
+        let registrationsUpdated = 0;
         let registrationsSkipped = 0;
         let eligibleCount = 0;
         let ineligibleCount = 0;
 
         const INELIGIBLE_VALUES = new Set(['no', 'not eligible', '0', 'false', 'ineligible']);
-        const defaultPassword = await bcrypt.hash('12345678', 10);
+
+        // ── PRE-STEP: Fetch current exam details for session conflict check ──
+        const currentExam = await Exam.findByPk(examId, { transaction });
+        if (!currentExam) throw new Error("Exam not found during import");
 
         for (let index = 0; index < rows.length; index++) {
             const row = rows[index];
@@ -1435,33 +1440,31 @@ export class ExamController {
 
             if (isEligible) { eligibleCount++; } else { ineligibleCount++; }
 
+            // ── STEP 1: FIND OR CREATE STUDENT (SMART UPSERT) ──
             let student = await Student.findOne({
                 where: { RegisterNumber: normalizedRegNo },
+                include: [{ model: User }],
                 transaction
             });
 
             if (!student) {
-                const email = buildEligibleStudentEmail(fullName, registerNumber);
+                // NEW STUDENT: Create User first
+                const plainPassword = generateDefaultPassword(fullName, normalizedRegNo);
+                const hashedPassword = await bcrypt.hash(plainPassword, 12);
                 
-                const [user, userCreated] = await User.findOrCreate({
-                    where: { Email: email },
-                    defaults: {
-                        Email: email,
-                        FullName: fullName,
-                        PasswordHash: defaultPassword,
-                        Role: 'student',
-                        IsActive: true,
-                        IsPasswordChanged: false,
-                        IsActivated: false
-                    } as any,
-                    transaction
-                });
+                const user = await User.create({
+                    Email: null, // Allow nullable email for bulk import
+                    FullName: fullName,
+                    PasswordHash: hashedPassword,
+                    Role: 'student',
+                    IsActive: true,
+                    IsPasswordChanged: false,
+                    IsActivated: false,
+                    FailedLoginAttempts: 0,
+                    AccountLockedUntil: null
+                } as any, { transaction });
 
-                if (userCreated) {
-                    createdUsers++;
-                } else {
-                    updatedUsers++;
-                }
+                createdUsers++;
 
                 // Resolve Department, Program, Semester for the NEW student
                 const deptId = defaultDepartmentId;
@@ -1475,7 +1478,7 @@ export class ExamController {
                         const semester = await resolveSemesterForEligibleImport(progId, row, transaction);
                         semId = semester.SemesterID;
                     } catch (e) {
-                        console.error('Error resolving program/semester for row:', rowNumber, e);
+                        console.warn('Error resolving academic details for row:', rowNumber);
                     }
                 }
 
@@ -1489,14 +1492,49 @@ export class ExamController {
                     SemesterID: semId,
                     BatchYear: new Date().getFullYear()
                 } as any, { transaction });
+                
                 createdStudents++;
             } else {
-                await student.update({
-                    Status: 'ACTIVE'
-                }, { transaction });
+                // EXISTING STUDENT: Update details if they have changed (Case 2/3)
+                const updates: any = { Status: 'ACTIVE' };
+                if (student.FullName !== fullName) updates.FullName = fullName;
+                
+                // Only update academic details if the row provides them or they are currently missing
+                const deptId = defaultDepartmentId;
+                if (deptId && !student.DepartmentID) updates.DepartmentID = deptId;
+                
+                await student.update(updates, { transaction });
+                
+                // Also update user's full name if it changed
+                if (student.User && student.User.FullName !== fullName) {
+                    await student.User.update({ FullName: fullName }, { transaction });
+                    updatedUsers++;
+                }
+                
                 updatedStudents++;
             }
 
+            // ── STEP 2: SESSION CONFLICT CHECK (LOG WARNING) ──
+            const sessionConflict = await ExamRegistration.findOne({
+                include: [{
+                    model: Exam,
+                    where: {
+                        ExamDate: currentExam.ExamDate,
+                        Session: currentExam.Session,
+                        ExamID: { [Op.ne]: examId } // Different exam
+                    }
+                }],
+                where: { StudentID: student.StudentID },
+                transaction
+            });
+
+            if (sessionConflict) {
+                const conflictingExamName = (sessionConflict as any).Exam?.ExamName || 'another exam';
+                console.warn(`[Import] Student ${normalizedRegNo} already has ${conflictingExamName} in the same session (${currentExam.ExamDate} ${currentExam.Session})`);
+                // Note: We don't block the import, just log it as per requirement.
+            }
+
+            // ── STEP 3: UPSERT EXAM REGISTRATION ──
             const [registration, created] = await ExamRegistration.findOrCreate({
                 where: {
                     ExamID: examId,
@@ -1513,10 +1551,13 @@ export class ExamController {
             if (created) {
                 registrationsCreated++;
             } else {
+                // UPDATE if exists (Case 3)
                 if ((registration as any).IsEligible !== isEligible) {
                     await (registration as any).update({ IsEligible: isEligible }, { transaction });
+                    registrationsUpdated++;
+                } else {
+                    registrationsSkipped++;
                 }
-                registrationsSkipped++;
             }
         }
 
@@ -1529,6 +1570,7 @@ export class ExamController {
             createdStudents,
             updatedStudents,
             registrationsCreated,
+            registrationsUpdated,
             registrationsSkipped,
             errorCount: errors.length,
             errors

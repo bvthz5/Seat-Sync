@@ -1,5 +1,6 @@
 import express from "express";
 import { StudentAuthController } from "../controllers/student.auth.controller.js";
+import { AuthMiddleware } from "../middlewares/auth.middleware.js";
 import { getDepartments } from "../controllers/department.controller.js";
 import { getPrograms } from "../controllers/program.controller.js";
 
@@ -14,6 +15,11 @@ router.post("/login", StudentAuthController.login);
  * Student Registration
  */
 router.post("/register", StudentAuthController.register);
+
+/**
+ * Change Password (Protected)
+ */
+router.post("/change-password", AuthMiddleware.verifyAccessToken, StudentAuthController.changePassword);
 
 /**
  * Forgot Password

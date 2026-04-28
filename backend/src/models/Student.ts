@@ -38,6 +38,10 @@ export class Student extends Model<StudentAttributes, StudentCreationAttributes>
   declare BatchYear: number;
   declare Status: "ACTIVE" | "GRADUATED" | "DROPPED";
   declare AdmissionDate: Date | null;
+  declare User?: User;
+  declare Department?: Department;
+  declare Program?: Program;
+  declare Semester?: Semester;
 }
 
 Student.init(

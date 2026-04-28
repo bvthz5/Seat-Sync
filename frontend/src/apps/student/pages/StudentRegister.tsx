@@ -129,7 +129,12 @@ const StudentRegister: React.FC = () => {
     };
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        const { name, value } = e.target;
+        let { name, value } = e.target;
+        
+        if (name === 'RegisterNumber') {
+            value = value.toUpperCase();
+        }
+        
         setFormData({ ...formData, [name]: value });
         
         // Mark field as touched
@@ -195,8 +200,8 @@ const StudentRegister: React.FC = () => {
         try {
             const payload = {
                 ...formData,
-                DepartmentID: parseInt(formData.DepartmentID),
-                ProgramID: parseInt(formData.ProgramID),
+                DepartmentID: formData.DepartmentID ? parseInt(formData.DepartmentID) : null,
+                ProgramID: formData.ProgramID ? parseInt(formData.ProgramID) : null,
                 BatchYear: parseInt(formData.BatchYear)
             };
 
@@ -388,18 +393,20 @@ const StudentRegister: React.FC = () => {
                                             <Calendar className="w-5 h-5" />
                                         </div>
                                         <input
-                                            type="number"
+                                            type="text"
+                                            inputMode="numeric"
                                             name="BatchYear"
                                             id="BatchYear"
                                             value={formData.BatchYear}
                                             onChange={handleInputChange}
                                             onBlur={() => handleBlur('BatchYear')}
+                                            onFocus={(e) => e.target.select()}
                                             className={`w-full bg-white border text-slate-900 text-[15px] font-medium rounded-xl focus:outline-none block pl-12 pr-4 py-3.5 transition-all shadow-sm placeholder:text-slate-400 ${
                                                 errors.BatchYear && touchedFields.has('BatchYear')
                                                     ? 'border-red-500 focus:ring-4 focus:ring-red-500/10 focus:border-red-500'
                                                     : 'border-slate-200 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500'
                                             }`}
-                                            placeholder="Year joined, e.g. 2024"
+                                            placeholder="e.g. 2024"
                                             disabled={isLoading}
                                         />
                                     </div>
@@ -416,7 +423,7 @@ const StudentRegister: React.FC = () => {
 
                                 <div className="relative group col-span-1">
                                     <div className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ml-1 ${errors.DepartmentID && touchedFields.has('DepartmentID') ? 'text-red-600' : 'text-slate-500'}`}>
-                                        Department
+                                        Department <span className="text-[10px] text-slate-400 font-normal lowercase">(Optional)</span>
                                     </div>
                                     <div className="relative flex items-center transition-all duration-300">
                                         <div className={`absolute left-4 group-focus-within:text-blue-600 transition-colors ${errors.DepartmentID && touchedFields.has('DepartmentID') ? 'text-red-500' : 'text-slate-400'}`}>
@@ -451,7 +458,7 @@ const StudentRegister: React.FC = () => {
 
                                 <div className="relative group col-span-1">
                                     <div className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ml-1 ${errors.ProgramID && touchedFields.has('ProgramID') ? 'text-red-600' : 'text-slate-500'}`}>
-                                        Program
+                                        Program <span className="text-[10px] text-slate-400 font-normal lowercase">(Optional)</span>
                                     </div>
                                     <div className="relative flex items-center transition-all duration-300">
                                         <div className={`absolute left-4 group-focus-within:text-blue-600 transition-colors ${errors.ProgramID && touchedFields.has('ProgramID') ? 'text-red-500' : 'text-slate-400'}`}>

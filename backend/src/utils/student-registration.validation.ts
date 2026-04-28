@@ -195,7 +195,7 @@ export const validateBatchYear = (batchYear: any): { valid: boolean; error?: str
  */
 export const validateDepartmentID = (departmentID: any): { valid: boolean; error?: string } => {
     if (departmentID === null || departmentID === undefined || departmentID === "") {
-        return { valid: false, error: "Department is required" };
+        return { valid: true }; // Now optional
     }
 
     const id = Number(departmentID);
@@ -213,7 +213,7 @@ export const validateDepartmentID = (departmentID: any): { valid: boolean; error
  */
 export const validateProgramID = (programID: any): { valid: boolean; error?: string } => {
     if (programID === null || programID === undefined || programID === "") {
-        return { valid: false, error: "Program is required" };
+        return { valid: true }; // Now optional
     }
 
     const id = Number(programID);

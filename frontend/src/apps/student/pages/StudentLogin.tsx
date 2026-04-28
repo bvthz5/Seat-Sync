@@ -11,7 +11,8 @@ const StudentLogin: React.FC = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [shake, setShake] = useState(false);
-    const [loginMethod, setLoginMethod] = useState<'email' | 'register'>('email');
+    const [loginMethod, setLoginMethod] = useState<'email' | 'register'>('register');
+    const [authError, setAuthError] = useState<string | null>(null);
 
     useEffect(() => {
         if (identifierRef.current) {
@@ -27,14 +28,17 @@ const StudentLogin: React.FC = () => {
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        if (!identifier || !password) {
+        setAuthError(null);
+        const trimmedIdentifier = identifier.trim();
+        if (!trimmedIdentifier || !password) {
+            setAuthError("Please fill in all fields");
             toast.error("Please fill in all fields");
             triggerShake();
             return;
         }
 
-        if (loginMethod === 'email' && !/^[a-zA-Z0-9._%+-]+@([a-zA-Z0-9-]+\.)*sjcetpalai\.ac\.in$/i.test(identifier)) {
-            toast.error("Please use your official sjcetpalai.ac.in email (including subdomains)");
+        if (loginMethod === 'email' && !trimmedIdentifier.toLowerCase().endsWith("sjcetpalai.ac.in")) {
+            toast.error("Please use your official @sjcetpalai.ac.in email");
             triggerShake();
             return;
         }
@@ -44,7 +48,7 @@ const StudentLogin: React.FC = () => {
             const response = await fetch('http://localhost:5000/api/auth/student/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ identifier, password }),
+                body: JSON.stringify({ identifier: trimmedIdentifier, password }),
             });
 
             const data = await response.json();
@@ -53,14 +57,27 @@ const StudentLogin: React.FC = () => {
                 throw new Error(data.error || 'Authentication failed');
             }
 
+            if (data.requirePasswordChange) {
+                // Store the temporary token so the change-password page can use it
+                localStorage.setItem("tempAccessToken", data.tempToken);
+                toast("Please change your password to continue", { icon: '🔒' });
+                
+                // Navigate to the change password page with the state
+                navigate('/student/change-password', { state: { isTemporary: true } });
+                return;
+            }
+
             // Successfully logged in
-            toast.success("Welcome back!");
             localStorage.setItem("accessToken", data.accessToken);
             sessionStorage.setItem('seat_sync_active', 'true');
+
+            toast.success("Welcome back!");
             // Reload so AuthContext can hydrate from the stored session/token cleanly
             window.location.replace('/student/dashboard');
 
         } catch (error: any) {
+            setIsLoading(false);
+            setAuthError(error.message);
             toast.error(error.message);
             triggerShake();
         } finally {
@@ -230,7 +247,10 @@ const StudentLogin: React.FC = () => {
                                         id="student-identifier"
                                         type={loginMethod === 'email' ? 'email' : 'text'}
                                         value={identifier}
-                                        onChange={(e) => setIdentifier(e.target.value)}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setIdentifier(loginMethod === 'register' ? val.toUpperCase() : val);
+                                        }}
                                         className="w-full bg-white border border-slate-200 text-slate-900 text-[15px] font-medium rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 block pl-12 pr-4 py-4 transition-all shadow-sm placeholder:text-slate-400"
                                         placeholder={loginMethod === 'email' ? "name@mca.sjcetpalai.ac.in" : "SJC24MCA021"}
                                         disabled={isLoading}
@@ -273,6 +293,13 @@ const StudentLogin: React.FC = () => {
                                 Forgot Password?
                             </Link>
                         </div>
+
+                        {authError && (
+                            <div className="p-3 rounded-lg bg-red-50 border border-red-100 flex items-center gap-2 text-red-600 text-[13px] font-medium animate-in fade-in slide-in-from-top-2">
+                                <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                                {authError}
+                            </div>
+                        )}
 
                         <button
                             type="submit"

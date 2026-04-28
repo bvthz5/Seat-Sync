@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { getAllStudents, importStudents, createStudent, getCreateOptions, getFilterOptions, updateStudent, deleteStudent, exportStudents, deleteAllStudents, bulkImportStudents, bulkImportStudentsWithSeats, getStudentImportTemplate, toggleStudentAccountStatus, resetStudentPassword, softDeleteStudent, syncSemesters } from '../controllers/student.controller.js';
+import { getAllStudents, importStudents, createStudent, getCreateOptions, getFilterOptions, updateStudent, deleteStudent, exportStudents, deleteAllStudents, bulkImportStudents, bulkImportStudentsWithSeats, getStudentImportTemplate, toggleStudentAccountStatus, resetStudentPassword, softDeleteStudent, syncSemesters, exportStudentCredentials } from '../controllers/student.controller.js';
 import { AuthMiddleware } from '../middlewares/auth.middleware.js';
 
 const router = express.Router();
@@ -81,6 +81,7 @@ const csvUpload = multer({
  *         description: Server error
  */
 router.get('/export', AuthMiddleware.verifyAccessToken, exportStudents);
+router.get('/export-credentials', AuthMiddleware.verifyAccessToken, exportStudentCredentials);
 
 /**
  * @swagger

@@ -9,7 +9,7 @@ export interface LoginResponse {
     refreshToken?: string;
     user: {
         UserID: number;
-        Email: string;
+        Email: string | null;
         Role: string;
         IsRootAdmin: boolean;
         IsPasswordChanged: boolean;
@@ -22,7 +22,7 @@ export interface RefreshResponse {
 
 export interface JWTPayload {
     UserID: number;
-    Email: string;
+    Email: string | null;
     Role: string;
     IsRootAdmin: boolean;
     IsPasswordChanged: boolean;

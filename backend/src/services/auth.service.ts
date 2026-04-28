@@ -40,10 +40,37 @@ export class AuthService {
             throw new Error("Invalid credentials or account is inactive");
         }
 
+        // Check for account lockout
+        if (user.AccountLockedUntil && user.AccountLockedUntil > new Date()) {
+            const remainingMinutes = Math.ceil((user.AccountLockedUntil.getTime() - Date.now()) / 60000);
+            throw new Error(`Account locked. Too many failed attempts. Please try again in ${remainingMinutes} minutes.`);
+        }
+
         // Verify password
         const isPasswordValid = await bcrypt.compare(password, user.PasswordHash);
         if (!isPasswordValid) {
+            // Increment failed attempts
+            const failedAttempts = (user.FailedLoginAttempts || 0) + 1;
+            let lockUntil = user.AccountLockedUntil;
+            
+            if (failedAttempts >= 5) {
+                lockUntil = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes lockout
+            }
+            
+            await user.update({ 
+                FailedLoginAttempts: failedAttempts,
+                AccountLockedUntil: lockUntil
+            });
+
             throw new Error("Invalid credentials");
+        }
+
+        // Reset failed attempts on successful login
+        if (user.FailedLoginAttempts > 0 || user.AccountLockedUntil) {
+            await user.update({ 
+                FailedLoginAttempts: 0,
+                AccountLockedUntil: null
+            });
         }
 
         const normalizedRole = this.normalizePortalRole(user.Role as string);

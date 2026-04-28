@@ -38,13 +38,24 @@ export const studentPortalApi = {
         return response.data;
     },
 
+    async getUpcomingExams(): Promise<any[]> {
+        const response = await api.get('/student/exams/upcoming');
+        return response.data.data;
+    },
+
     async getExams(): Promise<any[]> {
         const response = await api.get('/student/exams');
         return response.data.data;
     },
 
-    async getSeating(): Promise<any> {
-        const response = await api.get('/student/seating');
+    async getSeating(examId?: string | number): Promise<any> {
+        const url = examId ? `/student/seating/${examId}` : '/student/seating';
+        const response = await api.get(url);
+        return response.data.data;
+    },
+
+    async getSeatLayout(examId: string | number): Promise<any[]> {
+        const response = await api.get(`/student/seating/layout/${examId}`);
         return response.data.data;
     },
 
@@ -54,7 +65,22 @@ export const studentPortalApi = {
     },
 
     async getHistory(): Promise<any[]> {
-        const response = await api.get('/student/history');
+        const response = await api.get('/student/exams/history');
         return response.data.data;
+    },
+
+    async getProfile(): Promise<any> {
+        const response = await api.get('/student/profile');
+        return response.data.data;
+    },
+
+    async updateProfile(data: any): Promise<any> {
+        const response = await api.put('/student/profile', data);
+        return response.data;
+    },
+
+    async uploadAvatar(avatar: string): Promise<any> {
+        const response = await api.post('/student/profile/avatar', { avatar });
+        return response.data;
     },
 };

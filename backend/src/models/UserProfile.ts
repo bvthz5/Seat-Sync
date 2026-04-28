@@ -9,6 +9,9 @@ interface UserProfileAttributes {
   UserID: number;
   FullName: string;
   Phone?: string | null;
+  Avatar?: string | null;
+  DateOfBirth?: Date | null;
+  Gender?: "Male" | "Female" | "Other" | null;
 }
 
 export class UserProfile
@@ -17,6 +20,9 @@ export class UserProfile
   declare UserID: number;
   declare FullName: string;
   declare Phone?: string | null;
+  declare Avatar?: string | null;
+  declare DateOfBirth?: Date | null;
+  declare Gender?: "Male" | "Female" | "Other" | null;
 }
 
 UserProfile.init(
@@ -34,6 +40,21 @@ UserProfile.init(
 
     Phone: {
       type: DataTypes.STRING(20),
+      allowNull: true,
+    },
+
+    Avatar: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+
+    DateOfBirth: {
+      type: DataTypes.DATEONLY,
+      allowNull: true,
+    },
+
+    Gender: {
+      type: DataTypes.ENUM("Male", "Female", "Other"),
       allowNull: true,
     },
   },

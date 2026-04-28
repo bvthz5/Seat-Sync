@@ -6,13 +6,15 @@ import { sequelize } from "../config/database.js";
  */
 interface UserAttributes {
   UserID: number;
-  Email: string;
+  Email: string | null;
   FullName: string | null;
   PasswordHash: string;
   Role: "exam_admin" | "invigilator" | "student";
   IsRootAdmin: boolean;
   IsActive: boolean;
   IsPasswordChanged: boolean;
+  FailedLoginAttempts: number;
+  AccountLockedUntil: Date | null;
   CreatedAt: Date;
   IsActivated: boolean;
   ActivationToken: string | null;
@@ -23,18 +25,20 @@ interface UserAttributes {
  * Attributes required when creating a user
  */
 interface UserCreationAttributes
-  extends Optional<UserAttributes, "UserID" | "IsRootAdmin" | "IsActive" | "IsPasswordChanged" | "CreatedAt" | "IsActivated" | "ActivationToken" | "ActivationExpiresAt"> { }
+  extends Optional<UserAttributes, "UserID" | "Email" | "IsRootAdmin" | "IsActive" | "IsPasswordChanged" | "FailedLoginAttempts" | "AccountLockedUntil" | "CreatedAt" | "IsActivated" | "ActivationToken" | "ActivationExpiresAt"> { }
 
 export class User extends Model<UserAttributes, UserCreationAttributes>
   implements UserAttributes {
   declare UserID: number;
-  declare Email: string;
+  declare Email: string | null;
   declare FullName: string | null;
   declare PasswordHash: string;
   declare Role: "exam_admin" | "invigilator" | "student";
   declare IsRootAdmin: boolean;
   declare IsActive: boolean;
   declare IsPasswordChanged: boolean;
+  declare FailedLoginAttempts: number;
+  declare AccountLockedUntil: Date | null;
   declare CreatedAt: Date;
   declare IsActivated: boolean;
   declare ActivationToken: string | null;
@@ -51,8 +55,7 @@ User.init(
 
     Email: {
       type: DataTypes.STRING(150),
-      allowNull: false,
-      // unique: true, // Removed to avoid MSSQL syntax issues
+      allowNull: true,
     },
 
     FullName: {
@@ -89,6 +92,15 @@ User.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false,
+    },
+    FailedLoginAttempts: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    AccountLockedUntil: {
+      type: DataTypes.DATE,
+      allowNull: true,
     },
 
     CreatedAt: {

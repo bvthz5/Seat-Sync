@@ -10,7 +10,7 @@ import {
     Search, FileSpreadsheet, Pencil, Trash2, AlertTriangle, 
     GraduationCap, BookOpen, FileDown, Users, 
     MoreVertical, CheckCircle2, ShieldCheck, Mail, Phone,
-    Eye, X, Plus, UserCircle
+    Eye, X, Plus, UserCircle, Key, KeyRound
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import api from '../../../services/api';
@@ -97,6 +97,7 @@ const Students: React.FC = () => {
     
     // New modal states for disable, reset password, and delete
     const [isDisableOpen, setIsDisableOpen] = useState(false);
+    const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
     const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
     const [shouldResetPassword, setShouldResetPassword] = useState(false);
     const [resetPasswordData, setResetPasswordData] = useState<{ tempPassword: string; email: string } | null>(null);
@@ -382,6 +383,29 @@ const Students: React.FC = () => {
         }
     };
 
+    const handleExportCredentials = async () => {
+        try {
+            toast.loading("Generating credentials report...", { id: "export-creds" });
+            const response = await api.get('/students/export-credentials', {
+                params: {
+                    dept: filters.dept
+                },
+                responseType: 'blob'
+            });
+            
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'Student_Credentials_List.xlsx');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            toast.success("Credentials report downloaded", { id: "export-creds" });
+        } catch (error) {
+            toast.error("Failed to export credentials", { id: "export-creds" });
+        }
+    };
+
     const handleDeleteAll = async () => {
         if (deleteAllConfirmText !== 'DELETE ALL') return;
         setIsDeletingAll(true);
@@ -505,6 +529,15 @@ const Students: React.FC = () => {
                         radius="lg"
                     >
                         Export
+                    </Button>
+                    <Button 
+                        className="bg-amber-50 text-amber-700 font-medium hover:bg-amber-100 border border-amber-200"
+                        startContent={<Key size={16} />}
+                        onPress={handleExportCredentials}
+                        radius="lg"
+                        title="Download student passwords (formula based)"
+                    >
+                        Passwords
                     </Button>
                     <Button
     className="bg-blue-50 text-blue-700 font-medium border border-blue-100 hover:bg-blue-100"
@@ -920,7 +953,7 @@ const Students: React.FC = () => {
                                                 <DropdownItem key="enable" textValue="Toggle State" className="hover:bg-slate-50 py-2" startContent={item.User?.isActive ? <AlertTriangle size={15} className="mr-2 text-amber-500" /> : <ShieldCheck size={15} className="mr-2 text-emerald-500" />} onPress={() => { setSelectedStudent(item); setIsDisableOpen(true); }}>
                                                     <span className={item.User?.isActive ? "text-amber-700 font-medium" : "text-emerald-700 font-medium"}>{item.User?.isActive ? 'Disable Account' : 'Enable Account'}</span>
                                                 </DropdownItem>
-                                                <DropdownItem key="reset" textValue="Reset Password" className="hover:bg-slate-50 py-2" startContent={<ShieldCheck size={15} className="mr-2 text-slate-500" />} onPress={() => { setSelectedStudent(item); setShouldResetPassword(true); }}>
+                                                <DropdownItem key="reset" textValue="Reset Password" className="hover:bg-slate-50 py-2" startContent={<ShieldCheck size={15} className="mr-2 text-slate-500" />} onPress={() => { setSelectedStudent(item); setIsResetConfirmOpen(true); }}>
                                                     <span className="text-slate-700 font-medium">Reset Password</span>
                                                 </DropdownItem>
                                                 <DropdownItem key="delete" textValue="Delete Student" className="hover:bg-red-50 py-2 mt-1 border-t border-slate-100" startContent={<Trash2 size={15} className="mr-2 text-red-500" />} onPress={() => confirmDelete(item)} color="danger">
@@ -958,6 +991,41 @@ const Students: React.FC = () => {
             {selectedStudent && (
                 <EditStudentModal isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} onSuccess={() => fetchStudents()} student={selectedStudent} />
             )}
+
+            {/* Reset Password Confirmation Modal */}
+            <Modal isOpen={isResetConfirmOpen} onClose={() => setIsResetConfirmOpen(false)} size="sm" backdrop="blur" classNames={{ base: "bg-white border border-gray-200 shadow-2xl rounded-2xl" }}>
+                <ModalContent>
+                    {(onClose: () => void) => (
+                        <ModalBody className="p-8 text-center space-y-5">
+                            <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-50 flex items-center justify-center">
+                                <KeyRound size={28} className="text-amber-500" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-gray-900">Reset Password?</h3>
+                                <p className="text-sm text-gray-500 mt-2 leading-relaxed">
+                                    This will reset <strong className="text-gray-800">{selectedStudent?.User?.FullName}</strong>'s password to the default formula and force a change on their next login.
+                                </p>
+                            </div>
+                            <div className="flex gap-3 pt-2">
+                                <Button variant="bordered" className="flex-1 font-semibold" onPress={onClose} size="lg" radius="lg">Cancel</Button>
+                                <Button 
+                                    className="flex-1 bg-amber-500 text-white font-semibold hover:bg-amber-600" 
+                                    onPress={() => {
+                                        setIsResetConfirmOpen(false);
+                                        handleResetPassword();
+                                    }} 
+                                    size="lg" 
+                                    radius="lg" 
+                                    isLoading={isResettingPassword}
+                                    startContent={!isResettingPassword && <ShieldCheck size={16} />}
+                                >
+                                    Confirm
+                                </Button>
+                            </div>
+                        </ModalBody>
+                    )}
+                </ModalContent>
+            </Modal>
 
             {/* Delete Student Modal */}
             <Modal isOpen={isDeleteOpen} onClose={() => setIsDeleteOpen(false)} size="sm" backdrop="blur" classNames={{ base: "bg-white border border-gray-200 shadow-2xl rounded-2xl" }}>

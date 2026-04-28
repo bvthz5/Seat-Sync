@@ -13,7 +13,7 @@ import { AuthMiddleware } from "../middlewares/auth.middleware.js";
 const router = Router();
 
 // --- Public / User Routes (Authenticated) ---
-router.use(AuthMiddleware.requireAuth); // All routes need login
+router.use(AuthMiddleware.verifyAccessToken); // All routes need login
 
 router.get("/my", getMyNotifications);
 router.get("/stats", getUserStats);

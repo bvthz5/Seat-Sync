@@ -12,6 +12,10 @@ import { generateRandomToken, hashToken } from "../utils/hash.js";
 import { PasswordReset } from "../models/PasswordReset.model.js";
 import { UniqueConstraintError } from "sequelize";
 import { validateStudentRegistration } from "../utils/student-registration.validation.js";
+import jwt from "jsonwebtoken";
+import { generateDefaultPassword } from "../utils/student.utils.js";
+import { QueryTypes } from "sequelize";
+import { sequelize } from "../config/database.js";
 
 const normalizeSemesterRank = (semester: { SemesterNumber?: number; SemesterName?: string }) => {
   if (typeof semester.SemesterNumber === "number" && Number.isFinite(semester.SemesterNumber)) {
@@ -34,8 +38,10 @@ export class StudentAuthController {
    * Login with email or register number
    */
   static async login(req: Request, res: Response): Promise<void> {
+    console.log("[LoginTrace] Starting login request for identifier:", req.body.identifier);
     try {
-      const { identifier, password } = req.body;
+      const { identifier } = req.body;
+      const password = (req.body.password || '').trim();
 
       if (!identifier || !password) {
         res.status(400).json({ error: "Identifier and password are required" });
@@ -43,22 +49,26 @@ export class StudentAuthController {
       }
 
       // Check if identifier is email or register number
-      const isEmail = identifier.includes("@");
+      const cleanIdentifier = (identifier || '').trim();
+      const isEmail = cleanIdentifier.includes("@");
 
       let user;
+      let studentDoc: any = null;
+      const normalizedIdentifier = isEmail ? cleanIdentifier.toLowerCase() : cleanIdentifier.toUpperCase();
+
       if (isEmail) {
         user = await User.findOne({
-          where: { Email: identifier, Role: "student", IsActive: true },
+          where: { Email: normalizedIdentifier, Role: "student", IsActive: true },
           include: [{ model: Student, as: 'Student' }]
         });
+        studentDoc = (user as any)?.Student;
       } else {
-        const student = await Student.findOne({
-          where: { RegisterNumber: identifier },
+        studentDoc = await Student.findOne({
+          where: { RegisterNumber: normalizedIdentifier },
           include: [{ model: User, required: true, where: { Role: "student", IsActive: true } }]
         });
-        if (student) {
-          user = (student as any).User;
-          (user as any).Student = student;
+        if (studentDoc) {
+          user = (studentDoc as any).User;
         }
       }
 
@@ -67,18 +77,95 @@ export class StudentAuthController {
         return;
       }
 
+      // Check for account lockout
+      if (user.AccountLockedUntil) {
+        const lockTime = new Date(user.AccountLockedUntil);
+        if (!isNaN(lockTime.getTime()) && lockTime > new Date()) {
+          const remainingMinutes = Math.ceil((lockTime.getTime() - Date.now()) / 60000);
+          res.status(403).json({ 
+            error: "Account locked", 
+            message: `Too many failed attempts. Please try again in ${remainingMinutes} minutes.` 
+          });
+          return;
+        }
+      }
+
+      if (!user.PasswordHash) {
+        console.error(`Login failed: No password hash for user ${identifier}`);
+        res.status(401).json({ error: "Authentication failed. Please contact admin to reset your password." });
+        return;
+      }
+
       const isPasswordValid = await bcrypt.compare(password, user.PasswordHash);
       if (!isPasswordValid) {
+        // Increment failed attempts
+        const failedAttempts = (Number(user.FailedLoginAttempts) || 0) + 1;
+        let lockUntil = user.AccountLockedUntil;
+        
+        if (failedAttempts >= 5) {
+          lockUntil = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes lockout
+        }
+        
+        console.log(`[LoginDebug] Failed attempt ${failedAttempts} for user ${user.UserID}. LockUntil:`, lockUntil);
+
+        // Use a RAW query to bypass Sequelize's date-conversion logic which causes MSSQL errors
+        const formattedLockUntil = lockUntil ? lockUntil.toISOString().replace('T', ' ').slice(0, 19) : null;
+        
+        console.log(`[LoginDebug] Updating DB via RAW Query with formattedLockUntil:`, formattedLockUntil);
+        
+        await sequelize.query(
+          "UPDATE Users SET FailedLoginAttempts = ?, AccountLockedUntil = ? WHERE UserID = ?",
+          {
+            replacements: [failedAttempts, formattedLockUntil, user.UserID],
+            type: QueryTypes.UPDATE
+          }
+        );
+
         res.status(401).json({ error: "Invalid credentials" });
         return;
       }
 
+      // Reset failed attempts on successful login
+      if (user.FailedLoginAttempts > 0 || user.AccountLockedUntil) {
+        await User.update({ 
+          FailedLoginAttempts: 0,
+          AccountLockedUntil: null
+        }, { where: { UserID: user.UserID } });
+      }
+
+      // Check if password change is required
+      if (user.IsPasswordChanged === false) {
+        console.log("[LoginTrace] Password change required. Generating temp token for user:", user.UserID);
+        // Generate a restricted temporary token with full payload required by middleware
+        const tempToken = jwt.sign(
+          { 
+            UserID: user.UserID, 
+            Email: user.Email,
+            Role: user.Role,
+            IsPasswordChanged: false,
+            IsRootAdmin: false,
+            isTemp: true 
+          }, 
+          process.env.JWT_ACCESS_SECRET || 'secret', 
+          { expiresIn: '15m' }
+        );
+        console.log("[LoginTrace] Temp token generated successfully.");
+
+        res.status(200).json({ 
+          requirePasswordChange: true,
+          message: "Please change your password to continue",
+          tempToken
+        });
+        return;
+      }
+
+      // 4. Generate standard login tokens
       const payload: JWTPayload = {
         UserID: user.UserID,
-        Email: user.Email,
+        Email: user.Email as string | null,
         Role: user.Role,
-        IsRootAdmin: user.IsRootAdmin,
-        IsPasswordChanged: user.IsPasswordChanged,
+        IsPasswordChanged: !!user.IsPasswordChanged,
+        IsRootAdmin: !!user.IsRootAdmin
       };
 
       const accessToken = signAccessToken(payload);
@@ -92,10 +179,25 @@ export class StudentAuthController {
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
 
-      res.status(200).json({ accessToken, refreshToken, user });
+      res.status(200).json({
+        message: "Login successful",
+        accessToken,
+        refreshToken,
+        user: {
+          UserID: user.UserID,
+          Email: user.Email,
+          FullName: user.FullName,
+          Role: user.Role,
+          RegisterNumber: studentDoc?.RegisterNumber
+        }
+      });
+
     } catch (error: any) {
-      console.error("Student login error:", error.message);
-      res.status(500).json({ error: "Authentication failed", message: error.message });
+      console.error("Student login error:", error);
+      res.status(500).json({ 
+        error: "Authentication failed", 
+        message: error.message || "An internal error occurred" 
+      });
     }
   }
 
@@ -128,18 +230,18 @@ export class StudentAuthController {
         return;
       }
 
-      const departmentId = Number(DepartmentID);
-      const programId = Number(ProgramID);
+      const departmentId = DepartmentID ? Number(DepartmentID) : null;
+      const programId = ProgramID ? Number(ProgramID) : null;
       const batchYear = Number(BatchYear);
 
-      // Additional numeric validation (should pass after field validation)
-      if (![departmentId, programId, batchYear].every((value) => Number.isFinite(value) && value > 0)) {
-        res.status(400).json({ error: "Invalid academic details provided" });
+      // Additional numeric validation for BatchYear (since Department/Program are now optional)
+      if (!Number.isFinite(batchYear) || batchYear <= 0) {
+        res.status(400).json({ error: "Invalid batch year provided" });
         return;
       }
 
       // Duplicate checks
-      const existingEmail = await User.findOne({ where: { Email: Email.toLowerCase() } });
+      const existingEmail = Email ? await User.findOne({ where: { Email: Email.toLowerCase() } }) : null;
       if (existingEmail) { 
         res.status(400).json({ 
           error: "Validation failed",
@@ -157,42 +259,42 @@ export class StudentAuthController {
         return; 
       }
 
-      // Validate program belongs to the selected department (supports legacy and bridge-table mappings).
-      const program = await Program.findOne({ where: { ProgramID: programId } });
-      let programDepartmentLink = null;
+      let semesterId: number | null = null;
 
-      try {
-        programDepartmentLink = await ProgramDepartment.findOne({ where: { ProgramID: programId, DepartmentID: departmentId } });
-      } catch (lookupError) {
-        // If the bridge table is unavailable in a partial environment, fall back to the legacy mapping check.
-        console.warn("ProgramDepartment lookup skipped:", lookupError);
-      }
+      // Only validate program/semester if they are provided
+      if (programId && departmentId) {
+        // Validate program belongs to the selected department (supports legacy and bridge-table mappings).
+        const program = await Program.findOne({ where: { ProgramID: programId } });
+        let programDepartmentLink = null;
 
-      const isLinkedViaLegacy = program?.DepartmentID === departmentId;
-      if (!program || (!programDepartmentLink && !isLinkedViaLegacy)) {
-        res.status(400).json({ error: "Selected program is not mapped to the chosen department" });
-        return;
-      }
+        try {
+          programDepartmentLink = await ProgramDepartment.findOne({ where: { ProgramID: programId, DepartmentID: departmentId } });
+        } catch (lookupError) {
+          console.warn("ProgramDepartment lookup skipped:", lookupError);
+        }
 
-      // Verify semesters exist for this program and pick the first real semester safely.
-      const semesters = await Semester.findAll({
-        where: {
-          ProgramID: programId,
-          IsActive: true,
-        },
-      });
+        const isLinkedViaLegacy = program?.DepartmentID === departmentId;
+        if (!program || (!programDepartmentLink && !isLinkedViaLegacy)) {
+          res.status(400).json({ error: "Selected program is not mapped to the chosen department" });
+          return;
+        }
 
-      if (!semesters.length) {
-        res.status(400).json({ error: "No semesters found for the selected program. Please contact admin." });
-        return;
-      }
+        // Verify semesters exist for this program and pick the first real semester safely.
+        const semesters = await Semester.findAll({
+          where: {
+            ProgramID: programId,
+            IsActive: true,
+          },
+        });
 
-      const initialSemester = [...semesters]
-        .sort((a, b) => normalizeSemesterRank(a) - normalizeSemesterRank(b))[0];
-
-      if (!initialSemester?.SemesterID) {
-        res.status(400).json({ error: "Unable to determine initial semester for the selected program." });
-        return;
+        if (semesters.length > 0) {
+          const initialSemester = [...semesters]
+            .sort((a, b) => normalizeSemesterRank(a) - normalizeSemesterRank(b))[0];
+          
+          if (initialSemester?.SemesterID) {
+            semesterId = initialSemester.SemesterID;
+          }
+        }
       }
 
       const hashPassword = await bcrypt.hash(Password, 12);
@@ -204,6 +306,7 @@ export class StudentAuthController {
         PasswordHash: hashPassword,
         Role: "student",
         IsActive: true,
+        IsPasswordChanged: true, // User set their own password
       });
       createdUserID = user.UserID;
 
@@ -211,9 +314,10 @@ export class StudentAuthController {
       await Student.create({
         UserID: user.UserID,
         RegisterNumber: RegisterNumber.toUpperCase(),
-        DepartmentID: departmentId,
-        ProgramID: programId,
-        SemesterID: initialSemester.SemesterID,
+        FullName: FullName.trim(),
+        DepartmentID: departmentId as any,
+        ProgramID: programId as any,
+        SemesterID: semesterId as any,
         BatchYear: batchYear,
         Status: "ACTIVE",
         AdmissionDate: null
@@ -331,6 +435,81 @@ export class StudentAuthController {
     } catch (error: any) {
       console.error("Reset password error:", error.message);
       res.status(500).json({ error: "Password reset failed" });
+    }
+  }
+
+  /**
+   * POST /api/auth/student/change-password
+   */
+  static async changePassword(req: Request, res: Response): Promise<void> {
+    try {
+      const currentPassword = (req.body.currentPassword || '').trim();
+      const newPassword = (req.body.newPassword || '').trim();
+      const UserID = req.user?.UserID;
+
+      console.log(`[ChangePassword] Attempt for UserID: ${UserID}`);
+
+      if (!UserID) {
+        console.warn("[ChangePassword] No UserID found in request user object");
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
+      if (!currentPassword || !newPassword) {
+        console.warn("[ChangePassword] Missing passwords in request body");
+        res.status(400).json({ error: "Current and new passwords are required" });
+        return;
+      }
+
+      if (newPassword.length < 8) {
+        console.warn("[ChangePassword] New password too short:", newPassword.length);
+        res.status(400).json({ error: "New password must be at least 8 characters" });
+        return;
+      }
+
+      const user = await User.findByPk(UserID);
+      if (!user) {
+        console.error(`[ChangePassword] User not found for ID: ${UserID}`);
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
+
+      // Verify current password
+      console.log("[ChangePassword] Verifying current password match...");
+      const isMatch = await bcrypt.compare(currentPassword, user.PasswordHash);
+      if (!isMatch) {
+        console.warn(`[ChangePassword] Current password mismatch for user: ${user.Email}`);
+        res.status(400).json({ error: "Incorrect current password" });
+        return;
+      }
+      console.log("[ChangePassword] Password verified. Proceeding to update.");
+
+      // Hash and update
+      const hashed = await bcrypt.hash(newPassword, 12);
+      await user.update({ 
+        PasswordHash: hashed, 
+        IsPasswordChanged: true 
+      });
+
+      // Generate a fresh full access token
+      const student = await Student.findOne({ where: { UserID } });
+      const payload: JWTPayload = {
+        UserID: user.UserID,
+        Email: user.Email as string | null,
+        Role: user.Role,
+        IsPasswordChanged: true,
+        IsRootAdmin: user.IsRootAdmin
+      };
+
+      const accessToken = signAccessToken(payload);
+
+      res.json({ 
+        message: "Password updated successfully",
+        accessToken
+      });
+    } catch (error: any) {
+      console.error("Change password error:", error.message);
+      res.status(500).json({ error: "Failed to update password" });
     }
   }
 }

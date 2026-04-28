@@ -161,7 +161,7 @@ export const validateBatchYear = (batchYear: string | number): string | null => 
  */
 export const validateDepartmentID = (departmentID: string | number): string | null => {
   if (departmentID === null || departmentID === undefined || departmentID === "") {
-    return "Department is required";
+    return null; // Now optional
   }
 
   const id = Number(departmentID);
@@ -178,7 +178,7 @@ export const validateDepartmentID = (departmentID: string | number): string | nu
  */
 export const validateProgramID = (programID: string | number): string | null => {
   if (programID === null || programID === undefined || programID === "") {
-    return "Program is required";
+    return null; // Now optional
   }
 
   const id = Number(programID);
