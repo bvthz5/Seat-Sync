@@ -1109,12 +1109,17 @@ export const saveAttendance = async (req: Request, res: Response) => {
             ExamID: Number(examId),
             StudentID: Number(s.StudentID),
             IsPresent: Boolean(s.IsPresent),
-            MarkedByInvigilatorID: invigilator.FacultyID,
+            MarkedByInvigilatorID: invigilator.InvigilatorID, // Corrected from FacultyID to InvigilatorID
             MarkedAt: new Date()
         }));
 
         for (const data of attendanceData) {
-            await Attendance.upsert(data);
+            try {
+                await Attendance.upsert(data);
+            } catch (err) {
+                console.error(`Failed to upsert attendance for StudentID ${data.StudentID}:`, err);
+                throw err; // Re-throw to be caught by main catch block
+            }
         }
 
         // Log activity
@@ -1124,7 +1129,7 @@ export const saveAttendance = async (req: Request, res: Response) => {
             Details: `Submitted attendance for ExamID ${examId} in Room ${assignment.RoomID}`,
             IPAddress: req.ip,
             UserAgent: req.headers['user-agent']
-        });
+        }).catch(err => console.error("Activity log failed:", err));
 
         res.json({ 
             success: true, 
@@ -1136,8 +1141,11 @@ export const saveAttendance = async (req: Request, res: Response) => {
         });
 
     } catch (error: any) {
-        console.error("Save attendance error:", error);
-        res.status(500).json({ message: "Failed to save attendance. Please try again." });
+        console.error("Save attendance fatal error:", error);
+        res.status(500).json({ 
+            message: "Failed to save attendance. Please try again.",
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
