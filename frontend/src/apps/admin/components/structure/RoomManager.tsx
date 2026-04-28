@@ -37,7 +37,8 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
     // Form Data (Single)
     const [singleData, setSingleData] = useState({
         roomCode: '',
-        TotalCapacity: 0,
+        TotalCapacity: 40,
+        OverrideCap: null as number | null,
         examUsable: true
     });
 
@@ -143,13 +144,14 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
             setSingleData({
                 roomCode: room.RoomCode || room.RoomName || '',
                 TotalCapacity: room.TotalCapacity || (room.TotalRows * room.BenchesPerRow * room.SeatsPerBench) || 0,
+                OverrideCap: room.OverrideCap ?? null,
                 examUsable: room.ExamUsable
             });
             setIsBulkMode(false);
         } else {
             // Create Mode
             setEditingRoom(null);
-            setSingleData({ roomCode: '', TotalCapacity: 40, examUsable: true });
+            setSingleData({ roomCode: '', TotalCapacity: 40, OverrideCap: null, examUsable: true });
             setBulkData({ prefix: 'LH', startNumber: 101, count: 5, TotalCapacity: 40 });
             setIsBulkMode(false);
         }
@@ -295,13 +297,14 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
     };
 
     const handleSubmit = async (onClose: () => void) => {
-        if (!selectedBlockId || !selectedFloorId) {
-            toast.error("Location context missing");
-            return;
-        }
-
         try {
             if (isBulkMode && !editingRoom) {
+                // Validate Context for Bulk Create
+                if (!selectedBlockId || selectedBlockId === "all" || !selectedFloorId || selectedFloorId === "all") {
+                    toast.error("Please select a specific Block and Floor for bulk creation");
+                    return;
+                }
+
                 // Validate Preview
                 if (previewRooms.length === 0) {
                     toast.error("No valid rooms to create");
@@ -333,18 +336,27 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                 }
 
                 if (editingRoom) {
+                    // Update doesn't strictly need block/floor context if we have RoomID
                     await structureService.updateRoom(editingRoom.RoomID, {
                         RoomCode: singleData.roomCode,
                         TotalCapacity: singleData.TotalCapacity,
+                        OverrideCap: singleData.OverrideCap,
                         ExamUsable: singleData.examUsable
                     });
                     toast.success("Room updated");
                 } else {
+                    // SINGLE CREATE needs context
+                    if (!selectedBlockId || selectedBlockId === "all" || !selectedFloorId || selectedFloorId === "all") {
+                        toast.error("Please select a specific Block and Floor to add a room");
+                        return;
+                    }
+
                     await structureService.createRoom({
                         BlockID: Number(selectedBlockId),
                         FloorID: Number(selectedFloorId),
                         RoomCode: singleData.roomCode,
                         TotalCapacity: singleData.TotalCapacity,
+                        OverrideCap: singleData.OverrideCap,
                         ExamUsable: singleData.examUsable,
                         Status: 'Active'
                     });
@@ -352,7 +364,9 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                 }
             }
             // Refresh
-            loadRooms(Number(selectedBlockId), Number(selectedFloorId), page, searchQuery, statusFilter);
+            const bId = (selectedBlockId && selectedBlockId !== 'all') ? Number(selectedBlockId) : undefined;
+            const fId = (selectedFloorId && selectedFloorId !== 'all') ? Number(selectedFloorId) : undefined;
+            loadRooms(bId, fId, page, searchQuery, statusFilter);
             onClose();
         } catch (error: any) {
             toast.error(error.response?.data?.message || "Operation failed");
@@ -734,9 +748,15 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                             <div className="text-sm font-semibold text-slate-700 ml-1 mb-1.5">Room Code</div>
                                             <Input id="modal-room-code" name="roomCode" autoFocus aria-label="Room Code" placeholder="e.g. LH-201" variant="bordered" classNames={{ inputWrapper: "h-12 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl shadow-sm px-4 transition-all", input: "text-base font-medium text-slate-800 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0" }} value={singleData.roomCode} onValueChange={(v) => setSingleData({ ...singleData, roomCode: v })} />
                                         </div>
-                                        <div className="flex flex-col gap-1.5">
-                                            <div className="text-sm font-semibold text-slate-700 ml-1 mb-1.5">Capacity</div>
-                                            <Input id="modal-room-capacity" name="capacity" type="number" aria-label="Capacity" placeholder="60" variant="bordered" classNames={{ inputWrapper: "h-12 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl shadow-sm px-4 transition-all", input: "text-base font-medium text-slate-800 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0" }} value={singleData.TotalCapacity.toString()} onValueChange={(v) => setSingleData({ ...singleData, TotalCapacity: Number(v) })} />
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="flex flex-col gap-1.5">
+                                                <div className="text-sm font-semibold text-slate-700 ml-1 mb-1.5">Capacity</div>
+                                                <Input id="modal-room-capacity" name="capacity" type="number" aria-label="Capacity" placeholder="60" variant="bordered" classNames={{ inputWrapper: "h-12 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl shadow-sm px-4 transition-all", input: "text-base font-medium text-slate-800 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0" }} value={singleData.TotalCapacity.toString()} onValueChange={(v) => setSingleData({ ...singleData, TotalCapacity: Number(v) })} />
+                                            </div>
+                                            <div className="flex flex-col gap-1.5">
+                                                <div className="text-sm font-semibold text-slate-700 ml-1 mb-1.5">Override Cap <span className="text-[10px] font-normal text-slate-400 ml-1">(Optional)</span></div>
+                                                <Input id="modal-room-override" name="overrideCap" type="number" aria-label="Override Capacity" placeholder="e.g. 30" variant="bordered" classNames={{ inputWrapper: "h-12 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl shadow-sm px-4 transition-all", input: "text-base font-medium text-slate-800 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0" }} value={singleData.OverrideCap === null ? "" : singleData.OverrideCap.toString()} onValueChange={(v) => setSingleData({ ...singleData, OverrideCap: v === "" ? null : Number(v) })} />
+                                            </div>
                                         </div>
                                         <div className="flex flex-col gap-3 pt-2">
                                             <span className="text-sm font-semibold text-slate-700 ml-1">Exam Compatibility</span>
@@ -924,9 +944,20 @@ export const RoomManager: React.FC<RoomManagerProps> = ({ readOnly = false }) =>
                                     </div>
                                 )}
                             </ModalBody>
-                            <ModalFooter className="border-t border-slate-100 px-8 py-6">
-                                <Button color="danger" variant="light" onPress={onClose} className="font-semibold text-slate-500">Cancel</Button>
-                                <Button color="primary" className="font-bold shadow-lg shadow-blue-500/20 rounded-xl h-11 px-6 text-white" onPress={() => handleSubmit(onClose)} isDisabled={loading || (isBulkMode && previewRooms.length === 0)}>
+                            <ModalFooter className="border-t border-slate-100 px-8 py-6 bg-slate-50/50">
+                                <Button 
+                                    onPress={onClose} 
+                                    variant="flat" 
+                                    className="font-bold text-slate-500 hover:bg-slate-200 transition-colors rounded-xl px-6"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button 
+                                    onPress={() => handleSubmit(onClose)} 
+                                    isDisabled={loading || (isBulkMode && previewRooms.length === 0)}
+                                    className="font-bold shadow-lg shadow-blue-500/25 rounded-xl h-11 px-8 text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                                    isLoading={loading}
+                                >
                                     {editingRoom ? "Update Room" : (isBulkMode ? `Create ${previewRooms.length} Rooms` : "Create Room")}
                                 </Button>
                             </ModalFooter>

@@ -12,6 +12,7 @@ interface RoomAttributes {
   FloorID: number;
   RoomCode: string; // Renamed from RoomName
   TotalCapacity: number; // New field
+  OverrideCap?: number | null; // Optional override cap
   RoomType: "ROOM" | "HALL";
   LayoutType: "CUSTOM";
   RowLayout: number[];
@@ -24,7 +25,7 @@ interface RoomAttributes {
 /**
  * Attributes required when creating a room
  */
-interface RoomCreationAttributes extends Optional<RoomAttributes, "RoomID" | "RoomType" | "LayoutType" | "RowLayout" | "SeatsPerBench" | "IsLayoutLocked"> { }
+interface RoomCreationAttributes extends Optional<RoomAttributes, "RoomID" | "RoomType" | "LayoutType" | "RowLayout" | "SeatsPerBench" | "IsLayoutLocked" | "OverrideCap"> { }
 
 export class Room extends Model<RoomAttributes, RoomCreationAttributes>
   implements RoomAttributes {
@@ -33,6 +34,7 @@ export class Room extends Model<RoomAttributes, RoomCreationAttributes>
   declare FloorID: number;
   declare RoomCode: string;
   declare TotalCapacity: number;
+  declare OverrideCap: number | null;
   declare RoomType: "ROOM" | "HALL";
   declare LayoutType: "CUSTOM";
   declare RowLayout: number[];
@@ -75,6 +77,15 @@ Room.init(
       allowNull: false,
       defaultValue: 0,
       field: 'Capacity',
+      validate: {
+        min: 0
+      }
+    },
+    OverrideCap: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: null,
+      field: 'OverrideCap',
       validate: {
         min: 0
       }

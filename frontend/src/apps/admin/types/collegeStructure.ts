@@ -22,6 +22,7 @@ export interface Room {
     RoomCode: string; // New: replaces RoomName
     RoomName?: string; // Legacy support (optional)
     TotalCapacity: number; // New
+    OverrideCap?: number | null; // Optional override cap
     TotalRows: number;
     BenchesPerRow: number;
     SeatsPerBench: number;

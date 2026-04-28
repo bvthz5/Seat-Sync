@@ -139,6 +139,7 @@ export class RoomService {
                 BlockID: data.blockId,
                 FloorID: data.floorId,
                 TotalCapacity: data.capacity,
+                OverrideCap: (data as any).overrideCap ?? (data as any).OverrideCap ?? null,
                 ExamUsable: data.isExamUsable,
                 Status: "Active",
                 RoomType: "ROOM",
@@ -215,6 +216,7 @@ export class RoomService {
                     BlockID: blockId,
                     FloorID: floorId,
                     TotalCapacity: capacity,
+                    OverrideCap: r.overrideCap ?? r.OverrideCap ?? null,
                     ExamUsable: true,
                     Status: "Active",
                     RoomType: "ROOM",
@@ -271,8 +273,11 @@ export class RoomService {
         const data: any = {};
         if (updates.roomCode !== undefined) data.RoomCode = updates.roomCode;   
         if (updates.RoomCode !== undefined) data.RoomCode = updates.RoomCode;   
-        if (updates.capacity !== undefined) data.Capacity = Number(updates.capacity);
-        if (updates.Capacity !== undefined) data.Capacity = Number(updates.Capacity);
+        if (updates.capacity !== undefined) data.TotalCapacity = Number(updates.capacity);
+        if (updates.Capacity !== undefined) data.TotalCapacity = Number(updates.Capacity);
+        if (updates.TotalCapacity !== undefined) data.TotalCapacity = Number(updates.TotalCapacity);
+        if (updates.overrideCap !== undefined) data.OverrideCap = updates.overrideCap === "" ? null : Number(updates.overrideCap);
+        if (updates.OverrideCap !== undefined) data.OverrideCap = updates.OverrideCap === "" ? null : Number(updates.OverrideCap);
         if (updates.examUsable !== undefined) data.ExamUsable = !!updates.examUsable;
         if (updates.ExamUsable !== undefined) data.ExamUsable = !!updates.ExamUsable;
         if (updates.status !== undefined) data.Status = updates.status;

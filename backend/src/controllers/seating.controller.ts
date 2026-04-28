@@ -1249,9 +1249,6 @@ export const bulkAssign = async (req: Request, res: Response) => {
          * END-SEMESTER BRANCH — returns early
          * ══════════════════════════════════════════════════════ */
         if (examType === 'EndSemester') {
-            const rawCap = Number(roomCapacityLimit);
-            const capLimit = roomCapacityLimit && !isNaN(rawCap) && rawCap > 0 ? rawCap : 30;
-
             // ── Already-allocated excludes ──
             const selectedHallSetES = new Set<number>((hallIds as number[]).map((id: number) => Number(id)));
             const existingAllocsES = await SeatAllocation.findAll({
@@ -1313,6 +1310,17 @@ export const bulkAssign = async (req: Request, res: Response) => {
                 await transaction.rollback();
                 return res.status(400).json({ message: 'No valid hall IDs provided.', examType });
             }
+
+            // Fetch rooms to get their actual capacities and persistent overrides
+            const targetHallsES = await Room.findAll({ where: { RoomID: { [Op.in]: safeHallIds } }, transaction });
+            const roomCapacityMap = new Map<number, { capacity: number; override: number | null }>();
+            for (const h of targetHallsES) {
+                roomCapacityMap.set(h.RoomID, {
+                    capacity: h.TotalCapacity,
+                    override: h.OverrideCap
+                });
+            }
+
             let allActiveSeatsES: any[] = [];
             try {
                 allActiveSeatsES = await sequelize.query(`
@@ -1332,16 +1340,36 @@ export const bulkAssign = async (req: Request, res: Response) => {
                 return res.status(400).json({ message: 'No active seats found in selected halls.', examType });
             }
 
-            // Apply per-room capacity cap
+            // Apply per-room capacity cap using effective capacity logic
             const roomSeatsMapES = new Map<number, any[]>();
             for (const seat of allActiveSeatsES) {
                 const rid = Number(seat.RoomID);
                 if (!roomSeatsMapES.has(rid)) roomSeatsMapES.set(rid, []);
                 roomSeatsMapES.get(rid)!.push(seat);
             }
+            
+            const sessionOverrideCap = roomCapacityLimit && !isNaN(Number(roomCapacityLimit)) ? Number(roomCapacityLimit) : null;
+            const capLimit = sessionOverrideCap ?? 'Dynamic';
+            
             const cappedSeatsES: any[] = [];
-            for (const [, roomSeats] of roomSeatsMapES) {
-                cappedSeatsES.push(...roomSeats.slice(0, capLimit));
+            for (const [rid, roomSeats] of roomSeatsMapES) {
+                const roomInfo = roomCapacityMap.get(rid);
+                const dbCapacity = roomInfo?.capacity ?? roomSeats.length;
+                const dbOverride = roomInfo?.override ?? null;
+                
+                // Priority: 
+                // 1. Session Override (passed in request)
+                // 2. Persistent DB Override
+                // 3. Room Total Capacity
+                
+                let effectiveCap = dbCapacity;
+                if (sessionOverrideCap !== null) {
+                    effectiveCap = Math.min(sessionOverrideCap, dbCapacity);
+                } else if (dbOverride !== null) {
+                    effectiveCap = Math.min(dbOverride, dbCapacity);
+                }
+
+                cappedSeatsES.push(...roomSeats.slice(0, effectiveCap));
             }
 
             // ── Clear old allocations for these halls ──
@@ -1364,7 +1392,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
                 cappedByRoom.get(rid)!.push(seat);
             }
 
-            const targetHallsES = await Room.findAll({ where: { RoomID: { [Op.in]: safeHallIds } }, transaction });
+
             let hallIdsToUseES = [...safeHallIds];
             if (shuffleRooms) {
                 for (let i = hallIdsToUseES.length - 1; i > 0; i--) {
@@ -1739,6 +1767,15 @@ export const bulkAssign = async (req: Request, res: Response) => {
             transaction
         });
 
+        // Map capacities and overrides for Internal branch
+        const roomCapacityMap = new Map<number, { capacity: number; override: number | null }>();
+        for (const h of targetHalls) {
+            roomCapacityMap.set(h.RoomID, {
+                capacity: h.TotalCapacity,
+                override: h.OverrideCap
+            });
+        }
+
         // Fetch all active seats for these halls in one query
         // Using raw SQL to avoid Sequelize MSSQL dialect issues
         let allActiveSeats: any[] = [];
@@ -1789,6 +1826,25 @@ export const bulkAssign = async (req: Request, res: Response) => {
             roomSeatsMap.get(roomId)!.push(seat);
         }
 
+        // Apply capacity capping for Internal branch
+        const sessionOverrideCap = roomCapacityLimit && !isNaN(Number(roomCapacityLimit)) ? Number(roomCapacityLimit) : null;
+        const cappedByRoom = new Map<number, any[]>();
+        
+        for (const [rid, roomSeats] of roomSeatsMap) {
+            const roomInfo = roomCapacityMap.get(rid);
+            const dbCapacity = roomInfo?.capacity ?? roomSeats.length;
+            const dbOverride = roomInfo?.override ?? null;
+            
+            let effectiveCap = dbCapacity;
+            if (sessionOverrideCap !== null) {
+                effectiveCap = Math.min(sessionOverrideCap, dbCapacity);
+            } else if (dbOverride !== null) {
+                effectiveCap = Math.min(dbOverride, dbCapacity);
+            }
+
+            cappedByRoom.set(rid, roomSeats.slice(0, effectiveCap));
+        }
+
         const hallResults: any[] = [];
         const allNewAllocations: { ExamID: number; SeatID: number; StudentID: number; IsEligible: boolean; IsBlocked: boolean }[] = [];
 
@@ -1808,7 +1864,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
             const hall = targetHalls.find(h => h.RoomID === hallIdNum);
             if (!hall) continue;
 
-            const seats = roomSeatsMap.get(hallIdNum) || [];
+            const seats = cappedByRoom.get(hallIdNum) || [];
 
             const benchMap: Record<string, Record<number, any[]>> = {};
             for (const seat of seats) {

@@ -35,19 +35,22 @@ loadDotenvSilently();
 const DB_NAME = process.env.DB_NAME || "";
 const DB_USER = process.env.DB_USER || "";
 const DB_PASS = process.env.DB_PASS || "";
-const DB_HOST = process.env.DB_HOST || "localhost";
+const DB_HOST = process.env.DB_HOST || "127.0.0.1";
 const DB_PORT = Number(process.env.DB_PORT || 1433);
 const DB_ENCRYPT = process.env.DB_ENCRYPT === "true";
+const DB_USE_WINDOWS_AUTH = process.env.DB_USE_WINDOWS_AUTH === "true";
+const DB_FALLBACK_TO_SQLITE = process.env.DB_FALLBACK_TO_SQLITE === "true";
 
 /* ────────────────────────────────────────────── */
 /* SQLite Config                                  */
 /* ────────────────────────────────────────────── */
 
 function createSQLite() {
-    console.warn("Using SQLite fallback (MSSQL not available)");
+    console.warn("Using SQLite fallback (MSSQL not available or connection failed)");
+    const dbPath = path.resolve(process.cwd(), "database.sqlite");
     return new Sequelize({
         dialect: "sqlite",
-        storage: ":memory:",
+        storage: dbPath,
         logging: false
     });
 }
@@ -60,35 +63,52 @@ let sequelize: Sequelize;
 
 const hasMSSQLConfig =
     DB_NAME.length > 0 &&
-    DB_USER.length > 0 &&
-    DB_PASS.length > 0 &&
+    (DB_USE_WINDOWS_AUTH || (DB_USER.length > 0 && DB_PASS.length > 0)) &&
     DB_HOST.length > 0;
 
-// Log the auth decision for debugging
-console.log(`MSSQL Config Check: Host=${DB_HOST}, Encrypt=${DB_ENCRYPT}`);
+console.log(`MSSQL Config Check: Host=${DB_HOST}, Port=${DB_PORT}, Encrypt=${DB_ENCRYPT}, WindowsAuth=${DB_USE_WINDOWS_AUTH}`);
 
 if (hasMSSQLConfig) {
-    console.log("Initializing Sequelize with Standard MSSQL Config...");
-    sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASS, {
-        dialect: "mssql",
-        host: DB_HOST,
-        port: DB_PORT,
-        logging: false,
-        dialectOptions: {
-            options: {
-                encrypt: DB_ENCRYPT,
-                trustServerCertificate: true
+    if (DB_USE_WINDOWS_AUTH) {
+        console.log("Initializing Sequelize with MSSQL Windows Authentication...");
+        sequelize = new Sequelize(DB_NAME, "", "", {
+            dialect: "mssql",
+            host: DB_HOST,
+            port: DB_PORT,
+            logging: false,
+            dialectOptions: {
+                driver: "msnodesqlv8",
+                connectionString: `Driver={ODBC Driver 17 for SQL Server};Server=${DB_HOST},${DB_PORT};Database=${DB_NAME};Trusted_Connection=yes;`,
+                options: {
+                    trustServerCertificate: true
+                }
+            },
+            pool: { max: 10, min: 0, acquire: 30000, idle: 10000 }
+        });
+    } else {
+        console.log("Initializing Sequelize with Standard MSSQL Config...");
+        sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASS, {
+            dialect: "mssql",
+            host: DB_HOST,
+            port: DB_PORT,
+            logging: false,
+            dialectOptions: {
+                options: {
+                    encrypt: DB_ENCRYPT,
+                    trustServerCertificate: true,
+                    connectTimeout: 30000
+                }
+            },
+            pool: {
+                max: 10,
+                min: 0,
+                acquire: 30000,
+                idle: 10000
             }
-        },
-        pool: {
-            max: 10,
-            min: 0,
-            acquire: 30000,
-            idle: 10000
-        }
-    });
+        });
+    }
 } else {
-    console.warn("Missing MSSQL Config. Initializing SQLite Memory DB.");
+    console.warn("Missing MSSQL Config. Initializing SQLite DB.");
     sequelize = createSQLite();
 }
 
@@ -633,6 +653,10 @@ async function ensureSchemaIntegrity() {
                 BEGIN
                     ALTER TABLE [dbo].[Rooms] ADD [IsLayoutLocked] BIT NOT NULL DEFAULT 0;
                 END
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Rooms]') AND name = 'OverrideCap')
+                BEGIN
+                    ALTER TABLE [dbo].[Rooms] ADD [OverrideCap] INT NULL;
+                END
             END
         `, { type: QueryTypes.RAW });
 
@@ -726,7 +750,21 @@ export async function connectDB() {
     try {
         await sequelize.authenticate();
         console.log(`Connection Connected: ${sequelize.getDialect()} `);
+    } catch (err: any) {
+        console.error("Database Connection Failed:", err.message);
 
+        const isMSSQL = sequelize.getDialect() === 'mssql';
+        if (isMSSQL && DB_FALLBACK_TO_SQLITE) {
+            console.warn("MSSQL connection failed. Falling back to SQLite as configured...");
+            sequelize = createSQLite();
+            await sequelize.authenticate();
+            console.log("Connected to SQLite fallback database.");
+        } else {
+            throw err;
+        }
+    }
+
+    try {
         await ensureSchemaIntegrity();
 
         await import("../models/index.js");
@@ -748,7 +786,7 @@ export async function connectDB() {
 
         return true;
     } catch (err: any) {
-        console.error("Database Connection Failed:", err.message);
+        console.error("Database Initialization Failed:", err.message);
         throw err;
     }
 }

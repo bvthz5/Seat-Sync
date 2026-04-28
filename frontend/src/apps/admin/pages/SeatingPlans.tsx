@@ -141,7 +141,7 @@ const SeatingPlans: React.FC = () => {
     const [secondaryDept, setSecondaryDept] = useState<string>('');
     const [avoidSameDeptBench, setAvoidSameDeptBench] = useState(true);
     const [shuffleRooms, setShuffleRooms] = useState(false);
-    const [roomCapacityLimit, setRoomCapacityLimit] = useState<string>('30');
+    const [roomCapacityLimit, setRoomCapacityLimit] = useState<string>('');
     const [selectedHallIds, setSelectedHallIds] = useState<Set<number>>(new Set());
     const [hallSearch, setHallSearch] = useState('');
     const [hallFilter, setHallFilter] = useState<'all' | 'empty' | 'partial' | 'full'>('all');
@@ -2233,8 +2233,8 @@ const SeatingPlans: React.FC = () => {
                                                 </button>
                                             </div>
                                         ))}
-                                        {/* End Sem: per-room seat cap (Hidden when default 30) */}
-                                        {roomCapacityLimit !== '30' ? (
+                                        {/* End Sem: per-room seat cap (Hidden when empty/full capacity) */}
+                                        {roomCapacityLimit !== '' ? (
                                             <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-200 animate-in fade-in zoom-in duration-300">
                                                 <div className="flex flex-col">
                                                     <div className="flex items-center gap-1.5">
@@ -2269,18 +2269,18 @@ const SeatingPlans: React.FC = () => {
                                                         >+</button>
                                                     </div>
                                                     <button 
-                                                        onClick={() => setRoomCapacityLimit('30')}
+                                                        onClick={() => setRoomCapacityLimit('')}
                                                         className="text-[9px] font-extrabold text-indigo-600 hover:bg-indigo-100 px-2 py-1 rounded-md transition-colors uppercase"
-                                                    >Default</button>
+                                                    >Reset</button>
                                                 </div>
                                             </div>
                                         ) : (
                                             <button 
-                                                onClick={() => setRoomCapacityLimit('29')}
+                                                onClick={() => setRoomCapacityLimit('30')}
                                                 className="w-full flex items-center justify-center gap-2 py-2 border border-dashed border-slate-300 rounded-xl text-slate-400 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50/30 transition-all text-[11px] font-semibold"
                                             >
                                                 <LayoutGrid size={12} />
-                                                Set Custom Room Capacity (Default: 30)
+                                                Set Custom Capacity Limit (Currently: Full)
                                             </button>
                                         )}
                                     </div>
@@ -3348,7 +3348,7 @@ const SeatingPlans: React.FC = () => {
                                                         name="roomCapacityLimitSeries"
                                                         type="number" min={1} max={200}
                                                         value={roomCapacityLimit}
-                                                        placeholder="40"
+                                                        placeholder="None (Full)"
                                                         onChange={e => setRoomCapacityLimit(e.target.value)}
                                                         disabled={seriesRunning}
                                                         className="w-12 h-6 text-center text-[12px] font-bold text-indigo-700 border border-indigo-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400/50 focus:border-indigo-500 placeholder:text-slate-400 placeholder:font-normal [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
