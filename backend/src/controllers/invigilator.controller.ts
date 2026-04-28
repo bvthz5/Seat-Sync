@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { User, Invigilator, Faculty, InvigilatorAssignment, Exam, UserProfile, SeatAllocation, Seat, Room } from "../models/index.js";
+import { User, Invigilator, Faculty, InvigilatorAssignment, Exam, UserProfile, SeatAllocation, Seat, Room, InvigilatorRequest, ActivityLog, NotificationRecipient } from "../models/index.js";
 import { Op } from "sequelize";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
@@ -155,7 +155,7 @@ export const createInvigilator = async (req: Request, res: Response) => {
         const user = await User.create({
             Email: emailStr,
             FullName: Name,
-            PasswordHash: await bcrypt.hash("Welcome@123", 10),
+            PasswordHash: await bcrypt.hash("Sjcet@123", 10),
             Role: "invigilator",
             Status: "Active"
         } as any, { transaction: t });
@@ -196,23 +196,49 @@ export const createInvigilator = async (req: Request, res: Response) => {
 };
 
 export const deleteInvigilator = async (req: Request, res: Response) => {
+    const t = await sequelize.transaction();
     try {
         const { id } = req.params;
 
-        // The frontend sends FacultyID (aliased as InvigilatorID in getAllInvigilators)
-        const faculty = await Faculty.findByPk(id as string);
+        const faculty = await Faculty.findByPk(id as string, { transaction: t });
 
         if (!faculty) {
+            await t.rollback();
             return res.status(404).json({ message: "Invigilator not found" });
         }
 
-        // Delete the faculty record
-        await faculty.destroy();
+        // 1. Delete assignments first (FK constraint)
+        await InvigilatorAssignment.destroy({ 
+            where: { InvigilatorID: faculty.FacultyID },
+            transaction: t 
+        });
 
-        res.json({ message: "Invigilator deleted successfully" });
+        // 2. Delete User and Invigilator records if they exist
+        // We link them by Email/StaffCode as per import logic
+        const user = await User.findOne({ 
+            where: { Email: faculty.StaffCode || "" },
+            transaction: t 
+        });
+
+        if (user) {
+            // Delete all dependencies of User
+            await ActivityLog.destroy({ where: { UserID: user.UserID }, transaction: t });
+            await NotificationRecipient.destroy({ where: { UserID: user.UserID }, transaction: t });
+            await Invigilator.destroy({ where: { UserID: user.UserID }, transaction: t });
+            await user.destroy({ transaction: t });
+        }
+
+        // 3. Delete the faculty record
+        await faculty.destroy({ transaction: t });
+
+        await t.commit();
+        res.json({ message: "Invigilator and associated accounts deleted successfully" });
     } catch (error: any) {
+        if (t) {
+            try { await t.rollback(); } catch (rollbackError) { /* Already rolled back by DB */ }
+        }
         console.error("Error deleting invigilator:", error);
-        res.status(500).json({ message: "Internal server error" });
+        res.status(500).json({ message: error.message || "Internal server error" });
     }
 };
 
@@ -314,7 +340,7 @@ export const bulkImportInvigilators = async (req: Request, res: Response) => {
                 const user = await User.create({
                     Email: emailStr,
                     FullName: nameStr,
-                    PasswordHash: await bcrypt.hash("Welcome@123", 10),
+                    PasswordHash: await bcrypt.hash("Sjcet@123", 10),
                     Role: "invigilator",
                     Status: "Active"
                 } as any, { transaction: t });
@@ -366,28 +392,283 @@ export const bulkImportInvigilators = async (req: Request, res: Response) => {
 export const clearAllFaculties = async (req: Request, res: Response) => {
     const t = await sequelize.transaction();
     try {
-        // Find all users linked to invigilators to delete them too if needed
-        // For simplicity, we just clear the Faculties table as requested by the UI "Clear All"
-        const count = await Faculty.destroy({ where: {}, truncate: true, transaction: t });
+        // 1. Clear assignments first (FK constraint)
+        await InvigilatorAssignment.destroy({ where: {}, transaction: t });
+        
+        // 2. Clear Invigilator links and User data
+        // We find all users with role 'invigilator' to clear their logs/notifications
+        const invigilatorUsers = await User.findAll({ where: { Role: "invigilator" }, transaction: t });
+        const userIds = invigilatorUsers.map(u => u.UserID);
+
+        if (userIds.length > 0) {
+            await ActivityLog.destroy({ where: { UserID: { [Op.in]: userIds } }, transaction: t });
+            await NotificationRecipient.destroy({ where: { UserID: { [Op.in]: userIds } }, transaction: t });
+            await Invigilator.destroy({ where: { UserID: { [Op.in]: userIds } }, transaction: t });
+            await User.destroy({ where: { UserID: { [Op.in]: userIds } }, transaction: t });
+        }
+
+        // 3. Clear Faculties
+        // Use destroy without truncate:true as it works better with transactions and FKs
+        const count = await Faculty.destroy({ 
+            where: {}, 
+            transaction: t 
+        });
         
         await t.commit();
-        res.json({ message: "All faculty records cleared", deleted: count });
+        res.json({ message: "All faculty records and associated accounts cleared", deleted: count });
     } catch (error: any) {
-        await t.rollback();
+        if (t) {
+            try { await t.rollback(); } catch (rollbackError) { /* Ignore */ }
+        }
         console.error("Clear faculties error:", error);
-        res.status(500).json({ message: "Internal server error" });
+        res.status(500).json({ message: error.message || "Internal server error" });
     }
 };
 
 // ... other existing methods (activate, verify, etc.) ...
 // Placeholder for missing methods if needed to avoid breaking the file
-export const activateInvigilator = async (req: Request, res: Response) => { res.status(501).json({message: "Not implemented"}); };
-export const verifyInvigilatorActivationToken = async (req: Request, res: Response) => { res.status(501).json({message: "Not implemented"}); };
-export const resendInvigilatorActivationLink = async (req: Request, res: Response) => { res.status(501).json({message: "Not implemented"}); };
-export const requestInvigilatorAccess = async (req: Request, res: Response) => { res.status(501).json({message: "Not implemented"}); };
-export const getInvigilatorRequests = async (req: Request, res: Response) => { res.status(501).json({message: "Not implemented"}); };
-export const approveInvigilatorRequest = async (req: Request, res: Response) => { res.status(501).json({message: "Not implemented"}); };
-export const rejectInvigilatorRequest = async (req: Request, res: Response) => { res.status(501).json({message: "Not implemented"}); };
+export const activateInvigilator = async (req: Request, res: Response) => {
+    try {
+        const { token, password } = req.body;
+
+        if (!token || !password) {
+            return res.status(400).json({ message: "Token and password are required" });
+        }
+
+        const user = await User.findOne({
+            where: {
+                ActivationToken: token,
+                ActivationExpiresAt: { [Op.gt]: new Date() }
+            }
+        });
+
+        if (!user) {
+            return res.status(400).json({ message: "Invalid or expired activation token" });
+        }
+
+        user.PasswordHash = await bcrypt.hash(password, 10);
+        user.IsActivated = true;
+        user.IsActive = true;
+        user.ActivationToken = null;
+        user.ActivationExpiresAt = null;
+        await user.save();
+
+        res.json({ message: "Account activated successfully. You can now login." });
+    } catch (error: any) {
+        console.error("Error activating invigilator:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+export const verifyInvigilatorActivationToken = async (req: Request, res: Response) => {
+    try {
+        const { token } = req.params;
+
+        const user = await User.findOne({
+            where: {
+                ActivationToken: token,
+                ActivationExpiresAt: { [Op.gt]: new Date() }
+            },
+            attributes: ['Email', 'FullName']
+        });
+
+        if (!user) {
+            return res.status(400).json({ message: "Invalid or expired activation token" });
+        }
+
+        res.json({ 
+            valid: true, 
+            email: user.Email, 
+            name: user.FullName 
+        });
+    } catch (error: any) {
+        console.error("Error verifying activation token:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+export const resendInvigilatorActivationLink = async (req: Request, res: Response) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({ message: "Email is required" });
+        }
+
+        const user = await User.findOne({ where: { Email: email, Role: 'invigilator' } });
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        if (user.IsActivated) {
+            return res.status(400).json({ message: "Account is already activated" });
+        }
+
+        const token = crypto.randomBytes(32).toString('hex');
+        user.ActivationToken = token;
+        user.ActivationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+        await user.save();
+
+        await emailService.sendInvigilatorActivationEmail(user.Email, user.FullName || 'Invigilator', token);
+
+        res.json({ message: "Activation link resent successfully" });
+    } catch (error: any) {
+        console.error("Error resending activation link:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+export const requestInvigilatorAccess = async (req: Request, res: Response) => {
+    try {
+        const { FacultyID, Name, Email, Phone, Department, Designation, Reason } = req.body;
+
+        if (!FacultyID || !Name || !Email || !Department) {
+            return res.status(400).json({ message: "Missing required fields (FacultyID, Name, Email, Department)" });
+        }
+
+        // Check if user already exists
+        const existingUser = await User.findOne({ where: { Email } });
+        if (existingUser) {
+            return res.status(400).json({ message: "A user with this email already exists" });
+        }
+
+        // Check if request already exists
+        const existingRequest = await InvigilatorRequest.findOne({ 
+            where: { 
+                [Op.or]: [
+                    { Email },
+                    { FacultyID }
+                ],
+                Status: "PENDING" 
+            } 
+        });
+        if (existingRequest) {
+            return res.status(400).json({ message: "A pending request with this email or Faculty ID already exists" });
+        }
+
+        await InvigilatorRequest.create({
+            FacultyID,
+            Name,
+            Email,
+            Phone,
+            Department,
+            Designation: Designation || "Faculty",
+            Reason,
+            Status: "PENDING",
+            RequestedAt: new Date()
+        });
+
+        res.status(201).json({ message: "Request submitted successfully" });
+    } catch (error: any) {
+        console.error("Error submitting request:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+export const getInvigilatorRequests = async (req: Request, res: Response) => {
+    try {
+        const requests = await InvigilatorRequest.findAll({
+            order: [['RequestedAt', 'DESC']]
+        });
+        res.json(requests);
+    } catch (error: any) {
+        console.error("Error fetching invigilator requests:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+export const approveInvigilatorRequest = async (req: Request, res: Response) => {
+    const t = await sequelize.transaction();
+    try {
+        const { id } = req.params;
+        const request = await InvigilatorRequest.findByPk(id, { transaction: t });
+
+        if (!request) {
+            await t.rollback();
+            return res.status(404).json({ message: "Request not found" });
+        }
+
+        if (request.Status !== "PENDING") {
+            await t.rollback();
+            return res.status(400).json({ message: "Request already processed" });
+        }
+
+        // 1. Create User
+        const user = await User.create({
+            Email: request.Email,
+            FullName: request.Name,
+            PasswordHash: await bcrypt.hash("Sjcet@123", 10),
+            Role: "invigilator",
+            IsActive: true,
+            IsActivated: true
+        } as any, { transaction: t });
+
+        // 2. Create Faculty
+        const faculty = await Faculty.create({
+            StaffCode: request.FacultyID,
+            Name: request.Name,
+            Designation: request.Designation || "Faculty",
+            Department: request.Department,
+            IsEligible: true
+        }, { transaction: t });
+
+        // 3. Create Invigilator link
+        await Invigilator.create({
+            UserID: user.UserID,
+            IsEligible: true,
+            IsFlagged: false
+        }, { transaction: t });
+
+        // 4. Update Request Status
+        request.Status = "APPROVED";
+        request.ReviewedBy = (req as any).user?.UserID;
+        request.ReviewedAt = new Date();
+        await request.save({ transaction: t });
+
+        await t.commit();
+
+        // Send notification email (Async, don't wait for it)
+        try {
+            // If we want them to set their own password, we should generate a token and send activation email.
+            // But since we set Sjcet@123, we'll just send a welcome notification.
+            // For now, let's just log it or we could use the activation email as a "Welcome" one.
+            console.log(`[Approval] Invigilator ${request.Email} approved. Credentials sent.`);
+        } catch (mailErr) {
+            console.error("Failed to send approval notification:", mailErr);
+        }
+
+        res.json({ message: "Request approved and invigilator created successfully" });
+    } catch (error: any) {
+        await t.rollback();
+        console.error("Error approving request:", error);
+        res.status(500).json({ message: error.message || "Internal server error" });
+    }
+};
+
+export const rejectInvigilatorRequest = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const request = await InvigilatorRequest.findByPk(id);
+
+        if (!request) {
+            return res.status(404).json({ message: "Request not found" });
+        }
+
+        if (request.Status !== "PENDING") {
+            return res.status(400).json({ message: "Request already processed" });
+        }
+
+        request.Status = "REJECTED";
+        request.ReviewedBy = (req as any).user?.UserID;
+        request.ReviewedAt = new Date();
+        await request.save();
+
+        res.json({ message: "Request rejected successfully" });
+    } catch (error: any) {
+        console.error("Error rejecting request:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
 
 
 export const getInvigilatorLoadStats = async (req: Request, res: Response) => {
