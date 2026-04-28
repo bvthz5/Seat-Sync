@@ -9,6 +9,7 @@ import ExamSeriesList from './pages/ExamSeriesList';
 import SeatingPlans from './pages/SeatingPlans';
 import InternalSeatingPage from './pages/InternalSeatingPage';
 import Invigilators from './pages/Invigilators';
+import InvigilatorAssign from './pages/InvigilatorAssign';
 import Attendance from './pages/Attendance';
 import Reports from './pages/Reports';
 import ForgotPassword from './pages/ForgotPassword';
@@ -54,6 +55,7 @@ const AdminApp: React.FC = () => {
                     <Route path="seating/endsem" element={<SeatingPlans />} />
                     <Route path="seating/internal" element={<InternalSeatingPage />} />
                     <Route path="invigilators" element={<Invigilators />} />
+                    <Route path="invigilators/assign" element={<InvigilatorAssign />} />
                     <Route path="attendance" element={<Attendance />} />
                     <Route path="reports" element={<Reports />} />
 

@@ -28,11 +28,9 @@ import RequestsModal from '../components/invigilators/RequestsModal';
 /* ─── helpers ─────────────────────────────────────────────── */
 const staffId = (id: number) => `#IV-${String(id).padStart(4, '0')}`;
 const mockEmail = (name?: string) => {
-    if (!name) return 'user@faculty.edu';
-    const parts = name.trim().split(' ');
-    const first = parts[0]?.toLowerCase() || 'user';
-    const last = parts[1]?.toLowerCase() || 'x';
-    return `${first}.${last}@faculty.edu`;
+    if (!name) return 'user@sjcetpalai.ac.in';
+    const nameForEmail = name.toLowerCase().replace(/[^a-z]/g, '');
+    return `${nameForEmail}@sjcetpalai.ac.in`;
 };
 const mockPhone = (id?: number) => {
     if (!id) return '+91 98000 00234';
@@ -330,16 +328,6 @@ const ProfileDrawer: React.FC<{
                                 </div>
                                 <CopyBtn text={mockEmail(inv.Name)} />
                             </a>
-                            <div className="flex items-center gap-3 px-4 py-3.5">
-                                <span className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-500 flex items-center justify-center shrink-0">
-                                    <Phone size={13} />
-                                </span>
-                                <div className="min-w-0 flex-1">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Phone</p>
-                                    <p className="text-sm font-medium text-slate-700">{mockPhone(inv.InvigilatorID)}</p>
-                                </div>
-                                <CopyBtn text={mockPhone(inv.InvigilatorID)} />
-                            </div>
                         </div>
                     </div>
 
@@ -517,6 +505,21 @@ const Invigilators: React.FC = () => {
                                     </span>
                                 )}
                             </button>
+                            <button
+                                onClick={async () => {
+                                    if (window.confirm('Are you sure you want to delete all invigilators? This cannot be undone.')) {
+                                        try {
+                                            await invigilatorService.clearAll();
+                                            toast.success('All invigilators deleted');
+                                            fetchData();
+                                        } catch (e) {
+                                            toast.error('Failed to delete all invigilators');
+                                        }
+                                    }
+                                }}
+                                className="h-9 px-4 rounded-xl border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 hover:border-rose-300 text-sm font-semibold flex items-center gap-2 transition-all shadow-sm">
+                                <Trash2 size={14} /> Delete All
+                            </button>
                             <button onClick={onBulkOpen}
                                 className="h-9 px-4 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 text-sm font-semibold flex items-center gap-2 transition-all shadow-sm">
                                 <Upload size={14} /> Import
@@ -681,10 +684,6 @@ const Invigilators: React.FC = () => {
                                             <Mail size={10} className="text-slate-300 shrink-0" />
                                             {mockEmail(inv.Name)}
                                         </a>
-                                        <p className="flex items-center gap-1 text-[11px] text-slate-400 mt-0.5">
-                                            <Phone size={10} className="shrink-0" />
-                                            {mockPhone(inv.InvigilatorID)}
-                                        </p>
                                     </div>
 
                                     {/* Duty Load */}

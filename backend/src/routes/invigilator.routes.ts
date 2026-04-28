@@ -3,7 +3,8 @@ import {
     getAllInvigilators, createInvigilator, deleteInvigilator, getInvigilatorStats, 
     toggleInvigilatorFlag, toggleInvigilatorEligibility, bulkImportInvigilators, clearAllFaculties,
     activateInvigilator, verifyInvigilatorActivationToken, resendInvigilatorActivationLink, requestInvigilatorAccess, getInvigilatorRequests, 
-    approveInvigilatorRequest, rejectInvigilatorRequest
+    approveInvigilatorRequest, rejectInvigilatorRequest, getInvigilatorLoadStats, autoAssignInvigilators,
+    saveInvigilatorAssignments, getInvigilatorAssignments
 } from "../controllers/invigilator.controller.js";
 import { AuthMiddleware } from "../middlewares/auth.middleware.js";
 import rateLimit from "express-rate-limit";
@@ -66,6 +67,10 @@ router.patch("/:id/toggle-eligibility", toggleInvigilatorEligibility);
 router.get("/requests", getInvigilatorRequests);
 router.post("/requests/:id/approve", approveInvigilatorRequest);
 router.post("/requests/:id/reject", rejectInvigilatorRequest);
+router.get("/load-stats", getInvigilatorLoadStats);
+router.post("/auto-assign", autoAssignInvigilators);
+router.post("/save-assignments", saveInvigilatorAssignments);
+router.get("/assignments", getInvigilatorAssignments);
 router.delete("/clear-all", clearAllFaculties);
 router.delete("/:id", deleteInvigilator);
 

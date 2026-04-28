@@ -10,8 +10,11 @@ export const SeatingService = {
     },
 
     /** Get distinct exam dates (optionally by seriesId) */
-    getExamDates: async (seriesId?: number) => {
-        const r = await api.get(`${PREFIX}/exam-dates`, { params: seriesId ? { seriesId } : {} });
+    getExamDates: async (seriesId?: number, allocatedOnly?: boolean) => {
+        const params: any = {};
+        if (seriesId) params.seriesId = seriesId;
+        if (allocatedOnly) params.allocatedOnly = true;
+        const r = await api.get(`${PREFIX}/exam-dates`, { params });
         return r.data;
     },
 

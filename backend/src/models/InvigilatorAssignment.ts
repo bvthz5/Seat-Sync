@@ -2,7 +2,7 @@ import { DataTypes, Model } from "sequelize";
 import { sequelize } from "../config/database.js";
 import { Exam } from "./Exam.js";
 import { Room } from "./Room.js";
-import { Invigilator } from "./Invigilator.js";
+import { Faculty } from "./Faculty.js";
 
 /**
  * InvigilatorAssignment table attributes
@@ -46,8 +46,8 @@ InvigilatorAssignment.init(
       allowNull: false,
       primaryKey: true,
       references: {
-        model: "Invigilators",
-        key: "InvigilatorID",
+        model: "Faculties",
+        key: "FacultyID",
       },
     },
   },
@@ -77,11 +77,12 @@ Room.hasMany(InvigilatorAssignment, {
   foreignKey: "RoomID",
 });
 
-InvigilatorAssignment.belongsTo(Invigilator, {
+InvigilatorAssignment.belongsTo(Faculty, {
+  as: 'Invigilator',
   foreignKey: "InvigilatorID",
 });
 
-Invigilator.hasMany(InvigilatorAssignment, {
+Faculty.hasMany(InvigilatorAssignment, {
   foreignKey: "InvigilatorID",
 });
 

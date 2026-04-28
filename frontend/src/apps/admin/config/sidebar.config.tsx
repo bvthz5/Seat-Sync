@@ -61,6 +61,12 @@ export const sidebarConfig: SidebarItem[] = [
         requiresRoot: false
     },
     {
+        label: "Invigilator Assign",
+        icon: <ClipboardCheck size={20} />,
+        path: "/admin/invigilators/assign",
+        requiresRoot: false
+    },
+    {
         label: "Attendance",
         icon: <ClipboardCheck size={20} />,
         path: "/admin/attendance",

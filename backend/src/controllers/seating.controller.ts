@@ -355,27 +355,48 @@ export const getSeries = async (req: Request, res: Response) => {
  * ════════════════════════════════════════════════════════════ */
 export const getExamDates = async (req: Request, res: Response) => {
     try {
-        const { seriesId } = req.query;
+        const { seriesId, allocatedOnly } = req.query;
         const where: any = {};
         if (seriesId) where.ExamSeriesID = Number(seriesId);
 
-        const exams = await Exam.findAll({
-            attributes: ["ExamDate", "Session", "ExamName"],
-            where,
-            order: [["ExamDate", "ASC"]],
-        });
+        let exams: any[] = [];
+        
+        if (String(allocatedOnly) === 'true') {
+            const allocatedExams = await sequelize.query<{ ExamDate: Date; Session: string; ExamName: string }>(
+                `SELECT DISTINCT e.ExamDate, e.Session, e.ExamName
+                 FROM Exams e
+                 INNER JOIN SeatAllocations sa ON sa.ExamID = e.ExamID
+                 ${seriesId ? 'WHERE e.ExamSeriesID = :seriesId' : ''}
+                 ORDER BY e.ExamDate ASC`,
+                {
+                    replacements: { seriesId },
+                    type: QueryTypes.SELECT
+                }
+            );
+            exams = allocatedExams;
+        } else {
+            exams = await Exam.findAll({
+                attributes: ["ExamDate", "Session", "ExamName"],
+                where,
+                order: [["ExamDate", "ASC"]],
+            });
+        }
 
-        // Group by date+session to get counts
-        const slotMap = new Map<string, { examDate: string; session: string; examCount: number; examName: string }>();
+        // Group by date+session to get counts and names
+        const slotMap = new Map<string, { examDate: string; session: string; examCount: number; examNames: string[] }>();
         for (const exam of exams) {
             const dateStr = typeof exam.ExamDate === "string"
                 ? (exam.ExamDate as string).split("T")[0]
                 : new Date(exam.ExamDate).toISOString().split("T")[0];
             const key = `${dateStr}_${exam.Session}`;
             if (!slotMap.has(key)) {
-                slotMap.set(key, { examDate: dateStr!, session: exam.Session, examCount: 0, examName: exam.ExamName });
+                slotMap.set(key, { examDate: dateStr!, session: exam.Session, examCount: 0, examNames: [] });
             }
-            slotMap.get(key)!.examCount++;
+            const slot = slotMap.get(key)!;
+            slot.examCount++;
+            if (exam.ExamName && !slot.examNames.includes(exam.ExamName)) {
+                slot.examNames.push(exam.ExamName);
+            }
         }
 
         res.json([...slotMap.values()]);
