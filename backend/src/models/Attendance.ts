@@ -52,8 +52,8 @@ Attendance.init(
       type: DataTypes.INTEGER,
       allowNull: true,
       references: {
-        model: "Invigilators",
-        key: "InvigilatorID",
+        model: "Faculties",
+        key: "FacultyID",
       },
     },
     MarkedAt: {

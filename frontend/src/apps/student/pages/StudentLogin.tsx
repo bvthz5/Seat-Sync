@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, ShieldCheck, ArrowRight, Loader2, User, BookOpen, CalendarClock, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { AccessTokenStore } from '../../../services/api';
 
 const StudentLogin: React.FC = () => {
     const navigate = useNavigate();
@@ -59,7 +60,7 @@ const StudentLogin: React.FC = () => {
 
             if (data.requirePasswordChange) {
                 // Store the temporary token so the change-password page can use it
-                localStorage.setItem("tempAccessToken", data.tempToken);
+                sessionStorage.setItem("tempAccessToken", data.tempToken);
                 toast("Please change your password to continue", { icon: '🔒' });
                 
                 // Navigate to the change password page with the state
@@ -68,7 +69,7 @@ const StudentLogin: React.FC = () => {
             }
 
             // Successfully logged in
-            localStorage.setItem("accessToken", data.accessToken);
+            AccessTokenStore.setToken(data.accessToken);
             sessionStorage.setItem('seat_sync_active', 'true');
 
             toast.success("Welcome back!");

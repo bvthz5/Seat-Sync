@@ -11,13 +11,12 @@ interface InvigilatorAttributes {
   DepartmentID?: number;
   IsEligible: boolean;
   IsFlagged: boolean;
-  FacultyID?: number;
 }
 
 /**
  * Attributes required when creating an invigilator
  */
-interface InvigilatorCreationAttributes extends Optional<InvigilatorAttributes, "InvigilatorID" | "IsFlagged" | "IsEligible" | "DepartmentID" | "FacultyID"> { }
+interface InvigilatorCreationAttributes extends Optional<InvigilatorAttributes, "InvigilatorID" | "IsFlagged" | "IsEligible" | "DepartmentID"> { }
 
 export class Invigilator extends Model<InvigilatorAttributes, InvigilatorCreationAttributes>
   implements InvigilatorAttributes {
@@ -26,7 +25,6 @@ export class Invigilator extends Model<InvigilatorAttributes, InvigilatorCreatio
   declare DepartmentID?: number;
   declare IsEligible: boolean;
   declare IsFlagged: boolean;
-  declare FacultyID?: number;
 }
 
 Invigilator.init(
@@ -43,14 +41,6 @@ Invigilator.init(
       references: {
         model: "Users",
         key: "UserID",
-      },
-    },
-    FacultyID: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      references: {
-        model: "Faculties",
-        key: "FacultyID",
       },
     },
     DepartmentID: {

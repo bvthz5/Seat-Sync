@@ -29,18 +29,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     useEffect(() => {
         const initAuth = async () => {
             // Check for active session flag (Session Storage survives reload, dies on close)
+            // Note: We've implemented role-scoped storage in api.ts to prevent cross-contamination
             const sessionActive = sessionStorage.getItem('seat_sync_active');
-
-            if (!sessionActive) {
-                // Tab was closed or new session. Treat as logged out.
-                // We proactively clear artifacts to ensure no stale state.
-                AccessTokenStore.clear();
-                setIsAuthenticated(false);
-                setIsLoading(false);
-                // Optional: Attempt to clear backend cookies just in case they persist
-                try { await AuthService.logout(); } catch (e) { /* ignore */ }
-                return;
-            }
 
             try {
                 // Attempt to refresh token or get locally

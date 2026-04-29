@@ -50,7 +50,7 @@ export class AuthMiddleware {
     }
 
     /**
-     * Guard for exam_admin role
+     * Guard for exam_admin role or root admin
      */
     static requireExamAdmin(req: Request, res: Response, next: NextFunction): void {
         if (!req.user) {
@@ -60,9 +60,10 @@ export class AuthMiddleware {
             return;
         }
 
-        if (req.user.Role !== "exam_admin") {
+        if (req.user.Role !== "exam_admin" && !req.user.IsRootAdmin) {
             res.status(403).json({
-                error: "Access denied. Exam admin role required",
+                error: "Access denied. Exam admin or root admin role required",
+                details: `Required: exam_admin, Current: ${req.user.Role}`
             });
             return;
         }
@@ -95,8 +96,8 @@ export class AuthMiddleware {
      * Combined middleware for authenticated exam admin
      */
     static requireAuth(req: Request, res: Response, next: NextFunction): void {
-        AuthMiddleware.verifyAccessToken(req, res, (err?: any) => {
-            if (err) return;
+        AuthMiddleware.verifyAccessToken(req, res, () => {
+            // After successful verification, check for admin role
             AuthMiddleware.requireExamAdmin(req, res, next);
         });
     }

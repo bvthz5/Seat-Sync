@@ -11,6 +11,7 @@ import rateLimit from "express-rate-limit";
 
 const router = Router();
 
+// Limiters
 const verifyLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 60,
@@ -36,29 +37,28 @@ const resendLimiter = rateLimit({
 });
 
 // ==========================================
+// INVIGILATOR PORTAL ROUTES (High Priority)
+// ==========================================
+// Dashboard and duty details for logged-in invigilators
+router.get("/dashboard", AuthMiddleware.authenticated, getInvigilatorDashboardData);
+router.get("/assignments/:id", AuthMiddleware.authenticated, getAssignmentDetails);
+router.post("/attendance/save", AuthMiddleware.authenticated, saveAttendance);
+
+// ==========================================
 // PUBLIC ROUTES
 // ==========================================
-
 router.get("/activate/verify", verifyLimiter, verifyInvigilatorActivationToken);
 router.post("/activate", activateLimiter, activateInvigilator);
 router.post("/activate/resend", resendLimiter, resendInvigilatorActivationLink);
 router.post("/request", requestInvigilatorAccess);
 
 // ==========================================
-// INVIGILATOR PORTAL ROUTES
-// ==========================================
-router.get("/dashboard", AuthMiddleware.authenticated, getInvigilatorDashboardData);
-router.get("/assignments/:id", AuthMiddleware.authenticated, getAssignmentDetails);
-router.post("/attendance/save", AuthMiddleware.authenticated, saveAttendance);
-
-// ==========================================
 // PROTECTED ADMIN ROUTES
 // ==========================================
-// Protect all below routes - accessible by Exam Admin
-router.use((req, res, next) => AuthMiddleware.requireAuth(req, res, next));
+// Protect all below routes - accessible only by Exam Admin or Root Admin
+router.use(AuthMiddleware.requireAuth);
 
 router.get("/", getAllInvigilators);
-// router.get("/dashboard", getInvigilatorDashboardData); // Moved above
 router.get("/stats", getInvigilatorStats);
 router.post("/", createInvigilator);
 router.post("/bulk-import", bulkImportInvigilators);
