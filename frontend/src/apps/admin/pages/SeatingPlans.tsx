@@ -1153,7 +1153,7 @@ const SeatingPlans: React.FC = () => {
                 { wch: 15 }, // Subject Code
                 { wch: 35 }, // Subject Name
                 { wch: 8 },  // Dept
-                { wch: 25 }, // Hall (Increased from 15)
+                { wch: 25 }, // Hall / Room No
                 { wch: 70 }, // Register Numbers
                 { wch: 8 },  // Count
                 { wch: 8 }   // Total

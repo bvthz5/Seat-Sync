@@ -1461,11 +1461,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
                 return result;
             };
 
-            // Apply splitting and interleaving to all subject pools
-            for (const pool of subjectPools) {
-                const { regular, supply } = splitStudentsByType(pool.students);
-                pool.students = createInterleavedQueue(regular, supply);
-            }
+
 
             // Adaptive Dynamic Pool Picker (Weighted Locked-Column Model)
             const getBestAvailablePool = (excludeCodes: string[]): { code: string; students: any[] } | null => {

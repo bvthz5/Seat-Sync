@@ -18,15 +18,61 @@ import {
 } from "../models/index.js";
 import { notificationService } from "../services/notification.service.js";
 
-const IST_TIME_ZONE = "Asia/Kolkata";
-const ACADEMIC_YEAR_START_MONTH_INDEX = 6; // July (0-indexed)
+const FN_START_TIME = "09:30";
+const AN_START_TIME = "13:30";
+const SEATING_VISIBLE_MINUTES = 45;
+const ACADEMIC_YEAR_START_MONTH_INDEX = 5; // June
 
-const todayInIST = () => new Intl.DateTimeFormat("en-CA", { timeZone: IST_TIME_ZONE }).format(new Date());
+/**
+ * Format a date for consistent UI display (e.g. 10 May 2024)
+ */
+const formatDate = (date: string | Date) => {
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return "Invalid Date";
+    return d.toLocaleDateString('en-GB', { 
+        day: '2-digit', 
+        month: 'short', 
+        year: 'numeric' 
+    });
+};
 
-const formatDate = (value: string | Date) =>
-    new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric", timeZone: IST_TIME_ZONE }).format(new Date(value));
+/**
+ * Get today's date string in IST/Local format YYYY-MM-DD
+ */
+const todayInIST = () => {
+    return new Date().toISOString().split('T')[0];
+};
 
-const examToStatus = (examDate: string, today: string) => (examDate === today ? "Today" : examDate > today ? "Upcoming" : "Completed");
+const getExamTimes = (date: string, session: string) => {
+    const startTimeStr = session.toUpperCase().includes("FN") ? FN_START_TIME : AN_START_TIME;
+    const parts = startTimeStr.split(":").map(Number);
+    const startH = parts[0] ?? 0;
+    const startM = parts[1] ?? 0;
+    
+    const start = new Date(date);
+    start.setHours(startH, startM, 0, 0);
+    
+    return { start, startTimeStr };
+};
+
+const getExamStatus = (examDate: string, session: string, durationMin: number, now: Date) => {
+    const { start } = getExamTimes(examDate, session);
+    const end = new Date(start.getTime() + durationMin * 60000);
+
+    if (now < start) {
+        return "UPCOMING";
+    } else if (now >= start && now < end) {
+        return "LIVE";
+    } else {
+        return "COMPLETED";
+    }
+};
+
+const isSeatingVisible = (examDate: string, session: string, now: Date) => {
+    const { start } = getExamTimes(examDate, session);
+    const visibleAt = new Date(start.getTime() - SEATING_VISIBLE_MINUTES * 60000);
+    return now >= visibleAt;
+};
 
 const fetchRegisteredExams = async (studentId: number) => {
     return Exam.findAll({
@@ -62,16 +108,23 @@ const getProfilePayload = (student: any) => ({
     batchYear: student.BatchYear,
 });
 
-const mapExam = (exam: any, today: string) => ({
-    examId: exam.ExamID,
-    subject: exam.Subject?.SubjectName ?? exam.ExamName,
-    subjectCode: exam.Subject?.SubjectCode ?? null,
-    date: exam.ExamDate,
-    dateLabel: formatDate(exam.ExamDate),
-    session: exam.Session,
-    duration: exam.Duration,
-    status: examToStatus(exam.ExamDate, today),
-});
+const mapExam = (exam: any, now: Date) => {
+    const status = getExamStatus(exam.ExamDate, exam.Session, exam.Duration, now);
+    const { start } = getExamTimes(exam.ExamDate, exam.Session);
+    
+    return {
+        examId: exam.ExamID,
+        subject: exam.Subject?.SubjectName ?? exam.ExamName,
+        subjectCode: exam.Subject?.SubjectCode ?? null,
+        date: exam.ExamDate,
+        dateLabel: formatDate(exam.ExamDate),
+        session: exam.Session,
+        startTime: start.toISOString(),
+        duration: exam.Duration,
+        status: status,
+        isSeatingVisible: isSeatingVisible(exam.ExamDate, exam.Session, now)
+    };
+};
 
 const getAttendanceStatus = (attendance: any) => (attendance ? (attendance.IsPresent ? "Present" : "Absent") : "Pending");
 
@@ -272,20 +325,25 @@ export const getStudentDashboard = async (req: Request, res: Response) => {
             (effectiveSemester as any)?.SemesterName ??
             effectiveSemesterNumber;
 
-        const today = todayInIST();
+        const now = new Date();
         const exams = await fetchRegisteredExams(student.StudentID);
-        const examData = exams.map((exam: any) => mapExam(exam, today));
+        const examData = exams.map((exam: any) => mapExam(exam, now));
 
-        const todayExam = examData.find((exam) => exam.date === today) || null;
-        const upcomingExams = examData.filter((exam) => exam.date >= today).slice(0, 5);
-        const historyExams = examData.filter((exam) => exam.date < today).slice(-6).reverse();
+        // Find current or next relevant exam
+        const liveExam = examData.find(e => e.status === "LIVE");
+        const upcomingToday = examData.find(e => e.status === "UPCOMING" && e.date === todayInIST());
+        const nextUpcoming = examData.find(e => e.status === "UPCOMING");
 
-        const targetExamId = todayExam?.examId ?? upcomingExams[0]?.examId ?? null;
+        const targetExam = liveExam || upcomingToday || nextUpcoming || null;
+        
+        const upcomingExams = examData.filter((exam) => exam.status !== "COMPLETED").slice(0, 5);
+        const historyExams = examData.filter((exam) => exam.status === "COMPLETED").slice(-6).reverse();
+
         let seating: any = null;
 
-        if (targetExamId) {
+        if (targetExam && targetExam.isSeatingVisible) {
             const assignment = await SeatAllocation.findOne({
-                where: { ExamID: targetExamId, StudentID: student.StudentID },
+                where: { ExamID: targetExam.examId, StudentID: student.StudentID },
                 include: [
                     {
                         model: Seat,
@@ -316,7 +374,7 @@ export const getStudentDashboard = async (req: Request, res: Response) => {
                 }
 
                 seating = {
-                    examId: targetExamId,
+                    examId: targetExam.examId,
                     seatNumber: seat?.SeatIndex ?? null,
                     benchNumber: seat?.BenchIndex ?? null,
                     rowLabel: seat?.RowIndex ?? null,
@@ -363,7 +421,8 @@ export const getStudentDashboard = async (req: Request, res: Response) => {
                 unreadNotifications: notificationStats.unread,
                 criticalNotifications: notificationStats.critical,
             },
-            todayExam,
+            todayExam: (liveExam || upcomingToday) || null,
+            targetExam,
             upcomingExams,
             seating,
             notifications: notifications.data,
@@ -385,14 +444,14 @@ export const getStudentExams = async (req: Request, res: Response) => {
         if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
         const student = await loadStudent(userId);
-        if (!student) return res.status(404).json({ message: "Student profile not found" });
+        if (!student) return res.status(404).json({ message: "Student not found" });
 
-        const today = todayInIST();
+        const now = new Date();
         const exams = await fetchRegisteredExams(student.StudentID);
 
         res.json({
             success: true,
-            data: exams.map((exam: any) => mapExam(exam, today)),
+            data: exams.map((exam: any) => mapExam(exam, now)),
         });
     } catch (error: any) {
         console.error("Student exams error:", error);
@@ -408,13 +467,16 @@ export const getStudentUpcomingExams = async (req: Request, res: Response) => {
         const student = await loadStudent(userId);
         if (!student) return res.status(404).json({ message: "Student profile not found" });
 
-        const today = todayInIST();
+        const now = new Date();
         const exams = await fetchRegisteredExams(student.StudentID);
-        const upcoming = exams.filter((exam: any) => exam.ExamDate >= today);
+        const upcoming = exams.filter((exam: any) => {
+            const status = getExamStatus(exam.ExamDate, exam.Session, exam.Duration, now);
+            return status !== "COMPLETED";
+        });
 
         res.json({
             success: true,
-            data: upcoming.map((exam: any) => mapExam(exam, today)),
+            data: upcoming.map((exam: any) => mapExam(exam, now)),
         });
     } catch (error: any) {
         console.error("Student upcoming exams error:", error);
@@ -431,7 +493,7 @@ export const getStudentSeating = async (req: Request, res: Response) => {
         if (!student) return res.status(404).json({ message: "Student profile not found" });
 
         const examId = req.params.examId as string;
-        const today = todayInIST();
+        const now = new Date();
 
         let targetExam: any;
         if (examId) {
@@ -440,11 +502,31 @@ export const getStudentSeating = async (req: Request, res: Response) => {
             });
         } else {
             const exams = await fetchRegisteredExams(student.StudentID);
-            targetExam = exams.find((exam: any) => exam.ExamDate === today) || exams.find((exam: any) => exam.ExamDate >= today);
+            const mapped = exams.map(e => ({ ...e.toJSON(), ...mapExam(e, now) }));
+            const best = mapped.find(e => e.status === "LIVE") || 
+                       mapped.find(e => e.status === "UPCOMING" && e.date === todayInIST()) ||
+                       mapped.find(e => e.status === "UPCOMING");
+            
+            if (best) {
+                targetExam = exams.find(e => e.ExamID === best.examId);
+            }
         }
 
-        if (!targetExam) {
-            return res.json({ success: true, data: null });
+        if (!targetExam) return res.status(404).json({ message: "No relevant exam found" });
+
+        // Check seating visibility rule
+        const mappedInfo = mapExam(targetExam, now);
+        if (!mappedInfo.isSeatingVisible) {
+            return res.json({
+                success: false,
+                message: `Seating details will be available from ${formatDate(targetExam.ExamDate)} at ${getExamTimes(targetExam.ExamDate, targetExam.Session).startTimeStr}`,
+                data: {
+                    exam: mappedInfo,
+                    assignment: null,
+                    layout: [],
+                    visibilityError: true
+                },
+            });
         }
 
         console.log(`[SeatingFetch] StudentID: ${student.StudentID}, ExamID: ${targetExam.ExamID}`);
@@ -457,7 +539,7 @@ export const getStudentSeating = async (req: Request, res: Response) => {
             return res.json({
                 success: true,
                 data: {
-                    exam: mapExam(targetExam as any, today),
+                    exam: mappedInfo,
                     assignment: null,
                     layout: [],
                 },
@@ -508,7 +590,7 @@ export const getStudentSeating = async (req: Request, res: Response) => {
         res.json({
             success: true,
             data: {
-                exam: mapExam(targetExam as any, today),
+                exam: mappedInfo,
                 assignment: {
                     seatNumber: seat?.SeatIndex ?? null,
                     benchNumber: seat?.BenchIndex ?? null,
@@ -604,9 +686,12 @@ export const getStudentHistory = async (req: Request, res: Response) => {
         const student = await loadStudent(userId);
         if (!student) return res.status(404).json({ message: "Student profile not found" });
 
-        const today = todayInIST();
+        const now = new Date();
         const exams = await fetchRegisteredExams(student.StudentID);
-        const past = exams.filter((exam: any) => exam.ExamDate < today);
+        const past = exams.filter((exam: any) => {
+            const status = getExamStatus(exam.ExamDate, exam.Session, exam.Duration, now);
+            return status === "COMPLETED";
+        });
         const attendanceRows = await Attendance.findAll({ where: { StudentID: student.StudentID } });
         const attendanceByExamId = new Map<number, any>();
         attendanceRows.forEach((row: any) => attendanceByExamId.set(row.ExamID, row));
@@ -614,7 +699,7 @@ export const getStudentHistory = async (req: Request, res: Response) => {
         res.json({
             success: true,
             data: past.map((exam: any) => ({
-                ...mapExam(exam, today),
+                ...mapExam(exam, now),
                 attendanceStatus: getAttendanceStatus(attendanceByExamId.get(exam.ExamID)),
             })),
         });

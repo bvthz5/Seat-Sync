@@ -11,6 +11,14 @@ import rateLimit from "express-rate-limit";
 
 const router = Router();
 
+// ==========================================
+// INVIGILATOR PORTAL ROUTES (High Priority)
+// ==========================================
+// Dashboard and duty details for logged-in invigilators
+router.get("/dashboard", AuthMiddleware.authenticated, getInvigilatorDashboardData);
+router.get("/assignments/:id", AuthMiddleware.authenticated, getAssignmentDetails);
+router.post("/attendance/save", AuthMiddleware.authenticated, saveAttendance);
+
 // Limiters
 const verifyLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -35,14 +43,6 @@ const resendLimiter = rateLimit({
     legacyHeaders: false,
     message: { message: "Too many activation requests. Please try again later." },
 });
-
-// ==========================================
-// INVIGILATOR PORTAL ROUTES (High Priority)
-// ==========================================
-// Dashboard and duty details for logged-in invigilators
-router.get("/dashboard", AuthMiddleware.authenticated, getInvigilatorDashboardData);
-router.get("/assignments/:id", AuthMiddleware.authenticated, getAssignmentDetails);
-router.post("/attendance/save", AuthMiddleware.authenticated, saveAttendance);
 
 // ==========================================
 // PUBLIC ROUTES

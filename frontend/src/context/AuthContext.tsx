@@ -71,13 +71,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }).join(''));
                 const payload = JSON.parse(jsonPayload);
 
-                setUser({
-                    UserID: payload.UserID,
-                    Email: payload.Email,
-                    Role: payload.Role,
-                    IsRootAdmin: payload.IsRootAdmin
-                });
-                setIsAuthenticated(true);
+                // Role compatibility check for the current portal
+                const path = window.location.pathname.toLowerCase();
+                const role = payload.Role;
+                const isRoot = payload.IsRootAdmin;
+                
+                let isCompatible = true;
+                if (path.startsWith('/admin')) {
+                    if (role !== 'exam_admin' && !isRoot) isCompatible = false;
+                } else if (path.startsWith('/invigilator')) {
+                    if (role !== 'invigilator' && !isRoot) isCompatible = false;
+                } else if (path.startsWith('/student')) {
+                    if (role !== 'student') isCompatible = false;
+                }
+
+                if (!isCompatible) {
+                    console.warn(`Portal role mismatch: User role '${role}' is not compatible with path '${path}'`);
+                    AccessTokenStore.clear();
+                    setIsAuthenticated(false);
+                    setUser(null);
+                } else {
+                    setUser({
+                        UserID: payload.UserID,
+                        Email: payload.Email,
+                        Role: payload.Role,
+                        IsRootAdmin: payload.IsRootAdmin
+                    });
+                    setIsAuthenticated(true);
+                }
             } catch (error) {
                 // Not authenticated or token expired
                 setIsAuthenticated(false);

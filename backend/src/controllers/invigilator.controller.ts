@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { User, Invigilator, Faculty, InvigilatorAssignment, Exam, UserProfile, SeatAllocation, Seat, Room, InvigilatorRequest, ActivityLog, NotificationRecipient, Block, Attendance, Student, Subject } from "../models/index.js";
+import { User, Invigilator, Faculty, InvigilatorAssignment, Exam, UserProfile, SeatAllocation, Seat, Room, InvigilatorRequest, ActivityLog, NotificationRecipient, Block, Floor, Attendance, Student, Subject } from "../models/index.js";
 import { Op } from "sequelize";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
@@ -350,7 +350,9 @@ export const bulkImportInvigilators = async (req: Request, res: Response) => {
                 } else {
                     user.FullName = nameStr;
                     // Protect admin roles from being downgraded
-                    if (user.Role !== "exam_admin") {
+                    if (user.IsRootAdmin || user.Role === "exam_admin") {
+                        // Keep as is
+                    } else {
                         user.Role = "invigilator";
                     }
                     await user.save({ transaction: rowTransaction });
@@ -948,15 +950,17 @@ export const getInvigilatorAssignments = async (req: Request, res: Response) => 
     }
 };
 
-/**
- * Get real-time dashboard data for the logged-in invigilator
- */
 export const getInvigilatorDashboardData = async (req: Request, res: Response) => {
-    console.log("DEBUG: getInvigilatorDashboardData reached for user:", (req as any).user?.UserID);
     try {
-        const userId = (req as any).user?.UserID;
+        const userPayload = (req as any).user;
+        const userId = userPayload?.UserID;
+        
+        console.log(`[DASHBOARD_DEBUG] Request received. UserID: ${userId}, Email: ${userPayload?.Email}, Role: ${userPayload?.Role}`);
+
+
         if (!userId) {
-            return res.status(401).json({ message: "Unauthorized" });
+            console.error("[DASHBOARD_DEBUG] No userId found in request. Possible token payload issue.");
+            return res.status(401).json({ message: "Unauthorized: No user identifier found in token." });
         }
         
         const user = await User.findByPk(userId, {
@@ -1117,39 +1121,24 @@ export const getInvigilatorDashboardData = async (req: Request, res: Response) =
         res.status(500).json({ message: "Internal server error" });
     }
 };
-
 export const getAssignmentDetails = async (req: Request, res: Response) => {
     try {
-        const { id } = req.params; // This is actually the ExamID from our dashboard mapping
-        const user = (req as any).user;
-        
-        // Find faculty profile for the logged in user
-        // Instead of relying on a broken FacultyID column in the Invigilators table,
-        // we find the Faculty record by matching StaffCode to the User's email prefix or StaffCode fallback.
-        const faculty = await Faculty.findOne({ 
-            where: { 
-                [Op.or]: [
-                    { StaffCode: user.Email },
-                    { StaffCode: user.Email?.split('@')[0] }
-                ]
-            } 
-        });
-        
-        if (!faculty) return res.status(404).json({ message: "Faculty profile not found for this user" });
+        const { id } = req.params; // This is the AssignmentID from the URL
+        console.log(`[ASSIGNMENT_DETAILS] Fetching AssignmentID: ${id}`);
 
-        const assignment = await InvigilatorAssignment.findOne({
-            where: { 
-                ExamID: id,
-                InvigilatorID: faculty.FacultyID
-            },
+        if (!id) {
+            return res.status(400).json({ message: "Assignment ID is required" });
+        }
+
+        const assignment = await InvigilatorAssignment.findByPk(id as string, {
             include: [
                 {
                     model: Exam,
-                    include: [Subject]
+                    include: [{ model: Subject }]
                 },
-                { 
+                {
                     model: Room,
-                    include: [Block]
+                    include: [Block, Floor]
                 }
             ]
         });
@@ -1160,8 +1149,8 @@ export const getAssignmentDetails = async (req: Request, res: Response) => {
 
         res.json(assignment);
     } catch (error: any) {
-        console.error("Fetch assignment error:", error);
-        res.status(500).json({ message: "Internal server error" });
+        console.error("GET ASSIGNMENT DETAILS ERROR:", error);
+        res.status(500).json({ message: error.message });
     }
 };
 
