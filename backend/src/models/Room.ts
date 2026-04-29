@@ -42,6 +42,8 @@ export class Room extends Model<RoomAttributes, RoomCreationAttributes>
   declare Status: "Active" | "Inactive";
   declare ExamUsable: boolean;
   declare IsLayoutLocked: boolean;
+  declare Block?: Block;
+  declare Floor?: Floor;
 }
 
 Room.init(

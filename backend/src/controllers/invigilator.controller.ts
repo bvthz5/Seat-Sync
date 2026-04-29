@@ -583,7 +583,7 @@ export const approveInvigilatorRequest = async (req: Request, res: Response) => 
     const t = await sequelize.transaction();
     try {
         const { id } = req.params;
-        const request = await InvigilatorRequest.findByPk(id, { transaction: t });
+        const request = await InvigilatorRequest.findByPk(id as string, { transaction: t });
 
         if (!request) {
             await t.rollback();
@@ -651,7 +651,7 @@ export const approveInvigilatorRequest = async (req: Request, res: Response) => 
 export const rejectInvigilatorRequest = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const request = await InvigilatorRequest.findByPk(id);
+        const request = await InvigilatorRequest.findByPk(id as string);
 
         if (!request) {
             return res.status(404).json({ message: "Request not found" });
@@ -911,7 +911,7 @@ export const getInvigilatorDashboardData = async (req: Request, res: Response) =
                 where: {
                     [Op.or]: [
                         { StaffCode: user.Email },
-                        { Name: user.FullName }
+                        { Name: user.FullName || "" }
                     ]
                 }
             });
@@ -921,7 +921,7 @@ export const getInvigilatorDashboardData = async (req: Request, res: Response) =
             return res.status(404).json({ message: "Faculty profile not found for this account" });
         }
 
-        const today = new Date().toISOString().split('T')[0];
+        const today: string = new Date().toISOString().split('T')[0] || "";
         const now = new Date();
         const currentHour = now.getHours();
         const currentMinute = now.getMinutes();
@@ -980,9 +980,9 @@ export const getInvigilatorDashboardData = async (req: Request, res: Response) =
                 }]
             });
 
-            const examDate = typeof d.Exam?.ExamDate === 'string' 
-                ? d.Exam.ExamDate 
-                : (d.Exam?.ExamDate as Date).toISOString().split('T')[0];
+            const examDate: string = (d.Exam?.ExamDate 
+                ? (typeof d.Exam.ExamDate === 'string' ? d.Exam.ExamDate : (d.Exam.ExamDate as Date).toISOString().split('T')[0])
+                : today) || "";
 
             let status = "Upcoming";
             if (examDate === today) {
@@ -1004,7 +1004,7 @@ export const getInvigilatorDashboardData = async (req: Request, res: Response) =
                 date: examDate,
                 roomID: d.RoomID,
                 room: d.Room?.RoomCode || `Room ${d.RoomID}`,
-                block: d.Room?.Block?.BlockName || "Main Block",
+                block: (d.Room as any)?.Block?.BlockName || "Main Block",
                 time: d.Exam?.Session === "FN" ? "9:30 - 12:30" : "13:30 - 16:30",
                 students: studentCount,
                 presentCount: presentCount,
@@ -1127,8 +1127,8 @@ export const saveAttendance = async (req: Request, res: Response) => {
             UserID: user.UserID,
             Action: "SUBMIT_ATTENDANCE",
             Details: `Submitted attendance for ExamID ${examId} in Room ${assignment.RoomID}`,
-            IPAddress: req.ip,
-            UserAgent: req.headers['user-agent']
+            IPAddress: req.ip || "",
+            UserAgent: req.headers['user-agent'] || ""
         }).catch(err => console.error("Activity log failed:", err));
 
         res.json({ 
