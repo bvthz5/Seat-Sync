@@ -7,7 +7,7 @@ import {
     LogOut, ChevronRight, Eye, EyeOff, Check, RefreshCcw
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../../context/AuthContext';
+import { useAuth } from '../../../hooks/useAuth';
 import { invigilatorService } from '../../admin/services/invigilatorService';
 
 const MOCK_USER = {

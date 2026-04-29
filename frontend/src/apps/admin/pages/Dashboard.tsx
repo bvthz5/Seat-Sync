@@ -23,7 +23,7 @@ import { ActivityFeed } from '../components/ActivityFeed';
 import { LiveExamDetails } from '../components/LiveExamDetails';
 import { LiveClock } from '../components/LiveClock';
 import { SeriesService } from '../services/seriesService';
-import { useAuth } from '../../../context/AuthContext';
+import { useAuth } from '../../../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 
 const Dashboard: React.FC = () => {
@@ -275,4 +275,3 @@ function RootUtilityCard({ icon, title, desc, color, bg }: any) {
 }
 
 export default Dashboard;
-

@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { User, AuthState } from '../types/auth'; // Ensure path is correct
+import { User, AuthState } from '../types/auth';
 import { AuthService } from '../services/auth.service';
 import { AccessTokenStore } from '../services/api';
 import { toast } from '../utils/toast';
@@ -18,7 +18,7 @@ interface AuthContextType extends AuthState {
     canAccess: (feature: FeatureKey) => boolean;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
@@ -28,156 +28,61 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     useEffect(() => {
         const initAuth = async () => {
-            // Check for active session flag (Session Storage survives reload, dies on close)
-            // Note: We've implemented role-scoped storage in api.ts to prevent cross-contamination
-            const sessionActive = sessionStorage.getItem('seat_sync_active');
-
             try {
-                // Attempt to refresh token or get locally
                 let token = AccessTokenStore.token;
-
-                // Validate local token expiration
                 if (token) {
                     try {
-                        const base64Url = token.split('.')[1];
-                        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-                        const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function (c) {
-                            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-                        }).join(''));
-                        const payload = JSON.parse(jsonPayload);
-
-                        // Check if token is expired (add 10s buffer)
-                        const currentTime = Date.now() / 1000;
-                        if (payload.exp && payload.exp < (currentTime + 10)) {
-                            token = null;
-                        }
-                    } catch (e) {
-                        token = null;
-                    }
+                        const payload = JSON.parse(decodeURIComponent(window.atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')));
+                        if (payload.exp && payload.exp < (Date.now() / 1000 + 10)) token = null;
+                    } catch (e) { token = null; }
                 }
-
-                if (!token) {
-                    token = await AuthService.refresh();
-                }
-
+                if (!token) token = await AuthService.refresh();
                 AccessTokenStore.setToken(token);
                 setAccessToken(token);
-
-                // Decode token to get user info (manual decode)
-                const base64Url = token.split('.')[1];
-                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-                const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function (c) {
-                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-                }).join(''));
-                const payload = JSON.parse(jsonPayload);
-
-                // Role compatibility check for the current portal
+                const payload = JSON.parse(decodeURIComponent(window.atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')));
                 const path = window.location.pathname.toLowerCase();
                 const role = payload.Role;
                 const isRoot = payload.IsRootAdmin;
-                
                 let isCompatible = true;
-                if (path.startsWith('/admin')) {
-                    if (role !== 'exam_admin' && !isRoot) isCompatible = false;
-                } else if (path.startsWith('/invigilator')) {
-                    if (role !== 'invigilator' && !isRoot) isCompatible = false;
-                } else if (path.startsWith('/student')) {
-                    if (role !== 'student') isCompatible = false;
-                }
-
-                if (!isCompatible) {
-                    console.warn(`Portal role mismatch: User role '${role}' is not compatible with path '${path}'`);
-                    AccessTokenStore.clear();
-                    setIsAuthenticated(false);
-                    setUser(null);
-                } else {
-                    setUser({
-                        UserID: payload.UserID,
-                        Email: payload.Email,
-                        Role: payload.Role,
-                        IsRootAdmin: payload.IsRootAdmin
-                    });
-                    setIsAuthenticated(true);
-                }
-            } catch (error) {
-                // Not authenticated or token expired
-                setIsAuthenticated(false);
-                AccessTokenStore.clear();
-                sessionStorage.removeItem('seat_sync_active');
-            } finally {
-                // Always unset loading state
-                setIsLoading(false);
-            }
+                if (path.startsWith('/admin')) { if (role !== 'exam_admin' && !isRoot) isCompatible = false; }
+                else if (path.startsWith('/invigilator')) { if (role !== 'invigilator' && !isRoot) isCompatible = false; }
+                else if (path.startsWith('/student')) { if (role !== 'student') isCompatible = false; }
+                if (!isCompatible) { AccessTokenStore.clear(); setIsAuthenticated(false); setUser(null); }
+                else { setUser({ UserID: payload.UserID, Email: payload.Email, Role: payload.Role, IsRootAdmin: payload.IsRootAdmin }); setIsAuthenticated(true); }
+            } catch (error) { setIsAuthenticated(false); AccessTokenStore.clear(); }
+            finally { setIsLoading(false); }
         };
-
-        const timer = setTimeout(() => {
-            // Safety fallback: ensure loader doesn't stick for more than 5s if backend hangs
-            setIsLoading((prev) => (prev ? false : prev));
-        }, 5000);
-
+        const timer = setTimeout(() => setIsLoading(prev => prev ? false : prev), 5000);
         initAuth();
-
         return () => clearTimeout(timer);
     }, []);
 
     const login = async (email: string, password: string, role?: string) => {
-        try {
-            const data = await AuthService.login(email, password, role);
-            setUser(data.user);
-            setAccessToken(data.accessToken);
-            AccessTokenStore.setToken(data.accessToken);
-            // Mark session as active
-            sessionStorage.setItem('seat_sync_active', 'true');
-            setIsAuthenticated(true);
-            toast.success(`Welcome, ${data.user.Email}`);
-        } catch (error: any) {
-            throw error;
-        }
+        const data = await AuthService.login(email, password, role);
+        setUser(data.user);
+        setAccessToken(data.accessToken);
+        AccessTokenStore.setToken(data.accessToken);
+        setIsAuthenticated(true);
+        toast.success(`Welcome, ${data.user.Email}`);
     };
 
     const logout = async (options?: LogoutOptions) => {
-        try {
-            await AuthService.logout();
-        } catch (e) { /* ignore */ }
+        try { await AuthService.logout(); } catch (e) { }
         setUser(null);
         setAccessToken(null);
         setIsAuthenticated(false);
         AccessTokenStore.clear();
-        sessionStorage.removeItem('seat_sync_active');
-
-        if (!options?.silent) {
-            toast.success('Logged out successfully');
-        }
+        if (!options?.silent) toast.success('Logged out successfully');
     };
 
-    const canAccess = React.useCallback((feature: FeatureKey) => {
-        return checkPermission(user, feature);
-    }, [user]);
+    const canAccess = React.useCallback((feature: FeatureKey) => checkPermission(user, feature), [user]);
 
-    const value = React.useMemo(() => ({
-        user,
-        accessToken,
-        isAuthenticated,
-        isLoading,
-        login,
-        logout,
-        canAccess
-    }), [user, accessToken, isAuthenticated, isLoading, login, logout, canAccess]);
+    const value = React.useMemo(() => ({ user, accessToken, isAuthenticated, isLoading, login, logout, canAccess }), [user, accessToken, isAuthenticated, isLoading, login, logout, canAccess]);
 
     return (
         <AuthContext.Provider value={value}>
-            <AnimatePresence>
-                {isLoading && <GlobalLoader key="global-loader" />}
-            </AnimatePresence>
+            <AnimatePresence>{isLoading && <GlobalLoader key="global-loader" />}</AnimatePresence>
             {!isLoading && children}
         </AuthContext.Provider>
     );
-};
-
-export const useAuth = () => {
-    const context = useContext(AuthContext);
-    if (context === undefined) {
-        throw new Error('useAuth must be used within an AuthProvider');
-    }
-    return context;
 };

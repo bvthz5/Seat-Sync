@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button, Tab, Tabs } from '@heroui/react';
 import { Search, Bell, Plus, Filter, CheckCheck, SlidersHorizontal, Sparkles } from 'lucide-react';
@@ -14,7 +13,7 @@ import {
     getNotificationStats,
     initNotificationSocket
 } from '../services/notificationService';
-import { useAuth } from '../../../context/AuthContext';
+import { useAuth } from '../../../hooks/useAuth';
 import toast from 'react-hot-toast';
 
 const Notifications: React.FC = () => {
