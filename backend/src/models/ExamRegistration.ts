@@ -67,4 +67,20 @@ Student.belongsToMany(Exam, {
   otherKey: "ExamID",
 });
 
+ExamRegistration.belongsTo(Exam, {
+  foreignKey: "ExamID",
+});
+
+ExamRegistration.belongsTo(Student, {
+  foreignKey: "StudentID",
+});
+
+Exam.hasMany(ExamRegistration, {
+  foreignKey: "ExamID",
+});
+
+Student.hasMany(ExamRegistration, {
+  foreignKey: "StudentID",
+});
+
 export default ExamRegistration;

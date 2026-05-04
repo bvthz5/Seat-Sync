@@ -1369,25 +1369,40 @@ export const bulkAssign = async (req: Request, res: Response) => {
                 roomSeatsMapES.get(rid)!.push(seat);
             }
             
-            const sessionOverrideCap = roomCapacityLimit && !isNaN(Number(roomCapacityLimit)) ? Number(roomCapacityLimit) : null;
-            const capLimit = sessionOverrideCap ?? 'Dynamic';
+            let sessionOverrideCap = roomCapacityLimit && !isNaN(Number(roomCapacityLimit)) ? Number(roomCapacityLimit) : null;
             
+            // --- AUTO-SCALE CAPACITY IF SHORT ---
+            let currentCapacity = 0;
+            for (const [rid, roomSeats] of roomSeatsMapES) {
+                const roomInfo = roomCapacityMap.get(rid);
+                const dbCapacity = roomInfo?.capacity ?? roomSeats.length;
+                const dbOverride = roomInfo?.override ?? null;
+                let effCap = dbCapacity;
+                if (sessionOverrideCap !== null) effCap = Math.min(sessionOverrideCap, roomSeats.length);
+                else if (dbOverride !== null) effCap = Math.min(dbOverride, roomSeats.length);
+                currentCapacity += effCap;
+            }
+
+            if (currentCapacity < totalEndSemStudents) {
+                // We are short on seats. Auto-scale the session override cap to fit everyone.
+                const neededCapPerRoom = Math.ceil(totalEndSemStudents / roomSeatsMapES.size);
+                sessionOverrideCap = neededCapPerRoom;
+                console.log(`[bulkAssign] Auto-scaling capacity to ${neededCapPerRoom} to fit ${totalEndSemStudents} students in ${roomSeatsMapES.size} rooms.`);
+            }
+            // ------------------------------------
+
+            const capLimit = sessionOverrideCap ?? 'Dynamic';
             const cappedSeatsES: any[] = [];
             for (const [rid, roomSeats] of roomSeatsMapES) {
                 const roomInfo = roomCapacityMap.get(rid);
                 const dbCapacity = roomInfo?.capacity ?? roomSeats.length;
                 const dbOverride = roomInfo?.override ?? null;
                 
-                // Priority: 
-                // 1. Session Override (passed in request)
-                // 2. Persistent DB Override
-                // 3. Room Total Capacity
-                
                 let effectiveCap = dbCapacity;
                 if (sessionOverrideCap !== null) {
-                    effectiveCap = Math.min(sessionOverrideCap, dbCapacity);
+                    effectiveCap = Math.min(sessionOverrideCap, roomSeats.length); // Use physical limit if scaling
                 } else if (dbOverride !== null) {
-                    effectiveCap = Math.min(dbOverride, dbCapacity);
+                    effectiveCap = Math.min(dbOverride, roomSeats.length);
                 }
 
                 cappedSeatsES.push(...roomSeats.slice(0, effectiveCap));
@@ -1844,7 +1859,28 @@ export const bulkAssign = async (req: Request, res: Response) => {
         }
 
         // Apply capacity capping for Internal branch
-        const sessionOverrideCap = roomCapacityLimit && !isNaN(Number(roomCapacityLimit)) ? Number(roomCapacityLimit) : null;
+        let sessionOverrideCap = roomCapacityLimit && !isNaN(Number(roomCapacityLimit)) ? Number(roomCapacityLimit) : null;
+        
+        // --- AUTO-SCALE CAPACITY IF SHORT ---
+        let currentCapacity = 0;
+        for (const [rid, roomSeats] of roomSeatsMap) {
+            const roomInfo = roomCapacityMap.get(rid);
+            const dbCapacity = roomInfo?.capacity ?? roomSeats.length;
+            const dbOverride = roomInfo?.override ?? null;
+            let effCap = dbCapacity;
+            if (sessionOverrideCap !== null) effCap = Math.min(sessionOverrideCap, roomSeats.length);
+            else if (dbOverride !== null) effCap = Math.min(dbOverride, roomSeats.length);
+            currentCapacity += effCap;
+        }
+
+        if (currentCapacity < totalEligibleFetched) {
+            // We are short on seats. Auto-scale the session override cap to fit everyone.
+            const neededCapPerRoom = Math.ceil(totalEligibleFetched / roomSeatsMap.size);
+            sessionOverrideCap = neededCapPerRoom;
+            console.log(`[bulkAssign] Auto-scaling capacity to ${neededCapPerRoom} to fit ${totalEligibleFetched} students in ${roomSeatsMap.size} rooms.`);
+        }
+        // ------------------------------------
+
         const cappedByRoom = new Map<number, any[]>();
         
         for (const [rid, roomSeats] of roomSeatsMap) {
@@ -1854,9 +1890,9 @@ export const bulkAssign = async (req: Request, res: Response) => {
             
             let effectiveCap = dbCapacity;
             if (sessionOverrideCap !== null) {
-                effectiveCap = Math.min(sessionOverrideCap, dbCapacity);
+                effectiveCap = Math.min(sessionOverrideCap, roomSeats.length);
             } else if (dbOverride !== null) {
-                effectiveCap = Math.min(dbOverride, dbCapacity);
+                effectiveCap = Math.min(dbOverride, roomSeats.length);
             }
 
             cappedByRoom.set(rid, roomSeats.slice(0, effectiveCap));

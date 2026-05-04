@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button, Card, CardBody } from '@heroui/react';
-import { ArrowLeft, Upload, Sun, Moon, Info, CalendarClock, CalendarCheck } from 'lucide-react';
+import { ArrowLeft, Upload, Sun, Moon, Info, CalendarClock, CalendarCheck, Trash2, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { ExamService } from '../services/examService';
 import EligibleStudentsImportModal from '../components/exams/EligibleStudentsImportModal';
 import ExamDetailPanel from '../components/exams/ExamDetailPanel';
+import ConfirmationModal from '../components/ConfirmationModal';
 
 type BranchOption = {
     examId: number;
@@ -34,7 +35,9 @@ const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
         const examName = String(exam?.ExamName || '').trim();
         const session = String(exam?.Session || '').trim().toUpperCase();
         const duration = Number(exam?.Duration || 0);
-        const groupKey = `${date}::${session}::${examName}::${duration}`;
+        // Stable grouping by date, session, and subject code (fallback to name)
+        const paperId = String(exam?.Subject?.SubjectCode || examName).trim();
+        const groupKey = `${date}::${session}::${paperId}::${duration}`;
         const department = exam?.Subject?.Department || {};
         const branchKey = String(department.DepartmentID || department.DepartmentCode || exam.ExamID);
 
@@ -83,6 +86,17 @@ const ExamDateDetail: React.FC = () => {
     const [isImportOpen, setIsImportOpen] = useState(false);
     const [selectedExamForDetail, setSelectedExamForDetail] = useState<any>(null);
     const [isDetailPanelOpen, setIsDetailPanelOpen] = useState(false);
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => Promise<void>;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: async () => { }
+    });
 
     useEffect(() => {
         if (seriesId && date) fetchExams();
@@ -116,6 +130,49 @@ const ExamDateDetail: React.FC = () => {
             return date;
         }
     }, [date]);
+
+    const handleClearExamEligibility = (branch: BranchOption, examName: string) => {
+        setConfirmModal({
+            isOpen: true,
+            title: 'Clear Subject Eligibility',
+            message: `Are you sure you want to clear ALL eligibility records for ${examName} (${branch.departmentCode})? This will also remove any seat allocations for this exam.`,
+            onConfirm: async () => {
+                try {
+                    await ExamService.clearSingleExamEligibility(branch.examId);
+                    toast.success(`Cleared eligibility for ${examName} (${branch.departmentCode})`);
+                    fetchExams();
+                } catch (e: any) {
+                    console.error('Failed to clear exam eligibility', e);
+                    toast.error('Failed to clear eligibility');
+                    throw e;
+                }
+            }
+        });
+    };
+
+    const handleClearGroupEligibility = (exam: GroupedExam) => {
+        const branchNames = exam.branches.map(b => b.departmentCode).join(', ');
+        const isMulti = exam.branches.length > 1;
+        
+        setConfirmModal({
+            isOpen: true,
+            title: isMulti ? 'Clear Group Eligibility' : 'Clear Subject Eligibility',
+            message: isMulti 
+                ? `Are you sure you want to clear ALL eligibility records for ${exam.examName} across ALL departments (${branchNames})? This will also remove any seat allocations.`
+                : `Are you sure you want to clear ALL eligibility records for ${exam.examName} (${branchNames})? This will also remove any seat allocations.`,
+            onConfirm: async () => {
+                try {
+                    await Promise.all(exam.branches.map(b => ExamService.clearSingleExamEligibility(b.examId)));
+                    toast.success(`Cleared eligibility for ${exam.examName}`);
+                    fetchExams();
+                } catch (e: any) {
+                    console.error('Failed to clear group eligibility', e);
+                    toast.error('Failed to clear some eligibility records');
+                    throw e;
+                }
+            }
+        });
+    };
 
     const openImport = (exam: GroupedExam) => {
         setSelectedExam(exam);
@@ -172,22 +229,48 @@ const ExamDateDetail: React.FC = () => {
                         <div className="mb-6">
                             <div className="flex flex-wrap gap-2">
                                 {exam.branches.map((branch) => (
-                                    <span
+                                    <div
                                         key={`${exam.groupKey}-${branch.examId}`}
-                                        className="px-3 py-1.5 rounded-[10px] text-[11px] font-extrabold tracking-wide uppercase bg-indigo-50/80 text-indigo-700 border border-indigo-100 shadow-sm"
+                                        className="relative flex items-center bg-indigo-50/80 border border-indigo-100 rounded-[10px] shadow-sm"
                                     >
-                                        {branch.departmentCode}
-                                    </span>
+                                        <span className={`py-1.5 text-[11px] font-extrabold tracking-wide uppercase text-indigo-700 ${exam.hasRegistrations ? 'pl-3 pr-1' : 'px-3'}`}>
+                                            {branch.departmentCode}
+                                        </span>
+                                        {exam.hasRegistrations && (
+                                            <button
+                                                className="p-1 mr-1 text-indigo-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleClearExamEligibility(branch, exam.examName);
+                                                }}
+                                                title={`Clear eligibility for ${branch.departmentCode}`}
+                                            >
+                                                <X size={12} strokeWidth={3} />
+                                            </button>
+                                        )}
+                                    </div>
                                 ))}
                             </div>
                         </div>
                     </div>
 
                     <div className="flex items-center justify-between gap-3 mt-4 pt-5 border-t border-slate-100">
-                        <div className="flex items-center">
+                        <div className="flex items-center gap-1">
                             <span className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest text-slate-400">
                                 {exam.branches.length} Department{exam.branches.length !== 1 ? 's' : ''}
                             </span>
+                            {exam.hasRegistrations && (
+                                <button
+                                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleClearGroupEligibility(exam);
+                                    }}
+                                    title="Clear All Eligibility"
+                                >
+                                    <Trash2 size={14} strokeWidth={2.5} />
+                                </button>
+                            )}
                         </div>
                         <div className="flex gap-2">
                             <Button
@@ -316,6 +399,14 @@ const ExamDateDetail: React.FC = () => {
                     onEdit={() => { }}
                 />
             )}
+
+            <ConfirmationModal
+                isOpen={confirmModal.isOpen}
+                onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={confirmModal.onConfirm}
+                title={confirmModal.title}
+                message={confirmModal.message}
+            />
 
         </div>
     );

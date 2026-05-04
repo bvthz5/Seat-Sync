@@ -99,5 +99,15 @@ export const ExamService = {
         if (date) params.append('date', date);
         const response = await api.delete(`${PREFIX}/clear-eligibility?${params.toString()}`);
         return response.data;
+    },
+
+    deleteEligibility: async (examId: number, studentId: number) => {
+        const response = await api.delete(`${PREFIX}/${examId}/eligible-students/${studentId}`);
+        return response.data;
+    },
+
+    clearSingleExamEligibility: async (examId: number) => {
+        const response = await api.delete(`${PREFIX}/${examId}/eligible-students`);
+        return response.data;
     }
 };

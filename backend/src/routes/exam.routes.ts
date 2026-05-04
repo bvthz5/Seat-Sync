@@ -189,6 +189,7 @@ router.put('/:id', AuthMiddleware.verifyAccessToken, ExamController.updateExam);
  *         description: List of eligible students
  */
 router.get('/:id/eligible-students', AuthMiddleware.verifyAccessToken, ExamController.getEligibleStudents);
+router.delete('/:id/eligible-students', AuthMiddleware.verifyAccessToken, ExamController.clearSingleExamEligibility);
 
 /**
  * @swagger
@@ -209,6 +210,7 @@ router.get('/:id/eligible-students', AuthMiddleware.verifyAccessToken, ExamContr
  *         description: Exam deleted
  */
 router.delete('/clear-eligibility', AuthMiddleware.verifyAccessToken, ExamController.clearEligibility);
+router.delete('/:examId/eligible-students/:studentId', AuthMiddleware.verifyAccessToken, ExamController.deleteEligibility);
 router.delete('/delete-all', AuthMiddleware.verifyAccessToken, ExamController.deleteAllExams);
 router.delete('/:id', AuthMiddleware.verifyAccessToken, ExamController.deleteExam);
 

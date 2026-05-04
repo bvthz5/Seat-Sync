@@ -559,7 +559,15 @@ const SeatingPlans: React.FC = () => {
 
     const runSeriesAllocation = async () => {
         setSeriesRunning(true);
-        let ids = selectedHallIds.size > 0 ? [...selectedHallIds] : halls.map(h => h.RoomID);
+        let ids: number[] = [];
+        if (selectedHallIds.size > 0) {
+            ids = [...selectedHallIds];
+            // Auto-expand: append remaining halls so large exam slots don't run out of seats
+            const remaining = halls.map(h => h.RoomID).filter(id => !selectedHallIds.has(id));
+            ids.push(...remaining);
+        } else {
+            ids = halls.map(h => h.RoomID);
+        }
 
         const tasks = [...seriesTasks];
         let hasError = false;
