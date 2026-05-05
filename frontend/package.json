@@ -23,6 +23,7 @@
     "lottie-react": "^2.4.1",
     "lucide-react": "^0.562.0",
     "motion-dom": "^12.38.0",
+    "mssql": "^12.5.2",
     "papaparse": "^5.5.3",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
