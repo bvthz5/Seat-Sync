@@ -23,6 +23,9 @@ type GroupedExam = {
     status: string;
     duration: number;
     subjectCode: string;
+    examType: string;
+    programName: string;
+    semesterName: string;
     branches: BranchOption[];
     hasRegistrations: boolean;
 };
@@ -50,6 +53,9 @@ const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
                 status: String(exam?.Status || 'Scheduled'),
                 duration,
                 subjectCode: String(exam?.Subject?.SubjectCode || ''),
+                examType: String(exam?.ExamSeries?.ExamType || 'Internal'),
+                programName: String(exam?.Subject?.Semester?.Program?.ProgramName || 'Program'),
+                semesterName: String(exam?.Subject?.Semester?.SemesterName || ''),
                 branches: [],
                 branchKeys: new Set<string>(),
                 hasRegistrations: false
@@ -339,7 +345,12 @@ const ExamDateDetail: React.FC = () => {
                                     <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center border border-amber-100 shadow-sm shrink-0">
                                         <Sun size={20} className="stroke-[2.5]" />
                                     </div>
-                                    <h2 className="text-2xl font-black text-slate-800 tracking-tight">Forenoon Session</h2>
+                                    <h2 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3">
+                                        Forenoon Session
+                                        <span className="text-xs font-bold text-amber-600/80 bg-amber-100/50 px-2.5 py-1 rounded-lg tracking-wide">
+                                            {morningExams.length} Exam{morningExams.length !== 1 ? 's' : ''}
+                                        </span>
+                                    </h2>
                                 </div>
                                 <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6">
                                     {morningExams.map((exam) => <ExamCard key={exam.groupKey} exam={exam} />)}
@@ -354,7 +365,12 @@ const ExamDateDetail: React.FC = () => {
                                     <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-500 flex items-center justify-center border border-indigo-100 shadow-sm shrink-0">
                                         <Moon size={20} className="stroke-[2.5]" />
                                     </div>
-                                    <h2 className="text-2xl font-black text-slate-800 tracking-tight">Afternoon Session</h2>
+                                    <h2 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3">
+                                        Afternoon Session
+                                        <span className="text-xs font-bold text-indigo-600/80 bg-indigo-100/50 px-2.5 py-1 rounded-lg tracking-wide">
+                                            {afternoonExams.length} Exam{afternoonExams.length !== 1 ? 's' : ''}
+                                        </span>
+                                    </h2>
                                 </div>
                                 <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6">
                                     {afternoonExams.map((exam) => <ExamCard key={exam.groupKey} exam={exam} />)}
@@ -369,7 +385,12 @@ const ExamDateDetail: React.FC = () => {
                                     <div className="w-10 h-10 rounded-[14px] bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
                                         <CalendarClock size={20} className="stroke-[2.5]" />
                                     </div>
-                                    <h2 className="text-2xl font-black text-slate-800 tracking-tight">Other Sessions</h2>
+                                    <h2 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3">
+                                        Other Sessions
+                                        <span className="text-xs font-bold text-slate-500/80 bg-slate-200/50 px-2.5 py-1 rounded-lg tracking-wide">
+                                            {otherExams.length} Exam{otherExams.length !== 1 ? 's' : ''}
+                                        </span>
+                                    </h2>
                                 </div>
                                 <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6">
                                     {otherExams.map((exam) => <ExamCard key={exam.groupKey} exam={exam} />)}

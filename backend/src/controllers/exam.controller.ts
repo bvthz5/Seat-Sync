@@ -577,7 +577,7 @@ export class ExamController {
     // Get all exams with optional filtering
     static async getExams(req: Request, res: Response) {
         try {
-            const { search, status, startDate, endDate, department, seriesId } = req.query;
+            const { search, status, startDate, endDate, department, seriesId, session } = req.query;
 
             const whereClause: any = {};
             const subjectWhereClause: any = {};
@@ -604,6 +604,10 @@ export class ExamController {
                 whereClause.ExamSeriesID = seriesId;
             }
 
+            if (session) {
+                whereClause.Session = session;
+            }
+
             const exams = await Exam.findAll({
                 where: whereClause,
                 attributes: {
@@ -623,10 +627,22 @@ export class ExamController {
                         model: Subject,
                         where: subjectWhereClause,
                         attributes: ['SubjectName', 'SubjectCode', 'DepartmentID'],
-                        include: [{
-                            model: Department,
-                            attributes: ['DepartmentID', 'DepartmentName', 'DepartmentCode']
-                        }]
+                        include: [
+                            {
+                                model: Department,
+                                attributes: ['DepartmentID', 'DepartmentName', 'DepartmentCode']
+                            },
+                            {
+                                model: Semester,
+                                attributes: ['SemesterID', 'SemesterName', 'SemesterNumber'],
+                                include: [
+                                    {
+                                        model: Program,
+                                        attributes: ['ProgramID', 'ProgramName', 'ProgramCode']
+                                    }
+                                ]
+                            }
+                        ]
                     },
                     {
                         model: ExamSeries,
@@ -1337,13 +1353,74 @@ export class ExamController {
                             }
                         }
 
+                        // 1.5 Resolve Program and Semester based on row data
+                        let rowSemesterID: number = defaultSemesterID;
+                        
+                        // Robustly find column values regardless of slight header variations
+                        const getRowVal = (keys: string[]) => {
+                            for (const key of keys) {
+                                if (row[key] !== undefined) return row[key];
+                            }
+                            const lowerKeys = keys.map(k => k.toLowerCase().replace(/\s+/g, ''));
+                            for (const actualKey of Object.keys(row)) {
+                                if (lowerKeys.includes(actualKey.toLowerCase().replace(/\s+/g, ''))) {
+                                    return row[actualKey];
+                                }
+                            }
+                            return undefined;
+                        };
+
+                        const examTypeRaw = getRowVal(['Exam Type', 'ExamType', 'Semester', 'Exam_Type']);
+                        const programmeRaw = getRowVal(['Programme', 'Program']);
+
+                        if (programmeRaw || examTypeRaw) {
+                            const progName = programmeRaw ? String(programmeRaw).trim() : 'General Program';
+                            
+                            let prog = await Program.findOne({
+                                where: { ProgramName: progName, DepartmentID: departmentID }
+                            });
+                            
+                            if (!prog) {
+                                const baseCode = progName.replace(/\s+/g, '-').substring(0, 15).toUpperCase();
+                                const progCode = `${baseCode}-${departmentID}`;
+                                prog = await Program.create({
+                                    ProgramName: progName,
+                                    ProgramCode: progCode,
+                                    DepartmentID: departmentID,
+                                    IsActive: true
+                                } as any);
+                            }
+                            
+                            const semName = examTypeRaw ? String(examTypeRaw).trim() : 'Semester 1';
+                            let semNum = 1;
+                            const semMatch = semName.match(/[sS](\d+)/);
+                            if (semMatch && semMatch[1]) {
+                                semNum = parseInt(semMatch[1], 10);
+                            }
+                            
+                            let [sem] = await Semester.findOrCreate({
+                                where: { 
+                                    SemesterName: semName,
+                                    ProgramID: prog.ProgramID
+                                },
+                                defaults: {
+                                    SemesterName: semName,
+                                    SemesterNumber: semNum,
+                                    ProgramID: prog.ProgramID,
+                                    IsActive: true
+                                } as any
+                            });
+                            
+                            rowSemesterID = sem.SemesterID;
+                        }
+
                         // 2. Resolve Subject (Find or Create) per dept
                         let subjectID: number;
                         const subjectKey = `${cleanCode}::${departmentID}`;
                         const cachedSubjID = subjectCache.get(subjectKey);
 
                         // Defensive check: Ensure SemesterID is valid
-                        if (!defaultSemesterID || isNaN(Number(defaultSemesterID))) {
+                        if (!rowSemesterID || isNaN(Number(rowSemesterID))) {
                             const errMsg = `Row ${data.indexOf(row) + 2}: Missing or invalid SemesterID for Subject '${cleanCode}' (DepartmentID: ${departmentID}). Subject not created.`;
                             console.error(errMsg);
                             errors.push(errMsg);
@@ -1352,6 +1429,12 @@ export class ExamController {
 
                         if (cachedSubjID !== undefined) {
                             subjectID = cachedSubjID;
+                            
+                            // Optionally update the subject's semester if it was assigned to default before
+                            await Subject.update(
+                                { SemesterID: rowSemesterID } as any,
+                                { where: { SubjectID: subjectID } }
+                            );
                         } else {
                             const [subj] = await Subject.findOrCreate({
                                 where: {
@@ -1362,11 +1445,16 @@ export class ExamController {
                                     SubjectCode: cleanCode,
                                     SubjectName: subjectName,
                                     DepartmentID: departmentID,
-                                    SemesterID: defaultSemesterID
+                                    SemesterID: rowSemesterID
                                 } as any
                             });
                             subjectID = subj.SubjectID;
                             subjectCache.set(subjectKey, subjectID);
+                            
+                            // If the subject already existed but was found by findOrCreate (race condition), update it
+                            if (!subj.isNewRecord && subj.SemesterID !== rowSemesterID) {
+                                await subj.update({ SemesterID: rowSemesterID } as any);
+                            }
                         }
 
                         // 3. Upsert exam for this subject/department
