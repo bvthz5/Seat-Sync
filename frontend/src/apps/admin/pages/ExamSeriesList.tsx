@@ -10,10 +10,88 @@ import ExamImportModal from '../components/exams/ExamImportModal';
 import EditExamModal from '../components/exams/EditExamModal';
 import ConfirmationModal from '../components/ConfirmationModal';
 
-const isMissingDepartment = (exam: any) => {
-    const code = String(exam?.Subject?.Department?.DepartmentCode || '').trim().toUpperCase();
-    const name = String(exam?.Subject?.Department?.DepartmentName || '').trim().toUpperCase();
+const isMissingDepartment = (code: string, name: string) => {
     return !code || code === 'GEN' || code === 'GENERAL' || name === 'GENERAL';
+};
+
+type BranchOption = {
+    examId: number;
+    departmentId: number;
+    departmentCode: string;
+    departmentName: string;
+};
+
+type GroupedExam = {
+    groupKey: string;
+    examName: string;
+    date: string;
+    session: string;
+    status: string;
+    duration: number;
+    subjectCode: string;
+    branches: BranchOption[];
+    hasRegistrations: boolean;
+};
+
+const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
+    const groups = new Map<string, GroupedExam & { branchKeys: Set<string> }>();
+
+    exams.forEach((exam: any) => {
+        const date = String(exam?.ExamDate || '').split('T')[0];
+        const examName = String(exam?.ExamName || '').trim();
+        const session = String(exam?.Session || '').trim().toUpperCase();
+        const duration = Number(exam?.Duration || 0);
+        // Stable grouping by date, session, and subject code (fallback to name)
+        const paperId = String(exam?.Subject?.SubjectCode || examName).trim();
+        const groupKey = `${date}::${session}::${paperId}::${duration}`;
+        const department = exam?.Subject?.Department || {};
+        const branchKey = String(department.DepartmentID || department.DepartmentCode || exam.ExamID);
+
+        if (!groups.has(groupKey)) {
+            groups.set(groupKey, {
+                groupKey,
+                examName,
+                date,
+                session,
+                status: String(exam?.Status || 'Scheduled'),
+                duration,
+                subjectCode: String(exam?.Subject?.SubjectCode || ''),
+                branches: [],
+                branchKeys: new Set<string>(),
+                hasRegistrations: false
+            });
+        }
+
+        const group = groups.get(groupKey)!;
+        if (!group.branchKeys.has(branchKey)) {
+            group.branchKeys.add(branchKey);
+            group.branches.push({
+                examId: Number(exam.ExamID),
+                departmentId: Number(department.DepartmentID || 0),
+                departmentCode: String(department.DepartmentCode || 'GEN'),
+                departmentName: String(department.DepartmentName || 'General')
+            });
+        }
+
+        if (Number(exam.registrationCount || 0) > 0) {
+            group.hasRegistrations = true;
+        }
+    });
+
+    return Array.from(groups.values())
+        .map(({ branchKeys, ...group }) => group)
+        .sort((a, b) => {
+            const dateCmp = new Date(a.date).getTime() - new Date(b.date).getTime();
+            if (dateCmp !== 0) return dateCmp;
+            
+            // If same date, sort by session (FN before AN)
+            if (a.session !== b.session) {
+                return a.session === 'FN' ? -1 : 1;
+            }
+            
+            // If same date and session, sort alphabetically
+            return a.examName.localeCompare(b.examName);
+        });
 };
 
 const ExamSeriesList: React.FC = () => {
@@ -24,7 +102,7 @@ const ExamSeriesList: React.FC = () => {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [deleteExamId, setDeleteExamId] = useState<number | null>(null);
+    const [deleteExamIds, setDeleteExamIds] = useState<number[] | null>(null);
     const [isDeleteAllOpen, setIsDeleteAllOpen] = useState(false);
     const [selectedExam, setSelectedExam] = useState<any>(null);
     const [seriesName, setSeriesName] = useState<string>('');
@@ -73,19 +151,20 @@ const ExamSeriesList: React.FC = () => {
         setIsEditModalOpen(true);
     };
 
-    const handleDeleteClick = (id: number) => {
-        setDeleteExamId(id);
+    const handleDeleteClick = (examIds: number[]) => {
+        setDeleteExamIds(examIds);
     };
 
     const confirmDelete = async () => {
-        if (!deleteExamId) return;
+        if (!deleteExamIds || deleteExamIds.length === 0) return;
         try {
-            await ExamService.delete(deleteExamId);
-            toast.success("Exam deleted successfully");
+            await Promise.all(deleteExamIds.map(id => ExamService.delete(id)));
+            toast.success("Exam(s) deleted successfully");
             fetchExams();
         } catch (error) {
-            toast.error("Failed to delete exam");
-            throw error;
+            toast.error("Failed to delete exam(s)");
+        } finally {
+            setDeleteExamIds(null);
         }
     };
 
@@ -241,53 +320,49 @@ const ExamSeriesList: React.FC = () => {
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {exams.map((exam) => (
+                        {groupExamsByPaper(exams).map((examGroup) => (
                             <Card
-                                key={exam.ExamID}
+                                key={examGroup.groupKey}
                                 className={`bg-white border hover:shadow-lg transition-all duration-300 group rounded-2xl overflow-hidden ${
-                                    isMissingDepartment(exam)
+                                    examGroup.branches.some(b => isMissingDepartment(b.departmentCode, b.departmentName))
                                         ? 'border-amber-300 hover:border-amber-400 ring-1 ring-amber-200'
                                         : 'border-slate-200 hover:border-slate-300'
                                 }`}
                             >
-                                <div className={`h-1.5 w-full ${isMissingDepartment(exam) ? 'bg-amber-500' : 'bg-indigo-500'}`}></div>
+                                <div className={`h-1.5 w-full ${examGroup.branches.some(b => isMissingDepartment(b.departmentCode, b.departmentName)) ? 'bg-amber-500' : 'bg-indigo-500'}`}></div>
                                 <CardBody className="p-6 space-y-5">
                                     <div className="min-h-[4rem]">
                                         <h3 className="text-xl font-bold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-2">
-                                            {exam.ExamName}
+                                            {examGroup.examName}
                                         </h3>
                                         <div className="flex items-center gap-2 mt-2">
-                                            <span className="text-slate-500 font-medium text-sm flex-1 truncate" title={exam.Subject?.SubjectName || exam.Subject?.SubjectCode}>
-                                                {exam.Subject?.SubjectCode} 
-                                                {exam.Subject?.SubjectName ? ` - ${exam.Subject?.SubjectName}` : ''}
+                                            <span className="text-slate-500 font-medium text-sm flex-1 truncate" title={examGroup.subjectCode || examGroup.examName}>
+                                                {examGroup.subjectCode} 
                                             </span>
                                         </div>
-                                        <div className="mt-2">
-                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold border ${
-                                                isMissingDepartment(exam)
-                                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                                    : 'bg-indigo-50 text-indigo-700 border-indigo-100'
-                                            }`}>
-                                                Dept: {exam.Subject?.Department?.DepartmentCode || exam.Subject?.Department?.DepartmentName || 'General'}
-                                            </span>
-                                            {isMissingDepartment(exam) && (
-                                                <span className="ml-2 inline-flex items-center px-2 py-1 rounded-md text-[10px] font-bold bg-red-50 text-red-700 border border-red-200">
-                                                    Missing/Review Dept
+                                        <div className="mt-3 flex flex-wrap gap-2">
+                                            {examGroup.branches.map((branch) => (
+                                                <span key={branch.examId} className={`inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-semibold border ${
+                                                    isMissingDepartment(branch.departmentCode, branch.departmentName)
+                                                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                        : 'bg-indigo-50 text-indigo-700 border-indigo-100'
+                                                }`}>
+                                                    Dept: {branch.departmentCode}
                                                 </span>
-                                            )}
+                                            ))}
                                         </div>
                                     </div>
                                     
                                     <div className="flex flex-wrap gap-2">
                                         <span className={`px-2.5 py-1 rounded-md text-xs font-bold border ${
-                                            exam.Status === 'Scheduled' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                            exam.Status === 'Completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                            examGroup.status === 'Scheduled' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                            examGroup.status === 'Completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                                             'bg-purple-50 text-purple-700 border-purple-200'
                                         }`}>
-                                            {exam.Status}
+                                            {examGroup.status}
                                         </span>
                                         <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
-                                            {exam.Session === 'FN' ? 'Morning' : 'Afternoon'}
+                                            {examGroup.session === 'FN' ? 'Morning' : 'Afternoon'}
                                         </span>
                                     </div>
                                     
@@ -297,7 +372,7 @@ const ExamSeriesList: React.FC = () => {
                                     <div className="flex items-center justify-between text-slate-500 text-sm font-medium pt-1 group-hover:text-indigo-600 transition-colors">
                                         <div className="flex items-center gap-1.5">
                                             <CalendarDays size={16} />
-                                            <span>{new Date(exam.ExamDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                            <span>{new Date(examGroup.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
                                         </div>
                                     </div>
 
@@ -307,7 +382,7 @@ const ExamSeriesList: React.FC = () => {
                                             variant="flat"
                                             className="bg-slate-100 text-slate-700 hover:bg-slate-200 font-medium"
                                             startContent={<Pencil size={14} />}
-                                            onPress={() => handleEdit(exam)}
+                                            onPress={() => handleEdit(exams.find(e => e.ExamID === examGroup.branches[0].examId))}
                                         >
                                             Edit
                                         </Button>
@@ -316,9 +391,9 @@ const ExamSeriesList: React.FC = () => {
                                             variant="flat"
                                             className="bg-red-50 text-red-600 hover:bg-red-100 font-medium"
                                             startContent={<Trash2 size={14} />}
-                                            onPress={() => handleDeleteClick(exam.ExamID)}
+                                            onPress={() => handleDeleteClick(examGroup.branches.map(b => b.examId))}
                                         >
-                                            Delete
+                                            Delete Group
                                         </Button>
                                     </div>
                                 </CardBody>
@@ -358,13 +433,14 @@ const ExamSeriesList: React.FC = () => {
                 />
             )}
 
+            {/* Delete Confirmation Modal */}
             <ConfirmationModal
-                isOpen={!!deleteExamId}
-                onClose={() => setDeleteExamId(null)}
+                isOpen={!!deleteExamIds}
+                onClose={() => setDeleteExamIds(null)}
                 onConfirm={confirmDelete}
-                title="Delete Exam"
-                message="Are you sure you want to delete this exam? This action cannot be undone."
-                confirmText="Delete Exam"
+                title="Delete Exam Group"
+                message="Are you sure you want to delete this exam and all its associated department branches? This action cannot be undone."
+                confirmText="Delete All Branches"
                 cancelText="Cancel"
                 type="danger"
             />

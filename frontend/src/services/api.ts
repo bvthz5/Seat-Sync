@@ -10,18 +10,29 @@ const api: AxiosInstance = axios.create({
     },
 });
 
-// Token storage using localStorage (persists across refreshes)
+// Role-scoped token storage keys to prevent cross-contamination between Admin, Invigilator, and Student tabs
+const getStorageKey = () => {
+    const path = window.location.pathname.toLowerCase();
+    if (path.startsWith('/admin')) return 'seat_sync_admin_token';
+    if (path.startsWith('/invigilator')) return 'seat_sync_invigilator_token';
+    if (path.startsWith('/student')) return 'seat_sync_student_token';
+    return 'accessToken'; // Fallback
+};
+
 export const AccessTokenStore = {
-    get token() { return localStorage.getItem('accessToken'); },
+    get token() { return localStorage.getItem(getStorageKey()); },
     setToken: (t: string) => {
         const token = (t || '').trim();
+        const key = getStorageKey();
         if (!token || token === 'undefined' || token === 'null') {
-            localStorage.removeItem('accessToken');
+            localStorage.removeItem(key);
             return;
         }
-        localStorage.setItem('accessToken', token);
+        localStorage.setItem(key, token);
     },
-    clear: () => { localStorage.removeItem('accessToken'); }
+    clear: () => { 
+        localStorage.removeItem(getStorageKey());
+    }
 };
 
 // -- Refresh Token Mechanism Variables --
@@ -46,7 +57,7 @@ const processQueue = (error: any, token: string | null = null) => {
 // Request Interceptor: Attach Access Token
 api.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
-        const token = (localStorage.getItem('accessToken') || '').trim();
+        const token = (AccessTokenStore.token || '').trim();
         if (token && config.headers) {
             config.headers.Authorization = `Bearer ${token}`;
         }

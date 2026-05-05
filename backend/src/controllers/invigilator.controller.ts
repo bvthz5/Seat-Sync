@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
-import { User, Invigilator, Faculty, InvigilatorAssignment, Exam, UserProfile, SeatAllocation, Seat, Room, InvigilatorRequest, ActivityLog, NotificationRecipient, Block, Attendance, Student, Subject } from "../models/index.js";
+import { User, Invigilator, Faculty, InvigilatorAssignment, Exam, UserProfile, SeatAllocation, Seat, Room, InvigilatorRequest, ActivityLog, NotificationRecipient, Block, Floor, Attendance, Student, Subject } from "../models/index.js";
 import { Op } from "sequelize";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { sequelize } from "../config/database.js";
 import { emailService } from "../services/email.service.js";
@@ -28,7 +28,7 @@ export const getAllInvigilators = async (req: Request, res: Response) => {
         // Fetch all faculties
         const faculties = await Faculty.findAll();
 
-        const today = new Date().toISOString().split('T')[0];
+        const today: string = new Date().toISOString().split('T')[0] || "";
 
         // Fetch all assignments to calculate total exams count and on-duty status
         let allAssignments: any[] = [];
@@ -61,10 +61,9 @@ export const getAllInvigilators = async (req: Request, res: Response) => {
                 Department: (facultyData as any).Department,
                 totalExams: facultyAssignments.length,
                 isOnDuty: facultyAssignments.some(a => {
-                    if (!a.Exam) return false;
-                    const examDate = typeof a.Exam.ExamDate === 'string'
-                        ? a.Exam.ExamDate
-                        : (a.Exam.ExamDate as Date).toISOString().split('T')[0];
+                    const examDate = a.Exam?.ExamDate 
+                        ? (typeof a.Exam.ExamDate === 'string' ? a.Exam.ExamDate : (a.Exam.ExamDate as Date).toISOString().split('T')[0])
+                        : "";
                     return examDate === today;
                 })
             };
@@ -82,11 +81,25 @@ export const getAllInvigilators = async (req: Request, res: Response) => {
 
 export const toggleInvigilatorFlag = async (req: Request, res: Response) => {
     try {
-        const { id } = req.params;
-        const invigilator = await Invigilator.findByPk(id as string);
+        const { id } = req.params; // This is a FacultyID from the frontend
+        const faculty = await Faculty.findByPk(id as string);
+        if (!faculty) return res.status(404).json({ message: "Faculty not found" });
+
+        // Find associated Invigilator record by matching StaffCode to User Email
+        const user = await User.findOne({ 
+            where: { 
+                [Op.or]: [
+                    { Email: faculty.StaffCode },
+                    { Email: { [Op.like]: `${faculty.StaffCode}%` } }
+                ]
+            },
+            include: [Invigilator]
+        });
+
+        const invigilator = (user as any)?.Invigilator;
 
         if (!invigilator) {
-            return res.status(404).json({ message: "Invigilator not found" });
+            return res.status(404).json({ message: "Invigilator profile not linked to a user account" });
         }
 
         invigilator.IsFlagged = !invigilator.IsFlagged;
@@ -250,7 +263,7 @@ export const getInvigilatorStats = async (req: Request, res: Response) => {
         });
         const active = eligible; // For faculties, active = eligible
 
-        const today = new Date().toISOString().split('T')[0];
+        const today: string = new Date().toISOString().split('T')[0] || "";
         let onDuty = 0;
         try {
             const onDutyAssignments = await InvigilatorAssignment.findAll({
@@ -288,29 +301,32 @@ export const getInvigilatorStats = async (req: Request, res: Response) => {
  * Expected body: { rows: [{ Name, Department }] }
  */
 export const bulkImportInvigilators = async (req: Request, res: Response) => {
-    const t = await sequelize.transaction();
     try {
         const { rows } = req.body;
         if (!Array.isArray(rows) || rows.length === 0) {
-            await t.rollback();
             return res.status(400).json({ message: "No rows provided" });
         }
 
         const created: number[] = [];
         const skipped: { row: number; reason: string }[] = [];
+        let successCount = 0;
 
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
             const { Name, Email, Department: deptValue, Phone, Designation, StaffCode, FacultyID } = row;
 
+            // Use a per-row transaction to ensure atomicity for each staff member
+            // without poisoning the entire import if one fails.
+            const rowTransaction = await sequelize.transaction();
+            
             try {
                 const nameStr = Name ? String(Name).trim() : "";
                 const deptStr = deptValue ? String(deptValue).trim() : "";
-                const phoneStr = Phone ? String(Phone).trim() : null;
                 const desigStr = Designation ? String(Designation).trim() : "Faculty";
                 let emailStr = Email ? String(Email).trim().toLowerCase() : "";
 
                 if (!nameStr || !deptStr) {
+                    await rowTransaction.rollback();
                     skipped.push({ row: i + 2, reason: `Missing required fields (Name or Department)` });
                     continue;
                 }
@@ -320,74 +336,124 @@ export const bulkImportInvigilators = async (req: Request, res: Response) => {
                     emailStr = `${nameForEmail}@sjcetpalai.ac.in`;
                 }
 
-                // Check duplicate email
-                const existingUser = await User.findOne({ where: { Email: emailStr }, transaction: t });
-                if (existingUser) {
-                    skipped.push({ row: i + 2, reason: `Email ${emailStr} already exists` });
-                    continue;
-                }
-
-                // Check duplicate FacultyID if provided
-                if (FacultyID) {
-                    const existingFaculty = await Faculty.findByPk(FacultyID, { transaction: t });
-                    if (existingFaculty) {
-                        skipped.push({ row: i + 2, reason: `FacultyID ${FacultyID} already exists` });
-                        continue;
+                // 1. Handle User (Upsert)
+                let user = await User.findOne({ where: { Email: emailStr }, transaction: rowTransaction });
+                if (!user) {
+                    user = await User.create({
+                        Email: emailStr,
+                        FullName: nameStr,
+                        PasswordHash: await bcrypt.hash("Sjcet@123", 10),
+                        Role: "invigilator",
+                        IsActive: true,
+                        IsActivated: true
+                    } as any, { transaction: rowTransaction });
+                } else {
+                    user.FullName = nameStr;
+                    // Protect admin roles from being downgraded
+                    if (user.IsRootAdmin || user.Role === "exam_admin") {
+                        // Keep as is
+                    } else {
+                        user.Role = "invigilator";
                     }
+                    await user.save({ transaction: rowTransaction });
                 }
 
-                // 1. Create User
-                const user = await User.create({
-                    Email: emailStr,
-                    FullName: nameStr,
-                    PasswordHash: await bcrypt.hash("Sjcet@123", 10),
-                    Role: "invigilator",
-                    IsActive: true,
-                    IsActivated: true
-                } as any, { transaction: t });
-
-                // 2. Create Faculty
-                const facultyData: any = {
-                    StaffCode: StaffCode ? String(StaffCode).trim() : emailStr,
-                    Name: nameStr,
-                    Designation: desigStr,
-                    Department: deptStr,
-                    IsEligible: true
-                };
-
-                if (FacultyID) {
-                    facultyData.FacultyID = Number(FacultyID);
+                // 1b. Handle UserProfile (Upsert)
+                let profile = await UserProfile.findByPk(user.UserID, { transaction: rowTransaction });
+                if (!profile) {
+                    await UserProfile.create({
+                        UserID: user.UserID,
+                        FullName: nameStr,
+                        Phone: Phone ? String(Phone).trim() : null,
+                    }, { transaction: rowTransaction });
+                } else {
+                    profile.FullName = nameStr;
+                    if (Phone) profile.Phone = String(Phone).trim();
+                    await profile.save({ transaction: rowTransaction });
                 }
 
-                const faculty = await Faculty.create(facultyData, { transaction: t });
+                // 2. Handle Faculty (Upsert)
+                const facultyIDNum = FacultyID ? Number(FacultyID) : null;
+                const finalFacultyID = (facultyIDNum && !isNaN(facultyIDNum)) ? facultyIDNum : undefined;
+                const finalStaffCode = StaffCode ? String(StaffCode).trim() : (finalFacultyID ? String(finalFacultyID) : emailStr);
 
-                // 3. Create Invigilator link
-            await Invigilator.create({
-                UserID: user.UserID,
-                FacultyID: faculty.FacultyID,
-                IsEligible: true,
-                IsFlagged: false
-            }, { transaction: t });
+                let faculty: any = null;
+                if (finalFacultyID) {
+                    faculty = await Faculty.findByPk(finalFacultyID, { transaction: rowTransaction });
+                }
+                
+                if (!faculty) {
+                    faculty = await Faculty.findOne({ where: { StaffCode: finalStaffCode }, transaction: rowTransaction });
+                }
 
+                if (!faculty) {
+                    const facultyData: any = {
+                        StaffCode: finalStaffCode,
+                        Name: nameStr,
+                        Designation: desigStr,
+                        Department: deptStr,
+                        IsEligible: true
+                    };
+                    if (finalFacultyID) facultyData.FacultyID = finalFacultyID;
+                    faculty = await Faculty.create(facultyData, { transaction: rowTransaction });
+                } else {
+                    faculty.Name = nameStr;
+                    faculty.Designation = desigStr;
+                    faculty.Department = deptStr;
+                    faculty.StaffCode = finalStaffCode;
+                    await faculty.save({ transaction: rowTransaction });
+                }
+
+            // 3. Handle Invigilator (Metadata)
+            // Note: FacultyID is no longer stored in the Invigilators table.
+            // Linkage is now maintained via the User-Faculty relationship (StaffCode match).
+            let invigilator = await Invigilator.findOne({ 
+                where: { UserID: user.UserID }, 
+                transaction: rowTransaction 
+            });
+
+            if (!invigilator) {
+                invigilator = await Invigilator.create({
+                    UserID: user.UserID,
+                    IsEligible: true,
+                    IsFlagged: false
+                }, { transaction: rowTransaction });
+            } else {
+                // Just ensure the UserID is set correctly
+                invigilator.UserID = user.UserID;
+                await invigilator.save({ transaction: rowTransaction });
+            }
+
+                await rowTransaction.commit();
                 created.push(faculty.FacultyID);
+                successCount++;
 
             } catch (rowError: any) {
+                if (rowTransaction) {
+                    try { await rowTransaction.rollback(); } catch (err) { /* ignore rollback errors */ }
+                }
                 console.error(`Row ${i + 2} import error:`, rowError);
-                skipped.push({ row: i + 2, reason: rowError.message || "Unknown error" });
+                
+                let reason = rowError.message || "Unknown error";
+                if (rowError.name === 'SequelizeUniqueConstraintError') {
+                    reason = "Duplicate entry found (Conflict in UserID or FacultyID)";
+                } else if (rowError.original && rowError.original.message) {
+                    reason = rowError.original.message;
+                }
+                
+                skipped.push({ row: i + 2, reason });
             }
         }
 
-        await t.commit();
         res.json({
-            message: `Successfully imported ${created.length} staff records.`,
+            message: `Successfully processed ${successCount} records.`,
             created,
             skipped,
-            successCount: created.length
+            successCount
         });
     } catch (error: any) {
-        await t.rollback();
-        console.error("Bulk import error:", error);
-        res.status(500).json({ message: "Internal server error during bulk import" });
+        console.error("Bulk import critical error:", error);
+        res.status(500).json({ message: error.message || "Internal server error during bulk import" });
     }
 };
 
@@ -512,7 +578,7 @@ export const resendInvigilatorActivationLink = async (req: Request, res: Respons
         user.ActivationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
         await user.save();
 
-        await emailService.sendInvigilatorActivationEmail(user.Email, user.FullName || 'Invigilator', token);
+        await emailService.sendInvigilatorActivationEmail(user.Email!, user.FullName || 'Invigilator', token);
 
         res.json({ message: "Activation link resent successfully" });
     } catch (error: any) {
@@ -583,7 +649,12 @@ export const approveInvigilatorRequest = async (req: Request, res: Response) => 
     const t = await sequelize.transaction();
     try {
         const { id } = req.params;
-        const request = await InvigilatorRequest.findByPk(id as string, { transaction: t });
+        if (!id) {
+            await t.rollback();
+            return res.status(400).json({ message: "Request ID is required" });
+        }
+
+        const request = await InvigilatorRequest.findByPk(Number(id), { transaction: t });
 
         if (!request) {
             await t.rollback();
@@ -614,10 +685,9 @@ export const approveInvigilatorRequest = async (req: Request, res: Response) => 
             IsEligible: true
         }, { transaction: t });
 
-        // 3. Create Invigilator link
+        // 3. Create Invigilator record
         await Invigilator.create({
             UserID: user.UserID,
-            FacultyID: faculty.FacultyID,
             IsEligible: true,
             IsFlagged: false
         }, { transaction: t });
@@ -651,7 +721,7 @@ export const approveInvigilatorRequest = async (req: Request, res: Response) => 
 export const rejectInvigilatorRequest = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const request = await InvigilatorRequest.findByPk(id as string);
+        const request = await InvigilatorRequest.findByPk(Number(id));
 
         if (!request) {
             return res.status(404).json({ message: "Request not found" });
@@ -880,21 +950,22 @@ export const getInvigilatorAssignments = async (req: Request, res: Response) => 
     }
 };
 
-/**
- * Get real-time dashboard data for the logged-in invigilator
- */
 export const getInvigilatorDashboardData = async (req: Request, res: Response) => {
     try {
-        const userId = (req as any).user?.UserID;
+        const userPayload = (req as any).user;
+        const userId = userPayload?.UserID;
+        
+        console.log(`[DASHBOARD_DEBUG] Request received. UserID: ${userId}, Email: ${userPayload?.Email}, Role: ${userPayload?.Role}`);
+
+
         if (!userId) {
-            return res.status(401).json({ message: "Unauthorized" });
+            console.error("[DASHBOARD_DEBUG] No userId found in request. Possible token payload issue.");
+            return res.status(401).json({ message: "Unauthorized: No user identifier found in token." });
         }
         
-        // 1. Get User and associated Invigilator profile
         const user = await User.findByPk(userId, {
             include: [{
-                model: Invigilator,
-                include: [{ model: Faculty }]
+                model: Invigilator
             }]
         });
 
@@ -902,10 +973,26 @@ export const getInvigilatorDashboardData = async (req: Request, res: Response) =
             return res.status(404).json({ message: "User not found" });
         }
 
-        // Try to get faculty from formal link first
-        let faculty = (user as any).Invigilator?.Faculty;
+        console.log("DEBUG: Resolved user email:", user.Email);
 
-        // Fallback to searching by Email or Name for legacy records
+        // Resolve faculty record by StaffCode matching the User's Email or FullName
+        const email = user.Email?.trim().toLowerCase();
+        const emailPrefix = email?.split('@')[0];
+        const fullName = user.FullName?.trim();
+
+        const faculty = await Faculty.findOne({
+            where: {
+                [Op.or]: [
+                    { StaffCode: email || undefined },
+                    { StaffCode: emailPrefix || undefined },
+                    { Name: { [Op.like]: fullName || "" } },
+                    { StaffCode: { [Op.like]: emailPrefix + '%' } }
+                ]
+            }
+        });
+
+        console.log("DEBUG: Faculty found:", faculty?.FacultyID);
+
         if (!faculty) {
             faculty = await Faculty.findOne({
                 where: {
@@ -920,6 +1007,7 @@ export const getInvigilatorDashboardData = async (req: Request, res: Response) =
         if (!faculty) {
             return res.status(404).json({ message: "Faculty profile not found for this account" });
         }
+
 
         const today: string = new Date().toISOString().split('T')[0] || "";
         const now = new Date();
@@ -980,7 +1068,7 @@ export const getInvigilatorDashboardData = async (req: Request, res: Response) =
                 }]
             });
 
-            const examDate: string = (d.Exam?.ExamDate 
+            const examDate: string = (d.Exam?.ExamDate
                 ? (typeof d.Exam.ExamDate === 'string' ? d.Exam.ExamDate : (d.Exam.ExamDate as Date).toISOString().split('T')[0])
                 : today) || "";
 
@@ -1042,29 +1130,24 @@ export const getInvigilatorDashboardData = async (req: Request, res: Response) =
         res.status(500).json({ message: "Internal server error" });
     }
 };
-
 export const getAssignmentDetails = async (req: Request, res: Response) => {
     try {
-        const { id } = req.params; // This is actually the ExamID from our dashboard mapping
-        const user = (req as any).user;
-        
-        // Find faculty profile for the logged in user
-        const invigilator = await Invigilator.findOne({ where: { UserID: user.UserID } });
-        if (!invigilator) return res.status(404).json({ message: "Invigilator profile not found" });
+        const { id } = req.params; // This is the AssignmentID from the URL
+        console.log(`[ASSIGNMENT_DETAILS] Fetching AssignmentID: ${id}`);
 
-        const assignment = await InvigilatorAssignment.findOne({
-            where: { 
-                ExamID: id,
-                InvigilatorID: invigilator.FacultyID
-            },
+        if (!id) {
+            return res.status(400).json({ message: "Assignment ID is required" });
+        }
+
+        const assignment = await InvigilatorAssignment.findByPk(id as string, {
             include: [
                 {
                     model: Exam,
-                    include: [Subject]
+                    include: [{ model: Subject }]
                 },
-                { 
+                {
                     model: Room,
-                    include: [Block]
+                    include: [Block, Floor]
                 }
             ]
         });
@@ -1075,8 +1158,8 @@ export const getAssignmentDetails = async (req: Request, res: Response) => {
 
         res.json(assignment);
     } catch (error: any) {
-        console.error("Fetch assignment error:", error);
-        res.status(500).json({ message: "Internal server error" });
+        console.error("GET ASSIGNMENT DETAILS ERROR:", error);
+        res.status(500).json({ message: error.message });
     }
 };
 
@@ -1089,14 +1172,22 @@ export const saveAttendance = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "Invalid request payload" });
         }
 
-        const invigilator = await Invigilator.findOne({ where: { UserID: user.UserID } });
-        if (!invigilator) return res.status(404).json({ message: "Invigilator profile not found" });
+        const faculty = await Faculty.findOne({ 
+            where: { 
+                [Op.or]: [
+                    { StaffCode: user.Email },
+                    { StaffCode: user.Email?.split('@')[0] }
+                ]
+            } 
+        });
+        
+        if (!faculty) return res.status(404).json({ message: "Faculty profile not found" });
 
         // Verify assignment
         const assignment = await InvigilatorAssignment.findOne({
             where: { 
                 ExamID: Number(examId), 
-                InvigilatorID: invigilator.FacultyID 
+                InvigilatorID: faculty.FacultyID 
             }
         });
         
@@ -1109,7 +1200,7 @@ export const saveAttendance = async (req: Request, res: Response) => {
             ExamID: Number(examId),
             StudentID: Number(s.StudentID),
             IsPresent: Boolean(s.IsPresent),
-            MarkedByInvigilatorID: invigilator.InvigilatorID, // Corrected from FacultyID to InvigilatorID
+            MarkedByInvigilatorID: faculty.FacultyID, // Using FacultyID for marking attendance
             MarkedAt: new Date()
         }));
 
@@ -1127,8 +1218,8 @@ export const saveAttendance = async (req: Request, res: Response) => {
             UserID: user.UserID,
             Action: "SUBMIT_ATTENDANCE",
             Details: `Submitted attendance for ExamID ${examId} in Room ${assignment.RoomID}`,
-            IPAddress: req.ip || "",
-            UserAgent: req.headers['user-agent'] || ""
+            IPAddress: req.ip || "unknown",
+            UserAgent: (req.headers['user-agent'] as string) || "unknown"
         }).catch(err => console.error("Activity log failed:", err));
 
         res.json({ 

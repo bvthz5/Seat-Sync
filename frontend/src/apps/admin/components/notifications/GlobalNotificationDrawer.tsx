@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button, ScrollShadow } from "@heroui/react";
 import { X, Bell, AlertTriangle, Calendar, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getMyNotifications, Notification, initNotificationSocket, markAllAsRead } from '../../services/notificationService';
-import { useAuth } from '../../../../context/AuthContext';
+import { useAuth } from '../../../../hooks/useAuth';
 import { formatDistanceToNow } from 'date-fns';
 
 export const GlobalNotificationDrawer: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {

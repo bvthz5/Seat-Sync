@@ -669,7 +669,7 @@ export const importStudents = async (req: Request, res: Response) => {
                     let currentUser = m.user;
                     if (!currentUser) {
                         currentUser = await User.create({
-                            Email: m.email, // can be null now
+                            Email: m.email || `${m.regNo.toLowerCase()}@student.local`, // Guarantee uniqueness
                             FullName: m.normalizedName,
                             PasswordHash: m.password,
                             Role: 'student',

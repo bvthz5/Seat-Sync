@@ -81,7 +81,18 @@ const parseExamDateValue = (raw: unknown): Date | null => {
 
     const standardDate = new Date(text);
     if (!isNaN(standardDate.getTime())) {
-        return new Date(standardDate.getFullYear(), standardDate.getMonth(), standardDate.getDate());
+        let y = standardDate.getFullYear();
+        // Node.js parses 'May 5' as May 5, 2001. We want to default to the current year instead.
+        if (y === 2001 && !text.includes('2001')) {
+            y = new Date().getFullYear();
+        }
+        
+        // Fix known typos in the original timetable file (e.g. 2027, 2028 instead of 2026)
+        if (y === 2027 || y === 2028) {
+            y = 2026;
+        }
+
+        return new Date(y, standardDate.getMonth(), standardDate.getDate());
     }
 
     return null;
@@ -95,34 +106,82 @@ const formatDateForDb = (date: Date): string => {
 };
 
 const parseDepartmentCodes = (raw: unknown): string[] => {
-    const text = String(raw ?? '').trim();
+    let text = String(raw ?? '').trim();
     if (!text) return [];
+    
+    // Pre-process: if it contains " (", strip everything after it for individual codes
+    // e.g. "EEE (WP), CSE" -> "EEE, CSE"
+    text = text.replace(/\s*\(.*?\)/g, '');
+
     return [...new Set(
         text
             .split(/[,&/;|]+/)
-            .map((s) => normalizeDepartmentCode(s))
+            .map((s) => normalizeDepartmentCode(s.trim()))
             .filter(Boolean)
     )];
 };
 
 const DEPARTMENT_CODE_ALIASES: Record<string, string> = {
     INMCA: 'IMCA',
-    ITCS: 'CSE',
+    ITCS: 'CS',
     ITCE: 'CE',
-    ITEC: 'ECE',
-    ITEE: 'EEE',
+    ITEC: 'EC',
+    ITEE: 'EE',
+    EE: 'EE',
+    EC: 'EC',
+    CS: 'CS',
+    CSE: 'CS',
+    ECE: 'EC',
+    EEE: 'EE',
+    MECH: 'ME',
+    CIVIL: 'CE',
+    AD: 'AD',
+    CA: 'CA',
+    CC: 'CC',
+    RA: 'RA',
+    ER: 'ER',
+    EEEWP: 'EEEWP',
+    CSEWP: 'CSEWP',
+    ECEWP: 'ECEWP',
+    CEWP: 'CEWP',
+    MEWP: 'MEWP',
 };
 
 const DEPARTMENT_CODE_DISPLAY_NAMES: Record<string, string> = {
     IMCA: 'Integrated MCA',
+    EE: 'Electrical & Electronics Engineering',
+    CS: 'Computer Science & Engineering',
+    EC: 'Electronics & Communication Engineering',
+    CE: 'Civil Engineering',
+    ME: 'Mechanical Engineering',
+    AD: 'Artificial Intelligence & Data Science',
+    CA: 'Computer Applications',
+    CC: 'Computer Science (Cyber Security)',
+    RA: 'Robotics & Automation',
+    ER: 'Electronics & Robotics',
 };
 
 const normalizeDepartmentCode = (value: unknown): string => {
-    const raw = String(value ?? '')
-        .toUpperCase()
-        .replace(/[^A-Z0-9]/g, '')
-        .trim();
+    let text = String(value ?? '').toUpperCase().trim();
+    
+    // Strip everything in parentheses (e.g., "EEE (WP)" -> "EEE")
+    text = text.replace(/\(.*\)/g, '').trim();
+    
+    // Strip everything after a space or underscore if it looks like a suffix (e.g., "EEE_WP" -> "EEE", "CSE BATCH 1" -> "CSE")
+    // But keep it if the whole thing is a known alias
+    const parts = text.split(/[\s_]+/);
+    let raw = parts[0] ? parts[0].replace(/[^A-Z0-9]/g, '') : '';
+    
     if (!raw) return '';
+    
+    // If the first part is IT prefix (e.g. ITEE), handle it
+    if (raw.startsWith('IT') && raw.length > 2 && !DEPARTMENT_CODE_ALIASES[raw]) {
+        const withoutIT = raw.slice(2);
+        if (DEPARTMENT_CODE_ALIASES[withoutIT] || withoutIT.length >= 2) {
+            raw = withoutIT;
+        }
+    }
+
     return DEPARTMENT_CODE_ALIASES[raw] || raw;
 };
 
@@ -817,6 +876,68 @@ export class ExamController {
         }
     }
 
+    static async deleteEligibility(req: Request, res: Response) {
+        try {
+            const examId = Number(req.params.examId);
+            const studentId = Number(req.params.studentId);
+
+            if (isNaN(examId) || isNaN(studentId)) {
+                return res.status(400).json({ message: 'Invalid exam or student ID' });
+            }
+
+            // Also delete associated seat allocations if any
+            await sequelize.query(`
+                DELETE FROM SeatAllocations 
+                WHERE ExamID = :examId AND StudentID = :studentId
+            `, {
+                replacements: { examId, studentId },
+                type: QueryTypes.DELETE
+            });
+
+            const deleted = await ExamRegistration.destroy({
+                where: {
+                    ExamID: examId,
+                    StudentID: studentId
+                }
+            });
+
+            if (!deleted) {
+                return res.status(404).json({ message: 'Eligibility record not found' });
+            }
+
+            res.json({ message: 'Eligibility deleted successfully' });
+        } catch (error: any) {
+            console.error('Error deleting eligibility:', error);
+            res.status(500).json({ message: 'Failed to delete eligibility', error: error.message });
+        }
+    }
+
+    static async clearSingleExamEligibility(req: Request, res: Response) {
+        try {
+            const examId = Number(req.params.id);
+            if (isNaN(examId)) {
+                return res.status(400).json({ message: 'Invalid exam ID' });
+            }
+
+            // Delete associated seat allocations first
+            await sequelize.query(`
+                DELETE FROM SeatAllocations WHERE ExamID = :examId
+            `, {
+                replacements: { examId },
+                type: QueryTypes.DELETE
+            });
+
+            await ExamRegistration.destroy({
+                where: { ExamID: examId }
+            });
+
+            res.json({ message: 'Exam eligibility cleared successfully' });
+        } catch (error: any) {
+            console.error('Error clearing exam eligibility:', error);
+            res.status(500).json({ message: 'Failed to clear exam eligibility', error: error.message });
+        }
+    }
+
     // Delete all exams (optionally by series)
     static async deleteAllExams(req: Request, res: Response) {
         try {
@@ -1249,17 +1370,24 @@ export class ExamController {
                         }
 
                         // 3. Upsert exam for this subject/department
+                        // 3. Upsert exam for this subject/department
+                        const whereClause: any = { SubjectID: subjectID };
+                        if (seriesId) {
+                            whereClause.ExamSeriesID = parseInt(String(seriesId));
+                        } else {
+                            whereClause.ExamDate = formattedDate;
+                            whereClause.Session = session;
+                        }
+
                         const existingExam = await Exam.findOne({
-                            where: {
-                                SubjectID: subjectID,
-                                ExamDate: formattedDate,
-                                Session: session
-                            }
+                            where: whereClause
                         });
 
                         if (existingExam) {
                             await existingExam.update({
                                 ExamName: importedExamName || existingExam.ExamName,
+                                ExamDate: formattedDate as any,
+                                Session: session.toUpperCase(),
                                 Duration: durationRaw ? parseInt(String(durationRaw)) : existingExam.Duration,
                                 ExamSeriesID: seriesId ? parseInt(String(seriesId)) : (existingExam.ExamSeriesID || null),
                                 Status: new Date(formattedDate as any) < new Date() ? 'Completed' : 'Scheduled'
@@ -1452,8 +1580,14 @@ export class ExamController {
                 const plainPassword = generateDefaultPassword(fullName, normalizedRegNo);
                 const hashedPassword = await bcrypt.hash(plainPassword, 12);
                 
+                // Extract email or generate a fallback
+                const emailRaw = String(getEligibleCellValue(row, ['Email', 'Email Address', 'EmailAddress']) ?? '').trim();
+                const studentEmail = (emailRaw && emailRaw.includes('@')) 
+                    ? emailRaw.toLowerCase() 
+                    : `${normalizedRegNo.toLowerCase()}@student.local`;
+
                 const user = await User.create({
-                    Email: null, // Allow nullable email for bulk import
+                    Email: studentEmail, // Guarantee uniqueness
                     FullName: fullName,
                     PasswordHash: hashedPassword,
                     Role: 'student',
@@ -1701,19 +1835,16 @@ export class ExamController {
         }
     }
 
-    // Logic-Based Timetable Audit
+    // True Student Registration-Based Audit
     static async auditSeries(seriesId: number) {
         console.log(`Starting Audit for Series ID: ${seriesId}`);
         try {
-            // 1. Fetch all exams in this series with Subject/Department info
+            // 1. Fetch all exams in this series
             const exams = await Exam.findAll({
                 where: { ExamSeriesID: seriesId },
                 include: [{
                     model: Subject,
-                    include: [
-                        { model: Department, attributes: ['DepartmentCode'] },
-                        { model: Semester, attributes: ['SemesterID'] }
-                    ]
+                    attributes: ['SubjectCode', 'SubjectName']
                 }]
             });
 
@@ -1723,49 +1854,77 @@ export class ExamController {
                 { where: { ExamSeriesID: seriesId } }
             );
 
+            // 3. Find true student conflicts
             const updates: Promise<any>[] = [];
-
-            // 3. Group by Date + Session
             const slots = new Map<string, any[]>();
+            
+            // Group by Date + Session
             exams.forEach(exam => {
                 const key = `${exam.ExamDate}_${exam.Session}`;
                 if (!slots.has(key)) slots.set(key, []);
                 slots.get(key)?.push(exam);
             });
 
-            // 4. Check for Batch Conflicts (Same Dept + Semester in same slot)
+            let flaggedCount = 0;
+
             for (const [slot, slotExams] of slots.entries()) {
-                const batches = new Map<string, any[]>();
+                if (slotExams.length <= 1) continue;
 
-                // Group by Batch (Dept + Semester)
-                slotExams.forEach(exam => {
-                    const subject = (exam as any).Subject;
-                    if (!subject) return;
-
-                    const batchKey = `${subject.DepartmentID}_${subject.SemesterID}`;
-                    if (!batches.has(batchKey)) batches.set(batchKey, []);
-                    batches.get(batchKey)?.push(exam);
+                // For this slot, get all registrations for these exams
+                const examIds = slotExams.map(e => (e as any).ExamID);
+                const regs = await ExamRegistration.findAll({
+                    where: { ExamID: examIds },
+                    attributes: ['StudentID', 'ExamID']
                 });
 
-                // Detect Conflicts
-                for (const [batchKey, batchExams] of batches.entries()) {
-                    if (batchExams.length > 1) {
-                        // CONFLICT FOUND: Multiple exams for same batch in same slot
-                        const confSubjects = batchExams.map(e => e.Subject.SubjectCode).join(', ');
+                // Check which students have multiple registrations
+                const studentExams = new Map<number, number[]>();
+                regs.forEach(r => {
+                    const sId = (r as any).StudentID;
+                    const eId = (r as any).ExamID;
+                    if (!studentExams.has(sId)) studentExams.set(sId, []);
+                    studentExams.get(sId)?.push(eId);
+                });
 
-                        batchExams.forEach(exam => {
+                const conflictingExamIds = new Set<number>();
+                const conflictDetailsMap = new Map<number, Set<string>>(); // ExamID -> Set of conflicting SubjectCodes
+
+                for (const [studentId, eIds] of studentExams.entries()) {
+                    if (eIds.length > 1) {
+                        // This student is in multiple exams!
+                        eIds.forEach(id => conflictingExamIds.add(id));
+                        
+                        // Build details
+                        eIds.forEach(id => {
+                            if (!conflictDetailsMap.has(id)) conflictDetailsMap.set(id, new Set());
+                            const otherIds = eIds.filter(otherId => otherId !== id);
+                            otherIds.forEach(otherId => {
+                                const otherExam = slotExams.find(e => (e as any).ExamID === otherId);
+                                if (otherExam) {
+                                    conflictDetailsMap.get(id)?.add((otherExam as any).Subject?.SubjectCode || (otherExam as any).ExamName);
+                                }
+                            });
+                        });
+                    }
+                }
+
+                if (conflictingExamIds.size > 0) {
+                    conflictingExamIds.forEach(id => {
+                        const exam = slotExams.find(e => (e as any).ExamID === id);
+                        if (exam) {
+                            const details = Array.from(conflictDetailsMap.get(id) || []).join(', ');
                             updates.push(exam.update({
                                 AuditStatus: 'Conflict',
-                                ConflictDetails: `Clash with: ${confSubjects}`
+                                ConflictDetails: `Student clash with: ${details}`
                             } as any));
-                        });
-                        console.log(`Conflict found in ${slot} for batch ${batchKey}: ${confSubjects}`);
-                    }
+                            flaggedCount++;
+                        }
+                    });
                 }
             }
 
             await Promise.all(updates);
-            console.log(`Audit Complete. ${updates.length} exams flagged.`);
+            console.log(`Audit Complete. ${flaggedCount} exams flagged with true student conflicts.`);
 
         } catch (error) {
             console.error("Audit Failed:", error);

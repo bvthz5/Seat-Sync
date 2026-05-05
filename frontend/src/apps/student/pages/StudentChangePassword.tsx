@@ -13,11 +13,12 @@ import {
     ArrowLeft
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { AccessTokenStore } from '../../../services/api';
 
 const StudentChangePassword: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const isTemporary = location.state?.isTemporary || !!localStorage.getItem("tempAccessToken");
+    const isTemporary = location.state?.isTemporary || !!sessionStorage.getItem("tempAccessToken");
 
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -45,7 +46,7 @@ const StudentChangePassword: React.FC = () => {
 
         setIsLoading(true);
         try {
-            const token = localStorage.getItem("accessToken") || localStorage.getItem("tempAccessToken");
+            const token = AccessTokenStore.token || sessionStorage.getItem("tempAccessToken");
             
             if (!token) {
                 throw new Error("Session expired. Please login again.");
@@ -69,9 +70,9 @@ const StudentChangePassword: React.FC = () => {
             toast.success("Security credentials updated!");
             
             if (data.accessToken) {
-                localStorage.setItem("accessToken", data.accessToken);
+                AccessTokenStore.setToken(data.accessToken);
             }
-            localStorage.removeItem("tempAccessToken");
+            sessionStorage.removeItem("tempAccessToken");
 
             setTimeout(() => {
                 window.location.replace('/student/dashboard');

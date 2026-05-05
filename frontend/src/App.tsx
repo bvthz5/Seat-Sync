@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { AuthProvider } from './hooks/useAuth';
+import { AuthProvider } from './context/AuthContext';
 import AdminApp from './apps/admin/AdminApp';
 import InvigilatorLogin from './apps/invigilator/pages/InvigilatorLogin';
 import InvigilatorDashboard from './apps/invigilator/pages/InvigilatorDashboard';
@@ -21,11 +21,7 @@ function App() {
       <AuthProvider>
         <Routes>
           <Route path="/" element={<LandingPage />} />
-
-          {/* Admin App */}
           <Route path="/admin/*" element={<AdminApp />} />
-
-          {/* Invigilator App */}
           <Route path="/invigilator/login" element={<InvigilatorLogin />} />
           <Route path="/activate" element={<ActivateAccountPage />} />
           <Route path="/faculty/activate" element={<ActivateAccountPage />} />
@@ -36,10 +32,7 @@ function App() {
             <Route path="/invigilator/attendance/:id?" element={<AttendanceConsole />} />
             <Route path="/invigilator/profile" element={<InvigilatorProfile />} />
           </Route>
-
-          {/* Student App */}
           <Route path="/student/*" element={<StudentApp />} />
-
           <Route path="*" element={<NotFound />} />
         </Routes>
         <Toaster position="top-right" />

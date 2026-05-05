@@ -310,6 +310,68 @@ async function ensureSchemaIntegrity() {
             END
         `, { type: QueryTypes.RAW });
 
+        // Fix InvigilatorAssignments Foreign Key (Redirect from Invigilators to Faculties)
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InvigilatorAssignments' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                -- Find and drop the old FK that points to Invigilators
+                DECLARE @ConstraintName nvarchar(200)
+                SELECT @ConstraintName = name
+                FROM sys.foreign_keys
+                WHERE parent_object_id = OBJECT_ID('InvigilatorAssignments')
+                AND referenced_object_id = OBJECT_ID('Invigilators');
+
+                IF @ConstraintName IS NOT NULL
+                BEGIN
+                    EXEC('ALTER TABLE InvigilatorAssignments DROP CONSTRAINT ' + @ConstraintName);
+                    PRINT 'Dropped old FK pointing to Invigilators';
+                END
+
+                -- Add the correct FK pointing to Faculties if it doesn't exist
+                IF NOT EXISTS (
+                    SELECT * FROM sys.foreign_keys 
+                    WHERE parent_object_id = OBJECT_ID('InvigilatorAssignments') 
+                    AND referenced_object_id = OBJECT_ID('Faculties')
+                )
+                BEGIN
+                    ALTER TABLE InvigilatorAssignments 
+                    ADD CONSTRAINT FK_InvigilatorAssignments_Faculties 
+                    FOREIGN KEY (InvigilatorID) REFERENCES Faculties(FacultyID);
+                    PRINT 'Added correct FK pointing to Faculties';
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
+        // Fix Attendance Foreign Key
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Attendance' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                DECLARE @ConstraintName nvarchar(200)
+                SELECT @ConstraintName = name
+                FROM sys.foreign_keys
+                WHERE parent_object_id = OBJECT_ID('Attendance')
+                AND referenced_object_id = OBJECT_ID('Invigilators');
+
+                IF @ConstraintName IS NOT NULL
+                BEGIN
+                    EXEC('ALTER TABLE Attendance DROP CONSTRAINT ' + @ConstraintName);
+                    PRINT 'Dropped Attendance FK pointing to Invigilators';
+                END
+
+                IF NOT EXISTS (
+                    SELECT * FROM sys.foreign_keys 
+                    WHERE parent_object_id = OBJECT_ID('Attendance') 
+                    AND referenced_object_id = OBJECT_ID('Faculties')
+                )
+                BEGIN
+                    ALTER TABLE Attendance 
+                    ADD CONSTRAINT FK_Attendance_Faculties 
+                    FOREIGN KEY (MarkedByInvigilatorID) REFERENCES Faculties(FacultyID);
+                    PRINT 'Added Attendance FK pointing to Faculties';
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
         // Add Faculty Columns
         await sequelize.query(`
             IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Faculties' AND TABLE_SCHEMA = 'dbo')

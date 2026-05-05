@@ -1,8 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { Button, Chip, Spinner } from "@heroui/react";
-import { X, Calendar, Clock, FileText, BookOpen, Users, UserX } from "lucide-react";
+import { X, Calendar, Clock, FileText, BookOpen, Users, UserX, Trash2 } from "lucide-react";
 import { ExamService } from '../../services/examService';
+import { toast } from 'react-hot-toast';
+import ConfirmationModal from '../ConfirmationModal';
 
 interface ExamDetailPanelProps {
     exam: any;
@@ -24,12 +26,61 @@ const ExamDetailPanel: React.FC<ExamDetailPanelProps> = ({ exam, isOpen, onClose
     const [ineligibleStudents, setIneligibleStudents] = useState<StudentRow[]>([]);
     const [batchCounts, setBatchCounts] = useState<Record<string, number>>({});
     const [loading, setLoading] = useState(false);
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => Promise<void>;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: async () => {}
+    });
 
     useEffect(() => {
         if (isOpen && exam?.ExamID) {
             fetchStudents();
         }
     }, [isOpen, exam?.ExamID]);
+
+    const handleDeleteEligibility = (studentId: number, studentName: string) => {
+        setConfirmModal({
+            isOpen: true,
+            title: 'Remove Student',
+            message: `Are you sure you want to remove ${studentName} from this exam's eligibility list?`,
+            onConfirm: async () => {
+                try {
+                    await ExamService.deleteEligibility(exam.ExamID, studentId);
+                    toast.success(`Removed ${studentName} from eligibility`);
+                    fetchStudents();
+                } catch (error: any) {
+                    console.error('Failed to delete eligibility:', error);
+                    toast.error(error.response?.data?.message || 'Failed to remove student');
+                    throw error; // Re-throw for ConfirmationModal to handle loading state
+                }
+            }
+        });
+    };
+
+    const handleClearAll = () => {
+        setConfirmModal({
+            isOpen: true,
+            title: 'Clear All Eligibility',
+            message: `Are you sure you want to clear ALL eligibility records for this exam? This will also remove any seat allocations.`,
+            onConfirm: async () => {
+                try {
+                    await ExamService.clearSingleExamEligibility(exam.ExamID);
+                    toast.success('Eligibility cleared successfully');
+                    fetchStudents();
+                } catch (error: any) {
+                    console.error('Failed to clear eligibility:', error);
+                    toast.error('Failed to clear eligibility');
+                    throw error;
+                }
+            }
+        });
+    };
 
     const fetchStudents = async () => {
         setLoading(true);
@@ -84,15 +135,28 @@ const ExamDetailPanel: React.FC<ExamDetailPanelProps> = ({ exam, isOpen, onClose
                 {students.map((student, idx) => (
                     <div
                         key={idx}
-                        className={`flex items-center justify-between text-sm p-2.5 rounded-lg border transition-colors ${rowBg} ${rowBorder}`}
+                        className={`group flex items-center justify-between text-sm p-2.5 rounded-lg border transition-colors ${rowBg} ${rowBorder}`}
                     >
                         <div className="flex-1 min-w-0">
                             <p className="font-semibold text-gray-800 truncate text-[13px]">{student.FullName}</p>
                             <p className="text-[11px] text-gray-400 font-mono">{student.RegisterNumber}</p>
                         </div>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ml-2 ${badgeBg}`}>
-                            {badgeLabel}
-                        </span>
+                        <div className="flex items-center gap-2">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${badgeBg}`}>
+                                {badgeLabel}
+                            </span>
+                            <Button
+                                isIconOnly
+                                size="sm"
+                                variant="flat"
+                                color="danger"
+                                className="h-7 w-7 min-w-0 bg-red-50 text-red-500 hover:bg-red-100"
+                                onPress={() => handleDeleteEligibility(student.StudentID, student.FullName)}
+                                title={`Remove ${student.FullName}`}
+                            >
+                                <Trash2 size={14} />
+                            </Button>
+                        </div>
                     </div>
                 ))}
             </div>
@@ -259,23 +323,47 @@ const ExamDetailPanel: React.FC<ExamDetailPanelProps> = ({ exam, isOpen, onClose
                     </div>
 
                     {/* Footer */}
-                    <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
-                        <Button
-                            variant="bordered"
-                            className="border-gray-300 text-gray-700 font-medium px-6 hover:bg-gray-50"
-                            onPress={onClose}
-                        >
-                            Close
-                        </Button>
-                        <Button
-                            className="bg-blue-600 text-white font-semibold shadow-md px-6 hover:bg-blue-700"
-                            onPress={() => onEdit(exam)}
-                        >
-                            Edit Details
-                        </Button>
+                    <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex justify-between items-center gap-3">
+                        <div>
+                            {(eligibleStudents.length > 0 || ineligibleStudents.length > 0) && (
+                                <Button
+                                    variant="flat"
+                                    color="danger"
+                                    size="sm"
+                                    className="font-bold bg-red-50 hover:bg-red-100 text-red-500 rounded-xl px-4"
+                                    startContent={<Trash2 size={14} />}
+                                    onPress={handleClearAll}
+                                >
+                                    Clear All
+                                </Button>
+                            )}
+                        </div>
+                        <div className="flex gap-3">
+                            <Button
+                                variant="bordered"
+                                className="border-gray-300 text-gray-700 font-medium px-6 hover:bg-gray-50 rounded-xl"
+                                onPress={onClose}
+                            >
+                                Close
+                            </Button>
+                            <Button
+                                className="bg-blue-600 text-white font-semibold shadow-md px-6 hover:bg-blue-700 rounded-xl"
+                                onPress={() => onEdit(exam)}
+                            >
+                                Edit Details
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            <ConfirmationModal
+                isOpen={confirmModal.isOpen}
+                onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={confirmModal.onConfirm}
+                title={confirmModal.title}
+                message={confirmModal.message}
+            />
         </>
     );
 };
