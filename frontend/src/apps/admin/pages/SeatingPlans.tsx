@@ -901,26 +901,31 @@ const SeatingPlans: React.FC = () => {
     /* ── Fetch allocated hall allocations only and return consolidated rows ── */
     const buildGlobalRows = async () => {
         const rows: { slNo: number; hallCode: string; regRanges: string; subCode: string; count: number; total: number; isFirstRow: boolean; rowSpan: number }[] = [];
+        const ineligibleRows: { slNo: number; hallCode: string; regRanges: string; subCode: string; count: number; total: number; isFirstRow: boolean; rowSpan: number }[] = [];
         const globalSubjectCodes = new Set<string>();
 
-        if (!selectedDate) return { rows: [], examNameString: 'Examinations', subjectCodesString: '' };
+        if (!selectedDate) return { rows: [], ineligibleRows: [], examNameString: 'Examinations', subjectCodesString: '' };
 
         try {
             const { allocations } = await SeatingService.getGlobalAllocations(selectedDate, selectedSession);
 
             // Group by roomId -> subjectCode
             const roomMap = new Map<number, { hallCode: string; subjMap: Record<string, { code: string, name: string, regs: string[] }>; total: number }>();
+            const inelMap = new Map<number, { hallCode: string; subjMap: Record<string, { code: string, name: string, regs: string[] }>; total: number }>();
 
             allocations.forEach((a: any) => {
-                const { roomId, roomCode, registerNumber, subjectCode, subjectName } = a;
+                const { roomId, roomCode, registerNumber, subjectCode, subjectName, isBlocked, isEligible } = a;
+                const isIneligible = isBlocked === true || isEligible === false;
 
-                if (subjectCode && subjectCode !== "Unknown") globalSubjectCodes.add(subjectCode);
+                if (subjectCode && subjectCode !== "Unknown" && !isIneligible) globalSubjectCodes.add(subjectCode);
 
-                if (!roomMap.has(roomId)) {
-                    roomMap.set(roomId, { hallCode: roomCode || `Hall_${roomId}`, subjMap: {}, total: 0 });
+                const targetMap = isIneligible ? inelMap : roomMap;
+
+                if (!targetMap.has(roomId)) {
+                    targetMap.set(roomId, { hallCode: roomCode || `Hall_${roomId}`, subjMap: {}, total: 0 });
                 }
 
-                const rData = roomMap.get(roomId)!;
+                const rData = targetMap.get(roomId)!;
                 rData.total++;
 
                 const sCode = subjectCode || "Unknown";
@@ -932,45 +937,48 @@ const SeatingPlans: React.FC = () => {
                 }
             });
 
-            // Sort rooms by hallCode
-            const activeRooms = Array.from(roomMap.values()).sort((a, b) => a.hallCode.localeCompare(b.hallCode));
-            let slNo = 1;
+            const processRooms = (map: typeof roomMap, outRows: typeof rows) => {
+                const activeRooms = Array.from(map.values()).sort((a, b) => a.hallCode.localeCompare(b.hallCode));
+                let slNo = 1;
+                activeRooms.forEach(rData => {
+                    const subjs = Object.values(rData.subjMap)
+                        .filter(s => s.regs.length > 0) // SECTION 6: Filter empty rows
+                        .sort((a, b) => a.code.localeCompare(b.code));
 
-            activeRooms.forEach(rData => {
-                const subjs = Object.values(rData.subjMap)
-                    .filter(s => s.regs.length > 0) // SECTION 6: Filter empty rows
-                    .sort((a, b) => a.code.localeCompare(b.code));
+                    if (subjs.length === 0) return; // Skip empty halls
 
-                if (subjs.length === 0) return; // Skip empty halls
-
-                subjs.forEach((sub, idx) => {
-                    const sortedRegs = [...sub.regs].sort((r1, r2) => {
-                        const d1 = r1.substring(5, 7).toUpperCase();
-                        const d2 = r2.substring(5, 7).toUpperCase();
-                        if (d1 !== d2) {
-                            const i1 = OFFICIAL_DEPT_PRIORITY.indexOf(d1);
-                            const i2 = OFFICIAL_DEPT_PRIORITY.indexOf(d2);
-                            if (i1 !== -1 && i2 !== -1) return i1 - i2;
-                            if (i1 !== -1) return -1;
-                            if (i2 !== -1) return 1;
-                            return d1.localeCompare(d2);
-                        }
-                        return r1.localeCompare(r2);
+                    subjs.forEach((sub, idx) => {
+                        const sortedRegs = [...sub.regs].sort((r1, r2) => {
+                            const d1 = r1.substring(5, 7).toUpperCase();
+                            const d2 = r2.substring(5, 7).toUpperCase();
+                            if (d1 !== d2) {
+                                const i1 = OFFICIAL_DEPT_PRIORITY.indexOf(d1);
+                                const i2 = OFFICIAL_DEPT_PRIORITY.indexOf(d2);
+                                if (i1 !== -1 && i2 !== -1) return i1 - i2;
+                                if (i1 !== -1) return -1;
+                                if (i2 !== -1) return 1;
+                                return d1.localeCompare(d2);
+                            }
+                            return r1.localeCompare(r2);
+                        });
+                        const ranges = buildRegRanges(sortedRegs);
+                        outRows.push({
+                            slNo,
+                            hallCode: rData.hallCode,
+                            regRanges: ranges.join(', '),
+                            subCode: sub.name && sub.name !== "Unknown" ? `${sub.code}\n(${sub.name})` : sub.code,
+                            count: sub.regs.length,
+                            total: rData.total,
+                            isFirstRow: idx === 0,
+                            rowSpan: subjs.length
+                        });
                     });
-                    const ranges = buildRegRanges(sortedRegs);
-                    rows.push({
-                        slNo,
-                        hallCode: rData.hallCode,
-                        regRanges: ranges.join(', '),
-                        subCode: sub.name && sub.name !== "Unknown" ? `${sub.code}\n(${sub.name})` : sub.code,
-                        count: sub.regs.length,
-                        total: rData.total,
-                        isFirstRow: idx === 0,
-                        rowSpan: subjs.length
-                    });
+                    slNo++;
                 });
-                slNo++;
-            });
+            };
+
+            processRooms(roomMap, rows);
+            processRooms(inelMap, ineligibleRows);
         } catch (e) {
             console.error("Failed to fetch global allocations", e);
         }
@@ -983,7 +991,7 @@ const SeatingPlans: React.FC = () => {
         }
 
         const subjectCodesString = Array.from(globalSubjectCodes).join(', ');
-        return { rows, examNameString: seriesName, subjectCodesString };
+        return { rows, ineligibleRows, examNameString: seriesName, subjectCodesString };
     };
 
     /* ── Subject-Wise Consolidated: group by subject, then by department ── */
@@ -1282,7 +1290,7 @@ const SeatingPlans: React.FC = () => {
         setGlobalDownloading(true);
         try {
             const XLSXStyle = (await import('xlsx-js-style')).default;
-            const { rows, examNameString, subjectCodesString } = await buildGlobalRows();
+            const { rows, ineligibleRows, examNameString, subjectCodesString } = await buildGlobalRows();
 
             if (!rows || rows.length === 0) {
                 toast.error('No seating allocations found for this session');
@@ -1361,6 +1369,45 @@ const SeatingPlans: React.FC = () => {
                 ]);
             });
 
+            if (ineligibleRows.length > 0) {
+                DATA.push(['', '', '', '', '', '']); // spacer
+                DATA.push(['', '', '', '', '', '']);
+                DATA.push([{ v: 'INELIGIBLE STUDENTS', s: { font: { bold: true, sz: 11, color: { rgb: 'DC2626' } }, alignment: { horizontal: 'center' } } }, '', '', '', '', '']);
+                DATA.push(['', '', '', '', '', '']);
+                DATA.push(hCols.map(v => ({ v, s: { fill: { patternType: 'solid', fgColor: { rgb: '991B1B' } }, font: headerFont, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border: allThin } })));
+
+                const inelFirstRowSet = new Set<number>();
+                const inelLastRowSet = new Set<number>();
+                const inelGroupMap = new Map<number, number>();
+                let bIdx = 0, gIdx = -1;
+                ineligibleRows.forEach(r => {
+                    if (r.isFirstRow) {
+                        inelFirstRowSet.add(bIdx);
+                        if (bIdx > 0) inelLastRowSet.add(bIdx - 1);
+                        gIdx++;
+                    }
+                    inelGroupMap.set(bIdx, gIdx);
+                    bIdx++;
+                });
+                if (bIdx > 0) inelLastRowSet.add(bIdx - 1);
+
+                ineligibleRows.forEach((r, i) => {
+                    const fill = (inelGroupMap.get(i) ?? 0) % 2 === 0 ? { patternType: 'solid', fgColor: { rgb: 'FEE2E2' } } : { patternType: 'solid', fgColor: { rgb: 'FFF1F2' } };
+                    const isFirst = inelFirstRowSet.has(i);
+                    const isLast = inelLastRowSet.has(i);
+                    const border = mkBorder(isFirst, isLast);
+                    const base = { fill, border };
+                    DATA.push([
+                        { v: r.isFirstRow ? r.slNo : '', s: { ...base, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
+                        { v: r.isFirstRow ? r.hallCode : '', s: { ...base, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
+                        { v: r.regRanges, s: { ...base, font: regFont, alignment: { horizontal: 'left', vertical: 'center', wrapText: true } } },
+                        { v: r.subCode, s: { ...base, font: bodyFont, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } } },
+                        { v: r.count, s: { ...base, font: bodyFont, alignment: { horizontal: 'center', vertical: 'center' } } },
+                        { v: r.isFirstRow ? r.total : '', s: { ...base, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
+                    ]);
+                });
+            }
+
             const ws = XLSXStyle.utils.aoa_to_sheet(DATA);
             ws['!cols'] = [{ wch: 8 }, { wch: 28 }, { wch: 55 }, { wch: 25 }, { wch: 9 }, { wch: 9 }]; // Increased index 1 from 18, reduced index 2 from 60
             // Merge title rows across all cols
@@ -1368,6 +1415,13 @@ const SeatingPlans: React.FC = () => {
             const merges: any[] = [];
             for (let i = 0; i < mergeCount; i++) {
                 merges.push({ s: { r: i, c: 0 }, e: { r: i, c: 5 } });
+            }
+            if (ineligibleRows.length > 0) {
+                // Determine the row index for INELIGIBLE STUDENTS title
+                const inelTitleRowIndex = DATA.findIndex(row => row[0]?.v === 'INELIGIBLE STUDENTS');
+                if (inelTitleRowIndex !== -1) {
+                    merges.push({ s: { r: inelTitleRowIndex, c: 0 }, e: { r: inelTitleRowIndex, c: 5 } });
+                }
             }
             ws['!merges'] = merges;
             const wb = XLSXStyle.utils.book_new();
@@ -1384,7 +1438,7 @@ const SeatingPlans: React.FC = () => {
         try {
             const { default: jsPDF } = await import('jspdf');
             const { default: autoTable } = await import('jspdf-autotable');
-            const { rows, examNameString, subjectCodesString } = await buildGlobalRows();
+            const { rows, ineligibleRows, examNameString, subjectCodesString } = await buildGlobalRows();
             const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
             const pageW = doc.internal.pageSize.getWidth();
 
@@ -1492,6 +1546,68 @@ const SeatingPlans: React.FC = () => {
                     );
                 },
             });
+
+            if (ineligibleRows.length > 0) {
+                const finalY = (doc as any).lastAutoTable.finalY + 15;
+                
+                // Add title for ineligible section
+                doc.setFontSize(11);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(220, 38, 38); // Red color
+                doc.text('INELIGIBLE STUDENTS', pageW / 2, finalY, { align: 'center' });
+
+                const inelBodyRows: any[] = [];
+                ineligibleRows.forEach(r => {
+                    const tc = r.isFirstRow ? [30, 41, 59] : [100, 116, 139]; 
+                    inelBodyRows.push([
+                        { content: String(r.slNo), styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', textColor: tc } },
+                        { content: r.hallCode, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', textColor: tc } },
+                        { content: r.regRanges, styles: { fontStyle: 'bold', fontSize: 8.5, halign: 'left', valign: 'middle' } },
+                        { content: r.subCode, styles: { halign: 'center', valign: 'middle' } },
+                        { content: String(r.count), styles: { halign: 'center', valign: 'middle' } },
+                        { content: String(r.total), styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', textColor: tc } },
+                    ]);
+                });
+
+                const inelRowGroupMap = new Map<number, number>();
+                let bIdx = 0; let gIdx = -1;
+                ineligibleRows.forEach(r => {
+                    if (r.isFirstRow) gIdx++;
+                    inelRowGroupMap.set(bIdx, gIdx);
+                    bIdx++;
+                });
+
+                autoTable(doc, {
+                    startY: finalY + 5,
+                    head: [['Sl.No', 'Hall / Room No', 'Register Numbers', 'Subject Code & Name', 'Count', 'Total']],
+                    body: inelBodyRows,
+                    theme: 'grid',
+                    styles: { 
+                        fontSize: 8, 
+                        cellPadding: 3, 
+                        font: 'helvetica', 
+                        textColor: [30, 41, 59], 
+                        lineColor: [252, 165, 165], 
+                        lineWidth: 0.2, 
+                        valign: 'middle',
+                        overflow: 'linebreak'
+                    },
+                    headStyles: { fillColor: [153, 27, 27], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5, halign: 'center', valign: 'middle' },
+                    columnStyles: {
+                        0: { cellWidth: 12, halign: 'center', fontStyle: 'bold' },
+                        1: { cellWidth: 40, halign: 'center', fontStyle: 'bold' },
+                        2: { cellWidth: 128, halign: 'left' },
+                        3: { cellWidth: 45, halign: 'center', fillColor: [254, 242, 242] },
+                        4: { cellWidth: 15, halign: 'center' },
+                        5: { cellWidth: 15, halign: 'center', fontStyle: 'bold' },
+                    },
+                    didParseCell: (data: any) => {
+                        if (data.section !== 'body') return;
+                        const groupIndex = inelRowGroupMap.get(data.row.index) ?? 0;
+                        data.cell.styles.fillColor = groupIndex % 2 === 0 ? [254, 226, 226] : [255, 241, 242];
+                    }
+                });
+            }
 
             doc.save(`Consolidated_Seating_${selectedDate}_${selectedSession}.pdf`);
             toast.success('PDF downloaded');
