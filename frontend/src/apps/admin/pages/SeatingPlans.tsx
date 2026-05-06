@@ -1002,8 +1002,12 @@ const SeatingPlans: React.FC = () => {
         // 1. Group by subject
         const subjectMap = new Map<string, { name: string; students: any[] }>();
         allocations.forEach((a: any) => {
-            const sub = a.subjectCode || 'Unknown';
-            if (!subjectMap.has(sub)) subjectMap.set(sub, { name: a.subjectName || sub, students: [] });
+            const { isBlocked, isEligible, subjectCode, subjectName } = a;
+            const isIneligible = isBlocked === true || isEligible === false;
+            if (isIneligible) return; // Skip ineligible
+
+            const sub = subjectCode || 'Unknown';
+            if (!subjectMap.has(sub)) subjectMap.set(sub, { name: subjectName || sub, students: [] });
             subjectMap.get(sub)!.students.push(a);
         });
 
@@ -1011,74 +1015,51 @@ const SeatingPlans: React.FC = () => {
         const subjectGroups = Array.from(subjectMap.entries())
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([code, { name, students }]) => {
-                // Group students by department
-                const deptMap = new Map<string, any[]>();
-                students.forEach(s => {
-                    const d = s.deptCode || 'Unknown';
-                    if (!deptMap.has(d)) deptMap.set(d, []);
-                    deptMap.get(d)!.push(s);
-                });
+                // Sort students by RegisterNumber ASC
+                const sortedStudents = [...students].sort((a, b) => a.registerNumber.localeCompare(b.registerNumber));
 
-                // Sort departments using OFFICIAL_DEPT_PRIORITY
-                const sortedDepts = Array.from(deptMap.entries()).sort(([d1], [d2]) => {
-                    const i1 = OFFICIAL_DEPT_PRIORITY.indexOf(d1);
-                    const i2 = OFFICIAL_DEPT_PRIORITY.indexOf(d2);
-                    if (i1 !== -1 && i2 !== -1) return i1 - i2;
-                    if (i1 !== -1) return -1;
-                    if (i2 !== -1) return 1;
-                    return d1.localeCompare(d2);
-                });
+                // Chunk into blocks where ROOM is the same.
+                const blocks: any[] = [];
+                if (sortedStudents.length > 0) {
+                    let currentBlock: any = {
+                        hallCode: sortedStudents[0].roomCode || `Hall_${sortedStudents[0].roomId}`,
+                        regs: [sortedStudents[0].registerNumber],
+                        count: 1
+                    };
 
-                const departments = sortedDepts.map(([deptCode, deptStudents]) => {
-                    // Sort dept students by RegisterNumber ASC
-                    const sortedStudents = [...deptStudents].sort((a, b) => a.registerNumber.localeCompare(b.registerNumber));
+                    for (let i = 1; i < sortedStudents.length; i++) {
+                        const student = sortedStudents[i];
+                        const hallCode = student.roomCode || `Hall_${student.roomId}`;
+                        const currReg = student.registerNumber;
 
-                    // Chunk into blocks where ROOM is the same.
-                    // Internal register gaps are handled by buildRegRanges (e.g. CS01-02, CS04-10)
-                    const blocks: any[] = [];
-                    if (sortedStudents.length > 0) {
-                        let currentBlock: any = {
-                            hallCode: sortedStudents[0].roomCode || `Hall_${sortedStudents[0].roomId}`,
-                            regs: [sortedStudents[0].registerNumber],
-                            count: 1
-                        };
-
-                        for (let i = 1; i < sortedStudents.length; i++) {
-                            const student = sortedStudents[i];
-                            const hallCode = student.roomCode || `Hall_${student.roomId}`;
-                            const currReg = student.registerNumber;
-
-                            if (hallCode === currentBlock.hallCode) {
-                                currentBlock.regs.push(currReg);
-                                currentBlock.count++;
-                            } else {
-                                blocks.push({
-                                    hallCode: currentBlock.hallCode,
-                                    ranges: buildRegRanges(currentBlock.regs).join(', '),
-                                    count: currentBlock.count
-                                });
-                                currentBlock = {
-                                    hallCode: hallCode,
-                                    regs: [currReg],
-                                    count: 1
-                                };
-                            }
+                        if (hallCode === currentBlock.hallCode) {
+                            currentBlock.regs.push(currReg);
+                            currentBlock.count++;
+                        } else {
+                            blocks.push({
+                                hallCode: currentBlock.hallCode,
+                                ranges: buildRegRanges(currentBlock.regs).join(', '),
+                                count: currentBlock.count
+                            });
+                            currentBlock = {
+                                hallCode: hallCode,
+                                regs: [currReg],
+                                count: 1
+                            };
                         }
-                        blocks.push({
-                            hallCode: currentBlock.hallCode,
-                            ranges: buildRegRanges(currentBlock.regs).join(', '),
-                            count: currentBlock.count
-                        });
                     }
-
-                    return { deptCode, blocks };
-                });
+                    blocks.push({
+                        hallCode: currentBlock.hallCode,
+                        ranges: buildRegRanges(currentBlock.regs).join(', '),
+                        count: currentBlock.count
+                    });
+                }
 
                 return {
                     code,
                     name,
                     totalStudents: students.length,
-                    departments
+                    blocks
                 };
             });
 
@@ -1113,39 +1094,29 @@ const SeatingPlans: React.FC = () => {
             DATA.push([{ v: `Date: ${dateStr} – ${sessionStr}`, s: subStyle }, '', '', '', '', '', '', '']);
             DATA.push(['', '', '', '', '', '', '', '']);
 
-            DATA.push(['Sl.No', 'Subject Code', 'Subject Name', 'Dept', 'Hall / Room No', 'Register Numbers', 'Count', 'Total'].map(v => ({
+            DATA.push(['Sl.No', 'Subject Code', 'Subject Name', 'Hall / Room No', 'Register Numbers', 'Count', 'Total'].map(v => ({
                 v, s: { fill: headerFill, font: headerFont, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border: allThin }
             })));
 
             let sl = 1;
             const merges: any[] = [];
-            for (let i = 0; i < 5; i++) merges.push({ s: { r: i, c: 0 }, e: { r: i, c: 7 } });
+            for (let i = 0; i < 5; i++) merges.push({ s: { r: i, c: 0 }, e: { r: i, c: 6 } });
 
             subjectGroups.forEach((sg, gi) => {
                 const subjectStartRow = DATA.length;
                 const fill = gi % 2 === 0 ? { patternType: 'solid', fgColor: { rgb: 'EAF3FF' } } : { patternType: 'solid', fgColor: { rgb: 'F3E8FF' } };
 
-                sg.departments.forEach((dept, di) => {
-                    const deptStartRow = DATA.length;
-                    
-                    dept.blocks.forEach((block, bi) => {
-                        const row: any[] = [
-                            { v: sl, s: { fill, border: allThin, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
-                            { v: sg.code, s: { fill, border: allThin, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
-                            { v: sg.name, s: { fill, border: allThin, font: bodyFont, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } } },
-                            { v: dept.deptCode, s: { fill, border: allThin, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
-                            { v: block.hallCode, s: { fill, border: allThin, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
-                            { v: block.ranges, s: { fill, border: allThin, font: regFont, alignment: { horizontal: 'left', vertical: 'center', wrapText: true } } },
-                            { v: block.count, s: { fill, border: allThin, font: bodyFont, alignment: { horizontal: 'center', vertical: 'center' } } },
-                            { v: sg.totalStudents, s: { fill, border: allThin, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
-                        ];
-                        DATA.push(row);
-                    });
-
-                    const deptEndRow = DATA.length - 1;
-                    if (deptEndRow >= deptStartRow) {
-                        merges.push({ s: { r: deptStartRow, c: 3 }, e: { r: deptEndRow, c: 3 } });
-                    }
+                sg.blocks.forEach((block: any, bi: number) => {
+                    const row: any[] = [
+                        { v: sl, s: { fill, border: allThin, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
+                        { v: sg.code, s: { fill, border: allThin, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
+                        { v: sg.name, s: { fill, border: allThin, font: bodyFont, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } } },
+                        { v: block.hallCode, s: { fill, border: allThin, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
+                        { v: block.ranges, s: { fill, border: allThin, font: regFont, alignment: { horizontal: 'left', vertical: 'center', wrapText: true } } },
+                        { v: block.count, s: { fill, border: allThin, font: bodyFont, alignment: { horizontal: 'center', vertical: 'center' } } },
+                        { v: sg.totalStudents, s: { fill, border: allThin, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
+                    ];
+                    DATA.push(row);
                 });
 
                 const subjectEndRow = DATA.length - 1;
@@ -1153,7 +1124,7 @@ const SeatingPlans: React.FC = () => {
                     merges.push({ s: { r: subjectStartRow, c: 0 }, e: { r: subjectEndRow, c: 0 } });
                     merges.push({ s: { r: subjectStartRow, c: 1 }, e: { r: subjectEndRow, c: 1 } });
                     merges.push({ s: { r: subjectStartRow, c: 2 }, e: { r: subjectEndRow, c: 2 } });
-                    merges.push({ s: { r: subjectStartRow, c: 7 }, e: { r: subjectEndRow, c: 7 } });
+                    merges.push({ s: { r: subjectStartRow, c: 6 }, e: { r: subjectEndRow, c: 6 } });
                     
                     const firstRow = DATA[subjectStartRow];
                     firstRow.forEach((cell: any) => {
@@ -1168,7 +1139,6 @@ const SeatingPlans: React.FC = () => {
                 { wch: 6 },  // Sl.No
                 { wch: 15 }, // Subject Code
                 { wch: 35 }, // Subject Name
-                { wch: 8 },  // Dept
                 { wch: 25 }, // Hall / Room No
                 { wch: 70 }, // Register Numbers
                 { wch: 8 },  // Count
@@ -1216,42 +1186,34 @@ const SeatingPlans: React.FC = () => {
             subjectGroups.forEach((sg, gi) => {
                 const fill = gi % 2 === 0 ? [234, 243, 255] : [243, 232, 255];
                 
-                // Calculate total rows for this subject to use in rowSpan
-                const totalSubjectRows = sg.departments.reduce((sum, dept) => sum + dept.blocks.length, 0);
+                const totalSubjectRows = sg.blocks.length;
 
-                sg.departments.forEach((dept, di) => {
-                    const totalDeptRows = dept.blocks.length;
+                sg.blocks.forEach((block: any, bi: number) => {
+                    const isFirstInSubject = (bi === 0);
 
-                    dept.blocks.forEach((block, bi) => {
-                        const isFirstInSubject = (di === 0 && bi === 0);
-                        const isFirstInDept = (bi === 0);
-
-                        bodyRows.push([
-                            // Sl.No (Merged for whole subject)
-                            isFirstInSubject ? { content: String(sl), rowSpan: totalSubjectRows, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } } : null,
-                            // Subject Code (Merged for whole subject)
-                            isFirstInSubject ? { content: sg.code, rowSpan: totalSubjectRows, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } } : null,
-                            // Subject Name (Merged for whole subject)
-                            isFirstInSubject ? { content: sg.name, rowSpan: totalSubjectRows, styles: { halign: 'center', valign: 'middle', wrapText: true, fillColor: fill } } : null,
-                            // Dept (Merged for each department block)
-                            isFirstInDept ? { content: dept.deptCode, rowSpan: totalDeptRows, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } } : null,
-                            // Hall
-                            { content: block.hallCode, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } },
-                            // Register Numbers
-                            { content: block.ranges, styles: { halign: 'left', valign: 'middle', fillColor: fill, fontSize: 8.5, fontStyle: 'bold' } },
-                            // Count
-                            { content: String(block.count), styles: { halign: 'center', valign: 'middle', fillColor: fill } },
-                            // Total (Merged for whole subject)
-                            isFirstInSubject ? { content: String(sg.totalStudents), rowSpan: totalSubjectRows, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } } : null,
-                        ].filter(cell => cell !== null));
-                    });
+                    bodyRows.push([
+                        // Sl.No (Merged for whole subject)
+                        isFirstInSubject ? { content: String(sl), rowSpan: totalSubjectRows, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } } : null,
+                        // Subject Code (Merged for whole subject)
+                        isFirstInSubject ? { content: sg.code, rowSpan: totalSubjectRows, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } } : null,
+                        // Subject Name (Merged for whole subject)
+                        isFirstInSubject ? { content: sg.name, rowSpan: totalSubjectRows, styles: { halign: 'center', valign: 'middle', wrapText: true, fillColor: fill } } : null,
+                        // Hall
+                        { content: block.hallCode, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } },
+                        // Register Numbers
+                        { content: block.ranges, styles: { halign: 'left', valign: 'middle', fillColor: fill, fontSize: 8.5, fontStyle: 'bold' } },
+                        // Count
+                        { content: String(block.count), styles: { halign: 'center', valign: 'middle', fillColor: fill } },
+                        // Total (Merged for whole subject)
+                        isFirstInSubject ? { content: String(sg.totalStudents), rowSpan: totalSubjectRows, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } } : null,
+                    ].filter(cell => cell !== null));
                 });
                 sl++;
             });
 
             autoTable(doc, {
                 startY: 60,
-                head: [['Sl.No', 'Subject Code', 'Subject Name', 'Dept', 'Hall / Room No', 'Register Numbers', 'Count', 'Total']],
+                head: [['Sl.No', 'Subject Code', 'Subject Name', 'Hall / Room No', 'Register Numbers', 'Count', 'Total']],
                 body: bodyRows,
                 theme: 'grid',
                 styles: { 
@@ -1266,12 +1228,11 @@ const SeatingPlans: React.FC = () => {
                 columnStyles: {
                     0: { cellWidth: 10, halign: 'center' },
                     1: { cellWidth: 20, halign: 'center' },
-                    2: { cellWidth: 35 },
-                    3: { cellWidth: 12, halign: 'center' },
-                    4: { cellWidth: 35, halign: 'center' }, // Increased from 22
-                    5: { cellWidth: 120, halign: 'left' }, // Slightly reduced to accommodate hall expansion
-                    6: { cellWidth: 12, halign: 'center' },
-                    7: { cellWidth: 12, halign: 'center', fontStyle: 'bold' },
+                    2: { cellWidth: 47 }, // Increased to occupy Dept's width
+                    3: { cellWidth: 35, halign: 'center' }, // Hall
+                    4: { cellWidth: 120, halign: 'left' }, // Register Numbers
+                    5: { cellWidth: 12, halign: 'center' },
+                    6: { cellWidth: 12, halign: 'center', fontStyle: 'bold' },
                 },
                 didDrawPage: (d2: any) => {
                     doc.setFontSize(7); doc.setTextColor(150, 150, 150);

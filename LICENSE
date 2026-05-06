@@ -1,21 +1,71 @@
-MIT License
+SEAT-SYNC PROPRIETARY END-USER LICENSE AGREEMENT (EULA) & TERMS OF USE
 
-Copyright (c) 2026 Binil Vincent
+Copyright (c) 2026 Binil and Suryan. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+IMPORTANT – READ CAREFULLY: This Proprietary Software License Agreement ("Agreement") is a legal and binding contract between you (either an individual or a single legally recognized entity, hereinafter "User", "You", or "Your") and the authors and copyright holders, Binil and Suryan (hereinafter "Authors", "Licensors", or "Owners"), regarding the use of the "Seat-Sync" software, including all accompanying source code, object code, documentation, interfaces, graphics, data, and associated media (collectively, the "Software").
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+By accessing, viewing, downloading, or interacting with the Software in any capacity, you acknowledge that you have read this Agreement, understand it, and agree to be bound by its terms and conditions. If you do not agree to all of the terms and conditions of this Agreement, you are strictly prohibited from accessing or using the Software and must immediately delete and destroy all copies of the Software in your possession or control.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+1. EXCLUSIVE OWNERSHIP AND INTELLECTUAL PROPERTY RIGHTS
+   The Software is licensed, not sold. The Authors exclusively own all right, title, and interest in and to the Software, including all worldwide copyrights, patents, trade secrets, trademarks, and any other intellectual property rights inherent therein. This Agreement does not grant the User any ownership rights, implied or otherwise, in the Software. Any rights not expressly granted to the User in this Agreement are entirely reserved by the Authors.
+
+2. ABSENCE OF USAGE RIGHTS (NO DEFAULT LICENSE)
+   Access to the repository, codebase, or distribution media does NOT constitute a grant of any license or permission to use the Software. Without an explicit, physically or digitally signed, written License Agreement negotiated directly with the Authors, you are granted ZERO RIGHTS to use the Software for any purpose whatsoever (including but not limited to personal, academic, non-profit, testing, or commercial purposes).
+
+3. STRICT RESTRICTIONS AND PROHIBITED ACTIONS
+   Under no circumstances shall the User engage in, authorize, or facilitate any of the following activities. Any violation of these restrictions constitutes copyright infringement and a material breach of this Agreement:
+   a. Copying or Reproduction: You may not copy, duplicate, or reproduce the Software, in whole or in part, under any circumstances.
+   b. Modification and Derivatives: You may not modify, alter, adapt, translate, rewrite, or create derivative works based upon the Software.
+   c. Redistribution: You may not distribute, transmit, share, publish, lend, rent, lease, or sub-license the Software or any portion thereof to any third party.
+   d. Commercial Exploitation: You may not use the Software for commercial, business, or revenue-generating purposes.
+   e. Reverse Engineering: You may not decompile, disassemble, reverse engineer, or otherwise attempt to derive the source code, underlying algorithms, or architecture of the Software.
+   f. Hosting and Deployment: You may not host, deploy, or otherwise make the Software accessible over a network, internet, intranet, or as a Software-as-a-Service (SaaS) without explicit authorization.
+
+4. COMMERCIAL USAGE AND LICENSING
+   Any commercial, corporate, or institutional use of the Software requires a separate, legally executed Commercial License Agreement accompanied by the payment of applicable licensing fees. Unauthorized commercial usage is an actionable offense and will be prosecuted to the maximum extent permitted by law, including the pursuit of statutory damages, actual damages, and injunctive relief.
+
+5. MONITORING AND AUDIT RIGHTS
+   The Authors reserve the right to monitor the use of the Software and, upon reasonable notice, audit the User’s systems to verify compliance with this Agreement. The User agrees to cooperate fully with any such audit.
+
+6. STRICT ENFORCEMENT AND TERMINATION
+   This Agreement is effective until terminated. Any failure to comply with the terms of this Agreement will result in automatic and immediate termination of any granted or implied rights. Upon termination, the User must immediately cease all use of the Software and permanently destroy all copies in their possession. The Authors reserve the right to seek civil damages, attorneys' fees, and criminal prosecution for willful copyright infringement and misappropriation of intellectual property.
+
+7. DISCLAIMER OF WARRANTIES
+   THE SOFTWARE IS PROVIDED TO YOU "AS IS" AND "AS AVAILABLE," WITH ALL FAULTS, DEFECTS, AND ERRORS, AND WITHOUT WARRANTY OF ANY KIND. THE AUTHORS EXPRESSLY DISCLAIM ALL WARRANTIES, WHETHER EXPRESS, IMPLIED, STATUTORY, OR OTHERWISE, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT. THE AUTHORS DO NOT WARRANT THAT THE SOFTWARE WILL MEET YOUR REQUIREMENTS, OPERATE WITHOUT INTERRUPTION, BE ERROR-FREE, OR BE SECURE AGAINST CYBERATTACKS OR DATA BREACHES.
+
+8. LIMITATION OF LIABILITY
+   TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY SPECIAL, INCIDENTAL, INDIRECT, CONSEQUENTIAL, OR PUNITIVE DAMAGES WHATSOEVER (INCLUDING, WITHOUT LIMITATION, DAMAGES FOR LOSS OF BUSINESS PROFITS, BUSINESS INTERRUPTION, LOSS OF BUSINESS INFORMATION, DATA LOSS, OR ANY OTHER PECUNIARY LOSS) ARISING OUT OF THE USE OF OR INABILITY TO USE THE SOFTWARE, EVEN IF THE AUTHORS HAVE BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+9. INDEMNIFICATION
+   You agree to indemnify, defend, and hold harmless the Authors from and against any and all claims, liabilities, damages, losses, costs, expenses, or fees (including reasonable attorneys' fees) that arise from your unauthorized use of the Software or your violation of this Agreement.
+
+10. GOVERNING LAW AND JURISDICTION
+    This Agreement shall be governed by, construed, and enforced in accordance with the laws of the Authors' primary jurisdiction of residence, without giving effect to any conflict of law principles. Any legal action or proceeding arising out of or related to this Agreement shall be brought exclusively in the courts of the Authors' jurisdiction, and the User hereby consents to the personal jurisdiction of such courts.
+
+11. SEVERABILITY AND WAIVER
+    If any provision of this Agreement is held to be invalid, illegal, or unenforceable by a court of competent jurisdiction, the remaining provisions shall remain in full force and effect. The failure of the Authors to enforce any right or provision of this Agreement will not constitute a waiver of such right or provision.
+
+12. CONTACT INFORMATION
+    For inquiries regarding commercial licensing, authorized usage, or permissions, you must contact the Authors directly prior to any usage of the Software.
+
+---
+END OF EULA TERMS
+
+=============================================================================
+
+⚠️ STRICT LEGAL NOTICE ⚠️
+
+PROPRIETARY SOFTWARE — ALL RIGHTS RESERVED
+
+This repository and the enclosed codebase are the exclusive intellectual property of Binil and Suryan.
+
+* UNAUTHORIZED USAGE IS STRICTLY ILLEGAL.
+* UNAUTHORIZED COPYING IS STRICTLY ILLEGAL.
+* UNAUTHORIZED MODIFICATION IS STRICTLY ILLEGAL.
+* UNAUTHORIZED REDISTRIBUTION IS STRICTLY ILLEGAL.
+* COMMERCIAL USE REQUIRES A FORMAL, PAID LICENSE.
+
+Any violation of this legal notice will result in immediate legal action, including but not limited to Digital Millennium Copyright Act (DMCA) takedown notices, claims for statutory damages, and further civil litigation. 
+
+Contact the authors directly to negotiate a proper license agreement.
+=============================================================================

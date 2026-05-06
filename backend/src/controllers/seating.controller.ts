@@ -425,6 +425,10 @@ export const getExamDepartments = async (req: Request, res: Response) => {
             whereParts.push("e.ExamSeriesID = :seriesId");
             replacements.seriesId = Number(seriesId);
         }
+        if (session) {
+            whereParts.push("e.Session = :session");
+            replacements.session = String(session);
+        }
 
         const rows = await sequelize.query<any>(
             `
