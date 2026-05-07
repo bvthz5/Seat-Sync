@@ -10,6 +10,7 @@ import ExamCalendar from '../components/exams/ExamCalendar';
 import CreateExamModal from '../components/exams/CreateExamModal';
 import EditExamModal from '../components/exams/EditExamModal';
 import ExamImportModal from '../components/exams/ExamImportModal';
+import { InternalExamImportModal } from '../components/internal-structure/InternalExamImportModal';
 import ExamDetailPanel from '../components/exams/ExamDetailPanel';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { ExamService } from '../services/examService';
@@ -30,6 +31,7 @@ const Exams: React.FC = () => {
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
     const [seriesName, setSeriesName] = useState<string>('');
+    const [examType, setExamType] = useState<'Internal' | 'EndSemester'>('EndSemester');
     const [deleteExamId, setDeleteExamId] = useState<number | null>(null);
 
     // Panel State
@@ -89,7 +91,10 @@ const Exams: React.FC = () => {
             const response = await SeriesService.getAll();
             if (response.success) {
                 const found = response.data.find((s: any) => String(s.ExamSeriesID) === seriesId);
-                if (found) setSeriesName(found.SeriesName);
+                if (found) {
+                    setSeriesName(found.SeriesName);
+                    setExamType(found.ExamType);
+                }
             }
         } catch (error) {
             console.error("Failed to fetch series details", error);
@@ -448,12 +453,24 @@ const Exams: React.FC = () => {
             />
 
             {/* Import Modal */}
-            <ExamImportModal
-                isOpen={isImportModalOpen}
-                onClose={() => setIsImportModalOpen(false)}
-                onSuccess={fetchData}
-                preSelectedSeriesId={seriesId} // Pass seriesId to pre-select
-            />
+            {examType === 'Internal' ? (
+                <InternalExamImportModal
+                    isOpen={isImportModalOpen}
+                    onClose={() => setIsImportModalOpen(false)}
+                    onSuccess={() => {
+                        setIsImportModalOpen(false);
+                        fetchData();
+                    }}
+                    seriesId={seriesId!}
+                />
+            ) : (
+                <ExamImportModal
+                    isOpen={isImportModalOpen}
+                    onClose={() => setIsImportModalOpen(false)}
+                    onSuccess={fetchData}
+                    preSelectedSeriesId={seriesId} // Pass seriesId to pre-select
+                />
+            )}
 
             {/* Detail Drawer */}
             <ExamDetailPanel

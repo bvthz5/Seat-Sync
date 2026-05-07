@@ -163,6 +163,8 @@ app.use("/api/exams", examRoutes);
 app.use("/api/subjects", subjectRoutes);
 
 import facultyRoutes from "./routes/faculty.routes.js";
+import internalExamRoutes from "./routes/internalExam.routes.js";
+app.use("/api/internal-exams", internalExamRoutes);
 
 // New ERP Routes (Root Admin Only)
 app.use("/api/admin-management", adminManagementRoutes);

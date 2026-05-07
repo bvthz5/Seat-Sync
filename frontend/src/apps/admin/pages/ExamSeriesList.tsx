@@ -7,6 +7,7 @@ import { ExamService } from '../services/examService';
 import { SeriesService } from '../services/seriesService';
 import CreateExamModal from '../components/exams/CreateExamModal';
 import ExamImportModal from '../components/exams/ExamImportModal';
+import { InternalExamImportModal } from '../components/internal-structure/InternalExamImportModal';
 import EditExamModal from '../components/exams/EditExamModal';
 import ConfirmationModal from '../components/ConfirmationModal';
 
@@ -414,12 +415,24 @@ const ExamSeriesList: React.FC = () => {
                 seriesId={seriesId}
             />
 
-            <ExamImportModal
-                isOpen={isImportModalOpen}
-                onClose={() => setIsImportModalOpen(false)}
-                onSuccess={fetchExams}
-                preSelectedSeriesId={seriesId}
-            />
+            {examType === 'Internal' ? (
+                <InternalExamImportModal
+                    isOpen={isImportModalOpen}
+                    onClose={() => setIsImportModalOpen(false)}
+                    onSuccess={() => {
+                        setIsImportModalOpen(false);
+                        fetchExams();
+                    }}
+                    seriesId={seriesId!}
+                />
+            ) : (
+                <ExamImportModal
+                    isOpen={isImportModalOpen}
+                    onClose={() => setIsImportModalOpen(false)}
+                    onSuccess={fetchExams}
+                    preSelectedSeriesId={seriesId}
+                />
+            )}
 
             {selectedExam && (
                 <EditExamModal

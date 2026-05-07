@@ -128,3 +128,22 @@ NotificationRecipient.belongsTo(User, {
     foreignKey: "UserID",
     as: "User"
 });
+
+export { InternalExamSeries } from './InternalExamSeries.js';
+export { InternalExam } from './InternalExam.js';
+export { InternalExamDepartment } from './InternalExamDepartment.js';
+
+import { InternalExamSeries } from './InternalExamSeries.js';
+import { InternalExam } from './InternalExam.js';
+import { InternalExamDepartment } from './InternalExamDepartment.js';
+import ExamSeries from './ExamSeries.js';
+
+// Internal Exam Associations
+ExamSeries.hasMany(InternalExam, { foreignKey: 'InternalExamSeriesID', onDelete: 'CASCADE' });
+InternalExam.belongsTo(ExamSeries, { foreignKey: 'InternalExamSeriesID' });
+
+InternalExam.hasMany(InternalExamDepartment, { foreignKey: 'InternalExamID', onDelete: 'CASCADE' });
+InternalExamDepartment.belongsTo(InternalExam, { foreignKey: 'InternalExamID' });
+
+Department.hasMany(InternalExamDepartment, { foreignKey: 'DepartmentID', onDelete: 'CASCADE' });
+InternalExamDepartment.belongsTo(Department, { foreignKey: 'DepartmentID' });

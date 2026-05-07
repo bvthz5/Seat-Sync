@@ -10,7 +10,7 @@ import { Program } from "../models/Program.js";
 import { ExamRegistration } from "../models/ExamRegistration.js";
 import { AcademicYear } from "../models/AcademicYear.js";
 import { Op, QueryTypes } from 'sequelize';
-import { ExamSeries } from '../models/index.js';
+import { ExamSeries, InternalExam, InternalExamDepartment } from '../models/index.js';
 import * as XLSX from 'xlsx';
 import { PDFParse } from 'pdf-parse';
 import { createWorker } from 'tesseract.js';
@@ -600,12 +600,84 @@ export class ExamController {
                 subjectWhereClause.DepartmentID = department;
             }
 
+            let isInternal = false;
             if (seriesId) {
                 whereClause.ExamSeriesID = seriesId;
+                const seriesInfo = await ExamSeries.findByPk(seriesId as string);
+                if (seriesInfo && seriesInfo.ExamType === 'Internal') {
+                    isInternal = true;
+                }
             }
 
-            if (session) {
+            if (session && session !== 'All') {
                 whereClause.Session = session;
+            }
+
+            if (isInternal) {
+                const ieWhere: any = { InternalExamSeriesID: seriesId };
+                if (search) {
+                    ieWhere[Op.or] = [
+                        { SubjectName: { [Op.like]: `%${search}%` } },
+                        { SubjectCode: { [Op.like]: `%${search}%` } }
+                    ];
+                }
+                if (session && session !== 'All') {
+                    ieWhere.Session = session;
+                }
+                if (startDate && endDate) {
+                    ieWhere.ExamDate = { [Op.between]: [startDate, endDate] };
+                }
+
+                const internalExams = await InternalExam.findAll({
+                    where: ieWhere,
+                    include: [{
+                        model: InternalExamDepartment,
+                        include: [{ model: Department, attributes: ['DepartmentName', 'DepartmentCode'] }]
+                    }],
+                    order: [['ExamDate', 'ASC']]
+                });
+
+                const now = new Date();
+                const transformed = internalExams.map(ie => {
+                    const data = ie.toJSON() as any;
+                    
+                    const depts = data.InternalExamDepartments || [];
+                    const deptName = depts.length > 0 ? depts.map((d: any) => d.Department?.DepartmentCode).join(', ') : 'ALL_BRANCHES';
+                    const fullDeptName = depts.length > 0 ? depts.map((d: any) => d.Department?.DepartmentName).join(', ') : 'All Branches';
+                    
+                    const examDate = new Date(data.ExamDate);
+                    const startHour = data.Session === 'FN' ? 10 : 14;
+                    const examStart = new Date(examDate);
+                    examStart.setHours(startHour, 0, 0, 0);
+                    const examEnd = new Date(examStart.getTime() + (data.Duration || 150) * 60 * 1000);
+
+                    let calcStatus = 'Scheduled';
+                    if (now >= examEnd) calcStatus = 'Completed';
+                    else if (now >= examStart && now < examEnd) calcStatus = 'In Progress';
+
+                    if (status && status !== 'All' && calcStatus !== status) return null;
+
+                    return {
+                        ExamID: data.InternalExamID,
+                        ExamName: data.SubjectName,
+                        ExamDate: data.ExamDate,
+                        Session: data.Session,
+                        Duration: data.Duration || 150,
+                        Status: calcStatus,
+                        Subject: {
+                            SubjectName: data.SubjectName,
+                            SubjectCode: data.SubjectCode,
+                            Department: {
+                                DepartmentName: fullDeptName,
+                                DepartmentCode: deptName
+                            }
+                        },
+                        Enrollment: 0,
+                        AuditStatus: 'Clean'
+                    };
+                }).filter(Boolean);
+
+                return res.json(transformed);
             }
 
             const exams = await Exam.findAll({
@@ -826,9 +898,18 @@ export class ExamController {
     static async deleteExam(req: Request, res: Response) {
         try {
             const { id } = req.params;
-            const exam = await Exam.findByPk(id as string);
+            let exam = await Exam.findByPk(id as string);
 
             if (!exam) {
+                const internalExam = await InternalExam.findByPk(id as string);
+                if (internalExam) {
+                    await sequelize.query('DELETE FROM InternalExamDepartments WHERE InternalExamID = :id', {
+                        replacements: { id: internalExam.InternalExamID },
+                        type: QueryTypes.DELETE
+                    });
+                    await internalExam.destroy();
+                    return res.json({ message: 'Exam deleted successfully' });
+                }
                 return res.status(404).json({ message: 'Exam not found' });
             }
 
@@ -965,6 +1046,23 @@ export class ExamController {
             }
 
             if (parsedSeriesId) {
+                const seriesInfo = await ExamSeries.findByPk(parsedSeriesId);
+                if (seriesInfo && seriesInfo.ExamType === 'Internal') {
+                    // It's an internal series. Manually clean up departments first to avoid FK errors.
+                    await sequelize.query(
+                        'DELETE FROM InternalExamDepartments WHERE InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
+                        {
+                            replacements: { seriesId: parsedSeriesId },
+                            type: QueryTypes.DELETE
+                        }
+                    );
+                    const deletedCount = await InternalExam.destroy({ where: { InternalExamSeriesID: parsedSeriesId } });
+                    return res.json({
+                        message: 'All exams deleted successfully',
+                        deletedCount
+                    });
+                }
+
                 await sequelize.query(
                     'DELETE FROM Attendance WHERE ExamID IN (SELECT ExamID FROM Exams WHERE ExamSeriesID = :seriesId)',
                     {
@@ -1022,15 +1120,39 @@ export class ExamController {
             const { seriesId } = req.query;
             const whereClause: any = {};
 
+            let isInternal = false;
             if (seriesId) {
                 whereClause.ExamSeriesID = seriesId;
+                const seriesInfo = await ExamSeries.findByPk(seriesId as string);
+                if (seriesInfo && seriesInfo.ExamType === 'Internal') {
+                    isInternal = true;
+                }
+            }
+
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+
+            if (isInternal) {
+                const ieWhere: any = { InternalExamSeriesID: seriesId };
+                const totalExams = await InternalExam.count({ where: ieWhere });
+                const completedExams = await InternalExam.count({
+                    where: { ...ieWhere, ExamDate: { [Op.lt]: todayStr } }
+                });
+                const upcomingExams = await InternalExam.count({
+                    where: { ...ieWhere, ExamDate: { [Op.gt]: todayStr } }
+                });
+                const activeToday = await InternalExam.count({
+                    where: { ...ieWhere, ExamDate: todayStr }
+                });
+                return res.json({
+                    total: totalExams,
+                    completed: completedExams,
+                    upcoming: upcomingExams,
+                    activeToday: activeToday
+                });
             }
 
             const totalExams = await Exam.count({ where: whereClause });
-
-            // Use date-based logic matching the dynamic status in getExams
-            const today = new Date();
-            const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
 
             // Completed = exam date is before today
             const completedExams = await Exam.count({
