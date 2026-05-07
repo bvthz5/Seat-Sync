@@ -18,6 +18,8 @@ import ResetPassword from './pages/ResetPassword';
 
 import Students from './pages/Students';
 import CollegeStructure from './pages/CollegeStructure';
+import EndSemCollegeStructurePage from './pages/EndSemCollegeStructurePage';
+import InternalCollegeStructurePage from './pages/InternalCollegeStructurePage';
 import RequireAuth from '../../components/RequireAuth';
 import RequireRoot from './components/RequireRoot';
 
@@ -65,6 +67,8 @@ const AdminApp: React.FC = () => {
                     <Route element={<RequireRoot />}>
                         <Route path="admin-management" element={<AdminManagement />} />
                         <Route path="college-structure" element={<CollegeStructure />} />
+                        <Route path="college-structure/endsem" element={<EndSemCollegeStructurePage />} />
+                        <Route path="college-structure/internal" element={<InternalCollegeStructurePage />} />
                         <Route path="academic-setup" element={<AcademicSetup />} />
                         <Route path="exam-control" element={<ExamControl />} />
                         <Route path="notifications" element={<Notifications />} />
