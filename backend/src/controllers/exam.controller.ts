@@ -1354,82 +1354,82 @@ export class ExamController {
 
             for (const row of data) {
                 try {
-                    // Flexible Column Mapping - support both old and new timetable formats
-                    const deptRaw = row['DepartmentCode'] || row['Department Code'] || row['Department'] || row['Branches'] || row['Branch'];
-                    const codeRaw = row['SubjectCode'] || row['Subject Code'] || row['Code'] || row['Course Code'];
-                    const nameRaw = row['SubjectName'] || row['Subject Name'] || row['Course Name'] || row['Examination Name'] || row['ExaminationName'] || row['Name'];
-                    const dateRaw = row['ExamDate'] || row['Date'];
-                    // New format has Time (e.g., "9:30 AM – 12:00 PM") and Session (e.g., "FN") columns
-                    const timeRaw = row['Time'] || row['Session'];
-                    const sessionRaw = row['Session'];
-                    const importedExamName = row['ExamName'] || row['Exam Name'] || row['Examination Name'] || row['ExaminationName'];
-                    const durationRaw = row['Duration'];
+                    // Robust Column Mapping - handle various naming conventions
+                    const getVal = (keys: string[]) => {
+                        for (const k of keys) {
+                            if (row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== '') return row[k];
+                        }
+                        // Try lowercase variants
+                        const lowerKeys = keys.map(k => k.toLowerCase().replace(/\s+/g, ''));
+                        for (const actualKey of Object.keys(row)) {
+                            const normalizedActual = actualKey.toLowerCase().replace(/\s+/g, '');
+                            if (lowerKeys.includes(normalizedActual)) {
+                                if (row[actualKey] !== undefined && row[actualKey] !== null && String(row[actualKey]).trim() !== '') return row[actualKey];
+                            }
+                        }
+                        return undefined;
+                    };
+
+                    const deptRaw = getVal(['Branches', 'Branch', 'DepartmentCode', 'Department Code', 'Department', 'Dept']);
+                    const codeRaw = getVal(['Course Code', 'SubjectCode', 'Subject Code', 'Code', 'CourseCode']);
+                    const nameRaw = getVal(['Course Name', 'SubjectName', 'Subject Name', 'Examination Name', 'ExaminationName', 'Name', 'CourseName']);
+                    const dateRaw = getVal(['Date', 'ExamDate', 'Exam Date']);
+                    const timeRaw = getVal(['Time', 'Session', 'ExamTime']);
+                    const sessionRaw = getVal(['Session']);
+                    const durationRaw = getVal(['Duration']);
 
                     const code = codeRaw ? String(codeRaw).trim() : null;
                     const subjectName = nameRaw ? String(nameRaw).trim() : (code || 'Unknown Subject');
 
                     if (!code || !dateRaw) {
-                        if (!code && !dateRaw) continue;
-                        throw new Error(`Missing required fields (Code/Date) for row: ${JSON.stringify(row)}`);
+                        if (!code && !dateRaw) continue; // Skip empty rows silently
+                        throw new Error(`Row missing Code or Date. Code: ${code}, Date: ${dateRaw}`);
                     }
 
                     const cleanCode = String(code).trim();
-
-                    // Parse Date
                     const examDate = parseExamDateValue(dateRaw);
-                    const dateStrRaw: string = String(dateRaw).trim();
 
                     if (!examDate) {
-                        throw new Error(`Invalid Date format for '${cleanCode}': ${dateStrRaw}. Expected DD/MM/YYYY or YYYY-MM-DD.`);
+                        throw new Error(`Invalid Date format for '${cleanCode}': ${dateRaw}`);
                     }
-                    const formattedDate: string = formatDateForDb(examDate);
+                    const formattedDate = formatDateForDb(examDate);
 
                     // Parse Session and Duration
                     let session = 'FN';
-                    let duration: number = typeof durationRaw === 'number' ? durationRaw : 180;
+                    let duration: number = typeof durationRaw === 'number' ? durationRaw : 150;
 
-                    // If Session column exists (new format), use it directly
-                    if (sessionRaw && (sessionRaw === 'FN' || sessionRaw === 'AN')) {
-                        session = sessionRaw;
+                    const explicitSession = sessionRaw ? String(sessionRaw).trim().toUpperCase() : '';
+                    if (explicitSession === 'FN' || explicitSession === 'AN') {
+                        session = explicitSession;
                     } else if (timeRaw) {
-                        // Otherwise infer from Time column
-                        const timeStr: string = String(timeRaw).toLowerCase();
-                        if (timeStr === 'fn' || timeStr === 'an') {
-                            session = timeStr.toUpperCase();
-                        } else if (timeStr.includes('am') || timeStr.includes('pm') || timeStr.includes('-')) {
-                            // Extract start time from "9:30 AM – 12:00 PM" format
-                            const rawParts: string[] = timeStr.split(/[-–]/);
-                            if (rawParts.length > 0) {
-                                const part0 = rawParts[0];
-                                const startPart: string = part0 ? part0.trim() : '';
-                                if (startPart) {
-                                    const hourMatch = startPart.match(/(\d+)/);
-                                    if (hourMatch) {
-                                        let h: number = parseInt(hourMatch[1] || '0');
-                                        const isPM: boolean = startPart.includes('pm');
-                                        const isAM: boolean = startPart.includes('am');
-                                        if (isPM) {
-                                            if (h < 12) h += 12;
-                                            session = 'AN';
-                                        } else if (isAM) {
-                                            session = 'FN';
-                                        } else {
-                                            // No AM/PM explicitly, infer from hour
-                                            if (h >= 12) session = 'AN';
-                                            else if (h >= 1 && h <= 6) session = 'AN';
-                                            else session = 'FN';
-                                        }
-                                    }
+                        const timeStr = String(timeRaw).toLowerCase();
+                        if (timeStr.includes('fn')) session = 'FN';
+                        else if (timeStr.includes('an')) session = 'AN';
+                        else if (timeStr.includes('am') || timeStr.includes('pm') || timeStr.includes('-') || timeStr.includes('–') || timeStr.includes('—')) {
+                            const parts = timeStr.split(/[-–—]/);
+                            const startPart = (parts[0] || '').trim();
+                            if (startPart.includes('pm')) {
+                                session = 'AN';
+                            } else if (startPart.includes('am')) {
+                                session = 'FN';
+                            } else if (startPart) {
+                                const hourMatch = startPart.match(/(\d+)/);
+                                if (hourMatch && hourMatch[1]) {
+                                    const h = parseInt(hourMatch[1]);
+                                    if (h >= 12 || (h >= 1 && h <= 6)) session = 'AN';
+                                    else session = 'FN';
                                 }
                             }
                         }
                     }
-                    
-                    // Infer duration from Time column if present (typically 2.5 hours = 150 mins)
+
+                    // Auto-infer duration if missing
                     if (timeRaw && typeof durationRaw === 'undefined') {
-                        const timeStr: string = String(timeRaw).toLowerCase();
-                        if (timeStr.includes('12:00') || timeStr.includes('12:30') || timeStr.includes('4:00')) {
-                            duration = 150; // Most exams are 2.5 hours
+                        const t = String(timeRaw).toLowerCase();
+                        if (t.includes('12:00') || t.includes('12:30') || t.includes('4:00')) {
+                            duration = 150; 
+                        } else if (t.includes('1:00') || t.includes('4:30') || t.includes('12:30')) {
+                            duration = 180;
                         }
                     }
 
@@ -1580,40 +1580,42 @@ export class ExamController {
                         }
 
                         // 3. Upsert exam for this subject/department
-                        // 3. Upsert exam for this subject/department
-                        const whereClause: any = { SubjectID: subjectID };
+                        // We use SubjectID, Date, and Session as the unique identifier for an exam in a series.
+                        // This prevents different subjects or different sessions from overwriting each other.
+                        const whereClause: any = { 
+                            SubjectID: subjectID,
+                            ExamDate: formattedDate,
+                            Session: session.toUpperCase()
+                        };
+                        
                         if (seriesId) {
                             whereClause.ExamSeriesID = parseInt(String(seriesId));
-                        } else {
-                            whereClause.ExamDate = formattedDate;
-                            whereClause.Session = session;
                         }
 
                         const existingExam = await Exam.findOne({
                             where: whereClause
                         });
 
+                        const examStatus = new Date(formattedDate) < new Date() ? 'Completed' : 'Scheduled';
+
                         if (existingExam) {
                             await existingExam.update({
-                                ExamName: importedExamName || existingExam.ExamName,
-                                ExamDate: formattedDate as any,
-                                Session: session.toUpperCase(),
-                                Duration: durationRaw ? parseInt(String(durationRaw)) : existingExam.Duration,
+                                ExamName: subjectName,
+                                Duration: duration,
                                 ExamSeriesID: seriesId ? parseInt(String(seriesId)) : (existingExam.ExamSeriesID || null),
-                                Status: new Date(formattedDate as any) < new Date() ? 'Completed' : 'Scheduled'
+                                Status: examStatus,
+                                UpdatedAt: new Date()
                             } as any);
                             updatedCount++;
                         } else {
-                            const rawTitle = req.body.title;
-                            const defaultPrefix: string = rawTitle ? String(rawTitle) : 'Exam';
                             await Exam.create({
                                 SubjectID: subjectID,
                                 ExamSeriesID: seriesId ? parseInt(String(seriesId)) : undefined,
-                                ExamName: importedExamName || `${defaultPrefix} - ${subjectName}`,
+                                ExamName: subjectName,
                                 ExamDate: formattedDate as any,
                                 Session: session.toUpperCase(),
-                                Duration: durationRaw ? parseInt(String(durationRaw)) : 180,
-                                Status: new Date(formattedDate as any) < new Date() ? 'Completed' : 'Scheduled'
+                                Duration: duration,
+                                Status: examStatus
                             } as any);
                             successCount++;
                         }
