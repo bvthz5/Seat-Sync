@@ -25,13 +25,12 @@ export class AuthController {
             // Authenticate user
             const result = await AuthService.login({ email, password, ...(role && { role }) });
 
-            // Set refresh token as HttpOnly cookie
+            // Set refresh token as HttpOnly session cookie
             res.cookie("refreshToken", result.refreshToken, {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === "production",
                 sameSite: "lax",
-                path: "/api/auth/refresh",
-                maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+                path: "/api/auth/refresh"
             });
 
             res.status(200).json(result);
@@ -92,8 +91,7 @@ export class AuthController {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === "production",
                 sameSite: "lax",
-                path: "/api/auth/refresh",
-                maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+                path: "/api/auth/refresh"
             });
 
             res.status(200).json({ accessToken });

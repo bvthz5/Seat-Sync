@@ -27,18 +27,18 @@ const getStorageKey = () => {
 };
 
 export const AccessTokenStore = {
-    get token() { return localStorage.getItem(getStorageKey()); },
+    get token() { return sessionStorage.getItem(getStorageKey()); },
     setToken: (t: string) => {
         const token = (t || '').trim();
         const key = getStorageKey();
         if (!token || token === 'undefined' || token === 'null') {
-            localStorage.removeItem(key);
+            sessionStorage.removeItem(key);
             return;
         }
-        localStorage.setItem(key, token);
+        sessionStorage.setItem(key, token);
     },
     clear: () => { 
-        localStorage.removeItem(getStorageKey());
+        sessionStorage.removeItem(getStorageKey());
     }
 };
 
