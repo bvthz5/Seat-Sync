@@ -7,6 +7,8 @@ import { toast } from '../../../../utils/toast';
 
 interface LayoutConfigProps {
     readOnly?: boolean;
+    /** When true, locks seatsPerBench to 1 and hides the Dual option entirely (End Semester mode) */
+    singleSeatOnly?: boolean;
 }
 
 type RoomType = 'ROOM' | 'HALL';
@@ -23,7 +25,7 @@ interface SeatConfig {
     zoneId?: number;
 }
 
-export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) => {
+export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, singleSeatOnly = false }) => {
     // --- Data State ---
     const [blocks, setBlocks] = useState<Block[]>([]);
     const [floors, setFloors] = useState<Floor[]>([]);
@@ -126,7 +128,8 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
 
                     const newConfig = {
                         rowLayout: parsedRowLayout,
-                        seatsPerBench: room.SeatsPerBench || 2,
+                        // singleSeatOnly: always force 1; otherwise use saved value (default 2)
+                        seatsPerBench: singleSeatOnly ? 1 : (room.SeatsPerBench || 2),
                         roomType: (room.RoomType || 'ROOM') as RoomType
                     };
                     setConfig(newConfig);
@@ -255,8 +258,8 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
     };
 
     const handleAddRow = () => {
-
         const lastBenchCount = config.rowLayout.length > 0 ? config.rowLayout[config.rowLayout.length - 1] : 5;
+        setIsSaved(false);
         setConfig({ ...config, rowLayout: [...config.rowLayout, lastBenchCount] });
     };
 
@@ -270,6 +273,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
     const handleBenchCountChange = (index: number, value: number) => {
         const newLayout = [...config.rowLayout];
         newLayout[index] = value;
+        setIsSaved(false);
         setConfig({ ...config, rowLayout: newLayout });
     };
 
@@ -571,13 +575,23 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
                                                 <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Total Benches</span>
                                                 <span className="font-mono font-bold text-slate-800">{config.rowLayout.reduce((acc, curr) => acc + curr, 0)}</span>
                                             </div>
-                                            <div className="flex flex-col gap-2">
-                                                <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Seats Per Bench</span>
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    <button onClick={() => setConfig({ ...config, seatsPerBench: 1 })} className={`py-2 rounded-lg text-xs font-bold border-2 transition-all ${config.seatsPerBench === 1 ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>Single (1)</button>
-                                                    <button onClick={() => setConfig({ ...config, seatsPerBench: 2 })} className={`py-2 rounded-lg text-xs font-bold border-2 transition-all ${config.seatsPerBench === 2 ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>Dual (2)</button>
+                                            {singleSeatOnly ? (
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Seats Per Bench</span>
+                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-500 text-xs font-bold border border-slate-200">
+                                                        Single (1)
+                                                        <span className="text-[9px] opacity-60 font-normal">locked</span>
+                                                    </span>
                                                 </div>
-                                            </div>
+                                            ) : (
+                                                <div className="flex flex-col gap-2">
+                                                    <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Seats Per Bench</span>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <button onClick={() => setConfig({ ...config, seatsPerBench: 1 })} className={`py-2 rounded-lg text-xs font-bold border-2 transition-all ${config.seatsPerBench === 1 ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>Single (1)</button>
+                                                        <button onClick={() => setConfig({ ...config, seatsPerBench: 2 })} className={`py-2 rounded-lg text-xs font-bold border-2 transition-all ${config.seatsPerBench === 2 ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>Dual (2)</button>
+                                                    </div>
+                                                </div>
+                                            )}
                                             <Divider className="my-1" />
                                             <div className="flex justify-between items-center">
                                                 <div className="flex flex-col">
@@ -591,8 +605,36 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false }) 
 
                                     {!readOnly && (
                                         <div className="grid grid-cols-2 gap-3 pt-4 border-t border-slate-100">
-                                            <Button variant="flat" color="danger" isDisabled={!isDirty || loading} onPress={handleReset} startContent={<RotateCcw size={16} />}>Reset</Button>
-                                            <Button className={!isSaved ? "animate-pulse" : ""} color={isSaved ? "success" : "primary"} isLoading={loading} isDisabled={!isDirty || capacityCount === 0} onPress={handleSave} startContent={!isSaved ? <Save size={18} /> : null}>{isSaved ? "Saved ✓" : "Save"}</Button>
+                                            {/* Reset: enabled only when there are actual unsaved changes */}
+                                            <Button
+                                                variant="flat"
+                                                color="default"
+                                                isDisabled={!isDirty || loading}
+                                                onPress={handleReset}
+                                                startContent={<RotateCcw size={16} className={isDirty ? 'text-slate-600' : 'text-slate-300'} />}
+                                                className={`font-semibold transition-all ${
+                                                    isDirty
+                                                        ? 'text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300'
+                                                        : 'text-slate-300 bg-slate-50 border border-slate-100 cursor-not-allowed'
+                                                }`}
+                                            >
+                                                Reset
+                                            </Button>
+
+                                            {/* Save: green "Saved ✓" when clean, blue "Save" when dirty */}
+                                            <Button
+                                                isLoading={loading}
+                                                isDisabled={(!isDirty && isSaved) || capacityCount === 0 || loading}
+                                                onPress={handleSave}
+                                                startContent={isDirty ? <Save size={16} /> : null}
+                                                className={`font-bold transition-all ${
+                                                    isDirty
+                                                        ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-md shadow-indigo-200'
+                                                        : 'bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-default'
+                                                }`}
+                                            >
+                                                {isDirty ? 'Save' : 'Saved ✓'}
+                                            </Button>
                                         </div>
                                     )}
                                 </div>

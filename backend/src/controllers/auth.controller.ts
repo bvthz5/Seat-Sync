@@ -52,7 +52,7 @@ export class AuthController {
             const { email } = req.body;
             if (email) {
                 const context = {
-                    email: email,
+                    email: email || "",
                     ip: req.ip || "",
                     userAgent: req.get('User-Agent') || ""
                 };
