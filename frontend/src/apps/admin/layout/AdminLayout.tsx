@@ -6,6 +6,8 @@ import { useAuth } from '../../../hooks/useAuth';
 import { motion } from 'framer-motion';
 import { Menu, Bell, LogOut, User, ChevronDown } from 'lucide-react';
 import { GlobalNotificationDrawer } from '../components/notifications/GlobalNotificationDrawer';
+import { invigilatorService } from '../services/invigilatorService';
+import { getNotificationStats } from '../services/notificationService';
 import SeatingTypeModal from '../components/seating/SeatingTypeModal';
 import CollegeStructureTypeModal from '../components/structure/CollegeStructureTypeModal';
 
@@ -13,9 +15,30 @@ const AdminLayout: React.FC = () => {
     const { logout, user } = useAuth();
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [notificationOpen, setNotificationOpen] = useState(false);
+    const [unreadCount, setUnreadCount] = useState(0);
     const [isSeatingModalOpen, setIsSeatingModalOpen] = useState(false);
     const [isCollegeStructureModalOpen, setIsCollegeStructureModalOpen] = useState(false);
     const navigate = useNavigate();
+
+    const fetchCounts = async () => {
+        try {
+            const [notifStats, swaps] = await Promise.all([
+                getNotificationStats(),
+                invigilatorService.getSwaps('PENDING')
+            ]);
+            setUnreadCount((notifStats.unread || 0) + (swaps?.length || 0));
+        } catch (e) {
+            console.error("Failed to fetch notification counts", e);
+        }
+    };
+
+    React.useEffect(() => {
+        if (user) {
+            fetchCounts();
+            const interval = setInterval(fetchCounts, 60000); // Check every minute
+            return () => clearInterval(interval);
+        }
+    }, [user, notificationOpen]);
 
     return (
         <div className="flex h-screen w-full bg-[#f4f6f9] overflow-hidden font-sans selection:bg-indigo-100">
@@ -53,7 +76,11 @@ const AdminLayout: React.FC = () => {
                         className="relative w-9 h-9 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-all"
                     >
                         <Bell size={18} />
-                        <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500 border-[1.5px] border-white animate-pulse" />
+                        {unreadCount > 0 && (
+                            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white animate-in zoom-in-50 duration-300">
+                                {unreadCount > 9 ? '9+' : unreadCount}
+                            </span>
+                        )}
                     </button>
 
                     <Dropdown placement="bottom-end" classNames={{ content: "" }} disableAnimation>

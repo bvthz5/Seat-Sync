@@ -4,7 +4,8 @@ import {
     toggleInvigilatorFlag, toggleInvigilatorEligibility, bulkImportInvigilators, clearAllFaculties,
     activateInvigilator, verifyInvigilatorActivationToken, resendInvigilatorActivationLink, requestInvigilatorAccess, getInvigilatorRequests, 
     approveInvigilatorRequest, rejectInvigilatorRequest, getInvigilatorLoadStats, autoAssignInvigilators,
-    saveInvigilatorAssignments, getInvigilatorAssignments, getInvigilatorDashboardData, getAssignmentDetails, saveAttendance
+    saveInvigilatorAssignments, getInvigilatorAssignments, getInvigilatorDashboardData, getAssignmentDetails, saveAttendance, reportIncident, requestSwap,
+    getAllSwaps, getAvailableInvigilatorsForSwap, approveSwap, rejectSwap
 } from "../controllers/invigilator.controller.js";
 import { AuthMiddleware } from "../middlewares/auth.middleware.js";
 import rateLimit from "express-rate-limit";
@@ -18,6 +19,8 @@ const router = Router();
 router.get("/dashboard", AuthMiddleware.authenticated, getInvigilatorDashboardData);
 router.get("/assignments/:id", AuthMiddleware.authenticated, getAssignmentDetails);
 router.post("/attendance/save", AuthMiddleware.authenticated, saveAttendance);
+router.post("/incident/report", AuthMiddleware.authenticated, reportIncident);
+router.post("/swap/request", AuthMiddleware.authenticated, requestSwap);
 
 // Limiters
 const verifyLimiter = rateLimit({
@@ -73,5 +76,11 @@ router.post("/save-assignments", saveInvigilatorAssignments);
 router.get("/assignments", getInvigilatorAssignments);
 router.delete("/clear-all", clearAllFaculties);
 router.delete("/:id", deleteInvigilator);
+
+// Admin Swap Management
+router.get("/swaps", getAllSwaps);
+router.get("/swaps/:id/available", getAvailableInvigilatorsForSwap);
+router.post("/swaps/:id/approve", approveSwap);
+router.post("/swaps/:id/reject", rejectSwap);
 
 export default router;

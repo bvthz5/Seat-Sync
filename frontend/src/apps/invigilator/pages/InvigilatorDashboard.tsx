@@ -5,9 +5,10 @@ import {
     RefreshCcw, Bell, UserCircle, LogOut, CheckCircle2,
     Clock, Calendar, DoorOpen, LayoutGrid, ClipboardCheck,
     AlertTriangle, ChevronRight, Eye, Menu, X,
-    Wifi, MapPin, Settings, Moon, Sun, User, ChevronDown, RefreshCw
+    Wifi, MapPin, Settings, Moon, Sun, User, ChevronDown, RefreshCw, Lock
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { useAuth } from '../../../hooks/useAuth';
 import { invigilatorService } from '../../admin/services/invigilatorService';
 import { SeatingService } from '../../admin/services/seatingService';
@@ -33,13 +34,19 @@ interface DashboardData {
         id: number;
         exam: string;
         session: string;
+        roomID: number;
         room: string;
         block: string;
         time: string;
         students: number;
+        presentCount: number;
         status: string;
+        isHallRevealed?: boolean;
+        isAttendanceMarked?: boolean;
+        isReliefDuty?: boolean;
     }>;
     swaps: any[];
+    incidents: any[];
 }
 
 const NAV_GROUPS = [
@@ -89,8 +96,86 @@ export default function InvigilatorDashboard() {
     const [data, setData] = useState<DashboardData | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    // Live Clock Logic
-    const [timeRemaining, setTimeRemaining] = useState("01:32:12");
+    const [timeRemaining, setTimeRemaining] = useState("00:00:00");
+    const [showIncidentModal, setShowIncidentModal] = useState(false);
+    const [incidentText, setIncidentText] = useState("");
+    const [announcement, setAnnouncement] = useState<string | null>("🔔 BROADCAST: Please ensure all students have their ID cards visible before distributing question papers.");
+    const [selectedDutyTab, setSelectedDutyTab] = useState<'scheduled' | 'history' | 'incidents'>('scheduled');
+    const [showSwapModal, setShowSwapModal] = useState(false);
+    const [swapReason, setSwapReason] = useState("");
+    const [selectedDutyForSwap, setSelectedDutyForSwap] = useState<any>(null);
+    const [submittingSwap, setSubmittingSwap] = useState(false);
+
+    const handleReportIncident = async () => {
+        if (!incidentText.trim() || !data?.duties[0]) return;
+        try {
+            await invigilatorService.reportIncident({
+                examId: data.duties[0].id,
+                roomId: data.duties[0].roomID,
+                type: "Malpractice",
+                description: incidentText
+            });
+            toast.success("Incident reported to Exam Cell successfully.", { icon: '🚨' });
+            setShowIncidentModal(false);
+            setIncidentText("");
+            fetchDashboardData();
+        } catch (err) {
+            toast.error("Failed to report incident.");
+        }
+    };
+
+    const handleRequestSwap = async () => {
+        if (!swapReason.trim() || !selectedDutyForSwap) return;
+        try {
+            setSubmittingSwap(true);
+            await invigilatorService.requestSwap({
+                examId: selectedDutyForSwap.id,
+                roomId: selectedDutyForSwap.roomID,
+                reason: swapReason
+            });
+            toast.success("Swap request sent to Exam Cell admin.");
+            setShowSwapModal(false);
+            setSwapReason("");
+            fetchDashboardData();
+        } catch (err: any) {
+            toast.error(err.response?.data?.message || "Failed to request swap.");
+        } finally {
+            setSubmittingSwap(false);
+        }
+    };
+
+    useEffect(() => {
+        if (!data || data.user.status !== 'active' || !data.duties || data.duties.length === 0) return;
+
+        const session = data.duties[0].session;
+        const endTime = new Date();
+        if (session === 'FN') {
+            endTime.setHours(12, 30, 0, 0);
+        } else {
+            endTime.setHours(16, 30, 0, 0);
+        }
+
+        const interval = setInterval(() => {
+            const now = new Date();
+            const diff = endTime.getTime() - now.getTime();
+            
+            if (diff <= 0) {
+                setTimeRemaining("00:00:00");
+                clearInterval(interval);
+                return;
+            }
+
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const secs = Math.floor((diff % (1000 * 60)) / 1000);
+            
+            setTimeRemaining(
+                `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+            );
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [data]);
 
     useEffect(() => {
         fetchDashboardData();
@@ -297,6 +382,19 @@ export default function InvigilatorDashboard() {
             {/* --- MAIN CONTENT AREA --- */}
             <div className={`flex-1 flex flex-col min-w-0 overflow-hidden relative ${darkMode ? 'bg-[#0f172a]' : 'bg-[#F4F7FB]'}`}>
 
+                {announcement && (
+                    <div className="bg-amber-500 text-black px-4 py-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider z-40 relative shadow-sm">
+                        <div className="flex-1 flex justify-center items-center gap-2">
+                            <span className="flex h-2 w-2 relative">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+                            </span>
+                            {announcement}
+                        </div>
+                        <button onClick={() => setAnnouncement(null)} className="p-1 hover:bg-black/10 rounded-md transition-colors"><X size={14} /></button>
+                    </div>
+                )}
+
                 {/* 1. TOP HEADER (Command Center Bar) */}
                 <header className={`h-16 flex items-center justify-between px-5 sm:px-8 shrink-0 z-30 shadow-sm relative transition-colors duration-300 ${darkMode ? 'bg-slate-900 border-b border-slate-800' : 'bg-white border-b border-slate-100/80'}`}>
                     <div className="flex items-center gap-4">
@@ -375,7 +473,7 @@ export default function InvigilatorDashboard() {
                                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                                             </span>
-                                            EXAM IN PROGRESS – ROOM {data?.duties[0]?.room || '...'}
+                                            EXAM IN PROGRESS – ROOM {data?.duties?.[0]?.room || '...'}
                                         </div>
                                     )}
                                 </div>
@@ -398,7 +496,7 @@ export default function InvigilatorDashboard() {
 
                         {/* 3. SUMMARY METRICS ROW - ERP Depth Style */}
                         <motion.div initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.1 } } }} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                            {data?.metrics.map((metric, i) => (
+                            {data?.metrics?.map((metric, i) => (
                                 <motion.div
                                     key={i} variants={fadeUp}
                                     className={`p-5 rounded-2xl border shadow-sm flex flex-col gap-4 relative overflow-hidden transition-all duration-300 hover:shadow-md hover:-translate-y-1 group ${darkMode ? 'bg-[#1e293b] border-slate-700' : 'bg-white border-slate-200/60 block'}`}
@@ -433,11 +531,17 @@ export default function InvigilatorDashboard() {
                                     {[
                                         { icon: ClipboardCheck, label: "Start Attendance", color: "bg-[#2D3C8A] hover:bg-[#1E2A78] text-white shadow-[0_4px_12px_rgba(47,63,165,0.25)] border-transparent transform hover:-translate-y-0.5", priority: true },
                                         { icon: LayoutGrid, label: "View Seating Grid", color: darkMode ? "bg-slate-800 text-slate-200 border-slate-700" : "bg-white text-slate-700 hover:bg-slate-50 border-slate-200 shadow-sm" },
-                                        { icon: Users, label: "Subject List", color: darkMode ? "bg-slate-800 text-slate-200 border-slate-700" : "bg-white text-slate-700 hover:bg-slate-50 border-slate-200 shadow-sm" },
+                                        { icon: AlertTriangle, label: "Report Incident", color: darkMode ? "bg-slate-800 text-red-400 border-slate-700 hover:bg-slate-700" : "bg-white text-red-600 hover:bg-red-50 border-red-200 shadow-sm" },
                                         { icon: RefreshCcw, label: "Request Swap", color: darkMode ? "bg-slate-800 text-slate-200 border-slate-700" : "bg-white text-slate-700 hover:bg-slate-50 border-slate-200 shadow-sm" },
                                     ].map((action, i) => (
                                         <button
                                             key={i}
+                                            onClick={() => {
+                                                if (action.label === 'Start Attendance') navigate('/invigilator/attendance');
+                                                if (action.label === 'View Seating Grid') setActiveNav('seating');
+                                                if (action.label === 'Report Incident') setShowIncidentModal(true);
+                                                if (action.label === 'Request Swap') navigate('/invigilator/swaps');
+                                            }}
                                             className={`flex flex-row items-center gap-2.5 px-5 py-2.5 rounded-[10px] border font-bold text-[13px] transition-all active:scale-[0.98] whitespace-nowrap ${action.color}`}
                                         >
                                             <action.icon size={16} strokeWidth={action.priority ? 2.5 : 2} />
@@ -454,73 +558,122 @@ export default function InvigilatorDashboard() {
                             {/* LEFT COLUMN (65%): Duties Table */}
                             <motion.div variants={fadeUp} initial="hidden" animate="show" className="xl:col-span-2 space-y-6">
                                 <div className={`rounded-2xl border shadow-sm overflow-hidden flex flex-col h-full ${darkMode ? 'bg-[#1e293b] border-slate-700' : 'bg-white border-slate-200/80'}`}>
-                                    <div className={`p-5 sm:p-6 border-b flex items-center justify-between ${darkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50/50 border-slate-100'}`}>
-                                        <div>
+                                    <div className={`p-5 sm:p-6 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${darkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50/50 border-slate-100'}`}>
+                                        <div className="flex items-center gap-4">
                                             <h3 className={`text-[17px] font-black flex items-center gap-2.5 ${darkMode ? 'text-white' : 'text-[#0F172A]'}`}>
                                                 <div className="p-1.5 bg-blue-100 text-[#2F3FA5] rounded-lg"><ClipboardList size={18} /></div>
-                                                My Assigned Duties
+                                                Duty Dossier
                                             </h3>
+                                            <div className="flex bg-slate-200/50 p-1 rounded-xl ml-2">
+                                                {['scheduled', 'history', 'incidents'].map((tab) => (
+                                                    <button
+                                                        key={tab}
+                                                        onClick={() => setSelectedDutyTab(tab as any)}
+                                                        className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${selectedDutyTab === tab ? 'bg-white text-[#2F3FA5] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                                    >
+                                                        {tab}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
-                                        <button className="text-[12px] font-bold text-[#2F3FA5] bg-blue-50/80 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors hidden sm:block border border-blue-100 shadow-sm">View Full Schedule</button>
+                                        <button className="text-[12px] font-bold text-[#2F3FA5] bg-blue-50/80 px-4 py-1.5 rounded-lg hover:bg-blue-100 transition-colors hidden sm:block border border-blue-100 shadow-sm">Export My Log</button>
                                     </div>
                                     <div className="overflow-x-auto flex-1 p-2">
-                                        <table className="w-full text-left text-[13px] whitespace-nowrap">
-                                            <thead className={`font-bold uppercase tracking-wider text-[10px] ${darkMode ? 'text-slate-400 bg-slate-800/80' : 'text-slate-500 bg-slate-50'}`}>
-                                                <tr>
-                                                    <th className="px-4 py-3 rounded-l-xl">Exam Session</th>
-                                                    <th className="px-4 py-3">Room & Time</th>
-                                                    <th className="px-4 py-3">Metrics</th>
-                                                    <th className="px-4 py-3">Status</th>
-                                                    <th className="px-4 py-3 text-right rounded-r-xl">Action</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className={`divide-y ${darkMode ? 'divide-slate-700/50' : 'divide-slate-100/80'}`}>
-                                                {data?.duties.map(duty => (
-                                                    <tr key={duty.id} className={`transition-colors group ${darkMode ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50/50'}`}>
-                                                        <td className="px-4 py-4">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className={`w-8 h-8 rounded-[10px] flex items-center justify-center font-bold text-[11px] ${duty.session === 'FN' ? 'bg-amber-100 text-amber-700' : 'bg-indigo-100 text-indigo-700'}`}>
-                                                                    {duty.session}
-                                                                </div>
-                                                                <div>
-                                                                    <p className={`font-extrabold text-[14px] ${darkMode ? 'text-white' : 'text-slate-800'}`}>{duty.exam}</p>
-                                                                    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Regular Exam</p>
-                                                                </div>
+                                        {selectedDutyTab === 'incidents' ? (
+                                            <div className="p-4 space-y-4">
+                                                {!data?.incidents || data.incidents.length === 0 ? (
+                                                    <div className="flex flex-col items-center justify-center py-10 text-slate-400">
+                                                        <CheckCircle2 size={32} className="opacity-20 mb-2" />
+                                                        <p className="text-[11px] font-bold uppercase tracking-widest">No Incidents Reported</p>
+                                                    </div>
+                                                ) : data.incidents.map(inc => (
+                                                    <div key={inc.id} className={`p-4 rounded-xl border ${darkMode ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="px-2 py-0.5 bg-red-100 text-red-700 text-[9px] font-black rounded uppercase border border-red-200">{inc.type}</span>
+                                                                <span className="text-[11px] font-bold text-slate-500">{new Date(inc.date).toLocaleDateString()}</span>
                                                             </div>
-                                                        </td>
-                                                        <td className="px-4 py-4">
-                                                            <p className="font-extrabold text-[#2F3FA5] text-[14px]">{duty.room} <span className="text-slate-400 font-medium text-[12px] ml-1">({duty.block})</span></p>
-                                                            <p className="text-slate-500 text-[11px] mt-0.5 font-semibold flex items-center gap-1.5"><Clock size={12} /> {duty.time}</p>
-                                                        </td>
-                                                        <td className="px-4 py-4">
-                                                            <div className="flex flex-col gap-0.5">
-                                                                <span className={`font-bold ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>{duty.students} Students</span>
-                                                                {duty.status === "In Progress" && <span className="text-[9px] font-bold text-emerald-600 uppercase">{duty.presentCount} Marked</span>}
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-4 py-4">
-                                                            {duty.status === "In Progress" && (
-                                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-wider border border-emerald-200 shadow-sm">
-                                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                                                    In Progress
-                                                                </span>
-                                                            )}
-                                                            {duty.status === "Upcoming" && (
-                                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 text-[10px] font-black uppercase tracking-wider border border-amber-200 shadow-sm">
-                                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                                                                    Upcoming
-                                                                </span>
-                                                            )}
-                                                        </td>
-                                                        <td className="px-4 py-4 text-right">
-                                                            <button className={`inline-flex items-center gap-1.5 px-4 py-2 hover:bg-[#2F3FA5] hover:text-white font-bold text-[12px] rounded-lg transition-all shadow-sm ${darkMode ? 'bg-slate-700 text-white' : 'bg-white text-[#2F3FA5] border border-slate-200 hover:border-[#2F3FA5]'}`}>
-                                                                Open Console <ChevronRight size={14} />
-                                                            </button>
-                                                        </td>
-                                                    </tr>
+                                                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${inc.status === 'RESOLVED' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                                {inc.status}
+                                                            </span>
+                                                        </div>
+                                                        <p className={`text-[13px] font-black mb-1 ${darkMode ? 'text-white' : 'text-slate-800'}`}>{inc.exam} · {inc.room}</p>
+                                                        <p className="text-[12px] text-slate-500 leading-relaxed italic">"{inc.description}"</p>
+                                                    </div>
                                                 ))}
-                                            </tbody>
-                                        </table>
+                                            </div>
+                                        ) : (
+                                            <table className="w-full text-left text-[13px] whitespace-nowrap">
+                                                <thead className={`font-bold uppercase tracking-wider text-[10px] ${darkMode ? 'text-slate-400 bg-slate-800/80' : 'text-slate-500 bg-slate-50'}`}>
+                                                    <tr>
+                                                        <th className="px-4 py-3 rounded-l-xl">Exam Session</th>
+                                                        <th className="px-4 py-3">Room & Time</th>
+                                                        <th className="px-4 py-3">Metrics</th>
+                                                        <th className="px-4 py-3">Attendance</th><th className="px-4 py-3 text-center">Actions</th>
+                                                        <th className="px-4 py-3 text-right rounded-r-xl">Status</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className={`divide-y ${darkMode ? 'divide-slate-700/50' : 'divide-slate-100/80'}`}>
+                                                    {(selectedDutyTab === 'scheduled' 
+                                                        ? data?.duties?.filter(d => d.status !== 'Completed')
+                                                        : data?.duties?.filter(d => d.status === 'Completed')
+                                                    )?.map(duty => (
+                                                        <tr key={duty.id} className={`transition-colors group ${duty.isReliefDuty ? (darkMode ? 'bg-indigo-900/20 hover:bg-indigo-900/30' : 'bg-indigo-50/50 hover:bg-indigo-50/80') : (darkMode ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50/50')}`}>
+                                                            <td className="px-4 py-4">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className={`w-8 h-8 rounded-[10px] flex items-center justify-center font-bold text-[11px] ${duty.session === 'FN' ? 'bg-amber-100 text-amber-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                                                                        {duty.session}
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className={`font-extrabold text-[14px] ${darkMode ? 'text-white' : 'text-slate-800'}`}>{duty.exam}</p>
+                                                                        {duty.isReliefDuty ? (
+                                                                            <p className="text-indigo-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1"><RefreshCcw size={10} /> Relief Duty</p>
+                                                                        ) : (
+                                                                            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Regular Exam</p>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-4 py-4">
+                                                                <p className="font-extrabold text-[#2F3FA5] text-[14px]">{duty.room} <span className="text-slate-400 font-medium text-[12px] ml-1">({duty.block})</span></p>
+                                                                <p className="text-slate-500 text-[11px] mt-0.5 font-semibold flex items-center gap-1.5"><Clock size={12} /> {duty.time}</p>
+                                                            </td>
+                                                            <td className="px-4 py-4">
+                                                                <div className="flex flex-col gap-0.5">
+                                                                    <span className={`font-bold ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>{duty.students} Students</span>
+                                                                    {duty.status !== "Upcoming" && <span className="text-[9px] font-bold text-emerald-600 uppercase">{duty.presentCount} Present</span>}
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-4 py-4">
+                                                                {duty.isAttendanceMarked ? (
+                                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase rounded border border-emerald-100"><ClipboardCheck size={12} /> Marked</span>
+                                                                ) : (
+                                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-black uppercase rounded border border-slate-200">Pending</span>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-4 py-4 text-center">{duty.status !== "Completed" && (<button onClick={() => { setSelectedDutyForSwap(duty); setShowSwapModal(true); }} className={`p-1.5 rounded-lg border transition-all ${darkMode ? "bg-slate-800 border-slate-700 text-slate-400 hover:text-white" : "bg-white border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-200 hover:shadow-sm"}`} title="Request Relief / Swap"><RefreshCcw size={14} /></button>)}</td><td className="px-4 py-4 text-right">
+                                                                {duty.status === "In Progress" && (
+                                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-wider border border-emerald-200 shadow-sm">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                                        In Progress
+                                                                    </span>
+                                                                )}
+                                                                {duty.status === "Upcoming" && (
+                                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 text-[10px] font-black uppercase tracking-wider border border-amber-200 shadow-sm">
+                                                                        Upcoming
+                                                                    </span>
+                                                                )}
+                                                                {duty.status === "Completed" && (
+                                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-black uppercase tracking-wider border border-slate-200 shadow-sm">
+                                                                        Completed
+                                                                    </span>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        )}
                                     </div>
                                 </div>
                             </motion.div>
@@ -627,6 +780,105 @@ export default function InvigilatorDashboard() {
                         <p>This module is coming soon in the next update.</p>
                     </div>
                 )}
+
+                {/* --- INCIDENT REPORT MODAL --- */}
+                <AnimatePresence>
+                    {showIncidentModal && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowIncidentModal(false)} />
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                                className={`bg-white rounded-2xl shadow-2xl w-full max-w-md relative z-10 overflow-hidden ${darkMode ? 'bg-slate-800 text-white' : 'bg-white text-slate-800'}`}
+                            >
+                                <div className={`p-5 border-b flex items-center justify-between ${darkMode ? 'border-slate-700 bg-slate-800/50' : 'border-slate-100 bg-slate-50'}`}>
+                                    <h3 className="text-lg font-black flex items-center gap-2 text-red-600">
+                                        <AlertTriangle size={20} /> Report Incident
+                                    </h3>
+                                    <button onClick={() => setShowIncidentModal(false)} className={`p-1.5 rounded-lg transition-colors ${darkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-200'}`}>
+                                        <X size={18} />
+                                    </button>
+                                </div>
+                                <div className="p-5 space-y-4">
+                                    <p className={`text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                                        Please describe the incident or malpractice observed. This report will be sent immediately to the Exam Cell and Chief Superintendent.
+                                    </p>
+                                    <textarea
+                                        value={incidentText}
+                                        onChange={(e) => setIncidentText(e.target.value)}
+                                        placeholder="E.g., Student found with unauthorized material..."
+                                        className={`w-full p-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-red-500/50 transition-all min-h-[120px] resize-none text-sm font-medium ${darkMode ? 'bg-slate-900 border-slate-700 placeholder-slate-500' : 'bg-slate-50 border-slate-200 placeholder-slate-400'}`}
+                                    ></textarea>
+                                </div>
+                                <div className={`p-4 border-t flex justify-end gap-3 ${darkMode ? 'border-slate-700 bg-slate-800/50' : 'border-slate-100 bg-slate-50'}`}>
+                                    <button onClick={() => setShowIncidentModal(false)} className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-colors ${darkMode ? 'hover:bg-slate-700 text-slate-300' : 'hover:bg-slate-200 text-slate-600'}`}>
+                                        Cancel
+                                    </button>
+                                    <button onClick={handleReportIncident} disabled={!incidentText.trim()} className="px-5 py-2.5 rounded-xl font-bold text-sm bg-red-600 hover:bg-red-700 text-white transition-all shadow-lg shadow-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                                        Submit Report
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+ 
+                {/* --- SWAP REQUEST MODAL --- */}
+                <AnimatePresence>
+                    {showSwapModal && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowSwapModal(false)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+                            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className={`relative w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border ${darkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
+                                <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                                            <RefreshCcw size={20} />
+                                        </div>
+                                        <div>
+                                            <h3 className={`text-lg font-black ${darkMode ? 'text-white' : 'text-slate-900'}`}>Request Duty Relief</h3>
+                                            <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Exam Hall Swap Request</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => setShowSwapModal(false)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-400"><X size={20} /></button>
+                                </div>
+
+                                <div className="p-6 space-y-4">
+                                    {selectedDutyForSwap && (
+                                        <div className={`p-4 rounded-xl border ${darkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Selected Duty</p>
+                                            <p className={`text-[14px] font-black ${darkMode ? 'text-white' : 'text-slate-800'}`}>{selectedDutyForSwap.exam}</p>
+                                            <p className="text-[12px] font-bold text-indigo-600 mt-1">{selectedDutyForSwap.room} ({selectedDutyForSwap.block})</p>
+                                            <p className="text-[11px] text-slate-500 mt-0.5">{selectedDutyForSwap.date} · {selectedDutyForSwap.time}</p>
+                                        </div>
+                                    )}
+
+                                    <div className="space-y-2">
+                                        <label className={`text-xs font-black uppercase tracking-widest ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Reason for Relief</label>
+                                        <textarea 
+                                            value={swapReason}
+                                            onChange={(e) => setSwapReason(e.target.value)}
+                                            placeholder="Please provide a valid reason for requesting duty relief (e.g., Medical Emergency, Duty Conflict...)"
+                                            className={`w-full h-32 p-4 rounded-xl border text-[13px] font-medium resize-none transition-all outline-none focus:ring-2 focus:ring-indigo-500/20 ${darkMode ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                                        />
+                                        <p className="text-[10px] text-slate-400 font-medium">Your request will be sent to the Exam Cell admin for review and approval.</p>
+                                    </div>
+                                </div>
+
+                                <div className="p-6 bg-slate-50/50 border-t border-slate-100 flex gap-3">
+                                    <button onClick={() => setShowSwapModal(false)} className="flex-1 py-3 px-4 rounded-xl border border-slate-200 bg-white text-slate-600 font-bold text-[13px] hover:bg-slate-50 transition-colors">Cancel</button>
+                                    <button 
+                                        onClick={handleRequestSwap}
+                                        disabled={!swapReason.trim() || submittingSwap}
+                                        className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 text-white font-black text-[13px] hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 disabled:opacity-50 disabled:shadow-none flex items-center justify-center gap-2"
+                                    >
+                                        {submittingSwap ? <RefreshCcw size={16} className="animate-spin" /> : "Send Request"}
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+
+
             </main>
         </div>
     </div>
@@ -643,10 +895,47 @@ function InvigilatorSeatingView({ darkMode }: { darkMode: boolean }) {
     const [selectedDuty, setSelectedDuty] = useState<any>(null);
     const [benches, setBenches] = useState<any[]>([]);
     const [studentAllocations, setStudentAllocations] = useState<Record<number, any>>({});
+    const [revealCountdown, setRevealCountdown] = useState<string>("00:00:00");
 
     useEffect(() => {
         fetchInitialData();
     }, []);
+
+    useEffect(() => {
+        if (!selectedDuty || selectedDuty.isHallRevealed !== false) return;
+
+        const session = selectedDuty.session;
+        const examDateStr = selectedDuty.date;
+        const revealTime = examDateStr ? new Date(examDateStr) : new Date();
+        if (session === 'FN') {
+            revealTime.setHours(8, 30, 0, 0);
+        } else {
+            revealTime.setHours(12, 30, 0, 0);
+        }
+
+        const updateCountdown = () => {
+            const now = new Date();
+            const diff = revealTime.getTime() - now.getTime();
+            
+            if (diff <= 0) {
+                setRevealCountdown("00:00:00");
+                window.location.reload();
+                return;
+            }
+
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const secs = Math.floor((diff % (1000 * 60)) / 1000);
+            
+            setRevealCountdown(
+                `${hours.toString().padStart(2, '0')}h ${mins.toString().padStart(2, '0')}m ${secs.toString().padStart(2, '0')}s`
+            );
+        };
+
+        updateCountdown();
+        const interval = setInterval(updateCountdown, 1000);
+        return () => clearInterval(interval);
+    }, [selectedDuty]);
 
     const fetchInitialData = async () => {
         try {
@@ -654,7 +943,6 @@ function InvigilatorSeatingView({ darkMode }: { darkMode: boolean }) {
             const dashboard = await invigilatorService.getDashboardData();
             if (dashboard.duties && dashboard.duties.length > 0) {
                 setDuties(dashboard.duties);
-                // Use first duty by default (most likely current one)
                 handleDutySelect(dashboard.duties[0]);
             } else {
                 setError("No duties assigned to view seating.");
@@ -672,9 +960,14 @@ function InvigilatorSeatingView({ darkMode }: { darkMode: boolean }) {
             setLoading(true);
             setSelectedDuty(duty);
             
+            if (duty.isHallRevealed === false) {
+                setLoading(false);
+                return;
+            }
+
             const examDate = duty.date;
             const session = duty.session;
-            const roomId = duty.roomID;
+            const roomId = duty.roomID || duty.id; // ensure roomId exists
 
             if (!roomId) {
                 console.error("No RoomID for duty:", duty);
@@ -682,11 +975,9 @@ function InvigilatorSeatingView({ darkMode }: { darkMode: boolean }) {
                 return;
             }
 
-            // 1. Get hall layout
             const layout = await SeatingService.getHallLayout(roomId);
             setBenches(layout.benches || []);
 
-            // 2. Get student allocations
             const alloc = await SeatingService.getAllocationForHall(examDate, session, roomId);
             setStudentAllocations(alloc.assignments || {});
 
@@ -731,6 +1022,27 @@ function InvigilatorSeatingView({ darkMode }: { darkMode: boolean }) {
                 <button onClick={fetchInitialData} className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200 flex items-center gap-2">
                     <RefreshCw size={16} /> Retry
                 </button>
+            </div>
+        );
+    }
+
+    if (selectedDuty && selectedDuty.isHallRevealed === false) {
+        return (
+            <div className="flex-1 flex flex-col items-center justify-center p-12 text-center h-full">
+                <div className="w-20 h-20 bg-slate-100 border border-slate-200 rounded-3xl flex items-center justify-center text-slate-400 mb-6 shadow-inner relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-tr from-blue-100/50 to-transparent"></div>
+                    <Lock size={40} className="relative z-10" />
+                </div>
+                <h3 className={`text-2xl font-black uppercase tracking-widest mb-3 ${darkMode ? 'text-white' : 'text-slate-800'}`}>Hall Details Locked</h3>
+                <p className="text-slate-500 max-w-md text-sm font-semibold leading-relaxed mb-6">
+                    For security reasons, your assigned exam room and seating arrangement will be revealed exactly <span className="text-blue-600">1 hour</span> before the session starts.
+                </p>
+                <div className="bg-slate-100 p-5 rounded-2xl border border-slate-200 shadow-inner">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Unlocking In</p>
+                    <div className="text-3xl font-mono font-black text-slate-700 tracking-wider">
+                        {revealCountdown}
+                    </div>
+                </div>
             </div>
         );
     }

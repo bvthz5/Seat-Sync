@@ -62,7 +62,7 @@ const InvigilatorAssign: React.FC = () => {
     const [selectedSeries, setSelectedSeries] = useState<string>('');
     const [slots, setSlots] = useState<ExamSlot[]>([]);
     const [selectedDate, setSelectedDate] = useState<string>('');
-    const [selectedSession, setSelectedSession] = useState<string>('Morning');
+    const [selectedSession, setSelectedSession] = useState<string>('FN');
     const [halls, setHalls] = useState<any[]>([]);
     const [assignments, setAssignments] = useState<Assignment[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -92,14 +92,14 @@ const InvigilatorAssign: React.FC = () => {
         if (selectedSeries) {
             const fetchSlots = async () => {
                 try {
-                    const slotsData = await SeatingService.getExamDates(Number(selectedSeries), true);
+                    const slotsData = await SeatingService.getExamDates(Number(selectedSeries));
                     setSlots(slotsData);
                     if (slotsData.length > 0) {
                         setSelectedDate(slotsData[0].examDate);
                         setSelectedSession(slotsData[0].session);
                     } else {
                         setSelectedDate('');
-                        setSelectedSession('');
+                        setSelectedSession('FN');
                         setHalls([]);
                         setAssignments([]);
                     }
@@ -241,11 +241,7 @@ const InvigilatorAssign: React.FC = () => {
         return Array.from(dates).sort();
     }, [slots]);
 
-    const availableSessions = useMemo(() => {
-        return slots
-            .filter(s => s.examDate === selectedDate)
-            .map(s => s.session);
-    }, [slots, selectedDate]);
+    const availableSessions = ['FN', 'AN'];
 
     const currentSlotExams = useMemo(() => {
         const slot = slots.find(s => s.examDate === selectedDate && s.session === selectedSession);
@@ -318,11 +314,11 @@ const InvigilatorAssign: React.FC = () => {
                                             <Select
                                                 size="sm"
                                                 variant="flat"
-                                                selectedKeys={[selectedSeries]}
+                                                selectedKeys={selectedSeries ? new Set([selectedSeries]) : new Set()}
                                                 onSelectionChange={(keys) => setSelectedSeries(Array.from(keys)[0] as string)}
                                                 classNames={{ trigger: "h-11 bg-slate-100/50 rounded-xl", value: "text-xs font-bold" }}
                                             >
-                                                {series.map(s => <SelectItem key={s.ExamSeriesID} value={s.ExamSeriesID}>{s.SeriesName}</SelectItem>)}
+                                                {series.map(s => <SelectItem key={s.ExamSeriesID.toString()} value={s.ExamSeriesID.toString()}>{s.SeriesName}</SelectItem>)}
                                             </Select>
                                         </div>
                                         <div className="space-y-2">
@@ -331,7 +327,7 @@ const InvigilatorAssign: React.FC = () => {
                                                 size="sm"
                                                 variant="flat"
                                                 isDisabled={!selectedSeries}
-                                                selectedKeys={[selectedDate]}
+                                                selectedKeys={selectedDate ? new Set([selectedDate]) : new Set()}
                                                 onSelectionChange={(keys) => setSelectedDate(Array.from(keys)[0] as string)}
                                                 classNames={{ trigger: "h-11 bg-slate-100/50 rounded-xl", value: "text-xs font-bold" }}
                                             >
@@ -344,7 +340,7 @@ const InvigilatorAssign: React.FC = () => {
                                                 size="sm"
                                                 variant="flat"
                                                 isDisabled={!selectedDate}
-                                                selectedKeys={[selectedSession]}
+                                                selectedKeys={selectedSession ? new Set([selectedSession]) : new Set()}
                                                 onSelectionChange={(keys) => setSelectedSession(Array.from(keys)[0] as string)}
                                                 classNames={{ trigger: "h-11 bg-slate-100/50 rounded-xl", value: "text-xs font-bold" }}
                                             >

@@ -17,13 +17,14 @@ import {
     Filter, MoreVertical, Activity, Clock, Briefcase, X,
     TrendingUp, ClipboardList, Mail, Phone, Copy, Check,
     Shield, RotateCcw, LogOut, Eye, AlertTriangle, Calendar,
-    ChevronRight, Star, BookOpen, Award,
+    ChevronRight, Star, BookOpen, Award, RefreshCcw, FileText
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { invigilatorService, Invigilator, InvigilatorStats } from '../services/invigilatorService';
 import AddInvigilatorModal from '../components/invigilators/AddInvigilatorModal';
 import BulkImportModal from '../components/invigilators/BulkImportModal';
 import RequestsModal from '../components/invigilators/RequestsModal';
+import SwapRequestsModal from '../components/invigilators/SwapRequestsModal';
 
 /* ─── helpers ─────────────────────────────────────────────── */
 const staffId = (id: number) => `#IV-${String(id).padStart(4, '0')}`;
@@ -369,6 +370,7 @@ const Invigilators: React.FC = () => {
     const [invigilators,        setInvigilators]        = useState<Invigilator[]>([]);
     const [stats,               setStats]               = useState<InvigilatorStats>({ total: 0, active: 0, eligible: 0, onDuty: 0, flagged: 0 });
     const [pendingRequestsCount,setPendingRequestsCount] = useState(0);
+    const [pendingSwapsCount,   setPendingSwapsCount]   = useState(0);
     const [isLoading,           setIsLoading]           = useState(true);
     const [searchQuery,         setSearchQuery]         = useState('');
     const [selectedDept,        setSelectedDept]        = useState('');
@@ -380,6 +382,7 @@ const Invigilators: React.FC = () => {
     const { isOpen: isDeleteOpen, onOpen: onOpenDelete, onClose: onCloseDelete } = useDisclosure();
     const { isOpen: isBulkOpen,   onOpen: onBulkOpen,   onClose: onBulkClose  } = useDisclosure();
     const { isOpen: isReqOpen,    onOpen: onReqOpen,    onClose: onReqClose   } = useDisclosure();
+    const { isOpen: isSwapOpen,   onOpen: onSwapOpen,   onClose: onSwapClose  } = useDisclosure();
 
     const [selected,     setSelected]     = useState<Invigilator | null>(null);
     const [drawerOpen,   setDrawerOpen]   = useState(false);
@@ -389,14 +392,16 @@ const Invigilators: React.FC = () => {
     const fetchData = async () => {
         setIsLoading(true);
         try {
-            const [data, statData, requestsData] = await Promise.all([
+            const [data, statData, requestsData, swapsData] = await Promise.all([
                 invigilatorService.getAll(),
                 invigilatorService.getStats(),
                 invigilatorService.getRequests(),
+                invigilatorService.getSwaps('PENDING'),
             ]);
             setInvigilators(data);
             setStats(statData);
             setPendingRequestsCount(requestsData.filter(r => r.Status === 'PENDING').length);
+            setPendingSwapsCount(swapsData.length);
         } catch { toast.error('Failed to load invigilators'); }
         finally { setIsLoading(false); }
     };
@@ -493,17 +498,35 @@ const Invigilators: React.FC = () => {
                         </div>
                         <div className="flex items-center gap-2.5 shrink-0">
                             <button onClick={onReqOpen}
-                                className="relative h-9 px-4 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 text-sm font-semibold flex items-center gap-2 transition-all shadow-sm">
-                                <Activity size={14} />
+                                className="relative h-10 px-5 rounded-[14px] border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 text-[13px] font-bold flex items-center gap-2.5 transition-all shadow-sm group">
+                                <Activity size={16} className="text-rose-500 transition-transform group-hover:scale-110" />
                                 Review Requests
                                 {pendingRequestsCount > 0 && (
-                                    <span className="absolute -top-2 -right-2 min-w-[18px] h-[18px] flex items-center justify-center">
-                                        <span className="absolute inset-0 rounded-full bg-rose-500 animate-ping opacity-60" />
-                                        <span className="relative rounded-full bg-rose-500 text-white text-[9px] font-bold px-1.5 py-0.5 leading-none">
+                                    <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-[20px] flex items-center justify-center">
+                                        <span className="absolute inset-0 rounded-full bg-rose-500 animate-ping opacity-40" />
+                                        <span className="relative rounded-full bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.5 leading-none shadow-lg shadow-rose-500/20">
                                             {pendingRequestsCount > 9 ? '9+' : pendingRequestsCount}
                                         </span>
                                     </span>
                                 )}
+                            </button>
+                            <button onClick={onSwapOpen}
+                                className="relative h-10 px-5 rounded-[14px] border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 text-[13px] font-bold flex items-center gap-2.5 transition-all shadow-sm group">
+                                <RefreshCcw size={16} className="text-indigo-500 transition-transform group-hover:rotate-180 duration-500" />
+                                Swap Requests
+                                {pendingSwapsCount > 0 && (
+                                    <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-[20px] flex items-center justify-center">
+                                        <span className="absolute inset-0 rounded-full bg-indigo-500 animate-ping opacity-40" />
+                                        <span className="relative rounded-full bg-indigo-500 text-white text-[10px] font-black px-1.5 py-0.5 leading-none shadow-lg shadow-indigo-500/20">
+                                            {pendingSwapsCount > 9 ? '9+' : pendingSwapsCount}
+                                        </span>
+                                    </span>
+                                )}
+                            </button>
+                            <div className="w-px h-6 bg-slate-200 mx-1" />
+                            <button onClick={onBulkOpen}
+                                className="h-10 px-4 rounded-[14px] border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 text-[13px] font-bold flex items-center gap-2 transition-all shadow-sm">
+                                <Upload size={15} /> Import
                             </button>
                             <button
                                 onClick={async () => {
@@ -517,20 +540,16 @@ const Invigilators: React.FC = () => {
                                         }
                                     }
                                 }}
-                                className="h-9 px-4 rounded-xl border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 hover:border-rose-300 text-sm font-semibold flex items-center gap-2 transition-all shadow-sm">
-                                <Trash2 size={14} /> Delete All
-                            </button>
-                            <button onClick={onBulkOpen}
-                                className="h-9 px-4 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 text-sm font-semibold flex items-center gap-2 transition-all shadow-sm">
-                                <Upload size={14} /> Import
+                                className="h-10 px-4 rounded-[14px] border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 hover:border-rose-300 text-[13px] font-bold flex items-center gap-2 transition-all shadow-sm group">
+                                <Trash2 size={15} className="transition-transform group-hover:rotate-12" /> Delete All
                             </button>
                             <button onClick={exportCSV}
-                                className="h-9 px-4 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 text-sm font-semibold flex items-center gap-2 transition-all shadow-sm">
-                                Export CSV
+                                className="h-10 px-4 rounded-[14px] border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 text-[13px] font-bold flex items-center gap-2 transition-all shadow-sm">
+                                <FileText size={15} /> Export
                             </button>
                             <button onClick={onAddOpen}
-                                className="h-9 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-slate-900/20">
-                                <UserPlus size={14} /> Add Invigilator
+                                className="h-10 px-6 rounded-[14px] bg-[#0F172A] hover:bg-slate-800 text-white text-[13px] font-black flex items-center gap-2.5 transition-all shadow-xl shadow-slate-900/10">
+                                <UserPlus size={16} /> Add Invigilator
                             </button>
                         </div>
                     </div>
@@ -772,6 +791,7 @@ const Invigilators: React.FC = () => {
 
             {/* ══════════════ MODALS ══════════════════════════ */}
             <AddInvigilatorModal isOpen={isAddOpen} onClose={onAddClose} onSuccess={fetchData} existingInvigilators={invigilators} />
+            <SwapRequestsModal isOpen={isSwapOpen} onClose={onSwapClose} onSuccess={fetchData} />
 
             {/* Delete Confirm */}
             {isDeleteOpen && createPortal(

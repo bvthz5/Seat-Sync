@@ -57,7 +57,7 @@ Attendance.init(
       },
     },
     MarkedAt: {
-      type: DataTypes.DATE,
+      type: "DATETIME2",
       allowNull: true,
     },
   },
