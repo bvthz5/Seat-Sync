@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { sidebarConfig, SidebarItem as SidebarItemType } from '../config/sidebar.config';
 
-const Sidebar: React.FC<{ isOpen: boolean; onSeatingClick: () => void }> = ({ isOpen, onSeatingClick }) => {
+const Sidebar: React.FC<{ isOpen: boolean; onSeatingClick: () => void; onCollegeStructureClick: () => void }> = ({ isOpen, onSeatingClick, onCollegeStructureClick }) => {
     const { user, logout } = useAuth();
     const [openSections, setOpenSections] = useState<Record<string, boolean>>({ "Administration": true });
     const location = useLocation();
@@ -68,24 +68,38 @@ const Sidebar: React.FC<{ isOpen: boolean; onSeatingClick: () => void }> = ({ is
                                 transition={{ duration: 0.2 }}
                                 className="overflow-hidden mt-1"
                             >
-                                {item.children.map(child => (
-                                    <NavLink
-                                        key={child.path}
-                                        to={child.path!}
-                                        title={!isOpen ? child.label : undefined}
-                                        className={({ isActive }) => getLinkClass(isActive, true)}
-                                    >
-                                        {({ isActive }) => (
-                                            <>
-                                                {isActive && (
-                                                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-indigo-500" />
-                                                )}
-                                                <span className={isActive ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'}>{child.icon}</span>
-                                                {isOpen && <span className="truncate">{child.label}</span>}
-                                            </>
-                                        )}
-                                    </NavLink>
-                                ))}
+                                {item.children.map(child => {
+                                    const isChildCollegeStructure = child.label === "College Structure";
+                                    const isChildActiveCS = isChildCollegeStructure && location.pathname.startsWith('/admin/college-structure');
+
+                                    return (
+                                        <NavLink
+                                            key={child.path}
+                                            to={isChildCollegeStructure ? '/admin/college-structure' : child.path!}
+                                            onClick={(e) => {
+                                                if (isChildCollegeStructure) {
+                                                    e.preventDefault();
+                                                    onCollegeStructureClick();
+                                                }
+                                            }}
+                                            title={!isOpen ? child.label : undefined}
+                                            className={({ isActive }) => getLinkClass(isActive || isChildActiveCS, true)}
+                                        >
+                                            {({ isActive }) => {
+                                                const effectivelyActive = isActive || isChildActiveCS;
+                                                return (
+                                                    <>
+                                                        {effectivelyActive && (
+                                                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-indigo-500" />
+                                                        )}
+                                                        <span className={effectivelyActive ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'}>{child.icon}</span>
+                                                        {isOpen && <span className="truncate">{child.label}</span>}
+                                                    </>
+                                                );
+                                            }}
+                                        </NavLink>
+                                    );
+                                })}
                             </motion.div>
                         )}
                     </AnimatePresence>
@@ -94,24 +108,30 @@ const Sidebar: React.FC<{ isOpen: boolean; onSeatingClick: () => void }> = ({ is
         }
 
         const isSeatingPlans = item.label === "Seating Plans";
+        const isCollegeStructure = item.label === "College Structure";
         // Manual active check for seating to cover sub-routes like /admin/seating/endsem
         const isActiveSeating = isSeatingPlans && location.pathname.startsWith('/admin/seating');
+        // Manual active check for college-structure sub-routes
+        const isActiveCollegeStructure = isCollegeStructure && location.pathname.startsWith('/admin/college-structure');
 
         return (
             <NavLink
                 key={item.path}
-                to={isSeatingPlans ? '/admin/seating' : item.path!}
+                to={isSeatingPlans ? '/admin/seating' : isCollegeStructure ? '/admin/college-structure' : item.path!}
                 onClick={(e) => {
                     if (isSeatingPlans) {
                         e.preventDefault();
                         onSeatingClick();
+                    } else if (isCollegeStructure) {
+                        e.preventDefault();
+                        onCollegeStructureClick();
                     }
                 }}
                 title={!isOpen ? item.label : undefined}
-                className={({ isActive }) => getLinkClass(isActive || isActiveSeating)}
+                className={({ isActive }) => getLinkClass(isActive || isActiveSeating || isActiveCollegeStructure)}
             >
                 {({ isActive }) => {
-                    const effectivelyActive = isActive || isActiveSeating;
+                    const effectivelyActive = isActive || isActiveSeating || isActiveCollegeStructure;
                     return (
                         <>
                             {effectivelyActive && (

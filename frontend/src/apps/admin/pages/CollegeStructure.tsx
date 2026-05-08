@@ -1,142 +1,92 @@
-import React, { useState } from 'react';
-import { Tabs, Tab, Card, CardBody } from '@heroui/react';
-import { Building2, Layers, DoorOpen, Armchair, AlertCircle } from 'lucide-react';
-import { BlockManager } from '../components/structure/BlockManager';
-import { FloorManager } from '../components/structure/FloorManager';
-import { RoomManager } from '../components/structure/RoomManager';
-import { LayoutConfig } from '../components/structure/LayoutConfig';
-import { StructureImport } from '../components/structure/StructureImport';
+import React from 'react';
+import { Card, CardBody, Button } from '@heroui/react';
+import { Building2, GraduationCap, BookOpen, ChevronRight, ShieldAlert } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
-import { structureService } from '../services/structureService';
-import { toast } from 'react-hot-toast';
 
 const CollegeStructure: React.FC = () => {
+    const navigate = useNavigate();
     const { user } = useAuth();
-    const [selectedTab, setSelectedTab] = useState<string>("blocks");
-
     const isRootAdmin = user?.IsRootAdmin === true;
-    const isReadOnly = !isRootAdmin;
-
-    const handleDeleteAll = async () => {
-        if (!window.confirm('Are you sure you want to delete ALL structure data? This cannot be undone.')) return;
-        try {
-            await structureService.deleteAllStructureData();
-            toast.success('All structure data deleted.');
-            window.location.reload();
-        } catch (err: any) {
-            toast.error('Failed to delete all structure data.');
-        }
-    };
 
     return (
-        <div className="min-h-screen bg-slate-50/50 pb-12">
-            {/* Header Section */}
-            <div className="pt-6 px-8 max-w-[1920px] mx-auto flex flex-col gap-2">
-                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">College Structure</h1>
-                <p className="text-slate-500 text-sm font-medium">Configure blocks, floors, rooms, and seating layouts.</p>
-
-                {isReadOnly && (
-                    <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center gap-3 text-amber-800 animate-in fade-in slide-in-from-top-2 duration-300 max-w-2xl">
-                        <AlertCircle className="shrink-0" size={18} />
-                        <div>
-                            <p className="font-bold text-sm">Read-Only Access</p>
-                            <p className="text-xs opacity-90">You are viewing this configuration in read-only mode. Only Root Admins can make changes.</p>
+        <div className="min-h-[calc(100vh-64px)] bg-slate-50/30 flex items-center justify-center p-6">
+            <Card className="w-full max-w-4xl border border-slate-200/60 shadow-2xl shadow-slate-200/50 rounded-[40px] overflow-hidden bg-white/80 backdrop-blur-xl">
+                <CardBody className="p-0">
+                    {/* Header */}
+                    <div className="p-10 border-b border-slate-100 flex items-center justify-between">
+                        <div className="flex items-center gap-5">
+                            <div className="w-14 h-14 rounded-2xl bg-violet-50 flex items-center justify-center text-violet-600 shadow-sm border border-violet-100">
+                                <Building2 size={28} />
+                            </div>
+                            <div>
+                                <h1 className="text-3xl font-black text-slate-900 tracking-tight">College Structure</h1>
+                                <p className="text-slate-500 font-medium">Select the infrastructure pipeline you wish to manage</p>
+                            </div>
                         </div>
                     </div>
-                )}
-            </div>
 
-            {/* Sticky Navigation Tabs */}
-            <div className="sticky top-0 z-40 bg-slate-50/80 backdrop-blur-xl border-b border-slate-200/60 mt-6 px-8">
-                <div className="max-w-[1920px] mx-auto flex justify-between items-end gap-4">
-                    <Tabs
-                        aria-label="Structure Navigation"
-                        color="primary"
-                        variant="underlined"
-                        classNames={{
-                            tabList: "gap-6 relative rounded-none p-0",
-                            cursor: "w-full bg-blue-600 h-[2px]",
-                            tab: "max-w-fit px-0 h-12 data-[hover=true]:opacity-80",
-                            tabContent: "group-data-[selected=true]:text-blue-600 group-data-[selected=true]:font-bold font-medium text-slate-500 text-sm transition-colors"
-                        }}
-                        selectedKey={selectedTab}
-                        onSelectionChange={(key) => setSelectedTab(key.toString())}
-                    >
-                        <Tab
-                            key="blocks"
-                            title={
-                                <div className="flex items-center space-x-2 py-1">
-                                    <Building2 size={16} strokeWidth={2.5} />
-                                    <span>Blocks</span>
+                    {/* Selection Area */}
+                    <div className="p-10 grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {/* Internal Exam Card */}
+                        <Card 
+                            isPressable 
+                            onPress={() => navigate('/admin/college-structure/internal')}
+                            className="group border-2 border-slate-100 hover:border-violet-500/30 bg-white shadow-sm hover:shadow-xl hover:shadow-violet-500/10 transition-all duration-400 rounded-[32px] p-2"
+                        >
+                            <CardBody className="flex flex-col items-center text-center p-8 gap-6">
+                                <div className="w-24 h-24 rounded-3xl bg-violet-50 flex items-center justify-center text-violet-600 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500 ring-8 ring-violet-50/50">
+                                    <BookOpen size={44} strokeWidth={1.5} />
                                 </div>
-                            }
-                        />
-                        <Tab
-                            key="floors"
-                            title={
-                                <div className="flex items-center space-x-2 py-1">
-                                    <Layers size={16} strokeWidth={2.5} />
-                                    <span>Floors</span>
+                                <div>
+                                    <h2 className="text-2xl font-black text-slate-800 mb-2">Internal Exam</h2>
+                                    <p className="text-slate-500 text-sm font-medium">Classroom-style infrastructure with dual-seating logic.</p>
                                 </div>
-                            }
-                        />
-                        <Tab
-                            key="rooms"
-                            title={
-                                <div className="flex items-center space-x-2 py-1">
-                                    <DoorOpen size={16} strokeWidth={2.5} />
-                                    <span>Rooms</span>
+                                <div className="h-px w-full bg-slate-100 mt-2" />
+                                <Button 
+                                    variant="light" 
+                                    className="font-black text-violet-600 uppercase tracking-widest text-xs h-12 px-6"
+                                    endContent={<ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />}
+                                >
+                                    Configure Structure
+                                </Button>
+                            </CardBody>
+                        </Card>
+
+                        {/* End Sem Exam Card */}
+                        <Card 
+                            isPressable 
+                            onPress={() => navigate('/admin/college-structure/endsem')}
+                            className="group border-2 border-slate-100 hover:border-purple-500/30 bg-white shadow-sm hover:shadow-xl hover:shadow-purple-500/10 transition-all duration-400 rounded-[32px] p-2"
+                        >
+                            <CardBody className="flex flex-col items-center text-center p-8 gap-6">
+                                <div className="w-24 h-24 rounded-3xl bg-purple-50 flex items-center justify-center text-purple-600 group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-500 ring-8 ring-purple-50/50">
+                                    <GraduationCap size={44} strokeWidth={1.5} />
                                 </div>
-                            }
-                        />
-                        <Tab
-                            key="layout"
-                            title={
-                                <div className="flex items-center space-x-2 py-1">
-                                    <Armchair size={16} strokeWidth={2.5} />
-                                    <span>Seating Layout</span>
+                                <div>
+                                    <h2 className="text-2xl font-black text-slate-800 mb-2">End Semester Exam</h2>
+                                    <p className="text-slate-500 text-sm font-medium">Standard university-style layout with optimized capacity.</p>
                                 </div>
-                            }
-                        />
-                    </Tabs>
-                    {isRootAdmin && (
-                        <div className="mb-2 flex gap-2">
-                            <StructureImport onChange={() => window.location.reload()} />
-                            <button
-                                className="ml-2 px-4 py-2 bg-red-600 text-white rounded shadow hover:bg-red-700 transition"
-                                onClick={handleDeleteAll}
-                                type="button"
-                            >
-                                Delete All
-                            </button>
+                                <div className="h-px w-full bg-slate-100 mt-2" />
+                                <Button 
+                                    variant="light" 
+                                    className="font-black text-purple-600 uppercase tracking-widest text-xs h-12 px-6"
+                                    endContent={<ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />}
+                                >
+                                    Configure Structure
+                                </Button>
+                            </CardBody>
+                        </Card>
+                    </div>
+
+                    {!isRootAdmin && (
+                        <div className="px-10 pb-10 flex items-center gap-4 text-amber-600">
+                            <ShieldAlert size={20} />
+                            <p className="text-xs font-bold uppercase tracking-widest">Read-Only Mode Active</p>
                         </div>
                     )}
-                </div>
-            </div>
-
-            {/* Tab Content Area */}
-            <div className="px-8 py-6 max-w-[1920px] mx-auto">
-                {selectedTab === "blocks" && (
-                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <BlockManager readOnly={isReadOnly} />
-                    </div>
-                )}
-                {selectedTab === "floors" && (
-                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <FloorManager readOnly={isReadOnly} />
-                    </div>
-                )}
-                {selectedTab === "rooms" && (
-                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <RoomManager readOnly={isReadOnly} />
-                    </div>
-                )}
-                {selectedTab === "layout" && (
-                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <LayoutConfig readOnly={isReadOnly} />
-                    </div>
-                )}
-            </div>
+                </CardBody>
+            </Card>
         </div>
     );
 };

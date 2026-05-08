@@ -881,6 +881,85 @@ async function ensureSchemaIntegrity() {
             END
         `, { type: QueryTypes.RAW });
 
+        // ─── INTERNAL EXAM STRUCTURE TABLES ───────────────────────────────────────
+        // These are the isolated tables for the Internal Exam College Structure module.
+        // They must never be joined with or referenced from End Semester tables.
+        await sequelize.query(`
+            IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalBlocks' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                CREATE TABLE [dbo].[InternalBlocks] (
+                    [BlockID]   INT IDENTITY(1,1) PRIMARY KEY,
+                    [BlockName] NVARCHAR(50) NOT NULL,
+                    [Status]    NVARCHAR(20) NOT NULL DEFAULT 'Active'
+                );
+                PRINT 'Created InternalBlocks table';
+            END
+        `, { type: QueryTypes.RAW });
+
+        await sequelize.query(`
+            IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalFloors' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                CREATE TABLE [dbo].[InternalFloors] (
+                    [FloorID]     INT IDENTITY(1,1) PRIMARY KEY,
+                    [BlockID]     INT NOT NULL REFERENCES [dbo].[InternalBlocks]([BlockID]),
+                    [FloorNumber] INT NOT NULL,
+                    [Status]      NVARCHAR(20) NOT NULL DEFAULT 'Active'
+                );
+                PRINT 'Created InternalFloors table';
+            END
+        `, { type: QueryTypes.RAW });
+
+        await sequelize.query(`
+            IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalRooms' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                CREATE TABLE [dbo].[InternalRooms] (
+                    [RoomID]       INT IDENTITY(1,1) PRIMARY KEY,
+                    [BlockID]      INT NOT NULL REFERENCES [dbo].[InternalBlocks]([BlockID]),
+                    [FloorID]      INT NOT NULL REFERENCES [dbo].[InternalFloors]([FloorID]),
+                    [RoomCode]     NVARCHAR(50)  NOT NULL,
+                    [RoomType]     NVARCHAR(50)  NOT NULL DEFAULT 'Classroom',
+                    [TotalCapacity] INT NOT NULL DEFAULT 0,
+                    [OverrideCap]  INT NULL,
+                    [RowLayout]    NVARCHAR(MAX) NOT NULL DEFAULT '[]',
+                    [SeatsPerBench] INT NOT NULL DEFAULT 2,
+                    [SeatMode]     NVARCHAR(20)  NOT NULL DEFAULT 'Dual',
+                    [Status]       NVARCHAR(20)  NOT NULL DEFAULT 'Active',
+                    [ExamUsable]   BIT NOT NULL DEFAULT 1,
+                    [createdAt]    DATETIME NOT NULL DEFAULT GETDATE(),
+                    [updatedAt]    DATETIME NOT NULL DEFAULT GETDATE()
+                );
+                PRINT 'Created InternalRooms table';
+            END
+            ELSE
+            BEGIN
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[InternalRooms]') AND name = 'RoomType')
+                BEGIN
+                    ALTER TABLE [dbo].[InternalRooms] ADD [RoomType] NVARCHAR(50) NOT NULL DEFAULT 'Classroom';
+                    PRINT 'Added RoomType to InternalRooms';
+                END
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[InternalRooms]') AND name = 'SeatMode')
+                BEGIN
+                    ALTER TABLE [dbo].[InternalRooms] ADD [SeatMode] NVARCHAR(20) NOT NULL DEFAULT 'Dual';
+                    PRINT 'Added SeatMode to InternalRooms';
+                END
+            END
+        `, { type: QueryTypes.RAW });
+
+        await sequelize.query(`
+            IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalSeats' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                CREATE TABLE [dbo].[InternalSeats] (
+                    [SeatID]      INT IDENTITY(1,1) PRIMARY KEY,
+                    [RoomID]      INT NOT NULL REFERENCES [dbo].[InternalRooms]([RoomID]),
+                    [RowLabel]    CHAR(1)  NOT NULL,
+                    [BenchNumber] INT NOT NULL,
+                    [SeatNumber]  INT NOT NULL,
+                    [IsActive]    BIT NOT NULL DEFAULT 1
+                );
+                PRINT 'Created InternalSeats table';
+            END
+        `, { type: QueryTypes.RAW });
+
     } catch (error) {
         console.warn("Schema integrity check warning (non-fatal):", error);
     }

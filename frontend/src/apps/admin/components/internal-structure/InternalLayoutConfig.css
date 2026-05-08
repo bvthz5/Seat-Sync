@@ -1,0 +1,770 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   InternalLayoutConfig — Vertical Classroom Column Layout Engine
+   Premium dark glassmorphic theme with realistic classroom visualization
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Root Container ── */
+.ilc-root {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    padding-bottom: 3rem;
+}
+
+/* ── Header Bar ── */
+.ilc-header {
+    background: #fff;
+    padding: 1.25rem 1.5rem;
+    border-radius: 20px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.ilc-header__left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.ilc-header__icon {
+    width: 44px;
+    height: 44px;
+    background: linear-gradient(135deg, #7c3aed, #6d28d9);
+    color: #fff;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.25);
+}
+
+.ilc-header__title {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #1e293b;
+    margin: 0;
+}
+
+.ilc-header__sub {
+    font-size: 0.78rem;
+    color: #94a3b8;
+    margin: 0;
+}
+
+.ilc-header__chips {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* ── Body: Sidebar + Classroom ── */
+.ilc-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    align-items: flex-start;
+}
+
+@media (min-width: 1280px) {
+    .ilc-body {
+        flex-direction: row;
+    }
+}
+
+/* ── Sidebar ── */
+.ilc-sidebar {
+    width: 100%;
+    flex-shrink: 0;
+}
+
+@media (min-width: 1280px) {
+    .ilc-sidebar {
+        width: 380px;
+        position: sticky;
+        top: 140px;
+    }
+}
+
+.ilc-sidebar__card {
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.06) !important;
+    background: rgba(255,255,255,0.97) !important;
+    border-radius: 24px !important;
+    overflow: hidden !important;
+}
+
+.ilc-sidebar__header {
+    display: flex !important;
+    gap: 0.75rem !important;
+    background: rgba(248, 250, 252, 0.8) !important;
+    border-bottom: 1px solid #f1f5f9 !important;
+    padding: 1.25rem !important;
+}
+
+.ilc-sidebar__header-icon {
+    width: 36px;
+    height: 36px;
+    background: #fff;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    color: #7c3aed;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+
+.ilc-sidebar__header-title {
+    font-size: 0.72rem;
+    font-weight: 900;
+    color: #1e293b;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin: 0;
+}
+
+.ilc-sidebar__header-sub {
+    font-size: 0.66rem;
+    color: #94a3b8;
+    font-weight: 500;
+    margin: 0;
+}
+
+.ilc-label {
+    font-weight: 900;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 0.6rem;
+    margin-left: 2px;
+}
+
+/* ── Column List (sidebar) ── */
+.ilc-col-list {
+    background: rgba(248, 250, 252, 0.5);
+    padding: 0.5rem;
+    border-radius: 16px;
+    border: 1px solid #f1f5f9;
+    max-height: 240px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.ilc-col-item {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+    background: #fff;
+    padding: 0.5rem 0.6rem;
+    border-radius: 12px;
+    border: 1px solid #f1f5f9;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    transition: border-color 0.2s;
+}
+
+.ilc-col-item:hover {
+    border-color: #c4b5fd;
+}
+
+.ilc-col-badge {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    background: linear-gradient(135deg, #7c3aed, #6d28d9);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(124, 58, 237, 0.2);
+}
+
+.ilc-schema-box {
+    background: rgba(245, 243, 255, 0.5);
+    border: 1px solid #ede9fe;
+    border-radius: 16px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CLASSROOM VISUALIZATION PANEL
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.ilc-classroom {
+    flex: 1;
+    min-height: 650px;
+    border-radius: 32px;
+    border: 1px solid rgba(139, 92, 246, 0.15);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(165deg, #0c0820 0%, #140b2e 35%, #0f0a24 100%);
+    box-shadow:
+        0 0 60px rgba(124, 58, 237, 0.08),
+        0 20px 60px rgba(0,0,0,0.3),
+        inset 0 1px 0 rgba(255,255,255,0.03);
+}
+
+/* Blueprint grid background */
+.ilc-classroom__grid-bg {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image:
+        linear-gradient(rgba(139, 92, 246, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(139, 92, 246, 0.04) 1px, transparent 1px);
+    background-size: 28px 28px;
+    mask-image: radial-gradient(ellipse at center, black 40%, transparent 80%);
+    -webkit-mask-image: radial-gradient(ellipse at center, black 40%, transparent 80%);
+}
+
+.ilc-classroom__empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255,255,255,0.08);
+    gap: 0.75rem;
+    z-index: 1;
+}
+
+.ilc-classroom__empty p {
+    font-weight: 900;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    margin: 0;
+}
+
+.ilc-classroom__empty span {
+    font-size: 0.7rem;
+    font-weight: 500;
+    opacity: 0.5;
+}
+
+/* ── Toolbar ── */
+.ilc-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.85rem 1.5rem;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    background: rgba(0,0,0,0.25);
+    backdrop-filter: blur(12px);
+    z-index: 10;
+}
+
+.ilc-toolbar__info {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.ilc-toolbar__dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #34d399;
+    box-shadow: 0 0 12px rgba(52, 211, 153, 0.5);
+    animation: ilc-pulse 2s ease-in-out infinite;
+}
+
+.ilc-toolbar__room {
+    display: block;
+    color: #fff;
+    font-weight: 900;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+}
+
+.ilc-toolbar__meta {
+    display: block;
+    color: rgba(255,255,255,0.35);
+    font-size: 0.6rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.ilc-toolbar__modes {
+    display: flex;
+    background: rgba(255,255,255,0.05);
+    padding: 3px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.08);
+    gap: 2px;
+}
+
+.ilc-toolbar__mode-btn {
+    padding: 5px 12px;
+    border-radius: 8px;
+    font-size: 0.62rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(255,255,255,0.35);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.ilc-toolbar__mode-btn:hover {
+    color: rgba(255,255,255,0.6);
+}
+
+.ilc-toolbar__mode-btn--active {
+    background: linear-gradient(135deg, #7c3aed, #6d28d9);
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(124, 58, 237, 0.4);
+}
+
+/* ── Classroom Stage ── */
+.ilc-classroom__stage {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 2rem 2.5rem;
+    overflow: auto;
+    z-index: 1;
+}
+
+/* ── Blackboard ── */
+.ilc-blackboard {
+    position: relative;
+    height: 50px;
+    border-radius: 14px;
+    border: 2px solid rgba(139, 92, 246, 0.15);
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(99, 102, 241, 0.05));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    margin-bottom: 2rem;
+    box-shadow:
+        0 0 30px rgba(139, 92, 246, 0.06),
+        inset 0 0 20px rgba(139, 92, 246, 0.04);
+}
+
+.ilc-blackboard__glow {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(139, 92, 246, 0.12) 30%,
+        rgba(167, 139, 250, 0.15) 50%,
+        rgba(139, 92, 246, 0.12) 70%,
+        transparent 100%);
+    animation: ilc-shimmer 4s ease-in-out infinite;
+}
+
+.ilc-blackboard__text {
+    color: rgba(255,255,255,0.25);
+    font-size: 0.68rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.45em;
+    z-index: 1;
+}
+
+.ilc-blackboard__reflection {
+    position: absolute;
+    bottom: -6px;
+    left: 25%;
+    right: 25%;
+    height: 5px;
+    background: rgba(139, 92, 246, 0.2);
+    border-radius: 50%;
+    filter: blur(4px);
+}
+
+/* ── Columns Wrapper ── */
+.ilc-columns-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+    min-width: max-content;
+}
+
+/* ── Column Labels ── */
+.ilc-col-labels {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+}
+
+.ilc-col-labels--dual {
+    gap: 36px;
+}
+
+.ilc-col-label {
+    width: 72px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    font-size: 0.82rem;
+    color: rgba(167, 139, 250, 0.7);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    background: rgba(139, 92, 246, 0.06);
+    border: 1px solid rgba(139, 92, 246, 0.12);
+    border-radius: 8px;
+}
+
+/* Widen column labels in dual mode */
+.ilc-col-label--dual {
+    width: 140px;
+}
+
+/* ── Columns Container ── */
+.ilc-columns {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 24px;
+    flex-wrap: nowrap;
+    min-width: max-content;
+}
+
+.ilc-columns--dual {
+    gap: 36px;
+}
+
+.ilc-classroom__no-cols {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255,255,255,0.08);
+    padding: 4rem 0;
+    gap: 0.75rem;
+}
+
+.ilc-classroom__no-cols p {
+    font-size: 0.72rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin: 0;
+}
+
+/* ── Column ── */
+.ilc-column {
+    display: flex;
+    flex-direction: column;
+}
+
+.ilc-column--single {
+    width: 72px;
+}
+
+.ilc-column--dual {
+    width: 140px;
+}
+
+.ilc-column__inner {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 8px;
+    background: linear-gradient(180deg,
+        rgba(139, 92, 246, 0.06) 0%,
+        rgba(99, 102, 241, 0.04) 50%,
+        rgba(139, 92, 246, 0.06) 100%);
+    border: 1px solid rgba(139, 92, 246, 0.1);
+    border-radius: 16px;
+    box-shadow:
+        inset 0 0 16px rgba(139, 92, 246, 0.04),
+        0 4px 20px rgba(0,0,0,0.15);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BENCH STYLES — Paired seat container
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.ilc-bench {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    padding: 5px 6px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(139, 92, 246, 0.06);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ilc-bench--dual {
+    justify-content: space-between;
+    gap: 0;
+    padding: 6px 8px;
+    background: linear-gradient(135deg, rgba(30, 27, 75, 0.5), rgba(49, 46, 129, 0.25));
+    border: 1px solid rgba(139, 92, 246, 0.1);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+.ilc-bench--dual:hover {
+    transform: translateY(-2px);
+    box-shadow:
+        0 4px 16px rgba(139, 92, 246, 0.15),
+        0 0 24px rgba(139, 92, 246, 0.06);
+    border-color: rgba(139, 92, 246, 0.2);
+    background: linear-gradient(135deg, rgba(30, 27, 75, 0.65), rgba(49, 46, 129, 0.35));
+}
+
+.ilc-bench--all-disabled {
+    opacity: 0.45;
+    background: rgba(239, 68, 68, 0.06) !important;
+    border-color: rgba(239, 68, 68, 0.12) !important;
+}
+
+.ilc-bench--edit-mode {
+    cursor: pointer;
+}
+
+/* ── Bench Divider (the center line between L and R seats) ── */
+.ilc-bench__divider {
+    width: 1px;
+    height: 22px;
+    background: linear-gradient(180deg, transparent, rgba(167, 139, 250, 0.25), transparent);
+    margin: 0 4px;
+    flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SEAT STYLES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.ilc-seat {
+    height: 34px;
+    border-radius: 8px;
+    border: 1.5px solid transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: default;
+    transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    background: transparent;
+    padding: 0;
+}
+
+/* In single-column mode, seats take full width */
+.ilc-column--single .ilc-seat {
+    width: 100%;
+}
+
+/* In dual-bench mode, each seat takes ~half the bench */
+.ilc-bench--dual .ilc-seat {
+    flex: 1;
+    min-width: 44px;
+}
+
+.ilc-seat__label {
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+}
+
+/* Active seat */
+.ilc-seat--active {
+    background: linear-gradient(135deg, rgba(79, 70, 229, 0.4), rgba(99, 102, 241, 0.22));
+    border-color: rgba(129, 140, 248, 0.25);
+    color: rgba(199, 210, 254, 0.95);
+    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.12);
+}
+
+.ilc-seat--active:hover {
+    box-shadow: 0 0 14px rgba(139, 92, 246, 0.3);
+    border-color: rgba(167, 139, 250, 0.45);
+    background: linear-gradient(135deg, rgba(79, 70, 229, 0.55), rgba(99, 102, 241, 0.32));
+}
+
+/* Disabled seat */
+.ilc-seat--disabled {
+    background: rgba(239, 68, 68, 0.14);
+    border-color: rgba(239, 68, 68, 0.22);
+    color: rgba(239, 68, 68, 0.45);
+    opacity: 0.65;
+}
+
+/* Editable (toggle mode) seat */
+.ilc-seat--editable {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.28), rgba(167, 139, 250, 0.16));
+    border-color: rgba(167, 139, 250, 0.3);
+    color: rgba(221, 214, 254, 0.95);
+    cursor: pointer;
+    animation: ilc-seat-pulse 2.5s ease-in-out infinite;
+}
+
+.ilc-seat--editable:hover {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.45), rgba(220, 38, 38, 0.3));
+    border-color: rgba(239, 68, 68, 0.5);
+    color: #fff;
+    transform: scale(1.05);
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.2);
+}
+
+/* ── Legend ── */
+.ilc-legend {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.5rem;
+    border-top: 1px solid rgba(255,255,255,0.04);
+    background: rgba(0,0,0,0.35);
+    z-index: 10;
+}
+
+.ilc-legend__items {
+    display: flex;
+    gap: 1.25rem;
+}
+
+.ilc-legend__item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.ilc-legend__item span {
+    font-size: 0.6rem;
+    color: rgba(255,255,255,0.35);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.ilc-legend__dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 4px;
+}
+
+.ilc-legend__dot--active {
+    background: #6366f1;
+    box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
+}
+
+.ilc-legend__dot--disabled {
+    background: #ef4444;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+.ilc-legend__hint {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: rgba(167, 139, 250, 0.4);
+}
+
+.ilc-legend__hint span {
+    font-size: 0.6rem;
+    font-weight: 600;
+    font-style: italic;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ANIMATIONS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@keyframes ilc-shimmer {
+    0%, 100% { opacity: 0.3; transform: translateX(-50%); }
+    50% { opacity: 1; transform: translateX(50%); }
+}
+
+@keyframes ilc-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+@keyframes ilc-seat-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+    50% { box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+    .ilc-classroom__stage {
+        padding: 1.25rem;
+        overflow-x: auto;
+        overflow-y: auto;
+    }
+
+    .ilc-columns {
+        gap: 14px;
+    }
+
+    .ilc-columns--dual {
+        gap: 20px;
+    }
+
+    .ilc-col-labels {
+        gap: 14px;
+    }
+
+    .ilc-column--single {
+        width: 54px;
+    }
+
+    .ilc-column--dual {
+        width: 110px;
+    }
+
+    .ilc-col-label {
+        width: 54px;
+        font-size: 0.68rem;
+    }
+
+    .ilc-seat {
+        height: 30px;
+    }
+
+    .ilc-bench--dual {
+        padding: 4px 5px;
+    }
+
+    .ilc-bench__divider {
+        height: 18px;
+    }
+
+    .ilc-toolbar {
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+    }
+
+    .ilc-legend {
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 0.6rem 1rem;
+    }
+
+    .ilc-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}

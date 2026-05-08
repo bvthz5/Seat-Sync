@@ -28,8 +28,8 @@ export const SeatingService = {
     getDepartments: async () => { const r = await api.get(`${PREFIX}/departments`); return r.data; },
 
     /** Get departments participating on selected day (all sessions) with student totals */
-    getExamDepartments: async (examDate: string, _session: string, seriesId?: number) => {
-        const params: Record<string, string | number> = { examDate };
+    getExamDepartments: async (examDate: string, session: string, seriesId?: number) => {
+        const params: Record<string, string | number> = { examDate, session };
         if (seriesId) params.seriesId = seriesId;
         const r = await api.get(`${PREFIX}/exam-departments`, { params });
         return r.data;

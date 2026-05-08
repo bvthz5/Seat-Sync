@@ -10,7 +10,7 @@ import { Program } from "../models/Program.js";
 import { ExamRegistration } from "../models/ExamRegistration.js";
 import { AcademicYear } from "../models/AcademicYear.js";
 import { Op, QueryTypes } from 'sequelize';
-import { ExamSeries } from '../models/index.js';
+import { ExamSeries, InternalExam, InternalExamDepartment } from '../models/index.js';
 import * as XLSX from 'xlsx';
 import { PDFParse } from 'pdf-parse';
 import { createWorker } from 'tesseract.js';
@@ -577,7 +577,7 @@ export class ExamController {
     // Get all exams with optional filtering
     static async getExams(req: Request, res: Response) {
         try {
-            const { search, status, startDate, endDate, department, seriesId } = req.query;
+            const { search, status, startDate, endDate, department, seriesId, session } = req.query;
 
             const whereClause: any = {};
             const subjectWhereClause: any = {};
@@ -600,8 +600,84 @@ export class ExamController {
                 subjectWhereClause.DepartmentID = department;
             }
 
+            let isInternal = false;
             if (seriesId) {
                 whereClause.ExamSeriesID = seriesId;
+                const seriesInfo = await ExamSeries.findByPk(seriesId as string);
+                if (seriesInfo && seriesInfo.ExamType === 'Internal') {
+                    isInternal = true;
+                }
+            }
+
+            if (session && session !== 'All') {
+                whereClause.Session = session;
+            }
+
+            if (isInternal) {
+                const ieWhere: any = { InternalExamSeriesID: seriesId };
+                if (search) {
+                    ieWhere[Op.or] = [
+                        { SubjectName: { [Op.like]: `%${search}%` } },
+                        { SubjectCode: { [Op.like]: `%${search}%` } }
+                    ];
+                }
+                if (session && session !== 'All') {
+                    ieWhere.Session = session;
+                }
+                if (startDate && endDate) {
+                    ieWhere.ExamDate = { [Op.between]: [startDate, endDate] };
+                }
+
+                const internalExams = await InternalExam.findAll({
+                    where: ieWhere,
+                    include: [{
+                        model: InternalExamDepartment,
+                        include: [{ model: Department, attributes: ['DepartmentName', 'DepartmentCode'] }]
+                    }],
+                    order: [['ExamDate', 'ASC']]
+                });
+
+                const now = new Date();
+                const transformed = internalExams.map(ie => {
+                    const data = ie.toJSON() as any;
+                    
+                    const depts = data.InternalExamDepartments || [];
+                    const deptName = depts.length > 0 ? depts.map((d: any) => d.Department?.DepartmentCode).join(', ') : 'ALL_BRANCHES';
+                    const fullDeptName = depts.length > 0 ? depts.map((d: any) => d.Department?.DepartmentName).join(', ') : 'All Branches';
+                    
+                    const examDate = new Date(data.ExamDate);
+                    const startHour = data.Session === 'FN' ? 10 : 14;
+                    const examStart = new Date(examDate);
+                    examStart.setHours(startHour, 0, 0, 0);
+                    const examEnd = new Date(examStart.getTime() + (data.Duration || 150) * 60 * 1000);
+
+                    let calcStatus = 'Scheduled';
+                    if (now >= examEnd) calcStatus = 'Completed';
+                    else if (now >= examStart && now < examEnd) calcStatus = 'In Progress';
+
+                    if (status && status !== 'All' && calcStatus !== status) return null;
+
+                    return {
+                        ExamID: data.InternalExamID,
+                        ExamName: data.SubjectName,
+                        ExamDate: data.ExamDate,
+                        Session: data.Session,
+                        Duration: data.Duration || 150,
+                        Status: calcStatus,
+                        Subject: {
+                            SubjectName: data.SubjectName,
+                            SubjectCode: data.SubjectCode,
+                            Department: {
+                                DepartmentName: fullDeptName,
+                                DepartmentCode: deptName
+                            }
+                        },
+                        Enrollment: 0,
+                        AuditStatus: 'Clean'
+                    };
+                }).filter(Boolean);
+
+                return res.json(transformed);
             }
 
             const exams = await Exam.findAll({
@@ -623,10 +699,22 @@ export class ExamController {
                         model: Subject,
                         where: subjectWhereClause,
                         attributes: ['SubjectName', 'SubjectCode', 'DepartmentID'],
-                        include: [{
-                            model: Department,
-                            attributes: ['DepartmentID', 'DepartmentName', 'DepartmentCode']
-                        }]
+                        include: [
+                            {
+                                model: Department,
+                                attributes: ['DepartmentID', 'DepartmentName', 'DepartmentCode']
+                            },
+                            {
+                                model: Semester,
+                                attributes: ['SemesterID', 'SemesterName', 'SemesterNumber'],
+                                include: [
+                                    {
+                                        model: Program,
+                                        attributes: ['ProgramID', 'ProgramName', 'ProgramCode']
+                                    }
+                                ]
+                            }
+                        ]
                     },
                     {
                         model: ExamSeries,
@@ -810,9 +898,18 @@ export class ExamController {
     static async deleteExam(req: Request, res: Response) {
         try {
             const { id } = req.params;
-            const exam = await Exam.findByPk(id as string);
+            let exam = await Exam.findByPk(id as string);
 
             if (!exam) {
+                const internalExam = await InternalExam.findByPk(id as string);
+                if (internalExam) {
+                    await sequelize.query('DELETE FROM InternalExamDepartments WHERE InternalExamID = :id', {
+                        replacements: { id: internalExam.InternalExamID },
+                        type: QueryTypes.DELETE
+                    });
+                    await internalExam.destroy();
+                    return res.json({ message: 'Exam deleted successfully' });
+                }
                 return res.status(404).json({ message: 'Exam not found' });
             }
 
@@ -949,6 +1046,23 @@ export class ExamController {
             }
 
             if (parsedSeriesId) {
+                const seriesInfo = await ExamSeries.findByPk(parsedSeriesId);
+                if (seriesInfo && seriesInfo.ExamType === 'Internal') {
+                    // It's an internal series. Manually clean up departments first to avoid FK errors.
+                    await sequelize.query(
+                        'DELETE FROM InternalExamDepartments WHERE InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
+                        {
+                            replacements: { seriesId: parsedSeriesId },
+                            type: QueryTypes.DELETE
+                        }
+                    );
+                    const deletedCount = await InternalExam.destroy({ where: { InternalExamSeriesID: parsedSeriesId } });
+                    return res.json({
+                        message: 'All exams deleted successfully',
+                        deletedCount
+                    });
+                }
+
                 await sequelize.query(
                     'DELETE FROM Attendance WHERE ExamID IN (SELECT ExamID FROM Exams WHERE ExamSeriesID = :seriesId)',
                     {
@@ -1006,15 +1120,39 @@ export class ExamController {
             const { seriesId } = req.query;
             const whereClause: any = {};
 
+            let isInternal = false;
             if (seriesId) {
                 whereClause.ExamSeriesID = seriesId;
+                const seriesInfo = await ExamSeries.findByPk(seriesId as string);
+                if (seriesInfo && seriesInfo.ExamType === 'Internal') {
+                    isInternal = true;
+                }
+            }
+
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+
+            if (isInternal) {
+                const ieWhere: any = { InternalExamSeriesID: seriesId };
+                const totalExams = await InternalExam.count({ where: ieWhere });
+                const completedExams = await InternalExam.count({
+                    where: { ...ieWhere, ExamDate: { [Op.lt]: todayStr } }
+                });
+                const upcomingExams = await InternalExam.count({
+                    where: { ...ieWhere, ExamDate: { [Op.gt]: todayStr } }
+                });
+                const activeToday = await InternalExam.count({
+                    where: { ...ieWhere, ExamDate: todayStr }
+                });
+                return res.json({
+                    total: totalExams,
+                    completed: completedExams,
+                    upcoming: upcomingExams,
+                    activeToday: activeToday
+                });
             }
 
             const totalExams = await Exam.count({ where: whereClause });
-
-            // Use date-based logic matching the dynamic status in getExams
-            const today = new Date();
-            const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
 
             // Completed = exam date is before today
             const completedExams = await Exam.count({
@@ -1216,82 +1354,82 @@ export class ExamController {
 
             for (const row of data) {
                 try {
-                    // Flexible Column Mapping - support both old and new timetable formats
-                    const deptRaw = row['DepartmentCode'] || row['Department Code'] || row['Department'] || row['Branches'] || row['Branch'];
-                    const codeRaw = row['SubjectCode'] || row['Subject Code'] || row['Code'] || row['Course Code'];
-                    const nameRaw = row['SubjectName'] || row['Subject Name'] || row['Course Name'] || row['Examination Name'] || row['ExaminationName'] || row['Name'];
-                    const dateRaw = row['ExamDate'] || row['Date'];
-                    // New format has Time (e.g., "9:30 AM – 12:00 PM") and Session (e.g., "FN") columns
-                    const timeRaw = row['Time'] || row['Session'];
-                    const sessionRaw = row['Session'];
-                    const importedExamName = row['ExamName'] || row['Exam Name'] || row['Examination Name'] || row['ExaminationName'];
-                    const durationRaw = row['Duration'];
+                    // Robust Column Mapping - handle various naming conventions
+                    const getVal = (keys: string[]) => {
+                        for (const k of keys) {
+                            if (row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== '') return row[k];
+                        }
+                        // Try lowercase variants
+                        const lowerKeys = keys.map(k => k.toLowerCase().replace(/\s+/g, ''));
+                        for (const actualKey of Object.keys(row)) {
+                            const normalizedActual = actualKey.toLowerCase().replace(/\s+/g, '');
+                            if (lowerKeys.includes(normalizedActual)) {
+                                if (row[actualKey] !== undefined && row[actualKey] !== null && String(row[actualKey]).trim() !== '') return row[actualKey];
+                            }
+                        }
+                        return undefined;
+                    };
+
+                    const deptRaw = getVal(['Branches', 'Branch', 'DepartmentCode', 'Department Code', 'Department', 'Dept']);
+                    const codeRaw = getVal(['Course Code', 'SubjectCode', 'Subject Code', 'Code', 'CourseCode']);
+                    const nameRaw = getVal(['Course Name', 'SubjectName', 'Subject Name', 'Examination Name', 'ExaminationName', 'Name', 'CourseName']);
+                    const dateRaw = getVal(['Date', 'ExamDate', 'Exam Date']);
+                    const timeRaw = getVal(['Time', 'Session', 'ExamTime']);
+                    const sessionRaw = getVal(['Session']);
+                    const durationRaw = getVal(['Duration']);
 
                     const code = codeRaw ? String(codeRaw).trim() : null;
                     const subjectName = nameRaw ? String(nameRaw).trim() : (code || 'Unknown Subject');
 
                     if (!code || !dateRaw) {
-                        if (!code && !dateRaw) continue;
-                        throw new Error(`Missing required fields (Code/Date) for row: ${JSON.stringify(row)}`);
+                        if (!code && !dateRaw) continue; // Skip empty rows silently
+                        throw new Error(`Row missing Code or Date. Code: ${code}, Date: ${dateRaw}`);
                     }
 
                     const cleanCode = String(code).trim();
-
-                    // Parse Date
                     const examDate = parseExamDateValue(dateRaw);
-                    const dateStrRaw: string = String(dateRaw).trim();
 
                     if (!examDate) {
-                        throw new Error(`Invalid Date format for '${cleanCode}': ${dateStrRaw}. Expected DD/MM/YYYY or YYYY-MM-DD.`);
+                        throw new Error(`Invalid Date format for '${cleanCode}': ${dateRaw}`);
                     }
-                    const formattedDate: string = formatDateForDb(examDate);
+                    const formattedDate = formatDateForDb(examDate);
 
                     // Parse Session and Duration
                     let session = 'FN';
-                    let duration: number = typeof durationRaw === 'number' ? durationRaw : 180;
+                    let duration: number = typeof durationRaw === 'number' ? durationRaw : 150;
 
-                    // If Session column exists (new format), use it directly
-                    if (sessionRaw && (sessionRaw === 'FN' || sessionRaw === 'AN')) {
-                        session = sessionRaw;
+                    const explicitSession = sessionRaw ? String(sessionRaw).trim().toUpperCase() : '';
+                    if (explicitSession === 'FN' || explicitSession === 'AN') {
+                        session = explicitSession;
                     } else if (timeRaw) {
-                        // Otherwise infer from Time column
-                        const timeStr: string = String(timeRaw).toLowerCase();
-                        if (timeStr === 'fn' || timeStr === 'an') {
-                            session = timeStr.toUpperCase();
-                        } else if (timeStr.includes('am') || timeStr.includes('pm') || timeStr.includes('-')) {
-                            // Extract start time from "9:30 AM – 12:00 PM" format
-                            const rawParts: string[] = timeStr.split(/[-–]/);
-                            if (rawParts.length > 0) {
-                                const part0 = rawParts[0];
-                                const startPart: string = part0 ? part0.trim() : '';
-                                if (startPart) {
-                                    const hourMatch = startPart.match(/(\d+)/);
-                                    if (hourMatch) {
-                                        let h: number = parseInt(hourMatch[1] || '0');
-                                        const isPM: boolean = startPart.includes('pm');
-                                        const isAM: boolean = startPart.includes('am');
-                                        if (isPM) {
-                                            if (h < 12) h += 12;
-                                            session = 'AN';
-                                        } else if (isAM) {
-                                            session = 'FN';
-                                        } else {
-                                            // No AM/PM explicitly, infer from hour
-                                            if (h >= 12) session = 'AN';
-                                            else if (h >= 1 && h <= 6) session = 'AN';
-                                            else session = 'FN';
-                                        }
-                                    }
+                        const timeStr = String(timeRaw).toLowerCase();
+                        if (timeStr.includes('fn')) session = 'FN';
+                        else if (timeStr.includes('an')) session = 'AN';
+                        else if (timeStr.includes('am') || timeStr.includes('pm') || timeStr.includes('-') || timeStr.includes('–') || timeStr.includes('—')) {
+                            const parts = timeStr.split(/[-–—]/);
+                            const startPart = (parts[0] || '').trim();
+                            if (startPart.includes('pm')) {
+                                session = 'AN';
+                            } else if (startPart.includes('am')) {
+                                session = 'FN';
+                            } else if (startPart) {
+                                const hourMatch = startPart.match(/(\d+)/);
+                                if (hourMatch && hourMatch[1]) {
+                                    const h = parseInt(hourMatch[1]);
+                                    if (h >= 12 || (h >= 1 && h <= 6)) session = 'AN';
+                                    else session = 'FN';
                                 }
                             }
                         }
                     }
-                    
-                    // Infer duration from Time column if present (typically 2.5 hours = 150 mins)
+
+                    // Auto-infer duration if missing
                     if (timeRaw && typeof durationRaw === 'undefined') {
-                        const timeStr: string = String(timeRaw).toLowerCase();
-                        if (timeStr.includes('12:00') || timeStr.includes('12:30') || timeStr.includes('4:00')) {
-                            duration = 150; // Most exams are 2.5 hours
+                        const t = String(timeRaw).toLowerCase();
+                        if (t.includes('12:00') || t.includes('12:30') || t.includes('4:00')) {
+                            duration = 150; 
+                        } else if (t.includes('1:00') || t.includes('4:30') || t.includes('12:30')) {
+                            duration = 180;
                         }
                     }
 
@@ -1337,13 +1475,74 @@ export class ExamController {
                             }
                         }
 
+                        // 1.5 Resolve Program and Semester based on row data
+                        let rowSemesterID: number = defaultSemesterID;
+                        
+                        // Robustly find column values regardless of slight header variations
+                        const getRowVal = (keys: string[]) => {
+                            for (const key of keys) {
+                                if (row[key] !== undefined) return row[key];
+                            }
+                            const lowerKeys = keys.map(k => k.toLowerCase().replace(/\s+/g, ''));
+                            for (const actualKey of Object.keys(row)) {
+                                if (lowerKeys.includes(actualKey.toLowerCase().replace(/\s+/g, ''))) {
+                                    return row[actualKey];
+                                }
+                            }
+                            return undefined;
+                        };
+
+                        const examTypeRaw = getRowVal(['Exam Type', 'ExamType', 'Semester', 'Exam_Type']);
+                        const programmeRaw = getRowVal(['Programme', 'Program']);
+
+                        if (programmeRaw || examTypeRaw) {
+                            const progName = programmeRaw ? String(programmeRaw).trim() : 'General Program';
+                            
+                            let prog = await Program.findOne({
+                                where: { ProgramName: progName, DepartmentID: departmentID }
+                            });
+                            
+                            if (!prog) {
+                                const baseCode = progName.replace(/\s+/g, '-').substring(0, 15).toUpperCase();
+                                const progCode = `${baseCode}-${departmentID}`;
+                                prog = await Program.create({
+                                    ProgramName: progName,
+                                    ProgramCode: progCode,
+                                    DepartmentID: departmentID,
+                                    IsActive: true
+                                } as any);
+                            }
+                            
+                            const semName = examTypeRaw ? String(examTypeRaw).trim() : 'Semester 1';
+                            let semNum = 1;
+                            const semMatch = semName.match(/[sS](\d+)/);
+                            if (semMatch && semMatch[1]) {
+                                semNum = parseInt(semMatch[1], 10);
+                            }
+                            
+                            let [sem] = await Semester.findOrCreate({
+                                where: { 
+                                    SemesterName: semName,
+                                    ProgramID: prog.ProgramID
+                                },
+                                defaults: {
+                                    SemesterName: semName,
+                                    SemesterNumber: semNum,
+                                    ProgramID: prog.ProgramID,
+                                    IsActive: true
+                                } as any
+                            });
+                            
+                            rowSemesterID = sem.SemesterID;
+                        }
+
                         // 2. Resolve Subject (Find or Create) per dept
                         let subjectID: number;
                         const subjectKey = `${cleanCode}::${departmentID}`;
                         const cachedSubjID = subjectCache.get(subjectKey);
 
                         // Defensive check: Ensure SemesterID is valid
-                        if (!defaultSemesterID || isNaN(Number(defaultSemesterID))) {
+                        if (!rowSemesterID || isNaN(Number(rowSemesterID))) {
                             const errMsg = `Row ${data.indexOf(row) + 2}: Missing or invalid SemesterID for Subject '${cleanCode}' (DepartmentID: ${departmentID}). Subject not created.`;
                             console.error(errMsg);
                             errors.push(errMsg);
@@ -1352,6 +1551,12 @@ export class ExamController {
 
                         if (cachedSubjID !== undefined) {
                             subjectID = cachedSubjID;
+                            
+                            // Optionally update the subject's semester if it was assigned to default before
+                            await Subject.update(
+                                { SemesterID: rowSemesterID } as any,
+                                { where: { SubjectID: subjectID } }
+                            );
                         } else {
                             const [subj] = await Subject.findOrCreate({
                                 where: {
@@ -1362,48 +1567,55 @@ export class ExamController {
                                     SubjectCode: cleanCode,
                                     SubjectName: subjectName,
                                     DepartmentID: departmentID,
-                                    SemesterID: defaultSemesterID
+                                    SemesterID: rowSemesterID
                                 } as any
                             });
                             subjectID = subj.SubjectID;
                             subjectCache.set(subjectKey, subjectID);
+                            
+                            // If the subject already existed but was found by findOrCreate (race condition), update it
+                            if (!subj.isNewRecord && subj.SemesterID !== rowSemesterID) {
+                                await subj.update({ SemesterID: rowSemesterID } as any);
+                            }
                         }
 
                         // 3. Upsert exam for this subject/department
-                        // 3. Upsert exam for this subject/department
-                        const whereClause: any = { SubjectID: subjectID };
+                        // We use SubjectID, Date, and Session as the unique identifier for an exam in a series.
+                        // This prevents different subjects or different sessions from overwriting each other.
+                        const whereClause: any = { 
+                            SubjectID: subjectID,
+                            ExamDate: formattedDate,
+                            Session: session.toUpperCase()
+                        };
+                        
                         if (seriesId) {
                             whereClause.ExamSeriesID = parseInt(String(seriesId));
-                        } else {
-                            whereClause.ExamDate = formattedDate;
-                            whereClause.Session = session;
                         }
 
                         const existingExam = await Exam.findOne({
                             where: whereClause
                         });
 
+                        const examStatus = new Date(formattedDate) < new Date() ? 'Completed' : 'Scheduled';
+
                         if (existingExam) {
                             await existingExam.update({
-                                ExamName: importedExamName || existingExam.ExamName,
-                                ExamDate: formattedDate as any,
-                                Session: session.toUpperCase(),
-                                Duration: durationRaw ? parseInt(String(durationRaw)) : existingExam.Duration,
+                                ExamName: subjectName,
+                                Duration: duration,
                                 ExamSeriesID: seriesId ? parseInt(String(seriesId)) : (existingExam.ExamSeriesID || null),
-                                Status: new Date(formattedDate as any) < new Date() ? 'Completed' : 'Scheduled'
+                                Status: examStatus,
+                                UpdatedAt: new Date()
                             } as any);
                             updatedCount++;
                         } else {
-                            const rawTitle = req.body.title;
-                            const defaultPrefix: string = rawTitle ? String(rawTitle) : 'Exam';
                             await Exam.create({
                                 SubjectID: subjectID,
                                 ExamSeriesID: seriesId ? parseInt(String(seriesId)) : undefined,
-                                ExamName: importedExamName || `${defaultPrefix} - ${subjectName}`,
+                                ExamName: subjectName,
                                 ExamDate: formattedDate as any,
                                 Session: session.toUpperCase(),
-                                Duration: durationRaw ? parseInt(String(durationRaw)) : 180,
-                                Status: new Date(formattedDate as any) < new Date() ? 'Completed' : 'Scheduled'
+                                Duration: duration,
+                                Status: examStatus
                             } as any);
                             successCount++;
                         }
