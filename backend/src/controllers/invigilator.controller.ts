@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
-import { User, Invigilator, Faculty, InvigilatorAssignment, Exam, UserProfile, SeatAllocation, Seat, Room, InvigilatorRequest, ActivityLog, NotificationRecipient, Block, Floor, Attendance, Student, Subject } from "../models/index.js";
+import { User, Invigilator, Faculty, InvigilatorAssignment, Exam, UserProfile, SeatAllocation, Seat, Room, InvigilatorRequest, ActivityLog, NotificationRecipient, Block, Floor, Attendance, Student, Subject, IncidentReport, DutySwap } from "../models/index.js";
+import { Notification } from "../models/Notification.js";
 import { Op } from "sequelize";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
@@ -61,7 +62,7 @@ export const getAllInvigilators = async (req: Request, res: Response) => {
                 Department: (facultyData as any).Department,
                 totalExams: facultyAssignments.length,
                 isOnDuty: facultyAssignments.some(a => {
-                    const examDate = a.Exam?.ExamDate 
+                    const examDate = a.Exam?.ExamDate
                         ? (typeof a.Exam.ExamDate === 'string' ? a.Exam.ExamDate : (a.Exam.ExamDate as Date).toISOString().split('T')[0])
                         : "";
                     return examDate === today;
@@ -86,8 +87,8 @@ export const toggleInvigilatorFlag = async (req: Request, res: Response) => {
         if (!faculty) return res.status(404).json({ message: "Faculty not found" });
 
         // Find associated Invigilator record by matching StaffCode to User Email
-        const user = await User.findOne({ 
-            where: { 
+        const user = await User.findOne({
+            where: {
                 [Op.or]: [
                     { Email: faculty.StaffCode },
                     { Email: { [Op.like]: `${faculty.StaffCode}%` } }
@@ -156,7 +157,7 @@ export const createInvigilator = async (req: Request, res: Response) => {
 
         const staffCodeStr = (StaffCode || FacultyID) ? String(StaffCode || FacultyID).trim() : emailStr;
 
-        
+
         // 1. Check duplicate User
         const existingUser = await User.findOne({ where: { Email: emailStr }, transaction: t });
         if (existingUser) {
@@ -182,7 +183,7 @@ export const createInvigilator = async (req: Request, res: Response) => {
             ProfileImageURL: undefined,
             IsEligible: true
         };
-        
+
         if (FacultyID) {
             facultyData.FacultyID = Number(FacultyID);
         }
@@ -221,16 +222,16 @@ export const deleteInvigilator = async (req: Request, res: Response) => {
         }
 
         // 1. Delete assignments first (FK constraint)
-        await InvigilatorAssignment.destroy({ 
+        await InvigilatorAssignment.destroy({
             where: { InvigilatorID: faculty.FacultyID },
-            transaction: t 
+            transaction: t
         });
 
         // 2. Delete User and Invigilator records if they exist
         // We link them by Email/StaffCode as per import logic
-        const user = await User.findOne({ 
+        const user = await User.findOne({
             where: { Email: faculty.StaffCode || "" },
-            transaction: t 
+            transaction: t
         });
 
         if (user) {
@@ -318,7 +319,7 @@ export const bulkImportInvigilators = async (req: Request, res: Response) => {
             // Use a per-row transaction to ensure atomicity for each staff member
             // without poisoning the entire import if one fails.
             const rowTransaction = await sequelize.transaction();
-            
+
             try {
                 const nameStr = Name ? String(Name).trim() : "";
                 const deptStr = deptValue ? String(deptValue).trim() : "";
@@ -381,7 +382,7 @@ export const bulkImportInvigilators = async (req: Request, res: Response) => {
                 if (finalFacultyID) {
                     faculty = await Faculty.findByPk(finalFacultyID, { transaction: rowTransaction });
                 }
-                
+
                 if (!faculty) {
                     faculty = await Faculty.findOne({ where: { StaffCode: finalStaffCode }, transaction: rowTransaction });
                 }
@@ -404,25 +405,25 @@ export const bulkImportInvigilators = async (req: Request, res: Response) => {
                     await faculty.save({ transaction: rowTransaction });
                 }
 
-            // 3. Handle Invigilator (Metadata)
-            // Note: FacultyID is no longer stored in the Invigilators table.
-            // Linkage is now maintained via the User-Faculty relationship (StaffCode match).
-            let invigilator = await Invigilator.findOne({ 
-                where: { UserID: user.UserID }, 
-                transaction: rowTransaction 
-            });
+                // 3. Handle Invigilator (Metadata)
+                // Note: FacultyID is no longer stored in the Invigilators table.
+                // Linkage is now maintained via the User-Faculty relationship (StaffCode match).
+                let invigilator = await Invigilator.findOne({
+                    where: { UserID: user.UserID },
+                    transaction: rowTransaction
+                });
 
-            if (!invigilator) {
-                invigilator = await Invigilator.create({
-                    UserID: user.UserID,
-                    IsEligible: true,
-                    IsFlagged: false
-                }, { transaction: rowTransaction });
-            } else {
-                // Just ensure the UserID is set correctly
-                invigilator.UserID = user.UserID;
-                await invigilator.save({ transaction: rowTransaction });
-            }
+                if (!invigilator) {
+                    invigilator = await Invigilator.create({
+                        UserID: user.UserID,
+                        IsEligible: true,
+                        IsFlagged: false
+                    }, { transaction: rowTransaction });
+                } else {
+                    // Just ensure the UserID is set correctly
+                    invigilator.UserID = user.UserID;
+                    await invigilator.save({ transaction: rowTransaction });
+                }
 
                 await rowTransaction.commit();
                 created.push(faculty.FacultyID);
@@ -433,14 +434,14 @@ export const bulkImportInvigilators = async (req: Request, res: Response) => {
                     try { await rowTransaction.rollback(); } catch (err) { /* ignore rollback errors */ }
                 }
                 console.error(`Row ${i + 2} import error:`, rowError);
-                
+
                 let reason = rowError.message || "Unknown error";
                 if (rowError.name === 'SequelizeUniqueConstraintError') {
                     reason = "Duplicate entry found (Conflict in UserID or FacultyID)";
                 } else if (rowError.original && rowError.original.message) {
                     reason = rowError.original.message;
                 }
-                
+
                 skipped.push({ row: i + 2, reason });
             }
         }
@@ -462,7 +463,7 @@ export const clearAllFaculties = async (req: Request, res: Response) => {
     try {
         // 1. Clear assignments first (FK constraint)
         await InvigilatorAssignment.destroy({ where: {}, transaction: t });
-        
+
         // 2. Clear Invigilator links and User data
         // We find all users with role 'invigilator' to clear their logs/notifications
         const invigilatorUsers = await User.findAll({ where: { Role: "invigilator" }, transaction: t });
@@ -477,11 +478,11 @@ export const clearAllFaculties = async (req: Request, res: Response) => {
 
         // 3. Clear Faculties
         // Use destroy without truncate:true as it works better with transactions and FKs
-        const count = await Faculty.destroy({ 
-            where: {}, 
-            transaction: t 
+        const count = await Faculty.destroy({
+            where: {},
+            transaction: t
         });
-        
+
         await t.commit();
         res.json({ message: "All faculty records and associated accounts cleared", deleted: count });
     } catch (error: any) {
@@ -544,10 +545,10 @@ export const verifyInvigilatorActivationToken = async (req: Request, res: Respon
             return res.status(400).json({ message: "Invalid or expired activation token" });
         }
 
-        res.json({ 
-            valid: true, 
-            email: user.Email, 
-            name: user.FullName 
+        res.json({
+            valid: true,
+            email: user.Email,
+            name: user.FullName
         });
     } catch (error: any) {
         console.error("Error verifying activation token:", error);
@@ -601,14 +602,14 @@ export const requestInvigilatorAccess = async (req: Request, res: Response) => {
         }
 
         // Check if request already exists
-        const existingRequest = await InvigilatorRequest.findOne({ 
-            where: { 
+        const existingRequest = await InvigilatorRequest.findOne({
+            where: {
                 [Op.or]: [
                     { Email },
                     { FacultyID }
                 ],
-                Status: "PENDING" 
-            } 
+                Status: "PENDING"
+            }
         });
         if (existingRequest) {
             return res.status(400).json({ message: "A pending request with this email or Faculty ID already exists" });
@@ -808,7 +809,7 @@ export const autoAssignInvigilators = async (req: Request, res: Response) => {
 
         const staff = await Faculty.findAll({ where: { IsEligible: true } });
         const allAssignments = await InvigilatorAssignment.findAll();
-        
+
         const loadMap: Record<number, number> = {};
         allAssignments.forEach(a => {
             loadMap[a.InvigilatorID] = (loadMap[a.InvigilatorID] || 0) + 1;
@@ -822,7 +823,7 @@ export const autoAssignInvigilators = async (req: Request, res: Response) => {
         for (let i = 0; i < requiredHallIds.length; i++) {
             const hallId = Number(requiredHallIds[i]);
             const staffMember = sortedStaff.find(s => !usedStaffIds.has(s.FacultyID));
-            
+
             if (staffMember) {
                 proposedAssignments.push({
                     hallId: hallId,
@@ -866,7 +867,7 @@ export const saveInvigilatorAssignments = async (req: Request, res: Response) =>
         }
 
         const examIdByRoom = new Map<number, number>();
-        
+
         for (const exam of exams) {
             const allocations = await SeatAllocation.findAll({
                 where: { ExamID: exam.ExamID },
@@ -954,7 +955,7 @@ export const getInvigilatorDashboardData = async (req: Request, res: Response) =
     try {
         const userPayload = (req as any).user;
         const userId = userPayload?.UserID;
-        
+
         console.log(`[DASHBOARD_DEBUG] Request received. UserID: ${userId}, Email: ${userPayload?.Email}, Role: ${userPayload?.Role}`);
 
 
@@ -962,7 +963,7 @@ export const getInvigilatorDashboardData = async (req: Request, res: Response) =
             console.error("[DASHBOARD_DEBUG] No userId found in request. Possible token payload issue.");
             return res.status(401).json({ message: "Unauthorized: No user identifier found in token." });
         }
-        
+
         const user = await User.findByPk(userId, {
             include: [{
                 model: Invigilator
@@ -980,28 +981,33 @@ export const getInvigilatorDashboardData = async (req: Request, res: Response) =
         const emailPrefix = email?.split('@')[0];
         const fullName = user.FullName?.trim();
 
-        const faculty = await Faculty.findOne({
-            where: {
-                [Op.or]: [
-                    { StaffCode: email || undefined },
-                    { StaffCode: emailPrefix || undefined },
-                    { Name: { [Op.like]: fullName || "" } },
-                    { StaffCode: { [Op.like]: emailPrefix + '%' } }
-                ]
-            }
-        });
+        let faculty = null;
 
-        console.log("DEBUG: Faculty found:", faculty?.FacultyID);
+        // Build search conditions dynamically to avoid undefined values in Op.or
+        const searchConditions: any[] = [];
+        if (email) searchConditions.push({ StaffCode: email });
+        if (emailPrefix) {
+            searchConditions.push({ StaffCode: emailPrefix });
+            searchConditions.push({ StaffCode: { [Op.like]: emailPrefix + '%' } });
+        }
+        if (fullName) searchConditions.push({ Name: { [Op.like]: fullName } });
+
+        if (searchConditions.length > 0) {
+            faculty = await Faculty.findOne({
+                where: { [Op.or]: searchConditions }
+            });
+        }
 
         if (!faculty) {
-            faculty = await Faculty.findOne({
-                where: {
-                    [Op.or]: [
-                        { StaffCode: user.Email },
-                        { Name: user.FullName || "" }
-                    ]
-                }
-            });
+            const secondaryConditions: any[] = [];
+            if (user.Email) secondaryConditions.push({ StaffCode: user.Email });
+            if (user.FullName) secondaryConditions.push({ Name: user.FullName });
+
+            if (secondaryConditions.length > 0) {
+                faculty = await Faculty.findOne({
+                    where: { [Op.or]: secondaryConditions }
+                });
+            }
         }
 
         if (!faculty) {
@@ -1021,14 +1027,14 @@ export const getInvigilatorDashboardData = async (req: Request, res: Response) =
             include: [
                 {
                     model: Exam,
-                    where: { ExamDate: { [Op.gte]: today } }
+                    include: [{ model: Subject }]
                 },
-                { 
+                {
                     model: Room,
                     include: [{ model: Block }]
                 }
             ],
-            order: [[Exam, 'ExamDate', 'ASC'], [Exam, 'Session', 'ASC']]
+            order: [[Exam, 'ExamDate', 'DESC'], [Exam, 'Session', 'ASC']]
         });
 
         // 3. Get all time assignments for metrics
@@ -1081,9 +1087,54 @@ export const getInvigilatorDashboardData = async (req: Request, res: Response) =
                     if (currentTimeVal >= 13 * 60 + 0 && currentTimeVal <= 16 * 60 + 30) status = "In Progress";
                     else if (currentTimeVal > 16 * 60 + 30) status = "Completed";
                 }
+            } else if (examDate < today) {
+                status = "Completed";
             } else if (examDate > today) {
                 status = "Upcoming";
             }
+
+            let isHallRevealed = true;
+            if (examDate > today) {
+                isHallRevealed = false;
+            } else if (examDate === today) {
+                if (d.Exam?.Session === "FN" && currentTimeVal < 8 * 60 + 30) {
+                    isHallRevealed = false;
+                } else if (d.Exam?.Session === "AN" && currentTimeVal < 12 * 60 + 30) {
+                    isHallRevealed = false;
+                }
+            }
+
+            // Check if attendance was marked
+            const attendanceMarked = await Attendance.count({
+                where: { ExamID: d.ExamID },
+                include: [{
+                    model: Student,
+                    required: true,
+                    include: [{
+                        model: SeatAllocation,
+                        where: { ExamID: d.ExamID },
+                        required: true,
+                        include: [{
+                            model: Seat,
+                            where: { RoomID: d.RoomID },
+                            required: true
+                        }]
+                    }]
+                }]
+            });
+
+            let isReliefDuty = false;
+            try {
+                const reliefCheck = await DutySwap.findOne({
+                    where: {
+                        ExamID: d.ExamID,
+                        RoomID: d.RoomID,
+                        SubstituteID: faculty.FacultyID,
+                        Status: "APPROVED"
+                    }
+                });
+                isReliefDuty = !!reliefCheck;
+            } catch (_) { }
 
             formattedDuties.push({
                 id: d.ExamID,
@@ -1091,18 +1142,58 @@ export const getInvigilatorDashboardData = async (req: Request, res: Response) =
                 session: d.Exam?.Session || "FN",
                 date: examDate,
                 roomID: d.RoomID,
-                room: d.Room?.RoomCode || `Room ${d.RoomID}`,
-                block: (d.Room as any)?.Block?.BlockName || "Main Block",
+                room: isHallRevealed ? (d.Room?.RoomCode || `Room ${d.RoomID}`) : "Locked",
+                block: isHallRevealed ? ((d.Room as any)?.Block?.BlockName || "Main Block") : "Reveals 1hr before",
                 time: d.Exam?.Session === "FN" ? "9:30 - 12:30" : "13:30 - 16:30",
                 students: studentCount,
                 presentCount: presentCount,
-                status: status
+                status: status,
+                isHallRevealed: isHallRevealed,
+                isAttendanceMarked: attendanceMarked > 0,
+                isReliefDuty: isReliefDuty
             });
+        }
+
+        // 5. Get Swaps (gracefully handle if table not yet migrated)
+        let swaps: any[] = [];
+        try {
+            swaps = await DutySwap.findAll({
+                where: {
+                    [Op.or]: [
+                        { RequesterID: faculty.FacultyID },
+                        { SubstituteID: faculty.FacultyID }
+                    ]
+                },
+                include: [
+                    { model: Exam },
+                    { model: Room },
+                    { model: Faculty, as: 'Requester' },
+                    { model: Faculty, as: 'Substitute' }
+                ],
+                order: [['CreatedAt', 'DESC']]
+            });
+        } catch (swapErr: any) {
+            console.warn("DutySwaps table not ready yet:", swapErr.message);
+        }
+
+        // 6. Get Incidents (gracefully handle if table not yet migrated)
+        let incidents: any[] = [];
+        try {
+            incidents = await IncidentReport.findAll({
+                where: { FacultyID: faculty.FacultyID },
+                include: [
+                    { model: Exam },
+                    { model: Room }
+                ],
+                order: [['CreatedAt', 'DESC']]
+            });
+        } catch (incErr: any) {
+            console.warn("IncidentReports table not ready yet:", incErr.message);
         }
 
         const todayExams = formattedDuties.filter(d => d.date === today);
         const activeDuty = todayExams.find(d => d.status === "In Progress") || todayExams.find(d => d.status === "Upcoming") || (formattedDuties.length > 0 ? formattedDuties[0] : null);
-        
+
         const totalStudentsToday = todayExams.reduce((acc, curr) => acc + curr.students, 0);
         const totalPresentToday = todayExams.reduce((acc, curr) => acc + curr.presentCount, 0);
 
@@ -1122,12 +1213,355 @@ export const getInvigilatorDashboardData = async (req: Request, res: Response) =
                 { title: "Attendance", value: `${totalPresentToday}/${totalStudentsToday}`, icon: "ClipboardCheck", color: "amber", label: "Today's Status" },
             ],
             duties: formattedDuties,
-            swaps: [] 
+            swaps: swaps.map((s: any) => ({
+                id: s.SwapID,
+                duty: `${s.Exam?.ExamName || 'Unknown Exam'} (${s.Room?.RoomCode || 'TBD'})`,
+                status: s.Status ? (s.Status.charAt(0).toUpperCase() + s.Status.slice(1).toLowerCase()) : 'Pending',
+                with: s.SubstituteID ? (s.Substitute?.Name || "Assigned") : "Pending Admin Assignment",
+                type: s.RequesterID === faculty.FacultyID ? "Outbound" : "Inbound",
+                reason: s.Reason,
+                date: s.CreatedAt
+            })),
+            incidents: incidents.map((i: any) => ({
+                id: i.ReportID,
+                exam: i.Exam?.ExamName,
+                room: i.Room?.RoomCode,
+                type: i.Type,
+                description: i.Description,
+                status: i.Status,
+                date: i.CreatedAt
+            }))
         });
 
     } catch (error: any) {
         console.error("Dashboard data error:", error);
-        res.status(500).json({ message: "Internal server error" });
+        res.status(500).json({
+            message: "Internal server error",
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+    }
+};
+
+/**
+ * Report an incident
+ */
+export const reportIncident = async (req: Request, res: Response) => {
+    try {
+        const { examId, roomId, type, description } = req.body;
+        const user = (req as any).user;
+
+        const dbUser = await User.findByPk(user.UserID);
+        if (!dbUser) return res.status(404).json({ message: "User not found" });
+        const email = dbUser.Email?.trim().toLowerCase();
+        const emailPrefix = email?.split('@')[0];
+        let faculty = await Faculty.findOne({
+            where: {
+                [Op.or]: [
+                    { StaffCode: email || '___invalid___' },
+                    { StaffCode: emailPrefix || '___invalid___' }
+                ]
+            }
+        });
+        if (!faculty) {
+            const invigilator = await Invigilator.findOne({ where: { UserID: user.UserID } } as any);
+            faculty = invigilator ? await Faculty.findByPk((invigilator as any).FacultyID) : null;
+        }
+        if (!faculty) return res.status(404).json({ message: "Faculty profile not found" });
+
+        const report = await IncidentReport.create({
+            ExamID: Number(examId),
+            RoomID: Number(roomId),
+            FacultyID: faculty.FacultyID,
+            Type: type || "General",
+            Description: description,
+            Status: "PENDING"
+        });
+
+        res.status(201).json({ message: "Incident reported successfully", report });
+    } catch (error: any) {
+        console.error("Report incident error:", error);
+        res.status(500).json({
+            message: "Failed to report incident",
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+    }
+};
+
+/**
+ * Request a duty swap
+ */
+export const requestSwap = async (req: Request, res: Response) => {
+    try {
+        const { examId, roomId, reason } = req.body;
+        const user = (req as any).user;
+
+        const dbUser = await User.findByPk(user.UserID);
+        if (!dbUser) return res.status(404).json({ message: "User not found" });
+        const email = dbUser.Email?.trim().toLowerCase();
+        const emailPrefix = email?.split('@')[0];
+        let faculty = await Faculty.findOne({
+            where: {
+                [Op.or]: [
+                    { StaffCode: email || '___invalid___' },
+                    { StaffCode: emailPrefix || '___invalid___' }
+                ]
+            }
+        });
+        if (!faculty) {
+            const invigilator = await Invigilator.findOne({ where: { UserID: user.UserID } } as any);
+            faculty = invigilator ? await Faculty.findByPk((invigilator as any).FacultyID) : null;
+        }
+        if (!faculty) return res.status(404).json({ message: "Faculty profile not found" });
+
+        const swap = await DutySwap.create({
+            ExamID: Number(examId),
+            RoomID: Number(roomId),
+            RequesterID: faculty.FacultyID,
+            SubstituteID: null,
+            Reason: reason,
+            Status: "PENDING"
+        });
+
+        res.status(201).json({ message: "Relief request sent to Exam Cell successfully", swap });
+    } catch (error: any) {
+        console.error("Request swap error:", error);
+        res.status(500).json({
+            message: "Failed to request swap",
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+    }
+};
+
+/**
+ * Get all duty swap requests (ADMIN)
+ */
+export const getAllSwaps = async (req: Request, res: Response) => {
+    try {
+        const { status } = req.query;
+        const where: any = {};
+        if (status) where.Status = status;
+
+        const swaps = await DutySwap.findAll({
+            where,
+            include: [
+                { model: Exam },
+                { model: Room },
+                { model: Faculty, as: 'Requester' }
+            ],
+            order: [['CreatedAt', 'DESC']]
+        });
+        res.json(swaps);
+    } catch (error: any) {
+        console.error("Get swaps error:", error);
+        res.status(500).json({ message: "Failed to fetch duty swap requests" });
+    }
+};
+
+/**
+ * Get available invigilators for a specific swap request (ADMIN)
+ */
+export const getAvailableInvigilatorsForSwap = async (req: Request, res: Response) => {
+    try {
+        const swapId = parseInt(String(req.params.id), 10);
+        if (isNaN(swapId)) return res.status(400).json({ message: "Invalid swap ID" });
+
+        const swap = await DutySwap.findByPk(swapId, { include: [{ model: Exam }] }) as any;
+        if (!swap || !swap.Exam) return res.status(404).json({ message: "Swap not found" });
+
+        const examDate = swap.Exam.ExamDate;
+        const session = swap.Exam.Session;
+
+        // Get all faculty IDs who ALREADY have a duty on this date and session
+        const busyFaculty = await InvigilatorAssignment.findAll({
+            include: [{
+                model: Exam,
+                where: { ExamDate: examDate, Session: session }
+            }]
+        });
+
+        const busyIds = busyFaculty.map((a: any) => a.InvigilatorID);
+
+        // Fetch all eligible faculty NOT in busyIds
+        const availableFaculty = await Faculty.findAll({
+            where: {
+                IsEligible: true,
+                ...(busyIds.length > 0 ? { FacultyID: { [Op.notIn]: busyIds } } : {})
+            },
+            attributes: ['FacultyID', 'Name', 'Department', 'Designation']
+        });
+
+        // Add a 'dutyCount' to help admin balance load
+        const result = await Promise.all(availableFaculty.map(async (fac) => {
+            const count = await InvigilatorAssignment.count({ where: { InvigilatorID: fac.FacultyID } });
+            return {
+                ...fac.toJSON(),
+                dutyCount: count
+            };
+        }));
+
+        res.json(result);
+    } catch (error: any) {
+        console.error("Get available for swap error:", error);
+        res.status(500).json({ message: "Failed to fetch available invigilators" });
+    }
+};
+
+/**
+ * Approve swap and assign substitute (ADMIN)
+ */
+export const approveSwap = async (req: Request, res: Response) => {
+    try {
+        const swapId = parseInt(String(req.params.id), 10);
+        const { substituteId } = req.body;
+        console.log(`[ApproveSwap] ID: ${swapId}, Substitute: ${substituteId}`);
+
+        if (isNaN(swapId)) return res.status(400).json({ message: "Invalid swap ID" });
+
+        const swapRaw = await DutySwap.findByPk(swapId, {
+            include: [
+                { model: Exam }, 
+                { model: Room }, 
+                { model: Faculty, as: 'Requester' }
+            ]
+        });
+        
+        if (!swapRaw) {
+            console.error(`[ApproveSwap] Swap ${swapId} not found`);
+            return res.status(404).json({ message: "Swap request not found" });
+        }
+
+        const substitute = await Faculty.findByPk(substituteId);
+        if (!substitute) return res.status(404).json({ message: "Substitute not found" });
+
+        if (!swapRaw.ExamID || !swapRaw.RoomID) {
+            console.error(`[ApproveSwap] Swap ${swapId} is missing ExamID or RoomID`);
+            return res.status(400).json({ message: "Invalid swap request data" });
+        }
+
+        // Execute in transaction for safety
+        await sequelize.transaction(async (t) => {
+            console.log(`[ApproveSwap] Step 1: Reassigning duty from ${swapRaw.RequesterID} to ${substituteId}`);
+            // 1. Reassign Duty: Replace requester with substitute in Assignments
+            const deletedCount = await InvigilatorAssignment.destroy({
+                where: { 
+                    ExamID: swapRaw.ExamID, 
+                    RoomID: swapRaw.RoomID, 
+                    InvigilatorID: swapRaw.RequesterID 
+                },
+                transaction: t
+            });
+            console.log(`[ApproveSwap] Deleted ${deletedCount} old assignments`);
+
+            if (deletedCount > 0) {
+                // Check if substitute already has an assignment for THIS exam/room
+                const existing = await InvigilatorAssignment.findOne({
+                    where: { 
+                        ExamID: swapRaw.ExamID, 
+                        RoomID: swapRaw.RoomID, 
+                        InvigilatorID: Number(substituteId) 
+                    },
+                    transaction: t
+                });
+
+                if (!existing) {
+                    await InvigilatorAssignment.create({
+                        ExamID: swapRaw.ExamID,
+                        RoomID: swapRaw.RoomID,
+                        InvigilatorID: Number(substituteId)
+                    }, { transaction: t });
+                    console.log(`[ApproveSwap] Created new assignment for ${substituteId}`);
+                } else {
+                    console.log(`[ApproveSwap] Substitute ${substituteId} already assigned to this slot.`);
+                }
+            } else {
+                console.warn(`[ApproveSwap] No assignment found to replace! (Exam: ${swapRaw.ExamID}, Room: ${swapRaw.RoomID}, Req: ${swapRaw.RequesterID})`);
+            }
+
+            // 2. Update Swap Status using raw query for maximum reliability with SQL Server dates
+            await sequelize.query(
+                "UPDATE [DutySwaps] SET [SubstituteID] = ?, [Status] = 'APPROVED', [UpdatedAt] = GETDATE() WHERE [SwapID] = ?",
+                {
+                    replacements: [Number(substituteId), swapRaw.SwapID],
+                    transaction: t
+                }
+            );
+            console.log(`[ApproveSwap] Swap status updated to APPROVED`);
+        }).catch(err => {
+            console.error("[ApproveSwap] Transaction failed:", err);
+            throw err;
+        });
+
+        // Create a notification for the substitute
+        const swap = swapRaw as any;
+        const examName = swap.Exam?.ExamName ?? "Exam";
+        const roomCode = swap.Room?.RoomCode ?? "Hall";
+        const requesterName = swap.Requester?.Name ?? "colleague";
+
+        // Find substitute's user account via Invigilator link first (most reliable)
+        let subUser = null;
+        const invigilatorRecord = await Invigilator.findOne({ where: { FacultyID: substituteId } });
+        
+        if (invigilatorRecord) {
+            subUser = await User.findByPk(invigilatorRecord.UserID);
+        }
+
+        // Fallback to StaffCode matching but with EXACT matches only to avoid partial hits
+        if (!subUser) {
+            subUser = await User.findOne({ 
+                where: { 
+                    [Op.or]: [
+                        { Email: substitute.StaffCode },
+                        { Email: { [Op.like]: `${substitute.StaffCode}@%` } } // Only match if it's the full prefix before @
+                    ]
+                }
+            });
+        }
+
+        if (subUser) {
+            try {
+                await notificationService.createNotification({
+                    Title: "New Duty Assignment — Relief",
+                    Message: `You have been assigned to invigilate ${examName} in ${roomCode} as a relief for ${requesterName}.`,
+                    Type: "INFO",
+                    Category: "EXAM",
+                    TargetType: "USER",
+                    TargetId: subUser.UserID,
+                    Priority: "HIGH",
+                    Metadata: { swapId: swapRaw.SwapID, examId: swapRaw.ExamID }
+                }, 0); 
+            } catch (notifErr) {
+                console.error("Failed to send swap approval notification:", notifErr);
+            }
+        }
+
+        res.json({ message: "Swap approved and assignment updated successfully." });
+    } catch (error: any) {
+        console.error("Approve swap error:", error);
+        res.status(500).json({ message: "Failed to approve swap" });
+    }
+};
+
+/**
+ * Reject swap (ADMIN)
+ */
+export const rejectSwap = async (req: Request, res: Response) => {
+    try {
+        const swapId = parseInt(String(req.params.id), 10);
+        if (isNaN(swapId)) return res.status(400).json({ message: "Invalid swap ID" });
+
+        const swap = await DutySwap.findByPk(swapId);
+        if (!swap) return res.status(404).json({ message: "Swap not found" });
+
+        swap.Status = "REJECTED";
+        await swap.save();
+
+        res.json({ message: "Swap request rejected." });
+    } catch (error: any) {
+        console.error("Reject swap error:", error);
+        res.status(500).json({ message: "Failed to reject swap" });
     }
 };
 export const getAssignmentDetails = async (req: Request, res: Response) => {
@@ -1156,7 +1590,34 @@ export const getAssignmentDetails = async (req: Request, res: Response) => {
             return res.status(404).json({ message: "Assignment not found" });
         }
 
-        res.json(assignment);
+        const today: string = new Date().toISOString().split('T')[0] ?? "";
+        const now = new Date();
+        const currentTimeVal = now.getHours() * 60 + now.getMinutes();
+
+        const examDate = typeof assignment.Exam?.ExamDate === 'string'
+            ? assignment.Exam.ExamDate
+            : (assignment.Exam?.ExamDate as Date)?.toISOString().split('T')[0] || "";
+
+        let isHallRevealed = true;
+        if (examDate > today) {
+            isHallRevealed = false;
+        } else if (examDate === today) {
+            if (assignment.Exam?.Session === "FN" && currentTimeVal < 8 * 60 + 30) {
+                isHallRevealed = false;
+            } else if (assignment.Exam?.Session === "AN" && currentTimeVal < 12 * 60 + 30) {
+                isHallRevealed = false;
+            }
+        }
+
+        const responseData: any = assignment.toJSON();
+        responseData.isHallRevealed = isHallRevealed;
+
+        if (!isHallRevealed) {
+            responseData.RoomID = null;
+            responseData.Room = { RoomCode: "Locked" };
+        }
+
+        res.json(responseData);
     } catch (error: any) {
         console.error("GET ASSIGNMENT DETAILS ERROR:", error);
         res.status(500).json({ message: error.message });
@@ -1172,25 +1633,25 @@ export const saveAttendance = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "Invalid request payload" });
         }
 
-        const faculty = await Faculty.findOne({ 
-            where: { 
+        const faculty = await Faculty.findOne({
+            where: {
                 [Op.or]: [
-                    { StaffCode: user.Email },
-                    { StaffCode: user.Email?.split('@')[0] }
+                    { StaffCode: user.Email || undefined },
+                    { StaffCode: user.Email?.split('@')[0] || undefined }
                 ]
-            } 
+            }
         });
-        
+
         if (!faculty) return res.status(404).json({ message: "Faculty profile not found" });
 
         // Verify assignment
         const assignment = await InvigilatorAssignment.findOne({
-            where: { 
-                ExamID: Number(examId), 
-                InvigilatorID: faculty.FacultyID 
+            where: {
+                ExamID: Number(examId),
+                InvigilatorID: faculty.FacultyID
             }
         });
-        
+
         if (!assignment) {
             return res.status(403).json({ message: "Access Denied: You are not assigned to this exam hall." });
         }
@@ -1222,8 +1683,8 @@ export const saveAttendance = async (req: Request, res: Response) => {
             UserAgent: (req.headers['user-agent'] as string) || "unknown"
         }).catch(err => console.error("Activity log failed:", err));
 
-        res.json({ 
-            success: true, 
+        res.json({
+            success: true,
             message: "Attendance locked and submitted successfully.",
             summary: {
                 present: students.filter(s => s.IsPresent).length,
@@ -1233,7 +1694,7 @@ export const saveAttendance = async (req: Request, res: Response) => {
 
     } catch (error: any) {
         console.error("Save attendance fatal error:", error);
-        res.status(500).json({ 
+        res.status(500).json({
             message: "Failed to save attendance. Please try again.",
             error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });

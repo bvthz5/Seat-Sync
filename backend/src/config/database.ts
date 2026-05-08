@@ -960,6 +960,43 @@ async function ensureSchemaIntegrity() {
             END
         `, { type: QueryTypes.RAW });
 
+        // Create IncidentReports table if not exists
+        await sequelize.query(`
+            IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'IncidentReports' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                CREATE TABLE [dbo].[IncidentReports] (
+                    [ReportID]    INT IDENTITY(1,1) PRIMARY KEY,
+                    [ExamID]      INT NOT NULL REFERENCES [dbo].[Exams]([ExamID]),
+                    [RoomID]      INT NOT NULL REFERENCES [dbo].[Rooms]([RoomID]),
+                    [FacultyID]   INT NOT NULL REFERENCES [dbo].[Faculties]([FacultyID]),
+                    [Type]        NVARCHAR(50) NOT NULL,
+                    [Description] NVARCHAR(MAX) NOT NULL,
+                    [Status]      NVARCHAR(20) NOT NULL DEFAULT 'PENDING',
+                    [CreatedAt]   DATETIME NOT NULL DEFAULT GETDATE()
+                );
+                PRINT 'Created IncidentReports table';
+            END
+        `, { type: QueryTypes.RAW });
+
+        // Create DutySwaps table if not exists
+        await sequelize.query(`
+            IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'DutySwaps' AND TABLE_SCHEMA = 'dbo')
+            BEGIN
+                CREATE TABLE [dbo].[DutySwaps] (
+                    [SwapID]       INT IDENTITY(1,1) PRIMARY KEY,
+                    [ExamID]       INT NOT NULL REFERENCES [dbo].[Exams]([ExamID]),
+                    [RoomID]       INT NOT NULL REFERENCES [dbo].[Rooms]([RoomID]),
+                    [RequesterID]  INT NOT NULL REFERENCES [dbo].[Faculties]([FacultyID]),
+                    [SubstituteID] INT NULL REFERENCES [dbo].[Faculties]([FacultyID]),
+                    [Reason]       NVARCHAR(MAX) NOT NULL,
+                    [Status]       NVARCHAR(20) NOT NULL DEFAULT 'PENDING',
+                    [CreatedAt]    DATETIME NOT NULL DEFAULT GETDATE(),
+                    [UpdatedAt]    DATETIME NOT NULL DEFAULT GETDATE()
+                );
+                PRINT 'Created DutySwaps table';
+            END
+        `, { type: QueryTypes.RAW });
+
     } catch (error) {
         console.warn("Schema integrity check warning (non-fatal):", error);
     }

@@ -102,6 +102,30 @@ export const invigilatorService = {
     saveAttendance: async (examId: number, students: { StudentID: number, IsPresent: boolean }[]) => {
         const response = await api.post('/invigilators/attendance/save', { examId, students });
         return response.data;
+    },
+    reportIncident: async (data: { examId: number, roomId: number, type: string, description: string }) => {
+        const response = await api.post('/invigilators/incident/report', data);
+        return response.data;
+    },
+    requestSwap: async (data: { examId: number, roomId: number, reason: string }) => {
+        const response = await api.post('/invigilators/swap/request', data);
+        return response.data;
+    },
+    getSwaps: async (status?: string) => {
+        const response = await api.get('/invigilators/swaps', { params: { status } });
+        return response.data;
+    },
+    getAvailableInvigilatorsForSwap: async (swapId: number) => {
+        const response = await api.get(`/invigilators/swaps/${swapId}/available`);
+        return response.data;
+    },
+    approveSwap: async (swapId: number, substituteId: number) => {
+        const response = await api.post(`/invigilators/swaps/${swapId}/approve`, { substituteId });
+        return response.data;
+    },
+    rejectSwap: async (swapId: number) => {
+        const response = await api.post(`/invigilators/swaps/${swapId}/reject`);
+        return response.data;
     }
 };
 

@@ -107,7 +107,7 @@ Student.init(
       }
     },
     AdmissionDate: {
-      type: DataTypes.DATE,
+      type: DataTypes.DATEONLY,
       allowNull: true,
     },
   },

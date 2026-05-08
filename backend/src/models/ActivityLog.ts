@@ -79,9 +79,9 @@ ActivityLog.init(
       allowNull: true,
     },
     Timestamp: {
-      type: DataTypes.DATE,
+      type: "DATETIME2",
       allowNull: false,
-      defaultValue: DataTypes.NOW,
+      defaultValue: sequelize.literal('GETDATE()'),
     },
     Details: {
       type: DataTypes.TEXT,

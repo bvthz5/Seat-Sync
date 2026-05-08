@@ -76,6 +76,7 @@ const Sidebar: React.FC<{ isOpen: boolean; onSeatingClick: () => void; onCollege
                                         <NavLink
                                             key={child.path}
                                             to={isChildCollegeStructure ? '/admin/college-structure' : child.path!}
+                                            end={true}
                                             onClick={(e) => {
                                                 if (isChildCollegeStructure) {
                                                     e.preventDefault();
@@ -118,6 +119,7 @@ const Sidebar: React.FC<{ isOpen: boolean; onSeatingClick: () => void; onCollege
             <NavLink
                 key={item.path}
                 to={isSeatingPlans ? '/admin/seating' : isCollegeStructure ? '/admin/college-structure' : item.path!}
+                end={!isActiveSeating && !isActiveCollegeStructure}
                 onClick={(e) => {
                     if (isSeatingPlans) {
                         e.preventDefault();

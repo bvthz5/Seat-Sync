@@ -8,6 +8,7 @@ import { User } from "./User.js";
 interface InvigilatorAttributes {
   InvigilatorID: number;
   UserID: number;
+  FacultyID?: number;
   DepartmentID?: number;
   IsEligible: boolean;
   IsFlagged: boolean;
@@ -16,12 +17,13 @@ interface InvigilatorAttributes {
 /**
  * Attributes required when creating an invigilator
  */
-interface InvigilatorCreationAttributes extends Optional<InvigilatorAttributes, "InvigilatorID" | "IsFlagged" | "IsEligible" | "DepartmentID"> { }
+interface InvigilatorCreationAttributes extends Optional<InvigilatorAttributes, "InvigilatorID" | "IsFlagged" | "IsEligible" | "DepartmentID" | "FacultyID"> { }
 
 export class Invigilator extends Model<InvigilatorAttributes, InvigilatorCreationAttributes>
   implements InvigilatorAttributes {
   declare InvigilatorID: number;
   declare UserID: number;
+  declare FacultyID?: number;
   declare DepartmentID?: number;
   declare IsEligible: boolean;
   declare IsFlagged: boolean;
@@ -49,6 +51,14 @@ Invigilator.init(
       references: {
         model: "Departments",
         key: "DepartmentID",
+      },
+    },
+    FacultyID: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: "Faculties",
+        key: "FacultyID",
       },
     },
     IsEligible: {

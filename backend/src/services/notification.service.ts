@@ -4,6 +4,7 @@ import { NotificationRecipient } from "../models/NotificationRecipient.js";
 import { User } from "../models/User.js";
 import { getIO } from "../config/socket.js";
 import { Op } from "sequelize";
+import { sequelize } from "../config/database.js";
 
 class NotificationService {
     /**
@@ -23,7 +24,7 @@ class NotificationService {
             Channels = ["in_app"] // Array of strings e.g. ["in_app", "email"]
         } = data;
 
-        // 1. Save to DB
+        // 1. Save to DB - Use GETDATE() literal for SQL Server compatibility
         const notification = await Notification.create({
             Title,
             Message,
@@ -35,7 +36,7 @@ class NotificationService {
             Metadata,
             SentBy: senderId,
             ExpiresAt,
-            SentAt: new Date()
+            SentAt: sequelize.literal('GETDATE()') as any
         });
 
         // 2. Identify Recipients
@@ -194,21 +195,17 @@ class NotificationService {
      * Mark a notification as read
      */
     async markAsRead(userId: number, notificationId: number) {
-        // Find the recipient record associated with the notification ID and User
-        const recipient = await NotificationRecipient.findOne({
-            where: {
-                UserID: userId,
-                NotificationID: notificationId
+        // Use direct update to avoid date conversion issues with .save()
+        const result = await NotificationRecipient.update(
+            { 
+                IsRead: true, 
+                ReadAt: sequelize.literal('GETDATE()') 
+            },
+            { 
+                where: { UserID: userId, NotificationID: notificationId } 
             }
-        });
-
-        if (recipient) {
-            recipient.IsRead = true;
-            recipient.ReadAt = new Date();
-            await recipient.save();
-            return true;
-        }
-        return false;
+        );
+        return result[0] > 0;
     }
 
     /**
@@ -216,8 +213,13 @@ class NotificationService {
      */
     async markAllAsRead(userId: number) {
         await NotificationRecipient.update(
-            { IsRead: true, ReadAt: new Date() },
-            { where: { UserID: userId, IsRead: false } }
+            { 
+                IsRead: true, 
+                ReadAt: sequelize.literal('GETDATE()') 
+            },
+            { 
+                where: { UserID: userId, IsRead: false } 
+            }
         );
         return true;
     }
