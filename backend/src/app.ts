@@ -41,11 +41,14 @@ app.use(cors({
         // Allow same-origin (origin is undefined)
         if (!origin) return callback(null, true);
 
-        // Allow any localhost or loopback origin during development
+        // Allow localhost and loopback
         if (
             origin.startsWith('http://localhost') ||
             origin.startsWith('http://127.0.0.1') ||
-            origin.startsWith('http://[::1]')
+            origin.startsWith('http://[::1]') ||
+            origin.includes('ngrok') ||
+            origin.includes('ngrok-free') ||
+            origin.includes('trycloudflare.com')
         ) {
             return callback(null, true);
         }
@@ -54,7 +57,7 @@ app.use(cors({
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"]
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "ngrok-skip-browser-warning"]
 }));
 
 // --- Security Middleware: Helmet ---
@@ -66,6 +69,9 @@ app.use(helmet({
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 app.use(hpp());
+
+// Trust proxy so rate limiter can accurately identify users
+app.set('trust proxy', 1);
 
 // --- Static Files ---
 import path from "path";
@@ -185,6 +191,33 @@ app.use("/api/users", userManagementRoutes);
 
 import dashboardRoutes from "./routes/dashboard.routes.js";
 app.use("/api/dashboard", dashboardRoutes);
+
+// Serve Frontend (Production Build)
+const frontendDistPath = path.join(__dirname, "../../frontend/dist");
+app.use(express.static(frontendDistPath, {
+    maxAge: "1d",
+    etag: false,
+    setHeaders: (res, path) => {
+        if (path.endsWith('.html')) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+        }
+    }
+}));
+
+// Catch-all route: Serve index.html for client-side routing (only for non-file requests)
+app.use((req: express.Request, res: express.Response) => {
+    // Don't serve index.html for API calls or file requests with extensions
+    if (req.path.startsWith('/api') || /\.\w+$/.test(req.path)) {
+        return res.status(404).json({ error: "Not found" });
+    }
+    // Prevent caching for index.html
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.sendFile(path.join(frontendDistPath, "index.html"));
+});
 
 // --- Error Handling Middleware ---
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

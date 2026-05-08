@@ -36,8 +36,8 @@ router.post("/reset-password", StudentAuthController.resetPassword);
  */
 router.get("/meta", async (req, res) => {
     try {
-        const { default: Department } = await import("../models/Department.js");
-        const { Program, ProgramDepartment } = await import("../models/index.js");
+        const { default: Department } = await import("../models/Department.js") as any;
+        const { Program } = await import("../models/index.js");
         const departments = await Department.findAll({ order: [['DepartmentName', 'ASC']] });
         const programs = await Program.findAll({
             include: [{

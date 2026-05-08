@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/postcss'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  base: './',
+  base: '/',
   plugins: [react()],
   css: {
     postcss: {
@@ -17,6 +17,11 @@ export default defineConfig({
     hmr: {
       timeout: 30000,
     },
+    allowedHosts: [
+      'tucking-oversold-doctrine.ngrok-free.dev',
+      'localhost',
+      '127.0.0.1',
+    ],
   },
   build: {
     // heroui (~620KB), pdf-vendor (~624KB) are inherently large third-party libs

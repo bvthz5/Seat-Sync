@@ -3,8 +3,9 @@ const sql = require("mssql");
 const config = {
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
-  server: process.env.DB_SERVER,
+  server: "localhost", // change if needed
   database: process.env.DB_NAME,
+  port: 1433,
   options: {
     encrypt: false,
     trustServerCertificate: true
@@ -14,10 +15,10 @@ const config = {
 const connectDB = async () => {
   try {
     await sql.connect(config);
-    console.log("Connected to DB");
+    console.log("Connected to DB ✅");
   } catch (err) {
-    console.log("DB connection error:", err);
+    console.error("DB connection error ❌:", err.message);
   }
 };
 
-module.exports = { sql, connectDB };
+module.exports = connectDB; // ✅ SIMPLE EXPORT

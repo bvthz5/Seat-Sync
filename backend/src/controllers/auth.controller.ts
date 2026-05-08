@@ -39,7 +39,7 @@ export class AuthController {
             // Log Success
             if (result.user.Role === 'exam_admin') {
                 const context = {
-                    email: result.user.Email,
+                    email: result.user.Email || "",
                     userId: result.user.UserID,
                     ip: req.ip || "",
                     userAgent: req.get('User-Agent') || ""
@@ -127,7 +127,7 @@ export class AuthController {
             // Log Logout
             if (req.user?.UserID) {
                 const context = {
-                    email: req.user.Email,
+                    email: req.user.Email || "",
                     userId: req.user.UserID,
                     ip: req.ip || "",
                     userAgent: req.get('User-Agent') || ""
@@ -221,7 +221,7 @@ export class AuthController {
             // Log Password Change
             if (req.user?.UserID) {
                 const context = {
-                    email: req.user.Email,
+                    email: req.user.Email || "",
                     userId: req.user.UserID,
                     ip: req.ip || "",
                     userAgent: req.get('User-Agent') || ""

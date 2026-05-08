@@ -20,6 +20,7 @@ export class AuthMiddleware {
             const authHeader = req.headers.authorization;
 
             if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                console.error(`[Auth] Missing or invalid Authorization header on ${req.method} ${req.url}`);
                 res.status(401).json({
                     error: "Access token required",
                 });
@@ -34,7 +35,7 @@ export class AuthMiddleware {
 
             next();
         } catch (error: any) {
-            // console.error("Token verification error:", error.message);
+            console.error(`[Auth] Token verification failed for ${req.method} ${req.url}. Reason:`, error.message);
             res.status(401).json({
                 error: "Invalid or expired access token",
                 message: error.message,

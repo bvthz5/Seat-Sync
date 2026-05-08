@@ -165,7 +165,7 @@ export class AdminService {
         // Re-using the admin created email template or a simplified one containing the new password.
         // For now, let's use the same one as it conveys credentials clearly.
         try {
-            await emailService.sendAdminCreatedEmail(admin.Email, admin.FullName || "Admin", admin.Email, password);
+            await emailService.sendAdminCreatedEmail(admin.Email || "", admin.FullName || "Admin", admin.Email || "", password);
         } catch (emailError: any) {
             console.warn(`[AdminService] Failed to send reset password email to ${admin.Email}:`, emailError.message);
         }

@@ -1,12 +1,19 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { toast } from '../utils/toast';
 
-// Create Axios instance
+const getBaseUrl = () => {
+    if (import.meta.env.VITE_API_BASE_URL) return import.meta.env.VITE_API_BASE_URL;
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        return `${window.location.origin}/api`;
+    }
+    return 'http://localhost:5000/api';
+};
+
 const api: AxiosInstance = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api',
+    baseURL: getBaseUrl(),
     withCredentials: true, // Important for cookies (refresh token)
     headers: {
-        // 'Content-Type': 'application/json', // Do NOT set this globally, let Axios set it automatically (especially for FormData)
+        'ngrok-skip-browser-warning': 'true'
     },
 });
 
@@ -86,7 +93,11 @@ api.interceptors.response.use(
                 })
                     .then((token) => {
                         if (originalRequest.headers) {
-                            originalRequest.headers.Authorization = `Bearer ${token}`;
+                            if (typeof originalRequest.headers.set === 'function') {
+                                originalRequest.headers.set('Authorization', `Bearer ${token}`);
+                            } else {
+                                originalRequest.headers['Authorization'] = `Bearer ${token}`;
+                            }
                         }
                         return api(originalRequest);
                     })
@@ -100,7 +111,10 @@ api.interceptors.response.use(
                 // Call refresh endpoint using raw axios instance to avoid interceptors
                 // We assume the refresh endpoint relies on the HttpOnly cookie
                 const response = await axios.post(`${api.defaults.baseURL}/auth/refresh`, {}, {
-                    withCredentials: true
+                    withCredentials: true,
+                    headers: {
+                        'ngrok-skip-browser-warning': 'true'
+                    }
                 });
 
                 const rawAccessToken = (response.data as any)?.accessToken;
@@ -117,7 +131,11 @@ api.interceptors.response.use(
                 processQueue(null, accessToken);
 
                 if (originalRequest.headers) {
-                    originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+                    if (typeof originalRequest.headers.set === 'function') {
+                        originalRequest.headers.set('Authorization', `Bearer ${accessToken}`);
+                    } else {
+                        originalRequest.headers['Authorization'] = `Bearer ${accessToken}`;
+                    }
                 }
 
                 return api(originalRequest);

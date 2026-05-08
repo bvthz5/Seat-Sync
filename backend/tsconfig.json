@@ -7,8 +7,8 @@
 
     // Environment Settings
     // See also https://aka.ms/tsconfig/module
-    "module": "node16",
-    "moduleResolution": "node16",
+    "module": "es2022",
+    "moduleResolution": "node",
     "target": "ES2022",
     "types": ["node"],
     "lib": ["ES2022"],

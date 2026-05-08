@@ -46,7 +46,7 @@ const StudentLogin: React.FC = () => {
 
         setIsLoading(true);
         try {
-            const response = await fetch('http://localhost:5000/api/auth/student/login', {
+            const response = await fetch('/api/auth/student/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ identifier: trimmedIdentifier, password }),

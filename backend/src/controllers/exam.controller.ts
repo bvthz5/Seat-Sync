@@ -22,8 +22,6 @@ import mammoth from 'mammoth';
 import { sequelize } from '../config/database.js';
 import { generateDefaultPassword } from '../utils/student.utils.js';
 
-const require = createRequire(import.meta.url);
-
 const DATE_PATTERN =
     /\b(?:\d{4}-\d{2}-\d{2}|\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{1,2}\s*[A-Za-z]{3,9}\.?\s*\d{4})\b/;
 const SUBJECT_CODE_PATTERN = /\b(?:2\d[A-Z]{2,}[A-Z0-9]*\d{2,}|[A-Z]{2,}[0-9]{2,}[A-Z0-9-]*)\b/;

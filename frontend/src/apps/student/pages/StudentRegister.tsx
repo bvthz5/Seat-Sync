@@ -98,7 +98,7 @@ const StudentRegister: React.FC = () => {
         // Fetch departments and programs from the public meta endpoint (no auth needed)
         const fetchData = async () => {
             try {
-                const res = await fetch('http://localhost:5000/api/auth/student/meta');
+                const res = await fetch('/api/auth/student/meta');
                 if (res.ok) {
                     const { departments: depts, programs: progs } = await res.json();
                     setDepartments(depts || []);
@@ -205,7 +205,7 @@ const StudentRegister: React.FC = () => {
                 BatchYear: parseInt(formData.BatchYear)
             };
 
-            const response = await fetch('http://localhost:5000/api/auth/student/register', {
+            const response = await fetch('/api/auth/student/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),

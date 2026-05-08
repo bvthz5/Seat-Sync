@@ -20,7 +20,7 @@ export const initStudentNotificationSocket = (
 ) => {
     if (socket) return socket;
 
-    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
     socket = io(socketUrl, { withCredentials: true });
 
     socket.on('connect', () => {

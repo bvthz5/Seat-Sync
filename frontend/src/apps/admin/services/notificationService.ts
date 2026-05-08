@@ -31,7 +31,7 @@ export interface NotificationStats {
 
 // --- Socket Service ---
 let socket: Socket | null = null;
-const SOCKET_URL = 'http://localhost:5000'; // Adjust for production
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
 
 export const initNotificationSocket = (userId: number, onNewNotification: (n: Notification) => void) => {
     if (socket) return socket;
@@ -88,7 +88,7 @@ export const initNotificationSocket = (userId: number, onNewNotification: (n: No
 
 // --- API Service ---
 
-const API_URL = 'http://localhost:5000/api/notifications';
+const API_URL = '/notifications';
 
 // Helper to get token (adjust based on your auth implementation)
 // Removed manual header generation. API interceptor handles tokens.

@@ -980,7 +980,7 @@ export const getInvigilatorDashboardData = async (req: Request, res: Response) =
         const emailPrefix = email?.split('@')[0];
         const fullName = user.FullName?.trim();
 
-        const faculty = await Faculty.findOne({
+        let faculty = await Faculty.findOne({
             where: {
                 [Op.or]: [
                     { StaffCode: email || undefined },
@@ -997,8 +997,8 @@ export const getInvigilatorDashboardData = async (req: Request, res: Response) =
             faculty = await Faculty.findOne({
                 where: {
                     [Op.or]: [
-                        { StaffCode: user.Email },
-                        { Name: user.FullName || "" }
+                        ...(user.Email ? [{ StaffCode: user.Email }] : []),
+                        ...(user.FullName ? [{ Name: user.FullName }] : [])
                     ]
                 }
             });

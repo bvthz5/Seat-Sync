@@ -14,7 +14,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "module",
+  
   "ts-node": {
     "transpileOnly": true,
     "preferTsExts": true,
