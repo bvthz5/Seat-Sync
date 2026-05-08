@@ -680,6 +680,7 @@ export class ExamController {
 
             res.json(examsWithStatus);
         } catch (error: any) {
+            console.error("DEBUG: getExams failed:", error);
             res.status(500).json({ message: 'Error fetching exams', error: error.message });
         }
     }

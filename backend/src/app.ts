@@ -41,6 +41,8 @@ app.use(cors({
         // Allow same-origin (origin is undefined)
         if (!origin) return callback(null, true);
 
+        console.log(`[CORS Check] Origin: ${origin}`);
+
         // Allow localhost and loopback
         if (
             origin.startsWith('http://localhost') ||
@@ -53,7 +55,7 @@ app.use(cors({
             return callback(null, true);
         }
 
-        callback(new Error('Not allowed by CORS'));
+        callback(new Error(`Not allowed by CORS: ${origin}`));
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
