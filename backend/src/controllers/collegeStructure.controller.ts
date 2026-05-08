@@ -1,8 +1,11 @@
 // --- DELETE ALL STRUCTURE DATA --- 
+import { InvigilatorAssignment } from "../models/InvigilatorAssignment.js";
+
 export const deleteAllStructureData = async (req: Request, res: Response) => {
     try {
         await sequelize.transaction(async (t) => {
             // Delete from child tables first to avoid FK constraint errors
+            await InvigilatorAssignment.destroy({ where: {}, transaction: t });
             await SeatAllocation.destroy({ where: {}, transaction: t });
             await Seat.destroy({ where: {}, transaction: t });
             await Zone.destroy({ where: {}, transaction: t });
