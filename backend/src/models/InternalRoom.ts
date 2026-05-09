@@ -118,9 +118,6 @@ InternalRoom.init(
   }
 );
 
-InternalRoom.belongsTo(InternalFloor, { foreignKey: "FloorID" });
-InternalFloor.hasMany(InternalRoom, { foreignKey: "FloorID" });
-InternalRoom.belongsTo(InternalBlock, { foreignKey: "BlockID" });
-InternalBlock.hasMany(InternalRoom, { foreignKey: "BlockID" });
+// Associations are managed in models/index.ts to avoid alias conflicts.
 
 export default InternalRoom;

@@ -38,17 +38,25 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
 
     // Fetch floors when block changes
     useEffect(() => {
-        if (!selectedBlockId) return;
+        if (!selectedBlockId || isNaN(Number(selectedBlockId))) {
+            setFloors([]);
+            return;
+        }
         setFetchingFloors(true);
         internalStructureService.getFloors({ blockId: Number(selectedBlockId), limit: 100 })
-            .then(r => setFloors(r.data || []))
+            .then(res => {
+                setFloors(res.data || []);
+            })
             .catch(() => toast.error('Failed to load floors'))
             .finally(() => setFetchingFloors(false));
     }, [selectedBlockId]);
 
     // Fetch rooms when floor changes
     useEffect(() => {
-        if (!selectedFloorId) return;
+        if (!selectedFloorId || isNaN(Number(selectedFloorId))) {
+            setRooms([]);
+            return;
+        }
         setFetchingRooms(true);
         internalStructureService.getRooms({ floorId: Number(selectedFloorId), limit: 100 })
             .then(r => setRooms(r.data || []))
@@ -63,6 +71,15 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
         internalStructureService.getRoomLayout(Number(selectedRoomId)).then(data => {
             setRoomData(data.room);
             setSeats(data.seats);
+            
+            // Sync hierarchy if it doesn't match the selected room
+            if (data.room.BlockID && selectedBlockId !== String(data.room.BlockID)) {
+                setSelectedBlockId(String(data.room.BlockID));
+            }
+            if (data.room.FloorID && selectedFloorId !== String(data.room.FloorID)) {
+                setSelectedFloorId(String(data.room.FloorID));
+            }
+
             const layout = Array.isArray(data.room.RowLayout) ? data.room.RowLayout : [];
             const spb = data.room.SeatsPerBench || 2;
             const cfg = { rowLayout: layout, seatsPerBench: spb };
@@ -261,49 +278,62 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
                             <div className="space-y-5 pt-1">
                                 <div className="flex flex-col gap-2">
                                     <label className="ilc-label">Infrastructure Block</label>
-                                    <Select
+                                    <Autocomplete
+                                        items={blocks}
                                         placeholder="Select block..."
                                         size="sm"
                                         variant="bordered"
-                                        selectedKeys={new Set(selectedBlockId ? [String(selectedBlockId)] : [])}
-                                        onSelectionChange={(keys) => {
-                                            const val = String(Array.from(keys)[0] || '');
+                                        selectedKey={selectedBlockId ? String(selectedBlockId) : null}
+                                        onSelectionChange={(k) => {
+                                            const val = k ? String(k) : '';
                                             setSelectedBlockId(val);
                                             setSelectedFloorId('');
                                             setSelectedRoomId('');
                                             setFloors([]);
                                             setRooms([]);
                                         }}
-                                        classNames={{ trigger: 'bg-slate-50/50 rounded-xl h-11 border-slate-200' }}
+                                        inputProps={{ classNames: { inputWrapper: 'bg-slate-50/50 rounded-xl h-11 border-slate-200' } }}
+                                        listboxProps={{ classNames: { base: "p-2 rounded-xl", list: "gap-1" } }}
                                         popoverProps={{ classNames: { content: "rounded-xl border border-slate-100 shadow-2xl bg-white/95 backdrop-blur-xl" } }}>
-                                        {blocks.map(b => <SelectItem key={String(b.BlockID)} className="rounded-lg font-bold text-slate-700">{b.BlockName}</SelectItem>)}
-                                    </Select>
+                                        {(b) => (
+                                            <AutocompleteItem key={String(b.BlockID)} textValue={b.BlockName} className="rounded-lg font-bold text-slate-700">
+                                                {b.BlockName}
+                                            </AutocompleteItem>
+                                        )}
+                                    </Autocomplete>
                                 </div>
-
+                                
                                 <div className="flex flex-col gap-2">
                                     <label className="ilc-label">Level / Floor</label>
-                                    <Select
+                                    <Autocomplete
+                                        items={floors}
                                         placeholder={!selectedBlockId ? "Select block first..." : (fetchingFloors ? "Loading..." : "Select floor...")}
                                         size="sm"
                                         variant="bordered"
                                         isDisabled={!selectedBlockId || fetchingFloors}
                                         isLoading={fetchingFloors}
-                                        selectedKeys={new Set(selectedFloorId ? [String(selectedFloorId)] : [])}
-                                        onSelectionChange={(keys) => {
-                                            const val = String(Array.from(keys)[0] || '');
+                                        selectedKey={selectedFloorId ? String(selectedFloorId) : null}
+                                        onSelectionChange={(k) => {
+                                            const val = k ? String(k) : '';
                                             setSelectedFloorId(val);
                                             setSelectedRoomId('');
                                             setRooms([]);
                                         }}
-                                        classNames={{ trigger: 'bg-slate-50/50 rounded-xl h-11 border-slate-200' }}
+                                        inputProps={{ classNames: { inputWrapper: 'bg-slate-50/50 rounded-xl h-11 border-slate-200' } }}
+                                        listboxProps={{ classNames: { base: "p-2 rounded-xl", list: "gap-1" } }}
                                         popoverProps={{ classNames: { content: "rounded-xl border border-slate-100 shadow-2xl bg-white/90 backdrop-blur-xl" } }}>
-                                        {floors.map(f => <SelectItem key={String(f.FloorID)} className="rounded-lg font-bold text-slate-700">Floor {f.FloorNumber}</SelectItem>)}
-                                    </Select>
+                                        {(f) => (
+                                            <AutocompleteItem key={String(f.FloorID)} textValue={`Floor ${f.FloorNumber}`} className="rounded-lg font-bold text-slate-700">
+                                                Floor {f.FloorNumber}
+                                            </AutocompleteItem>
+                                        )}
+                                    </Autocomplete>
                                 </div>
 
                                 <div className="flex flex-col gap-2">
                                     <label className="ilc-label">Specific Room</label>
                                     <Autocomplete
+                                        items={rooms}
                                         placeholder={!selectedFloorId ? "Select floor first..." : (fetchingRooms ? "Loading..." : "Select room...")}
                                         size="sm"
                                         variant="bordered"
@@ -314,7 +344,14 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
                                         inputProps={{ classNames: { inputWrapper: 'bg-slate-50/50 rounded-xl h-11 border-slate-200' } }}
                                         listboxProps={{ classNames: { base: "p-2 rounded-xl", list: "gap-1" } }}
                                         popoverProps={{ classNames: { content: "rounded-xl border border-slate-100 shadow-2xl bg-white/90 backdrop-blur-xl" } }}>
-                                        {rooms.map(r => <AutocompleteItem key={String(r.RoomID)} className="rounded-lg font-bold text-slate-700">{r.RoomCode}</AutocompleteItem>)}
+                                        {(r) => (
+                                            <AutocompleteItem key={String(r.RoomID)} textValue={r.RoomCode}>
+                                                <div className="flex flex-col">
+                                                    <span className="font-bold text-slate-700">{r.RoomCode}</span>
+                                                    <span className="text-[10px] text-slate-400 uppercase font-black">{r.RoomType}</span>
+                                                </div>
+                                            </AutocompleteItem>
+                                        )}
                                     </Autocomplete>
                                 </div>
                             </div>

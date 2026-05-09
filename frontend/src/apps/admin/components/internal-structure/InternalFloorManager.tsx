@@ -130,34 +130,32 @@ export const InternalFloorManager: React.FC<Props> = ({ readOnly = false }) => {
             <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
                 <Table aria-label="Internal Floors" removeWrapper classNames={{ th: 'bg-slate-50 text-slate-500 text-xs font-bold uppercase tracking-wider', td: 'py-3' }}>
                     <TableHeader>
-                        <TableColumn key="block">Block Hierarchy</TableColumn>
-                        <TableColumn key="floor" align="center">Floor Designation</TableColumn>
-                        <TableColumn key="status" align="center">Status</TableColumn>
-                        <TableColumn key="actions" align="end">Actions</TableColumn>
+                        <TableColumn key="block"><span className="text-[10px] uppercase">Infrastructure Block</span></TableColumn>
+                        <TableColumn key="floor" align="center"><span className="text-[10px] uppercase">Level / Floor</span></TableColumn>
+                        <TableColumn key="status" align="center"><span className="text-[10px] uppercase">Status</span></TableColumn>
+                        <TableColumn key="actions" align="end"><span className="text-[10px] uppercase">Actions</span></TableColumn>
                     </TableHeader>
                     <TableBody emptyContent={loading ? ' ' : 'No floors found'}>
                         {floors.map(f => (
                             <TableRow key={f.FloorID} className="hover:bg-slate-50 transition-colors">
                                 <TableCell>
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center border border-slate-200 shadow-sm">
-                                            <Building2 size={16} className="text-slate-600" />
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center border border-slate-200">
+                                            <Building2 size={14} className="text-slate-500" />
                                         </div>
-                                        <div className="flex flex-col">
-                                            <span className="font-black text-slate-900 tracking-tight">{(f as any).InternalBlock?.BlockName || '—'}</span>
-                                        </div>
+                                        <span className="font-black text-slate-800 text-sm tracking-tight">{f.Block?.BlockName || '—'}</span>
                                     </div>
                                 </TableCell>
                                 <TableCell>
                                     <div className="flex flex-col items-center">
-                                        <span className="font-black text-violet-600 text-lg leading-none">Floor {f.FloorNumber}</span>
+                                        <span className="font-black text-violet-600 text-sm">Floor {f.FloorNumber}</span>
                                     </div>
                                 </TableCell>
                                 <TableCell>
                                     <div className="flex flex-col items-center">
                                         <Chip size="sm" variant="flat" color={f.Status === 'Active' ? 'success' : 'default'}
                                             classNames={{ base: f.Status === 'Active' ? 'bg-emerald-50 border border-emerald-200' : 'bg-slate-100' }}>
-                                            <span className="font-black text-[10px] uppercase tracking-widest">{f.Status}</span>
+                                            <span className="font-black text-[9px] uppercase tracking-widest">{f.Status}</span>
                                         </Chip>
                                     </div>
                                 </TableCell>

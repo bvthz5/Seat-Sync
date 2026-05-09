@@ -19,6 +19,9 @@ export class InternalSeatAllocation extends Model<InternalSeatAllocationAttribut
     declare InternalExamID: number;
     declare InternalSeatID: number;
     declare InternalStudentID: number;
+    declare Student?: any;
+    declare Exam?: any;
+    declare Seat?: any;
 }
 
 InternalSeatAllocation.init(

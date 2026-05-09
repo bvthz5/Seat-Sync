@@ -51,7 +51,6 @@ InternalFloor.init(
   }
 );
 
-InternalFloor.belongsTo(InternalBlock, { foreignKey: "BlockID" });
-InternalBlock.hasMany(InternalFloor, { foreignKey: "BlockID" });
+// Associations are managed in models/index.ts
 
 export default InternalFloor;

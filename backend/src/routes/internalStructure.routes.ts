@@ -7,7 +7,7 @@ import {
   getInternalRooms, createInternalRoom, bulkCreateInternalRooms, updateInternalRoom,
   disableInternalRoom, enableInternalRoom, deleteInternalRoom,
   getInternalRoomLayout, updateInternalRoomLayout, updateInternalSeatStates,
-  deleteAllInternalStructureData, importInternalStructure
+  deleteAllInternalStructureData, importInternalStructure, getFloorsByBlock
 } from "../controllers/internalStructure.controller.js";
 
 // All routes require root admin auth
@@ -22,6 +22,7 @@ router.get("/blocks", getInternalBlocks);
 router.post("/blocks", createInternalBlock);
 router.put("/blocks/:id", updateInternalBlock);
 router.delete("/blocks/:id", deleteInternalBlock);
+router.get("/blocks/:blockId/floors", getFloorsByBlock);
 
 // --- FLOORS ---
 router.get("/floors", getInternalFloors);

@@ -37,6 +37,8 @@ import invigilatorRoutes from "./routes/invigilator.routes.js";
 import studentPortalRoutes from "./routes/student.portal.routes.js";
 import unifiedAcademicRoutes from "./routes/unified_academic.routes.js";
 import seriesRoutes from "./routes/series.routes.js";
+import internalSeatingRoutes from "./routes/internal/internalSeating.routes.js";
+import internalReportsRoutes from "./routes/internal/internalReports.routes.js";
 
 const app = express();
 
@@ -191,6 +193,8 @@ app.use("/api/allocation", allocationRoutes);
 
 import seatingRoutes from "./routes/seating.routes.js";
 app.use("/api/seating", seatingRoutes);
+app.use("/api/internal/seating", internalSeatingRoutes);
+app.use("/api/internal/reports", internalReportsRoutes);
 
 import auditLogsRoutes from "./routes/auditLogs.routes.js";
 app.use("/api/audit", auditLogsRoutes);

@@ -297,58 +297,58 @@ export const InternalRoomManager: React.FC<Props> = ({ readOnly = false }) => {
             <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
                 <Table aria-label="Internal Rooms" removeWrapper classNames={{ th: 'bg-slate-50 text-slate-500 text-xs font-bold uppercase tracking-wider', td: 'py-2.5' }}>
                     <TableHeader>
-                        <TableColumn key="room">Room</TableColumn>
-                        <TableColumn key="location">Hierarchy</TableColumn>
-                        <TableColumn key="capacity" align="center">Capacity</TableColumn>
-                        <TableColumn key="seating" align="center">Seating</TableColumn>
-                        <TableColumn key="status" align="center">Status</TableColumn>
-                        <TableColumn key="actions" align="end">Actions</TableColumn>
+                        <TableColumn key="room"><span className="text-[10px] uppercase">Room / Infrastructure</span></TableColumn>
+                        <TableColumn key="location"><span className="text-[10px] uppercase">Hierarchy</span></TableColumn>
+                        <TableColumn key="capacity" align="center"><span className="text-[10px] uppercase tracking-tighter">Capacity</span></TableColumn>
+                        <TableColumn key="seating" align="center"><span className="text-[10px] uppercase tracking-tighter">Seating</span></TableColumn>
+                        <TableColumn key="status" align="center"><span className="text-[10px] uppercase tracking-tighter">Status</span></TableColumn>
+                        <TableColumn key="actions" align="end"><span className="text-[10px] uppercase tracking-tighter">Actions</span></TableColumn>
                     </TableHeader>
                     <TableBody emptyContent={loading ? ' ' : 'No rooms found'}>
                         {rooms.map(r => (
                             <TableRow key={r.RoomID} className={`hover:bg-slate-50 transition-colors ${r.Status === 'Inactive' ? 'opacity-60' : ''}`}>
                                 <TableCell>
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-violet-50 border border-violet-100 flex items-center justify-center shadow-sm">
-                                            <DoorOpen size={16} className="text-violet-600" />
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-9 h-9 rounded-lg bg-violet-50 border border-violet-100 flex items-center justify-center">
+                                            <DoorOpen size={14} className="text-violet-600" />
                                         </div>
                                         <div className="flex flex-col">
-                                            <span className="font-black text-slate-900 tracking-tight">
-                                                {((r as any).InternalBlock?.BlockName || '')} {r.RoomCode}
+                                            <span className="font-black text-slate-900 tracking-tight text-sm">
+                                                {r.RoomCode}
                                             </span>
+                                            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest leading-none">ID: {r.RoomID}</span>
                                         </div>
                                     </div>
                                 </TableCell>
                                 <TableCell>
-                                    <div className="flex items-center gap-2">
-                                        <span className="bg-slate-100 text-slate-700 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider border border-slate-200 shadow-sm">
-                                            {(r as any).InternalBlock?.BlockName || '—'}
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-slate-800 text-[11px] font-black uppercase tracking-tight">
+                                            {r.Block?.BlockName || '—'}
                                         </span>
-                                        <span className="text-slate-300">•</span>
-                                        <span className="text-slate-500 text-xs font-bold uppercase tracking-tight">
-                                            Floor {(r as any).InternalFloor?.FloorNumber ?? '0'}
+                                        <span className="text-slate-300">/</span>
+                                        <span className="text-slate-500 text-[10px] font-bold uppercase tracking-tighter">
+                                            FL {r.Floor?.FloorNumber ?? '0'}
                                         </span>
                                     </div>
                                 </TableCell>
                                 <TableCell>
                                     <div className="flex flex-col items-center">
-                                        <span className="font-black text-slate-900 text-lg leading-none">{r.TotalCapacity}</span>
-                                        <span className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter mt-1">Total Seats</span>
+                                        <span className="font-black text-slate-800 text-sm leading-none">{r.TotalCapacity}</span>
                                     </div>
                                 </TableCell>
                                 <TableCell>
                                     <div className="flex flex-col items-center">
                                         <Chip size="sm" variant="flat"
-                                            className={r.SeatsPerBench === 2 ? 'bg-violet-50 text-violet-700 border border-violet-200' : 'bg-slate-100 text-slate-600'}>
-                                            <span className="font-black text-[10px] uppercase tracking-widest">{r.SeatsPerBench === 2 ? 'Dual' : 'Single'}</span>
+                                            className={r.SeatsPerBench === 2 ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' : 'bg-slate-100 text-slate-600'}>
+                                            <span className="font-black text-[9px] uppercase tracking-widest">{r.SeatsPerBench === 2 ? 'Dual' : 'Single'}</span>
                                         </Chip>
                                     </div>
                                 </TableCell>
                                 <TableCell>
                                     <div className="flex flex-col items-center">
                                         <Chip size="sm" variant="flat" color={r.Status === 'Active' ? 'success' : 'default'}
-                                            classNames={{ base: r.Status === 'Active' ? 'bg-emerald-50 border border-emerald-200' : 'bg-slate-100' }}>
-                                            <span className="font-black text-[10px] uppercase tracking-widest">{r.Status}</span>
+                                            classNames={{ base: r.Status === 'Active' ? 'bg-emerald-50 border border-emerald-100' : 'bg-slate-100' }}>
+                                            <span className="font-black text-[9px] uppercase tracking-widest">{r.Status}</span>
                                         </Chip>
                                     </div>
                                 </TableCell>

@@ -199,25 +199,24 @@ InternalExamRegistration.belongsTo(InternalStudent, { foreignKey: 'InternalStude
 InternalStudent.hasMany(InternalExamRegistration, { foreignKey: 'InternalStudentID', onDelete: 'CASCADE' });
 
 // InternalSeatAllocation associations
+InternalSeatAllocation.belongsTo(InternalExam, { foreignKey: 'InternalExamID', as: 'Exam', onDelete: 'CASCADE' });
+InternalExam.hasMany(InternalSeatAllocation, { foreignKey: 'InternalExamID', as: 'Allocations', onDelete: 'CASCADE' });
 
-InternalSeatAllocation.belongsTo(InternalExam, { foreignKey: 'InternalExamID', onDelete: 'CASCADE' });
-InternalExam.hasMany(InternalSeatAllocation, { foreignKey: 'InternalExamID', onDelete: 'CASCADE' });
+InternalSeatAllocation.belongsTo(InternalSeat, { foreignKey: 'InternalSeatID', as: 'Seat', onDelete: 'CASCADE' });
+InternalSeat.hasMany(InternalSeatAllocation, { foreignKey: 'InternalSeatID', as: 'Allocations', onDelete: 'CASCADE' });
 
-InternalSeatAllocation.belongsTo(InternalSeat, { foreignKey: 'InternalSeatID', onDelete: 'CASCADE' });
-InternalSeat.hasMany(InternalSeatAllocation, { foreignKey: 'InternalSeatID', onDelete: 'CASCADE' });
-
-InternalSeatAllocation.belongsTo(InternalStudent, { foreignKey: 'InternalStudentID', onDelete: 'CASCADE' });
-InternalStudent.hasMany(InternalSeatAllocation, { foreignKey: 'InternalStudentID', onDelete: 'CASCADE' });
+InternalSeatAllocation.belongsTo(InternalStudent, { foreignKey: 'InternalStudentID', as: 'Student', onDelete: 'CASCADE' });
+InternalStudent.hasMany(InternalSeatAllocation, { foreignKey: 'InternalStudentID', as: 'Allocations', onDelete: 'CASCADE' });
 
 // Internal Structure Associations (already defined in model files, but ensuring consistency here)
-InternalBlock.hasMany(InternalFloor, { foreignKey: 'BlockID', onDelete: 'CASCADE' });
-InternalFloor.belongsTo(InternalBlock, { foreignKey: 'BlockID' });
+InternalBlock.hasMany(InternalFloor, { foreignKey: 'BlockID', as: 'Floors', onDelete: 'CASCADE' });
+InternalFloor.belongsTo(InternalBlock, { foreignKey: 'BlockID', as: 'Block' });
 
-InternalFloor.hasMany(InternalRoom, { foreignKey: 'FloorID', onDelete: 'CASCADE' });
-InternalRoom.belongsTo(InternalFloor, { foreignKey: 'FloorID' });
+InternalFloor.hasMany(InternalRoom, { foreignKey: 'FloorID', as: 'Rooms', onDelete: 'CASCADE' });
+InternalRoom.belongsTo(InternalFloor, { foreignKey: 'FloorID', as: 'Floor' });
 
-InternalBlock.hasMany(InternalRoom, { foreignKey: 'BlockID', onDelete: 'CASCADE' });
-InternalRoom.belongsTo(InternalBlock, { foreignKey: 'BlockID' });
+InternalBlock.hasMany(InternalRoom, { foreignKey: 'BlockID', as: 'Rooms', onDelete: 'CASCADE' });
+InternalRoom.belongsTo(InternalBlock, { foreignKey: 'BlockID', as: 'Block' });
 
 InternalRoom.hasMany(InternalSeat, { foreignKey: 'RoomID', onDelete: 'CASCADE' });
 InternalSeat.belongsTo(InternalRoom, { foreignKey: 'RoomID' });

@@ -17,6 +17,7 @@ export class InternalExamRegistration extends Model<InternalExamRegistrationAttr
     declare InternalExamRegistrationID: number;
     declare InternalExamID: number;
     declare InternalStudentID: number;
+    declare Student?: any;
 }
 
 InternalExamRegistration.init(

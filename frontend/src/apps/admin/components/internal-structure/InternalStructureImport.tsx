@@ -68,8 +68,10 @@ export const InternalStructureImport: React.FC<{ onChange?: () => void }> = ({ o
         setErrors([]);
         try {
             const arrayBuffer = await file.arrayBuffer();
-            const wb = XLSX.read(arrayBuffer, { type: 'array' });
-            const data = XLSX.utils.sheet_to_json<any>(wb.Sheets[wb.SheetNames[0]], { defval: null });
+            const wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: true, cellNF: true, cellText: false });
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            // sheet_to_json handles merged cells by default (value is in the top-left cell)
+            const data = XLSX.utils.sheet_to_json<any>(ws, { defval: "" });
             const processed = processRawData(data);
             setPreviewData(processed);
             validateData(processed);
@@ -114,7 +116,7 @@ export const InternalStructureImport: React.FC<{ onChange?: () => void }> = ({ o
 
         try {
             const chunkSize = 20;
-            const chunks = [];
+            const chunks: CSVData[][] = [];
             for (let i = 0; i < previewData.length; i += chunkSize) {
                 chunks.push(previewData.slice(i, i + chunkSize));
             }
@@ -261,16 +263,16 @@ export const InternalStructureImport: React.FC<{ onChange?: () => void }> = ({ o
                                                 <div className="max-h-[300px] overflow-auto rounded-[32px] border border-slate-100 shadow-sm bg-white">
                                                     <Table aria-label="Preview" removeWrapper isHeaderSticky classNames={{ th: "bg-slate-50 text-slate-400 font-black text-[10px] uppercase tracking-widest py-4", td: "text-slate-700 text-sm py-4 border-b border-slate-50 font-medium" }}>
                                                         <TableHeader>
-                                                            <TableColumn>EXTRACTED ROOM</TableColumn>
-                                                            <TableColumn>CAPACITY</TableColumn>
-                                                            <TableColumn>STATUS</TableColumn>
+                                                            <TableColumn><span className="text-[10px] uppercase">Extracted Identity</span></TableColumn>
+                                                            <TableColumn><span className="text-[10px] uppercase">Capacity</span></TableColumn>
+                                                            <TableColumn><span className="text-[10px] uppercase">Status</span></TableColumn>
                                                         </TableHeader>
                                                         <TableBody>
                                                             {previewData.slice(0, 100).map((row, i) => (
                                                                 <TableRow key={i}>
-                                                                    <TableCell className="font-bold text-slate-900">{row.RoomCode}</TableCell>
-                                                                    <TableCell><span className="bg-slate-100 px-3 py-1 rounded-full text-xs font-black">{row.Capacity} Seats</span></TableCell>
-                                                                    <TableCell><Chip size="sm" variant="flat" color="success" className="font-black text-[10px] uppercase">Valid</Chip></TableCell>
+                                                                    <TableCell className="font-black text-slate-900 text-xs">{row.RoomCode}</TableCell>
+                                                                    <TableCell><span className="bg-slate-100 px-2 py-1 rounded-md text-[10px] font-black text-slate-500">{row.Capacity} Seats</span></TableCell>
+                                                                    <TableCell><Chip size="sm" variant="flat" color="success" className="font-black text-[10px] tracking-widest bg-emerald-50 text-emerald-600">VALID</Chip></TableCell>
                                                                 </TableRow>
                                                             ))}
                                                         </TableBody>
