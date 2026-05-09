@@ -30,6 +30,8 @@ export { default as ExamSeries } from "./ExamSeries.js";
 export { default as Zone } from "./Zone.js";
 export { default as InvigilatorRequest } from "./InvigilatorRequest.js";
 export { default as ProgramDepartment } from "./ProgramDepartment.js";
+export { default as IncidentReport } from "./IncidentReport.js";
+export { default as DutySwap } from "./DutySwap.js";
 
 // Associations
 import ActivityLog from "./ActivityLog.js";
@@ -216,3 +218,21 @@ InternalRoom.belongsTo(InternalBlock, { foreignKey: 'BlockID' });
 
 InternalRoom.hasMany(InternalSeat, { foreignKey: 'RoomID', onDelete: 'CASCADE' });
 InternalSeat.belongsTo(InternalRoom, { foreignKey: 'RoomID' });
+
+// Incident & Swap Associations
+import IncidentReport from "./IncidentReport.js";
+import DutySwap from "./DutySwap.js";
+
+IncidentReport.belongsTo(Exam, { foreignKey: 'ExamID' });
+IncidentReport.belongsTo(Room, { foreignKey: 'RoomID' });
+IncidentReport.belongsTo(Faculty, { foreignKey: 'FacultyID' });
+
+DutySwap.belongsTo(Exam, { foreignKey: 'ExamID' });
+DutySwap.belongsTo(Room, { foreignKey: 'RoomID' });
+DutySwap.belongsTo(Faculty, { as: 'Requester', foreignKey: 'RequesterID' });
+DutySwap.belongsTo(Faculty, { as: 'Substitute', foreignKey: 'SubstituteID' });
+
+Exam.hasMany(IncidentReport, { foreignKey: 'ExamID' });
+Faculty.hasMany(IncidentReport, { foreignKey: 'FacultyID' });
+Faculty.hasMany(DutySwap, { as: 'RequestedSwaps', foreignKey: 'RequesterID' });
+Faculty.hasMany(DutySwap, { as: 'SubstituteSwaps', foreignKey: 'SubstituteID' });

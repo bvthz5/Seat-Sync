@@ -6,6 +6,8 @@ import { useAuth } from '../../../hooks/useAuth';
 import { motion } from 'framer-motion';
 import { Menu, Bell, LogOut, User, ChevronDown } from 'lucide-react';
 import { GlobalNotificationDrawer } from '../components/notifications/GlobalNotificationDrawer';
+import { invigilatorService } from '../services/invigilatorService';
+import { getNotificationStats } from '../services/notificationService';
 import SeatingTypeModal from '../components/seating/SeatingTypeModal';
 import CollegeStructureTypeModal from '../components/structure/CollegeStructureTypeModal';
 import StudentTypeModal from '../components/students/StudentTypeModal';
@@ -14,10 +16,31 @@ const AdminLayout: React.FC = () => {
     const { logout, user } = useAuth();
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [notificationOpen, setNotificationOpen] = useState(false);
+    const [unreadCount, setUnreadCount] = useState(0);
     const [isSeatingModalOpen, setIsSeatingModalOpen] = useState(false);
     const [isCollegeStructureModalOpen, setIsCollegeStructureModalOpen] = useState(false);
     const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
     const navigate = useNavigate();
+
+    const fetchCounts = async () => {
+        try {
+            const [notifStats, swaps] = await Promise.all([
+                getNotificationStats(),
+                invigilatorService.getSwaps('PENDING')
+            ]);
+            setUnreadCount((notifStats.unread || 0) + (swaps?.length || 0));
+        } catch (e) {
+            console.error("Failed to fetch notification counts", e);
+        }
+    };
+
+    React.useEffect(() => {
+        if (user) {
+            fetchCounts();
+            const interval = setInterval(fetchCounts, 60000); // Check every minute
+            return () => clearInterval(interval);
+        }
+    }, [user, notificationOpen]);
 
     return (
         <div className="flex h-screen w-full bg-[#f8fafc] overflow-hidden font-sans selection:bg-indigo-100">
@@ -59,7 +82,11 @@ const AdminLayout: React.FC = () => {
                         className="relative w-10 h-10 flex items-center justify-center rounded-xl text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-all duration-300"
                     >
                         <Bell size={20} />
-                        <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full bg-indigo-500 border-2 border-white animate-pulse" />
+                        {unreadCount > 0 && (
+                            <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-sm ring-2 ring-red-100 animate-in zoom-in-50 duration-300">
+                                {unreadCount > 9 ? '9+' : unreadCount}
+                            </span>
+                        )}
                     </button>
 
                     <Dropdown placement="bottom-end" classNames={{ content: "glass-card border-slate-200/50 p-2 shadow-2xl" }} disableAnimation>

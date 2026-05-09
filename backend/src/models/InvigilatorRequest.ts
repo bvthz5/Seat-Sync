@@ -78,9 +78,9 @@ InvigilatorRequest.init(
       }
     },
     RequestedAt: {
-      type: DataTypes.DATE,
+      type: "DATETIME2",
       allowNull: false,
-      defaultValue: DataTypes.NOW,
+      defaultValue: sequelize.literal('GETDATE()'),
     },
     ReviewedBy: {
       type: DataTypes.INTEGER,
@@ -91,7 +91,7 @@ InvigilatorRequest.init(
       },
     },
     ReviewedAt: {
-      type: DataTypes.DATE,
+      type: "DATETIME2",
       allowNull: true,
     },
   },

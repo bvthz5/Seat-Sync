@@ -81,6 +81,7 @@ const Sidebar: React.FC<{
                                         <NavLink
                                             key={child.path}
                                             to={isChildCollegeStructure ? '/admin/college-structure' : child.path!}
+                                            end={true}
                                             onClick={(e) => {
                                                 if (isChildCollegeStructure) {
                                                     e.preventDefault();
@@ -125,6 +126,7 @@ const Sidebar: React.FC<{
             <NavLink
                 key={item.path}
                 to={isStudents ? '/admin/students' : isSeatingPlans ? '/admin/seating' : isCollegeStructure ? '/admin/college-structure' : item.path!}
+                end={!isActiveStudents && !isActiveSeating && !isActiveCollegeStructure}
                 onClick={(e) => {
                     if (isStudents) {
                         e.preventDefault();

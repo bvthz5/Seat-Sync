@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     ArrowLeft, Users, CheckCircle2, UserX, AlertCircle, AlertTriangle,
     Search, Filter, Save, FileSignature,
-    ChevronDown, Printer, FileText, Upload, LayoutGrid, RefreshCcw, ClipboardList
+    ChevronDown, Printer, FileText, Upload, LayoutGrid, RefreshCcw, ClipboardList, Lock
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -57,6 +57,43 @@ export default function AttendanceConsole() {
     const [filter, setFilter] = useState<'all' | 'present' | 'absent' | 'unmarked'>('all');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showSignatureModal, setShowSignatureModal] = useState(false);
+    const [revealCountdown, setRevealCountdown] = useState<string>("00:00:00");
+
+    useEffect(() => {
+        if (!assignment || assignment.isHallRevealed !== false) return;
+
+        const session = assignment.Exam?.Session;
+        const examDateStr = assignment.Exam?.ExamDate;
+        const revealTime = examDateStr ? new Date(examDateStr) : new Date();
+        if (session === 'FN') {
+            revealTime.setHours(8, 30, 0, 0);
+        } else {
+            revealTime.setHours(12, 30, 0, 0);
+        }
+
+        const updateCountdown = () => {
+            const now = new Date();
+            const diff = revealTime.getTime() - now.getTime();
+            
+            if (diff <= 0) {
+                setRevealCountdown("00:00:00");
+                window.location.reload();
+                return;
+            }
+
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const secs = Math.floor((diff % (1000 * 60)) / 1000);
+            
+            setRevealCountdown(
+                `${hours.toString().padStart(2, '0')}h ${mins.toString().padStart(2, '0')}m ${secs.toString().padStart(2, '0')}s`
+            );
+        };
+
+        updateCountdown();
+        const interval = setInterval(updateCountdown, 1000);
+        return () => clearInterval(interval);
+    }, [assignment]);
 
     useEffect(() => {
         if (assignmentId) fetchData();
@@ -70,6 +107,11 @@ export default function AttendanceConsole() {
             // 1. Get assignment details
             const duty = await invigilatorService.getAssignmentDetails(assignmentId!);
             setAssignment(duty);
+
+            if (duty.isHallRevealed === false) {
+                setLoading(false);
+                return;
+            }
 
             const examDate = duty.Exam.ExamDate;
             const session = duty.Exam.Session;
@@ -222,6 +264,30 @@ export default function AttendanceConsole() {
         );
     }
 
+    if (assignment && assignment.isHallRevealed === false) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center font-sans">
+                <div className="w-20 h-20 bg-slate-100 border border-slate-200 rounded-3xl flex items-center justify-center text-slate-400 mb-6 shadow-inner relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-tr from-blue-100/50 to-transparent"></div>
+                    <Lock size={40} className="relative z-10" />
+                </div>
+                <h2 className="text-2xl font-black uppercase tracking-widest mb-3 text-slate-800">Hall Locked</h2>
+                <p className="text-slate-500 max-w-md text-sm font-semibold leading-relaxed mb-6">
+                    For security reasons, your assigned exam room and attendance list will be revealed exactly <span className="text-blue-600">1 hour</span> before the session starts.
+                </p>
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm mb-6">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Unlocking In</p>
+                    <div className="text-3xl font-mono font-black text-slate-700 tracking-wider">
+                        {revealCountdown}
+                    </div>
+                </div>
+                <button onClick={() => navigate('/invigilator/dashboard')} className="px-6 py-2 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700 transition-all">
+                    Return to Dashboard
+                </button>
+            </div>
+        );
+    }
+
     const ROOM_INFO = {
         roomCode: assignment.Room?.RoomCode || "Unknown",
         block: assignment.Room?.Block?.BlockName || "Main Block",
@@ -297,6 +363,17 @@ export default function AttendanceConsole() {
                             </div>
                         </div>
 
+                        {/* Emergency Alert Button */}
+                        <button
+                            onClick={() => {
+                                toast.error("EMERGENCY ALERT SENT TO CONTROL ROOM", { duration: 5000, icon: '🚨' });
+                            }}
+                            className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-red-500/20 border border-red-500 mr-2"
+                        >
+                            <AlertTriangle size={16} className="animate-pulse" />
+                            <span className="hidden sm:inline">Emergency Alert</span>
+                        </button>
+
                         {/* Submit Button */}
                         <button
                             onClick={handleSubmit}
@@ -318,7 +395,7 @@ export default function AttendanceConsole() {
                 <aside className="w-[340px] xl:w-[400px] bg-white border-r border-slate-200 flex flex-col shrink-0 z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
 
                     {/* Action Panel */}
-                    <div className="p-5 border-b border-slate-100 bg-slate-50/50">
+                    <div className="p-5 border-b border-slate-100 bg-slate-50/50 space-y-3">
                         <div className="flex gap-2">
                             <button
                                 onClick={handleMarkAllPresent}
@@ -329,6 +406,20 @@ export default function AttendanceConsole() {
                             </button>
                             <button className="px-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl transition-colors shadow-sm" title="Upload Scan">
                                 <Upload size={16} />
+                            </button>
+                        </div>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => toast.success("Request for Additional Answer Sheets sent to Exam Cell.", { icon: '📄' })}
+                                className="flex-1 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 font-bold py-2 rounded-xl text-[11px] transition-colors shadow-sm flex items-center justify-center gap-1.5"
+                            >
+                                <FileText size={14} /> Req. Answer Sheets
+                            </button>
+                            <button
+                                onClick={() => toast.success("Reliever requested. A staff member will arrive shortly.", { icon: '🧑‍🏫' })}
+                                className="flex-1 bg-amber-50 border border-amber-200 hover:bg-amber-100 text-amber-700 font-bold py-2 rounded-xl text-[11px] transition-colors shadow-sm flex items-center justify-center gap-1.5"
+                            >
+                                <Users size={14} /> Req. Reliever
                             </button>
                         </div>
                     </div>
