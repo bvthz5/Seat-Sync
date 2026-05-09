@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { Room, Seat, Student, User, Department, Exam, SeatAllocation, ExamSeries, Subject, Semester, Program, Zone, ExamSchedule, ExamRegistration } from "../models/index.js";
+import { Room, Seat, Student, User, Department, Exam, SeatAllocation, ExamSeries, Subject, Semester, Program, Zone, ExamSchedule, ExamRegistration, InternalExam, InternalSeat, InternalRoom, InternalSeatAllocation, InternalStudent, InternalExamRegistration } from "../models/index.js";
 import { Op, QueryTypes } from "sequelize";
 import { sequelize } from "../config/database.js";
 import bcrypt from "bcrypt";
@@ -9,13 +9,14 @@ import { generateSeats } from "../services/seatEngine.js";
 /* ────────────────────────────────────────────────────────────
  * Helper: resolve exam IDs for a given date + session
  * ──────────────────────────────────────────────────────────── */
-const resolveExamIds = async (examDate: string, session: string, transaction?: any): Promise<number[]> => {
-    const exams = await Exam.findAll({
-        attributes: ["ExamID"],
+const resolveExamIds = async (examDate: string, session: string, transaction?: any, ExamModel: any = Exam): Promise<number[]> => {
+    const idCol = ExamModel === InternalExam ? "InternalExamID" : "ExamID";
+    const exams = await ExamModel.findAll({
+        attributes: [idCol],
         where: { ExamDate: examDate, Session: session },
         transaction
     });
-    return exams.map(e => e.ExamID);
+    return exams.map((e: any) => e[idCol]);
 };
 
 const resolveExamIdsForDate = async (examDate: string, transaction?: any): Promise<number[]> => {
@@ -25,6 +26,47 @@ const resolveExamIdsForDate = async (examDate: string, transaction?: any): Promi
         transaction
     });
     return exams.map(e => e.ExamID);
+};
+
+const resolveModels = async (seriesId?: number, examDate?: string, session?: string) => {
+    let type: 'Internal' | 'EndSemester' = 'EndSemester';
+    if (seriesId) {
+        const series = await ExamSeries.findByPk(seriesId);
+        if (series?.ExamType === 'Internal') type = 'Internal';
+    } else if (examDate && session) {
+        // Fallback: Check if there's an InternalExam for this slot
+        const intExam = await InternalExam.findOne({ where: { ExamDate: examDate, Session: session } });
+        if (intExam) type = 'Internal';
+    }
+
+    if (type === 'Internal') {
+        return {
+            ExamModel: InternalExam as any,
+            AllocationModel: InternalSeatAllocation as any,
+            StudentModel: InternalStudent as any,
+            RoomModel: InternalRoom as any,
+            SeatModel: InternalSeat as any,
+            RegistrationModel: InternalExamRegistration as any,
+            ExamIDCol: 'InternalExamID',
+            StudentIDCol: 'InternalStudentID',
+            SeatIDCol: 'SeatID',
+            AllocationIDCol: 'InternalSeatAllocationID',
+            type
+        };
+    }
+    return {
+        ExamModel: Exam as any,
+        AllocationModel: SeatAllocation as any,
+        StudentModel: Student as any,
+        RoomModel: Room as any,
+        SeatModel: Seat as any,
+        RegistrationModel: ExamRegistration as any,
+        ExamIDCol: 'ExamID',
+        StudentIDCol: 'StudentID',
+        SeatIDCol: 'SeatID',
+        AllocationIDCol: 'SeatAllocationID',
+        type
+    };
 };
 
 const getRegisteredStudentsByDepartment = async (
@@ -103,12 +145,19 @@ const getStudentsForExamSession = async (
     slot: string,
     excludeStudentIds: number[],
     transaction?: any,
-    batchYear?: number
+    batchYear?: number,
+    ExamModel: any = Exam,
+    RegistrationModel: any = ExamRegistration,
+    StudentModel: any = Student
 ) => {
+    const isInternal = ExamModel === InternalExam;
+    const ExamIDCol = isInternal ? 'InternalExamID' : 'ExamID';
+    const StudentIDCol = isInternal ? 'InternalStudentID' : 'StudentID';
+
     const normalizedSlot = String(slot || "").trim().toUpperCase();
 
     // First, resolve all exam IDs for this date + session
-    const examIds = await resolveExamIds(examDate, normalizedSlot, transaction);
+    const examIds = await resolveExamIds(examDate, normalizedSlot, transaction, ExamModel);
     console.log("DEBUG: Exams fetched for date/session:", examIds.length, { examDate, session: normalizedSlot });
 
     if (examIds.length === 0) {
@@ -116,19 +165,19 @@ const getStudentsForExamSession = async (
         return [];
     }
 
-    // Fetch students registered for these exams via ExamRegistration table (the source of truth)
-    const registrations = await ExamRegistration.findAll({
-        where: { ExamID: { [Op.in]: examIds } },
-        attributes: ["StudentID", "IsEligible"],
+    // Fetch students registered for these exams via Registration table (the source of truth)
+    const registrations = await RegistrationModel.findAll({
+        where: { [ExamIDCol]: { [Op.in]: examIds } },
+        attributes: [StudentIDCol, "IsEligible"],
         ...(transaction ? { transaction } : {}),
     }) as any[];
 
-    console.log("DEBUG: ExamRegistrations fetched:", registrations.length, { examIds: examIds.length });
+    console.log("DEBUG: Registrations fetched:", registrations.length, { examIds: examIds.length });
 
     // Build a map: StudentID -> IsEligible (latest value wins when student appears in multiple exams)
     const eligibilityMap = new Map<number, boolean>();
     for (const r of registrations as any[]) {
-        const sid = Number(r.StudentID);
+        const sid = Number(r[StudentIDCol]);
         // If ANY registration for this student is ineligible, mark them ineligible for this slot
         if (!eligibilityMap.has(sid) || r.IsEligible === false) {
             eligibilityMap.set(sid, r.IsEligible !== false);
@@ -137,25 +186,41 @@ const getStudentsForExamSession = async (
 
     const studentIds = [...new Set(
         (registrations as any[])
-            .map((r: any) => Number(r.StudentID))
+            .map((r: any) => Number(r[StudentIDCol]))
             .filter(Boolean)
     )];
 
     if (studentIds.length === 0) {
-        console.log("DEBUG: No registered students found in ExamRegistration. Falling back to department-based implicit registration.");
-        const examSubjectRows = await sequelize.query<{ DepartmentID: number }>(
-            `
-            SELECT DISTINCT sub.DepartmentID
-            FROM Exams e
-            INNER JOIN Subjects sub ON sub.SubjectID = e.SubjectID
-            WHERE e.ExamID IN (${examIds.map((_, i) => `:examId${i}`).join(",")})
-            `,
-            {
-                type: QueryTypes.SELECT,
-                replacements: examIds.reduce((acc, id, i) => ({ ...acc, [`examId${i}`]: id }), {} as Record<string, number>),
-                ...(transaction ? { transaction } : {}),
-            }
-        );
+        console.log("DEBUG: No registered students found. Falling back to department-based implicit registration.");
+        let examSubjectRows: any[] = [];
+        if (isInternal) {
+            examSubjectRows = await sequelize.query<{ DepartmentID: number }>(
+                `
+                SELECT DISTINCT ied.DepartmentID
+                FROM InternalExams e
+                INNER JOIN InternalExamDepartments ied ON ied.InternalExamID = e.InternalExamID
+                WHERE e.InternalExamID IN (${examIds.join(",")})
+                `,
+                {
+                    type: QueryTypes.SELECT,
+                    ...(transaction ? { transaction } : {}),
+                }
+            );
+        } else {
+            examSubjectRows = await sequelize.query<{ DepartmentID: number }>(
+                `
+                SELECT DISTINCT sub.DepartmentID
+                FROM Exams e
+                INNER JOIN Subjects sub ON sub.SubjectID = e.SubjectID
+                WHERE e.ExamID IN (${examIds.join(",")})
+                `,
+                {
+                    type: QueryTypes.SELECT,
+                    replacements: examIds.reduce((acc, id, i) => ({ ...acc, [`examId${i}`]: id }), {} as Record<string, number>),
+                    ...(transaction ? { transaction } : {}),
+                }
+            );
+        }
         const slotDeptIds = [...new Set(examSubjectRows.map(r => Number(r.DepartmentID)).filter(Boolean))];
         if (slotDeptIds.length === 0) return [];
 
@@ -164,7 +229,7 @@ const getStudentsForExamSession = async (
             studentWhereFallback.BatchYear = batchYear;
         }
 
-        const allSlotStudents = await Student.findAll({
+        const allSlotStudents = await StudentModel.findAll({
             where: studentWhereFallback,
             include: [
                 { model: User, attributes: ["FullName"] },
@@ -175,7 +240,7 @@ const getStudentsForExamSession = async (
         });
 
         const excluded = new Set<number>(excludeStudentIds.map(Number));
-        const finalStudents = allSlotStudents.filter((s: any) => !excluded.has(Number(s.StudentID)));
+        const finalStudents = allSlotStudents.filter((s: any) => !excluded.has(Number(s[StudentIDCol])));
 
         return finalStudents.map((s: any) => {
             const jsonStu = typeof s.toJSON === 'function' ? s.toJSON() : { ...s };
@@ -191,12 +256,12 @@ const getStudentsForExamSession = async (
     console.log("DEBUG: Filtered student IDs:", { total: studentIds.length, afterExclude: filteredStudentIds.length });
 
     // Fetch full student data
-    const studentWhere: any = { StudentID: { [Op.in]: filteredStudentIds } };
+    const studentWhere: any = { [StudentIDCol]: { [Op.in]: filteredStudentIds } };
     if (batchYear) {
         studentWhere.BatchYear = batchYear;
     }
 
-    const students = await Student.findAll({
+    const students = await StudentModel.findAll({
         where: studentWhere,
         include: [
             { model: User, attributes: ["FullName"] },
@@ -251,27 +316,30 @@ const sortSeatsByPosition = (a: any, b: any) => {
 /* ────────────────────────────────────────────────────────────
  * Helper: Auto-generate Seat rows for a room if none exist yet
  * ──────────────────────────────────────────────────────────── */
-const ensureSeatsExist = async (room: Room, transaction?: any): Promise<void> => {
+const ensureSeatsExist = async (room: Room | InternalRoom, transaction?: any): Promise<void> => {
     try {
         if (!room || !room.RoomID) {
             console.error("ensureSeatsExist: Invalid room", room);
             return;
         }
 
+        const isInternal = room instanceof InternalRoom;
+        const SeatModel = isInternal ? InternalSeat : Seat;
+
         const queryOptions: any = {
             where: { RoomID: Number(room.RoomID) },
             attributes: [
                 "SeatID",
-                "RowIndex",
-                "BenchIndex",
-                "SeatIndex"
+                isInternal ? "RowLabel" : "RowIndex",
+                isInternal ? "BenchNumber" : "BenchIndex",
+                isInternal ? "SeatNumber" : "SeatIndex"
             ],
             raw: true
         };
         if (transaction) queryOptions.transaction = transaction;
 
-        console.log(`ensureSeatsExist: Querying seats for room ${room.RoomID}`, queryOptions);
-        const existingSeats = await Seat.findAll(queryOptions);
+        console.log(`ensureSeatsExist: Querying seats for ${isInternal ? 'Internal' : 'EndSem'} room ${room.RoomID}`, queryOptions);
+        const existingSeats = await (SeatModel as any).findAll(queryOptions);
         console.log(`ensureSeatsExist: Found ${existingSeats?.length || 0} existing seats for room ${room.RoomID}`);
 
         let rowLayout: any = (room as any).RowLayout;
@@ -305,7 +373,12 @@ const ensureSeatsExist = async (room: Room, transaction?: any): Promise<void> =>
         }
 
         const existingKeys = new Set(
-            (existingSeats as any[]).map((s: any) => `${String(s.RowIndex)}-${Number(s.BenchIndex)}-${Number(s.SeatIndex)}`)
+            (existingSeats as any[]).map((s: any) => {
+                const r = isInternal ? s.RowLabel : s.RowIndex;
+                const b = isInternal ? s.BenchNumber : s.BenchIndex;
+                const si = isInternal ? s.SeatNumber : s.SeatIndex;
+                return `${String(r)}-${Number(b)}-${Number(si)}`;
+            })
         );
 
         const hasLayoutMismatch =
@@ -356,17 +429,28 @@ export const getSeries = async (req: Request, res: Response) => {
 export const getExamDates = async (req: Request, res: Response) => {
     try {
         const { seriesId, allocatedOnly } = req.query;
+        const seriesIdNum = seriesId ? Number(Array.isArray(seriesId) ? seriesId[0] : seriesId) : undefined;
+        const { ExamModel, AllocationModel, ExamIDCol } = await resolveModels(seriesIdNum);
+        
         const where: any = {};
-        if (seriesId) where.ExamSeriesID = Number(seriesId);
+        if (seriesId) {
+            if (ExamModel === InternalExam) where.InternalExamSeriesID = Number(seriesId);
+            else where.ExamSeriesID = Number(seriesId);
+        }
 
         let exams: any[] = [];
         
         if (String(allocatedOnly) === 'true') {
-            const allocatedExams = await sequelize.query<{ ExamDate: Date; Session: string; ExamName: string }>(
-                `SELECT DISTINCT e.ExamDate, e.Session, e.ExamName
-                 FROM Exams e
-                 INNER JOIN SeatAllocations sa ON sa.ExamID = e.ExamID
-                 ${seriesId ? 'WHERE e.ExamSeriesID = :seriesId' : ''}
+            const table = ExamModel === InternalExam ? 'InternalExams' : 'Exams';
+            const allocTable = ExamModel === InternalExam ? 'InternalSeatAllocations' : 'SeatAllocations';
+            const idCol = ExamModel === InternalExam ? 'InternalExamID' : 'ExamID';
+            const seriesCol = ExamModel === InternalExam ? 'InternalExamSeriesID' : 'ExamSeriesID';
+
+            const allocatedExams = await sequelize.query<{ ExamDate: Date; Session: string; ExamName: string | null; SubjectName: string | null }>(
+                `SELECT DISTINCT e.ExamDate, e.Session, ${ExamModel === InternalExam ? 'e.SubjectName' : 'e.ExamName'} as ExamName
+                 FROM ${table} e
+                 INNER JOIN ${allocTable} sa ON sa.${idCol} = e.${idCol}
+                 ${seriesId ? `WHERE e.${seriesCol} = :seriesId` : ''}
                  ORDER BY e.ExamDate ASC`,
                 {
                     replacements: { seriesId },
@@ -375,8 +459,8 @@ export const getExamDates = async (req: Request, res: Response) => {
             );
             exams = allocatedExams;
         } else {
-            exams = await Exam.findAll({
-                attributes: ["ExamDate", "Session", "ExamName"],
+            exams = await ExamModel.findAll({
+                attributes: ["ExamDate", "Session", ExamModel === InternalExam ? "SubjectName" : "ExamName"],
                 where,
                 order: [["ExamDate", "ASC"]],
             });
@@ -394,8 +478,9 @@ export const getExamDates = async (req: Request, res: Response) => {
             }
             const slot = slotMap.get(key)!;
             slot.examCount++;
-            if (exam.ExamName && !slot.examNames.includes(exam.ExamName)) {
-                slot.examNames.push(exam.ExamName);
+            const name = ExamModel === InternalExam ? (exam as any).SubjectName : (exam as any).ExamName;
+            if (name && !slot.examNames.includes(name)) {
+                slot.examNames.push(name);
             }
         }
 
@@ -416,6 +501,10 @@ export const getExamDepartments = async (req: Request, res: Response) => {
         if (!examDate) {
             return res.status(400).json({ message: "examDate is required" });
         }
+
+        const seriesIdNum = seriesId ? Number(Array.isArray(seriesId) ? seriesId[0] : seriesId) : undefined;
+        const { type } = await resolveModels(seriesIdNum, examDate as string, session as string);
+        const isInternal = type === 'Internal';
 
         const whereParts = ["e.ExamDate = :examDate"];
         const replacements: Record<string, any> = {
@@ -476,9 +565,12 @@ export const getExamDepartments = async (req: Request, res: Response) => {
 /* ════════════════════════════════════════════════════════════
  *  GET /api/seating/halls
  * ════════════════════════════════════════════════════════════ */
-export const getHalls = async (_req: Request, res: Response) => {
+export const getHalls = async (req: Request, res: Response) => {
     try {
-        const halls = await Room.findAll({
+        const { seriesId } = req.query;
+        const seriesIdNum = seriesId ? Number(Array.isArray(seriesId) ? seriesId[0] : seriesId) : undefined;
+        const { RoomModel } = await resolveModels(seriesIdNum);
+        const halls = await (RoomModel as any).findAll({
             where: { Status: "Active" },
             order: [["RoomCode", "ASC"]],
         });
@@ -495,7 +587,12 @@ export const getHalls = async (_req: Request, res: Response) => {
 export const getHallLayout = async (req: Request, res: Response) => {
     try {
         const { hallId } = req.params;
-        const hall = await Room.findByPk(Number(hallId));
+        const { seriesId } = req.query;
+        const seriesIdNum = seriesId ? Number(Array.isArray(seriesId) ? seriesId[0] : seriesId) : undefined;
+        const { RoomModel, SeatModel, type } = await resolveModels(seriesIdNum);
+        const isInternal = type === 'Internal';
+
+        const hall = await RoomModel.findByPk(Number(hallId));
         if (!hall) return res.status(404).json({ message: "Hall not found" });
 
         // Gracefully try to ensure seats exist — do NOT let failures block the layout response
@@ -506,12 +603,12 @@ export const getHallLayout = async (req: Request, res: Response) => {
         }
 
         // Fetch ALL seats (active + inactive) so the UI can show disabled ones
-        const seats = await Seat.findAll({
+        const seats = await SeatModel.findAll({
             where: { RoomID: Number(hallId) },
-            order: [["RowIndex", "ASC"], ["BenchIndex", "ASC"], ["SeatIndex", "ASC"]],
+            order: [[isInternal ? "RowLabel" : "RowIndex", "ASC"], [isInternal ? "BenchNumber" : "BenchIndex", "ASC"], [isInternal ? "SeatNumber" : "SeatIndex", "ASC"]],
         });
 
-        const activeSeats = seats.filter(s => s.IsActive).length;
+        const activeSeats = (seats as any[]).filter((s: any) => s.IsActive).length;
 
         const benchMap: Record<string, Record<number, any[]>> = {};
 
@@ -829,13 +926,17 @@ export const getAllocationForHall = async (req: Request, res: Response) => {
 export const saveAllocation = async (req: Request, res: Response) => {
     const transaction = await sequelize.transaction();
     try {
-        const { examDate, session, hallId, assignments } = req.body;
+        const { examDate, session, hallId, assignments, seriesId } = req.body;
+        const seriesIdNum = seriesId ? Number(Array.isArray(seriesId) ? seriesId[0] : seriesId) : undefined;
+        const { ExamModel, AllocationModel, ExamIDCol, StudentIDCol, SeatModel, type: examType } = await resolveModels(seriesIdNum, examDate as string, session as string);
+        const isInternal = examType === 'Internal';
+
         if (!examDate || !session || !hallId) {
             await transaction.rollback();
             return res.status(400).json({ message: "examDate, session, and hallId are required" });
         }
 
-        const examIds = await resolveExamIds(examDate, session, transaction);
+        const examIds = await resolveExamIds(examDate, session, transaction, ExamModel);
         if (examIds.length === 0) {
             await transaction.rollback();
             return res.status(400).json({ message: "No exams found for this slot" });
@@ -843,17 +944,17 @@ export const saveAllocation = async (req: Request, res: Response) => {
 
         const primaryExamId = examIds[0] as number; // Use first exam as FK anchor
 
-        const seats = await Seat.findAll({
+        const seats = await (SeatModel as any).findAll({
             where: { RoomID: Number(hallId), IsActive: true },
-            attributes: ["SeatID", "RowIndex", "BenchIndex", "SeatIndex"],
+            attributes: ["SeatID", isInternal ? "RowLabel" : "RowIndex", isInternal ? "BenchNumber" : "BenchIndex", isInternal ? "SeatNumber" : "SeatIndex"],
             transaction,
         });
-        const seatIds = seats.map(s => s.SeatID);
+        const seatIds = seats.map((s: any) => s.SeatID);
 
         // Delete existing allocations for ALL exams in this slot in this hall
-        await SeatAllocation.destroy({
+        await (AllocationModel as any).destroy({
             where: {
-                ExamID: { [Op.in]: examIds },
+                [ExamIDCol]: { [Op.in]: examIds },
                 SeatID: { [Op.in]: seatIds.length > 0 ? seatIds : [-1] },
             },
             transaction,
@@ -864,12 +965,12 @@ export const saveAllocation = async (req: Request, res: Response) => {
             const records = assignments
                 .filter((a: any) => a.seatId && a.studentId)
                 .map((a: any) => ({
-                    ExamID: primaryExamId,
+                    [ExamIDCol]: primaryExamId,
                     SeatID: Number(a.seatId),
-                    StudentID: Number(a.studentId),
+                    [StudentIDCol]: Number(a.studentId),
                 }));
             if (records.length > 0) {
-                await SeatAllocation.bulkCreate(records, { transaction });
+                await (AllocationModel as any).bulkCreate(records, { transaction });
             }
         }
 
@@ -889,15 +990,19 @@ export const saveAllocation = async (req: Request, res: Response) => {
 export const clearAllocation = async (req: Request, res: Response) => {
     try {
         const { examDate, session, hallId } = req.params;
-        const examIds = await resolveExamIds(examDate as string, session as string);
+        const { seriesId } = req.query;
+        const seriesIdNum = seriesId ? Number(Array.isArray(seriesId) ? seriesId[0] : seriesId) : undefined;
+        const { ExamModel, AllocationModel, ExamIDCol, SeatModel } = await resolveModels(seriesIdNum, examDate as string, session as string);
+
+        const examIds = await resolveExamIds(examDate as string, session as string, undefined, ExamModel);
         if (examIds.length === 0) return res.json({ message: "Nothing to clear" });
 
-        const seats = await Seat.findAll({ where: { RoomID: Number(hallId), IsActive: true } });
-        const seatIds = seats.map(s => s.SeatID);
+        const seats = await (SeatModel as any).findAll({ where: { RoomID: Number(hallId), IsActive: true } });
+        const seatIds = seats.map((s: any) => s.SeatID);
 
-        await SeatAllocation.destroy({
+        await (AllocationModel as any).destroy({
             where: {
-                ExamID: { [Op.in]: examIds },
+                [ExamIDCol]: { [Op.in]: examIds },
                 SeatID: { [Op.in]: seatIds.length > 0 ? seatIds : [-1] },
             },
         });
@@ -998,12 +1103,16 @@ export const getStudentsByDept = async (req: Request, res: Response) => {
 export const getAllocationSummary = async (req: Request, res: Response) => {
     try {
         const { examDate, session } = req.params;
-        const examIds = await resolveExamIds(examDate as string, session as string);
+        const { seriesId } = req.query;
+        const seriesIdNum = seriesId ? Number(Array.isArray(seriesId) ? seriesId[0] : seriesId) : undefined;
+        const { ExamModel, AllocationModel, ExamIDCol, RoomModel, SeatModel } = await resolveModels(seriesIdNum, examDate as string, session as string);
+        
+        const examIds = await resolveExamIds(examDate as string, session as string, undefined, ExamModel);
 
-        const activeHalls = await Room.findAll({ where: { Status: "Active" }, order: [["RoomCode", "ASC"]] });
+        const activeHalls = await (RoomModel as any).findAll({ where: { Status: "Active" }, order: [["RoomCode", "ASC"]] });
 
         // Optimize: Do an aggregated count of active seats and allocations by RoomID
-        const activeSeatsCounts = await Seat.findAll({
+        const activeSeatsCounts = await (SeatModel as any).findAll({
             where: { IsActive: true },
             attributes: ["RoomID", [sequelize.fn("COUNT", sequelize.col("SeatID")), "count"]],
             group: ["RoomID"],
@@ -1017,11 +1126,11 @@ export const getAllocationSummary = async (req: Request, res: Response) => {
 
         const allocationCountMap = new Map<number, number>();
         if (examIds.length > 0) {
-            const allocations = await SeatAllocation.findAll({
-                where: { ExamID: { [Op.in]: examIds } },
-                include: [{ model: Seat, attributes: ["RoomID"] }],
-                attributes: [[sequelize.col("Seat.RoomID"), "RoomID"], [sequelize.fn("COUNT", sequelize.col("SeatAllocation.SeatID")), "count"]],
-                group: ["Seat.RoomID"],
+            const allocations = await (AllocationModel as any).findAll({
+                where: { [ExamIDCol]: { [Op.in]: examIds } },
+                include: [{ model: SeatModel, attributes: ["RoomID"] }],
+                attributes: [[sequelize.col(`${SeatModel.name}.RoomID`), "RoomID"], [sequelize.fn("COUNT", sequelize.col(`${AllocationModel.name}.SeatID`)), "count"]],
+                group: [`${SeatModel.name}.RoomID`],
                 raw: true,
             }) as any[];
             for (const r of allocations) {
@@ -1237,6 +1346,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
             shuffleRooms,
             roomCapacityLimit,   // End-Sem: optional per-room seat cap (default 40)
             batchYear,           // Optional filter by batch
+            seriesId,            // UI selected series
         } = req.body;
 
         if (!examDate || !session || !hallIds || hallIds.length === 0) {
@@ -1244,31 +1354,17 @@ export const bulkAssign = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "examDate, session, and hallIds are required" });
         }
 
-        const examIds = await resolveExamIds(examDate, session, transaction);
+        const seriesIdNum = seriesId ? Number(Array.isArray(seriesId) ? seriesId[0] : seriesId) : undefined;
+        const { ExamModel, AllocationModel, StudentModel, RoomModel, SeatModel, RegistrationModel, ExamIDCol, StudentIDCol, SeatIDCol, type: examType } = await resolveModels(seriesIdNum, examDate as string, session as string);
+        const isInternal = examType === 'Internal';
+        const examIds = await resolveExamIds(examDate, session, transaction, ExamModel);
         if (examIds.length === 0) {
             await transaction.rollback();
             return res.status(400).json({ message: "No exams found for this date + session" });
         }
         const primaryExamId = examIds[0] as number;
 
-        /* ══════════════════════════════════════════════════════
-         * STEP 1: Detect ExamType for this date+session
-         * Query ExamSeries through the Exams table.
-         * ══════════════════════════════════════════════════════ */
-        const examTypeRows = await sequelize.query<{ ExamType: string }>(`
-            SELECT DISTINCT es.ExamType
-            FROM   Exams e
-            INNER JOIN ExamSeries es ON es.ExamSeriesID = e.ExamSeriesID
-            WHERE  e.ExamDate = :examDate AND e.Session = :session
-        `, {
-            type: QueryTypes.SELECT,
-            replacements: { examDate: String(examDate), session: String(session) },
-            transaction,
-        });
-        // Any EndSemester exam in the slot → use EndSemester logic
-        const examType: 'Internal' | 'EndSemester' =
-            examTypeRows.some(r => r.ExamType === 'EndSemester') ? 'EndSemester' : 'Internal';
-        console.log(`[bulkAssign] ExamType detected: ${examType} (rows: ${examTypeRows.length})`);
+        console.log(`[bulkAssign] ExamType detected: ${examType}`);
 
         /* ══════════════════════════════════════════════════════
          * END-SEMESTER BRANCH — returns early
@@ -1697,15 +1793,15 @@ export const bulkAssign = async (req: Request, res: Response) => {
         // Already-allocated students in OTHER halls (outside the current bulk-run scope)
         // Students already seated in selected halls must remain eligible because those halls are re-cleared/reassigned.
         const selectedHallSet = new Set<number>((hallIds as number[]).map((id: number) => Number(id)));
-        const existingAllocations = await SeatAllocation.findAll({
-            where: { ExamID: { [Op.in]: examIds } },
-            include: [{ model: Seat, attributes: ["RoomID"], required: true }],
+        const existingAllocations = await AllocationModel.findAll({
+            where: { [ExamIDCol]: { [Op.in]: examIds } },
+            include: [{ model: SeatModel, attributes: ["RoomID"], required: true }],
             transaction,
         });
         const allocatedStudentIds = new Set<number>(
             (existingAllocations as any[])
                 .filter((a: any) => !selectedHallSet.has(Number(a?.Seat?.RoomID)))
-                .map((a: any) => Number(a.StudentID))
+                .map((a: any) => Number(a[StudentIDCol]))
                 .filter(Boolean)
         );
         const excludeIds = allocatedStudentIds.size > 0 ? [...allocatedStudentIds] : [-1];
@@ -1733,7 +1829,10 @@ export const bulkAssign = async (req: Request, res: Response) => {
             slotValue,
             excludeIds,
             transaction,
-            batchYear ? Number(batchYear) : undefined
+            batchYear ? Number(batchYear) : undefined,
+            ExamModel,
+            RegistrationModel,
+            StudentModel
         );
 
         // ── STEP 2: Build left/right pools based on mode + departments ──
@@ -1798,14 +1897,14 @@ export const bulkAssign = async (req: Request, res: Response) => {
         }
 
         let leftIdx = 0, rightIdx = 0;
-        const targetHalls = await Room.findAll({
+        const targetHalls = await (RoomModel as any).findAll({
             where: { RoomID: { [Op.in]: hallIds } },
             transaction
         });
 
         // Map capacities and overrides for Internal branch
         const roomCapacityMap = new Map<number, { capacity: number; override: number | null }>();
-        for (const h of targetHalls) {
+        for (const h of (targetHalls as any[])) {
             roomCapacityMap.set(h.RoomID, {
                 capacity: h.TotalCapacity,
                 override: h.OverrideCap
@@ -1816,12 +1915,13 @@ export const bulkAssign = async (req: Request, res: Response) => {
         // Using raw SQL to avoid Sequelize MSSQL dialect issues
         let allActiveSeats: any[] = [];
         try {
+            const seatsTable = isInternal ? 'InternalSeats' : 'Seats';
             allActiveSeats = await sequelize.query(`
-                SELECT SeatID, RoomID, RowIndex AS RowLabel, BenchIndex AS BenchNumber, SeatIndex AS SeatNumber
-                FROM Seats
+                SELECT SeatID, RoomID, ${isInternal ? 'RowLabel' : 'RowIndex'} AS RowLabel, ${isInternal ? 'BenchNumber' : 'BenchIndex'} AS BenchNumber, ${isInternal ? 'SeatNumber' : 'SeatIndex'} AS SeatNumber
+                FROM ${seatsTable}
                 WHERE RoomID IN (${hallIds.map((id: any) => Number(id)).join(',')})
                 AND IsActive = 1
-                ORDER BY RoomID ASC, RowIndex ASC, BenchIndex ASC, SeatIndex ASC
+                ORDER BY RoomID ASC, ${isInternal ? 'RowLabel' : 'RowIndex'} ASC, ${isInternal ? 'BenchNumber' : 'BenchIndex'} ASC, ${isInternal ? 'SeatNumber' : 'SeatIndex'} ASC
             `, {
                 type: QueryTypes.SELECT,
                 raw: true,
@@ -1848,8 +1948,8 @@ export const bulkAssign = async (req: Request, res: Response) => {
         // Clear existing allocations for all these halls + slot in one query
         const allSeatIds = allActiveSeats.map(s => s.SeatID);
         if (allSeatIds.length > 0) {
-            await SeatAllocation.destroy({
-                where: { ExamID: { [Op.in]: examIds }, SeatID: { [Op.in]: allSeatIds } },
+            await AllocationModel.destroy({
+                where: { [ExamIDCol]: { [Op.in]: examIds }, SeatID: { [Op.in]: allSeatIds } },
                 transaction,
             });
         }
@@ -1918,7 +2018,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
 
         // Hall-by-hall assignment: fill each hall completely before moving to next
         for (const hallIdNum of hallIdsToUse) {
-            const hall = targetHalls.find(h => h.RoomID === hallIdNum);
+            const hall = (targetHalls as any[]).find((h: any) => h.RoomID === hallIdNum);
             if (!hall) continue;
 
             const seats = cappedByRoom.get(hallIdNum) || [];
@@ -1966,12 +2066,12 @@ export const bulkAssign = async (req: Request, res: Response) => {
                                 const stuEligible = stu._isEligible !== false;
                                 console.log(`Bench ${row}${benchNum} Left: ${stu.RegisterNumber} (${stu.Department?.DepartmentCode}) eligible=${stuEligible}`);
                                 allNewAllocations.push({
-                                    ExamID: primaryExamId,
-                                    SeatID: seat.SeatID!,
-                                    StudentID: stu.StudentID as number,
+                                    [ExamIDCol]: primaryExamId,
+                                    [SeatIDCol]: seat.SeatID!,
+                                    [StudentIDCol]: stu[StudentIDCol] as number,
                                     IsEligible: stuEligible,
                                     IsBlocked: !stuEligible,
-                                });
+                                } as any);
                                 hallLeft++;
                             }
                         } else {
@@ -2071,12 +2171,12 @@ export const bulkAssign = async (req: Request, res: Response) => {
                                 const stuEligible = stu._isEligible !== false;
                                 console.log(`Bench ${row}${benchNum} Right: ${stu.RegisterNumber} (${stu.Department?.DepartmentCode}) eligible=${stuEligible}`);
                                 allNewAllocations.push({
-                                    ExamID: primaryExamId,
-                                    SeatID: seat.SeatID!,
-                                    StudentID: stu.StudentID as number,
+                                    [ExamIDCol]: primaryExamId,
+                                    [SeatIDCol]: seat.SeatID!,
+                                    [StudentIDCol]: stu[StudentIDCol] as number,
                                     IsEligible: stuEligible,
                                     IsBlocked: !stuEligible,
-                                });
+                                } as any);
 
                                 // Increment appropriate counter
                                 if (useRightPool) {
@@ -2099,7 +2199,7 @@ export const bulkAssign = async (req: Request, res: Response) => {
         }
 
         if (allNewAllocations.length > 0) {
-            await SeatAllocation.bulkCreate(allNewAllocations, { transaction });
+            await AllocationModel.bulkCreate(allNewAllocations, { transaction });
         }
 
         await transaction.commit();
@@ -3080,65 +3180,48 @@ export const exportSeatingToExcel = async (req: Request, res: Response) => {
 export const getGlobalAllocations = async (req: Request, res: Response) => {
     try {
         const { examDate, session } = req.params;
-        const examIds = await resolveExamIds(examDate as string, session as string);
+        const { seriesId } = req.query;
+        const seriesIdNum = seriesId ? Number(Array.isArray(seriesId) ? seriesId[0] : seriesId) : undefined;
+        const { ExamModel, AllocationModel, ExamIDCol, StudentIDCol, SeatModel, type: examType } = await resolveModels(seriesIdNum, examDate as string, session as string);
+        const isInternal = examType === 'Internal';
+
+        const examIds = await resolveExamIds(examDate as string, session as string, undefined, ExamModel);
         if (examIds.length === 0) return res.json({ allocations: [] });
 
-        const allocations = await SeatAllocation.findAll({
-            where: { ExamID: { [Op.in]: examIds } },
-            include: [
-                { model: Seat, attributes: ["RoomID"], include: [{ model: Room, attributes: ["RoomCode"] }] },
-                {
-                    model: Student,
-                    include: [{ model: Department, attributes: ["DepartmentCode", "DepartmentName"] }]
-                }
-            ]
-        });
+        const allocTable = isInternal ? 'InternalSeatAllocations' : 'SeatAllocations';
+        const examTable = isInternal ? 'InternalExams' : 'Exams';
+        const studentTable = isInternal ? 'InternalStudents' : 'Students';
+        const seatTable = isInternal ? 'InternalSeats' : 'Seats';
 
-        // Enrich with subjectCode via ExamRegistrations (similar to getAllocationForHall)
-        const studentIds = [...new Set((allocations as any[]).map(a => Number(a.StudentID)))];
-        const subjectByStudent = new Map<number, { code: string, name: string }>();
-        
-        if (studentIds.length > 0) {
-            const studentIdList = studentIds.join(',');
-            const examIdList = examIds.join(',');
-            const regsWithSubject = await sequelize.query<{ StudentID: number; SubjectCode: string; SubjectName: string }>(
-                `SELECT er.StudentID, s.SubjectCode, s.SubjectName
-                 FROM   ExamRegistrations er
-                 INNER JOIN Exams e ON e.ExamID = er.ExamID
-                 INNER JOIN Subjects s ON s.SubjectID = e.SubjectID
-                 WHERE  er.StudentID IN (${studentIdList})
-                 AND    er.ExamID IN (${examIdList})`,
-                { type: QueryTypes.SELECT }
-            );
-            
-            for (const r of regsWithSubject) {
-                if (!subjectByStudent.has(Number(r.StudentID))) {
-                    subjectByStudent.set(Number(r.StudentID), { code: r.SubjectCode, name: r.SubjectName });
-                }
-            }
-        }
+        const allocations = await sequelize.query(`
+            SELECT 
+                sa.${isInternal ? 'InternalSeatAllocationID' : 'SeatAllocationID'} as allocationId,
+                sa.${ExamIDCol} as examId,
+                sa.${StudentIDCol} as studentId,
+                s.RoomID as roomId,
+                r.RoomCode as roomCode,
+                st.RegisterNumber as registerNumber,
+                u.FullName as studentName,
+                d.DepartmentCode as deptCode,
+                ${isInternal ? 'e.SubjectName' : 'sub.SubjectName'} as subjectName,
+                ${isInternal ? 'e.SubjectCode' : 'sub.SubjectCode'} as subjectCode,
+                sa.IsEligible as isEligible,
+                sa.IsBlocked as isBlocked
+            FROM ${allocTable} sa
+            INNER JOIN ${seatTable} s ON s.SeatID = sa.SeatID
+            INNER JOIN Rooms r ON r.RoomID = s.RoomID
+            INNER JOIN ${studentTable} st ON st.${StudentIDCol} = sa.${StudentIDCol}
+            INNER JOIN Users u ON u.UserID = st.UserID
+            INNER JOIN Departments d ON d.DepartmentID = st.DepartmentID
+            INNER JOIN ${examTable} e ON e.${ExamIDCol} = sa.${ExamIDCol}
+            ${isInternal ? '' : 'INNER JOIN Subjects sub ON sub.SubjectID = e.SubjectID'}
+            WHERE sa.${ExamIDCol} IN (${examIds.join(',')})
+            ORDER BY r.RoomCode ASC, s.${isInternal ? 'RowLabel' : 'RowIndex'} ASC, s.${isInternal ? 'BenchNumber' : 'BenchIndex'} ASC
+        `, { type: QueryTypes.SELECT });
 
-        const results = (allocations as any[]).map(a => {
-            const sid = Number(a.StudentID);
-            const sbj = subjectByStudent.get(sid);
-            return {
-                seatId: a.SeatID,
-                roomId: a.Seat?.RoomID,
-                roomCode: a.Seat?.Room?.RoomCode,
-                studentId: sid,
-                registerNumber: a.Student?.RegisterNumber,
-                studentName: a.Student?.FullName,
-                isEligible: a.IsEligible !== false,
-                isBlocked: a.IsBlocked === true,
-                deptCode: a.Student?.Department?.DepartmentCode,
-                subjectCode: sbj?.code || "Unknown",
-                subjectName: sbj?.name || "Unknown",
-            };
-        });
-
-        res.json({ allocations: results });
+        res.json({ allocations });
     } catch (error: any) {
-        console.error("GET GLOBAL ALLOCATIONS ERROR:", error);
+        console.error('GET GLOBAL ALLOCATIONS ERROR:', error);
         res.status(500).json({ message: (error instanceof Error ? error.message : String(error)) });
     }
 };

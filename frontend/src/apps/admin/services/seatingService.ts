@@ -19,10 +19,16 @@ export const SeatingService = {
     },
 
     /** Get all active halls */
-    getHalls: async () => { const r = await api.get(`${PREFIX}/halls`); return r.data; },
+    getHalls: async (seriesId?: number) => { 
+        const r = await api.get(`${PREFIX}/halls`, { params: seriesId ? { seriesId } : {} }); 
+        return r.data; 
+    },
 
     /** Get seat layout for a hall */
-    getHallLayout: async (hallId: number) => { const r = await api.get(`${PREFIX}/halls/${hallId}/layout`); return r.data; },
+    getHallLayout: async (hallId: number, seriesId?: number) => { 
+        const r = await api.get(`${PREFIX}/halls/${hallId}/layout`, { params: seriesId ? { seriesId } : {} }); 
+        return r.data; 
+    },
 
     /** Get departments with student counts */
     getDepartments: async () => { const r = await api.get(`${PREFIX}/departments`); return r.data; },
@@ -39,14 +45,14 @@ export const SeatingService = {
     getStudentsByDept: async (deptId: number) => { const r = await api.get(`${PREFIX}/students/${deptId}`); return r.data; },
 
     /** Per-hall allocation summary for a date+session */
-    getAllocationSummary: async (examDate: string, session: string) => {
-        const r = await api.get(`${PREFIX}/allocation-summary/${examDate}/${session}`);
+    getAllocationSummary: async (examDate: string, session: string, seriesId?: number) => {
+        const r = await api.get(`${PREFIX}/allocation-summary/${examDate}/${session}`, { params: seriesId ? { seriesId } : {} });
         return r.data;
     },
 
     /** Fetch all allocations globally for a specific date and session */
-    getGlobalAllocations: async (examDate: string, session: string) => {
-        const r = await api.get(`${PREFIX}/global-allocations/${examDate}/${session}`);
+    getGlobalAllocations: async (examDate: string, session: string, seriesId?: number) => {
+        const r = await api.get(`${PREFIX}/global-allocations/${examDate}/${session}`, { params: seriesId ? { seriesId } : {} });
         return r.data;
     },
 
@@ -83,26 +89,26 @@ export const SeatingService = {
     },
 
     /** Save allocation for a hall */
-    saveAllocation: async (payload: { examDate: string; session: string; hallId: number; assignments: { seatId: number; studentId: number }[] }) => {
+    saveAllocation: async (payload: { examDate: string; session: string; hallId: number; assignments: { seatId: number; studentId: number }[]; seriesId?: number }) => {
         const r = await api.post(`${PREFIX}/save`, payload);
         return r.data;
     },
 
     /** Get saved allocation for a date+session+hall */
-    getAllocationForHall: async (examDate: string, session: string, hallId: number) => {
-        const r = await api.get(`${PREFIX}/allocation/${examDate}/${session}/${hallId}`);
+    getAllocationForHall: async (examDate: string, session: string, hallId: number, seriesId?: number) => {
+        const r = await api.get(`${PREFIX}/allocation/${examDate}/${session}/${hallId}`, { params: seriesId ? { seriesId } : {} });
         return r.data;
     },
 
     /** Clear allocation for a hall */
-    clearAllocation: async (examDate: string, session: string, hallId: number) => {
-        const r = await api.delete(`${PREFIX}/allocation/${examDate}/${session}/${hallId}`);
+    clearAllocation: async (examDate: string, session: string, hallId: number, seriesId?: number) => {
+        const r = await api.delete(`${PREFIX}/allocation/${examDate}/${session}/${hallId}`, { params: seriesId ? { seriesId } : {} });
         return r.data;
     },
 
     /** Clear ALL allocations for an entire date + session (nuclear wipe) */
-    clearAllAllocations: async (examDate: string, session: string) => {
-        const r = await api.delete(`${PREFIX}/allocation/${examDate}/${session}`);
+    clearAllAllocations: async (examDate: string, session: string, seriesId?: number) => {
+        const r = await api.delete(`${PREFIX}/allocation/${examDate}/${session}`, { params: seriesId ? { seriesId } : {} });
         return r.data;
     },
 
