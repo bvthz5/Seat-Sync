@@ -963,6 +963,39 @@ async function ensureSchemaIntegrity() {
     } catch (error) {
         console.warn("Schema integrity check warning (non-fatal):", error);
     }
+
+    // ── Internal Students Table Schema Check ──
+    try {
+        const dialect = sequelize.getDialect();
+        if (dialect === 'mssql') {
+            await sequelize.query(`
+                IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalStudents' AND TABLE_SCHEMA = 'dbo')
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT * FROM sys.columns 
+                        WHERE object_id = OBJECT_ID(N'[dbo].[InternalStudents]') 
+                        AND name = 'Source'
+                    )
+                    BEGIN
+                        ALTER TABLE [dbo].[InternalStudents] ADD [Source] NVARCHAR(30) NOT NULL DEFAULT 'Imported';
+                        PRINT 'Added Source to InternalStudents';
+                    END
+                    
+                    IF NOT EXISTS (
+                        SELECT * FROM sys.columns 
+                        WHERE object_id = OBJECT_ID(N'[dbo].[InternalStudents]') 
+                        AND name = 'Status'
+                    )
+                    BEGIN
+                        ALTER TABLE [dbo].[InternalStudents] ADD [Status] NVARCHAR(20) NOT NULL DEFAULT 'ACTIVE';
+                        PRINT 'Added Status to InternalStudents';
+                    END
+                END
+            `, { type: QueryTypes.RAW });
+        }
+    } catch (error) {
+        console.warn("InternalStudents schema check warning:", error);
+    }
 }
 
 export async function connectDB() {

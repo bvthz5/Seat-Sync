@@ -166,6 +166,12 @@ import facultyRoutes from "./routes/faculty.routes.js";
 import internalExamRoutes from "./routes/internalExam.routes.js";
 app.use("/api/internal-exams", internalExamRoutes);
 
+// ═══════════════════════════════════════════════════════════════
+// INTERNAL STUDENT ECOSYSTEM — Completely isolated from EndSem
+// ═══════════════════════════════════════════════════════════════
+import internalStudentRoutes from "./routes/internalStudent.routes.js";
+app.use("/api/internal", internalStudentRoutes);
+
 // New ERP Routes (Root Admin Only)
 app.use("/api/admin-management", adminManagementRoutes);
 app.use("/api/academic-setup", academicSetupRoutes);

@@ -158,6 +158,11 @@ const StudentDashboard: React.FC = () => {
                                 <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] border ${statusInfo.color}`}>
                                     {statusInfo.label}
                                 </span>
+                                {targetExam?.isInternal && (
+                                    <span className="px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] bg-violet-50 text-violet-600 border-violet-100">
+                                        Internal
+                                    </span>
+                                )}
                                 <span className="text-slate-200">/</span>
                                 <div className="flex items-center gap-2 text-slate-400 text-[10px] font-black uppercase tracking-widest">
                                     <Clock3 size={14} className="text-slate-300" />
@@ -200,7 +205,7 @@ const StudentDashboard: React.FC = () => {
 
                                     <div className="pt-6 flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
                                         <button
-                                            onClick={() => canViewSeating && navigate(`/student/seating/${targetExam.examId}`)}
+                                            onClick={() => canViewSeating && navigate(`/student/seating/${targetExam.examId}${targetExam.isInternal ? '?isInternal=true' : ''}`)}
                                             className={`px-10 py-5 rounded-[1.25rem] font-black flex items-center justify-center gap-4 transition-all duration-500 ${
                                                 canViewSeating
                                                     ? 'bg-slate-900 text-white hover:bg-indigo-600 shadow-[0_20px_40px_-10px_rgba(15,23,42,0.3)] hover:shadow-[0_20px_40px_-10px_rgba(79,70,229,0.4)] transform hover:-translate-y-1'
@@ -310,7 +315,12 @@ const StudentDashboard: React.FC = () => {
                                     {data?.upcomingExams?.slice(0, 5).map((exam: any, i: number) => (
                                         <tr key={i} className="group hover:bg-slate-50/50 transition-colors">
                                             <td className="px-8 py-6">
-                                                <p className="font-extrabold text-slate-900 group-hover:text-indigo-600 transition-colors">{exam.subject}</p>
+                                                <div className="flex items-center gap-2">
+                                                    <p className="font-extrabold text-slate-900 group-hover:text-indigo-600 transition-colors">{exam.subject}</p>
+                                                    {exam.isInternal && (
+                                                        <span className="px-2 py-0.5 rounded-md bg-violet-50 text-violet-600 text-[8px] font-black uppercase tracking-tighter border border-violet-100">INT</span>
+                                                    )}
+                                                </div>
                                                 <p className="text-[10px] font-black text-slate-400 mt-1 uppercase tracking-tighter">{exam.subjectCode}</p>
                                             </td>
                                             <td className="px-8 py-6">
@@ -330,7 +340,7 @@ const StudentDashboard: React.FC = () => {
                                             </td>
                                             <td className="px-8 py-6 text-right">
                                                 <Link 
-                                                    to={exam.isSeatingVisible ? `/student/seating/${exam.examId}` : '#'}
+                                                    to={exam.isSeatingVisible ? `/student/seating/${exam.examId}${exam.isInternal ? '?isInternal=true' : ''}` : '#'}
                                                     className={`inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all ${
                                                         exam.isSeatingVisible ? 'text-indigo-600 hover:text-indigo-800' : 'text-slate-300 cursor-not-allowed'
                                                     }`}

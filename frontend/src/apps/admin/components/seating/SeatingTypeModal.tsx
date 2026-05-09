@@ -1,7 +1,7 @@
 import React from 'react';
 import { Modal, ModalContent, ModalHeader, ModalBody, Card, CardBody } from "@heroui/react";
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, GraduationCap } from "lucide-react";
+import { BookOpen, GraduationCap, Tag } from "lucide-react";
 
 interface SeatingTypeModalProps {
     isOpen: boolean;
@@ -24,57 +24,62 @@ const SeatingTypeModal: React.FC<SeatingTypeModalProps> = ({ isOpen, onClose }) 
         <Modal 
             isOpen={isOpen} 
             onClose={onClose}
-            size="2xl"
+            size="md"
             backdrop="blur"
             classNames={{
-                base: "bg-white shadow-2xl rounded-3xl",
-                header: "border-b border-slate-100 pb-4 pt-6 px-8",
-                body: "py-8 px-8",
-                closeButton: "top-5 right-5 text-slate-400 hover:bg-slate-100"
+                base: "glass-card rounded-[40px] border-white/40 shadow-glass overflow-hidden",
+                header: "pb-0 pt-10 px-10 text-center flex flex-col items-center",
+                body: "py-10 px-10",
+                closeButton: "top-6 right-6 bg-white/50 backdrop-blur-md hover:bg-white hover:rotate-90 transition-all duration-500 rounded-full p-2 border border-white/50 shadow-sm"
             }}
         >
             <ModalContent>
-                <ModalHeader className="flex flex-col gap-1">
-                    <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Select Seating Type</h2>
-                    <p className="text-sm text-slate-500 font-medium">Choose the exam category for seating arrangement</p>
+                <ModalHeader className="flex flex-col gap-1.5">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="w-8 h-1 bg-indigo-500 rounded-full" />
+                        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-indigo-500/80">Examination Logistics</span>
+                        <div className="w-8 h-1 bg-indigo-500 rounded-full" />
+                    </div>
+                    <h2 className="text-3xl font-black text-slate-900 tracking-tight leading-tight">Seating <span className="text-indigo-600">Plans</span></h2>
                 </ModalHeader>
                 <ModalBody>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <Card 
-                            isPressable 
-                            onPress={() => handleSelect('internal')}
-                            className="bg-white border-2 border-slate-100 hover:border-indigo-500 hover:shadow-xl transition-all group overflow-hidden"
+                    <div className="grid grid-cols-2 gap-8">
+                        {/* Internal Option - Now First */}
+                        <button 
+                            onClick={() => handleSelect('internal')}
+                            className="group relative aspect-[0.9/1] flex flex-col items-center justify-center text-center p-8 rounded-[40px] bg-white border border-slate-100 hover:border-indigo-200 hover:shadow-premium-hover transition-all duration-500 ease-out hover:-translate-y-3 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-150"
                         >
-                            <CardBody className="p-8 flex flex-col items-center text-center gap-4">
-                                <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                                    <BookOpen size={32} />
-                                </div>
-                                <div>
-                                    <h3 className="text-xl font-bold text-slate-900 mb-2">Internal Exam</h3>
-                                    <p className="text-sm text-slate-500 font-medium">Internal Exam Seating Plan</p>
-                                </div>
-                            </CardBody>
-                        </Card>
+                            <div className="w-20 h-20 rounded-3xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-500 shadow-sm group-hover:shadow-indigo-200 group-hover:shadow-lg">
+                                <Tag size={36} />
+                            </div>
+                            <h3 className="text-xl font-black text-slate-900 leading-tight group-hover:text-indigo-600 transition-colors px-2">Internal Exam</h3>
+                            <div className="mt-4 w-10 h-1.5 bg-indigo-100 rounded-full group-hover:w-16 group-hover:bg-indigo-500 transition-all duration-300" />
+                            
+                            {/* Floating micro-glow effect */}
+                            <div className="absolute inset-0 bg-indigo-400/0 group-hover:bg-indigo-400/5 rounded-[40px] transition-colors duration-500 pointer-events-none" />
+                        </button>
 
-                        <Card 
-                            isPressable 
-                            onPress={() => handleSelect('endsem')}
-                            className="bg-white border-2 border-slate-100 hover:border-purple-500 hover:shadow-xl transition-all group overflow-hidden"
+                        {/* End Semester Option - Now Second */}
+                        <button 
+                            onClick={() => handleSelect('endsem')}
+                            className="group relative aspect-[0.9/1] flex flex-col items-center justify-center text-center p-8 rounded-[40px] bg-white border border-slate-100 hover:border-violet-200 hover:shadow-premium-hover transition-all duration-500 ease-out hover:-translate-y-3 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300"
                         >
-                            <CardBody className="p-8 flex flex-col items-center text-center gap-4">
-                                <div className="w-16 h-16 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                                    <GraduationCap size={32} />
-                                </div>
-                                <div>
-                                    <h3 className="text-xl font-bold text-slate-900 mb-2">End Semester Exam</h3>
-                                    <p className="text-sm text-slate-500 font-medium">End Semester Seating Plan</p>
-                                </div>
-                            </CardBody>
-                        </Card>
+                            <div className="w-20 h-20 rounded-3xl bg-violet-50 text-violet-600 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-violet-600 group-hover:text-white transition-all duration-500 shadow-sm group-hover:shadow-violet-200 group-hover:shadow-lg">
+                                <GraduationCap size={36} />
+                            </div>
+                            <h3 className="text-xl font-black text-slate-900 leading-tight group-hover:text-violet-600 transition-colors px-2">End Semester</h3>
+                            <div className="mt-4 w-10 h-1.5 bg-violet-100 rounded-full group-hover:w-16 group-hover:bg-violet-500 transition-all duration-300" />
+                            
+                            {/* Floating micro-glow effect */}
+                            <div className="absolute inset-0 bg-violet-400/0 group-hover:bg-violet-400/5 rounded-[40px] transition-colors duration-500 pointer-events-none" />
+                        </button>
                     </div>
                 </ModalBody>
+
             </ModalContent>
         </Modal>
+
+
     );
 };
 

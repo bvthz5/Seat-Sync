@@ -132,10 +132,18 @@ NotificationRecipient.belongsTo(User, {
 export { InternalExamSeries } from './InternalExamSeries.js';
 export { InternalExam } from './InternalExam.js';
 export { InternalExamDepartment } from './InternalExamDepartment.js';
+export { default as InternalBlock } from './InternalBlock.js';
+export { default as InternalFloor } from './InternalFloor.js';
+export { default as InternalRoom } from './InternalRoom.js';
+export { default as InternalSeat } from './InternalSeat.js';
 
 import { InternalExamSeries } from './InternalExamSeries.js';
 import { InternalExam } from './InternalExam.js';
 import { InternalExamDepartment } from './InternalExamDepartment.js';
+import InternalBlock from './InternalBlock.js';
+import InternalFloor from './InternalFloor.js';
+import InternalRoom from './InternalRoom.js';
+import InternalSeat from './InternalSeat.js';
 import ExamSeries from './ExamSeries.js';
 
 // Internal Exam Associations
@@ -147,3 +155,64 @@ InternalExamDepartment.belongsTo(InternalExam, { foreignKey: 'InternalExamID' })
 
 Department.hasMany(InternalExamDepartment, { foreignKey: 'DepartmentID', onDelete: 'CASCADE' });
 InternalExamDepartment.belongsTo(Department, { foreignKey: 'DepartmentID' });
+
+// ═══════════════════════════════════════════════════════════════
+// INTERNAL STUDENT ECOSYSTEM — Completely isolated from EndSem
+// ═══════════════════════════════════════════════════════════════
+export { default as InternalStudent } from './InternalStudent.js';
+export { default as InternalExamRegistration } from './InternalExamRegistration.js';
+export { default as InternalSeatAllocation } from './InternalSeatAllocation.js';
+
+import InternalStudent from './InternalStudent.js';
+import InternalExamRegistration from './InternalExamRegistration.js';
+import InternalSeatAllocation from './InternalSeatAllocation.js';
+import Semester from './Semester.js';
+
+// InternalStudent ↔ User (shared auth layer)
+InternalStudent.belongsTo(User, { foreignKey: 'UserID', onDelete: 'NO ACTION' });
+User.hasOne(InternalStudent, { foreignKey: 'UserID' });
+
+// InternalStudent ↔ Department
+InternalStudent.belongsTo(Department, { foreignKey: 'DepartmentID', onDelete: 'NO ACTION' });
+Department.hasMany(InternalStudent, { foreignKey: 'DepartmentID', onDelete: 'NO ACTION' });
+
+// InternalStudent ↔ Program
+InternalStudent.belongsTo(Program, { foreignKey: 'ProgramID', onDelete: 'NO ACTION' });
+Program.hasMany(InternalStudent, { foreignKey: 'ProgramID', onDelete: 'NO ACTION' });
+
+// InternalStudent ↔ Semester
+InternalStudent.belongsTo(Semester, { foreignKey: 'SemesterID', onDelete: 'NO ACTION' });
+Semester.hasMany(InternalStudent, { foreignKey: 'SemesterID', onDelete: 'NO ACTION' });
+
+// InternalExamRegistration ↔ InternalExam (mapping: student appears for this exam)
+InternalExamRegistration.belongsTo(InternalExam, { foreignKey: 'InternalExamID', onDelete: 'CASCADE' });
+InternalExam.hasMany(InternalExamRegistration, { foreignKey: 'InternalExamID', onDelete: 'CASCADE' });
+
+// InternalExamRegistration ↔ InternalStudent
+InternalExamRegistration.belongsTo(InternalStudent, { foreignKey: 'InternalStudentID', onDelete: 'CASCADE' });
+InternalStudent.hasMany(InternalExamRegistration, { foreignKey: 'InternalStudentID', onDelete: 'CASCADE' });
+
+// InternalSeatAllocation associations
+import { InternalSeat } from './InternalSeat.js';
+
+InternalSeatAllocation.belongsTo(InternalExam, { foreignKey: 'InternalExamID', onDelete: 'CASCADE' });
+InternalExam.hasMany(InternalSeatAllocation, { foreignKey: 'InternalExamID', onDelete: 'CASCADE' });
+
+InternalSeatAllocation.belongsTo(InternalSeat, { foreignKey: 'InternalSeatID', onDelete: 'CASCADE' });
+InternalSeat.hasMany(InternalSeatAllocation, { foreignKey: 'InternalSeatID', onDelete: 'CASCADE' });
+
+InternalSeatAllocation.belongsTo(InternalStudent, { foreignKey: 'InternalStudentID', onDelete: 'CASCADE' });
+InternalStudent.hasMany(InternalSeatAllocation, { foreignKey: 'InternalStudentID', onDelete: 'CASCADE' });
+
+// Internal Structure Associations (already defined in model files, but ensuring consistency here)
+InternalBlock.hasMany(InternalFloor, { foreignKey: 'BlockID', onDelete: 'CASCADE' });
+InternalFloor.belongsTo(InternalBlock, { foreignKey: 'BlockID' });
+
+InternalFloor.hasMany(InternalRoom, { foreignKey: 'FloorID', onDelete: 'CASCADE' });
+InternalRoom.belongsTo(InternalFloor, { foreignKey: 'FloorID' });
+
+InternalBlock.hasMany(InternalRoom, { foreignKey: 'BlockID', onDelete: 'CASCADE' });
+InternalRoom.belongsTo(InternalBlock, { foreignKey: 'BlockID' });
+
+InternalRoom.hasMany(InternalSeat, { foreignKey: 'RoomID', onDelete: 'CASCADE' });
+InternalSeat.belongsTo(InternalRoom, { foreignKey: 'RoomID' });

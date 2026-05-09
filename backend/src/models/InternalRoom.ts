@@ -1,7 +1,7 @@
 import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from "../config/database.js";
-import { InternalFloor } from "./InternalFloor.js";
-import { InternalBlock } from "./InternalBlock.js";
+import InternalFloor from "./InternalFloor.js";
+import InternalBlock from "./InternalBlock.js";
 
 interface InternalRoomAttributes {
   RoomID: number;

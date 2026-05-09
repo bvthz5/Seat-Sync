@@ -1450,8 +1450,9 @@ export const exportStudentCredentials = async (req: Request, res: Response) => {
 
         const students = await Student.findAll({
             include: [
-                { model: User, attributes: ['FullName', 'IsPasswordChanged'] },
-                { model: Department, attributes: ['DepartmentName'] }
+                { model: User, attributes: ['Email', 'FullName', 'IsPasswordChanged'] },
+                { model: Department, attributes: ['DepartmentName', 'DepartmentCode'] },
+                { model: Program, attributes: ['ProgramCode', 'ProgramName'] }
             ],
             where: whereClause,
             order: [
@@ -1475,14 +1476,21 @@ export const exportStudentCredentials = async (req: Request, res: Response) => {
             const regNo = (s.RegisterNumber || '').trim().toUpperCase();
             const isChanged = s.User?.IsPasswordChanged;
             
+            const email = s.User?.Email || generateStudentEmail(
+                fullName, 
+                s.BatchYear || new Date().getFullYear(), 
+                s.Program?.ProgramCode || s.Department?.DepartmentCode || 'STUDENT'
+            );
+            
             deptGroups.get(deptName)?.push({
                 'Register Number': regNo,
+                'Email': email,
                 'Full Name': fullName,
                 'Default Password': generateDefaultPassword(fullName, regNo),
                 'Password Status': isChanged ? 'Changed' : 'Initial Default',
                 'Note': isChanged 
                     ? 'Password already changed by student. If login fails, student must use their new password.' 
-                    : 'Initial default password. If login fails, check if the student has already changed it.'
+                    : 'Initial default password. Use the Email and Password shown here.'
             });
         });
 

@@ -17,6 +17,7 @@ interface AddStudentModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSuccess: () => void;
+    isInternal?: boolean;
 }
 
 interface ProgramWithDuration {
@@ -32,6 +33,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
     isOpen,
     onClose,
     onSuccess,
+    isInternal = false,
 }) => {
     const [loading, setLoading] = useState(false);
     const [departments, setDepartments] = useState<any[]>([]);
@@ -48,13 +50,14 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
 
     React.useEffect(() => {
         if (isOpen) {
-            api.get('/students/meta/create-options').then(res => {
+            const url = isInternal ? '/internal/students/filter-options' : '/students/meta/create-options';
+            api.get(url).then(res => {
                 const d = res.data;
                 setDepartments(d.departments || []);
                 setPrograms(d.programs || []);
             }).catch(err => console.error('Failed to load create options', err));
         }
-    }, [isOpen]);
+    }, [isOpen, isInternal]);
 
     const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -141,7 +144,8 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
 
         setLoading(true);
         try {
-            await api.post("/students", {
+            const url = isInternal ? "/internal/students" : "/students";
+            await api.post(url, {
                 RegisterNumber: formData.RegisterNumber.trim().toUpperCase(),
                 FullName: formData.FullName.trim(),
                 Email: formData.Email.trim().toLowerCase(),
@@ -149,7 +153,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                 ProgramID: parseInt(formData.ProgramID),
                 BatchYear: parseInt(formData.BatchYear),
             });
-            toast.success("Student created successfully - Credentials sent to college email");
+            toast.success(isInternal ? "Internal student created successfully" : "Student created successfully - Credentials sent to college email");
             onSuccess();
             onClose();
             setFormData({ RegisterNumber: "", FullName: "", Email: "", DepartmentID: "", ProgramID: "", BatchYear: "" });
@@ -208,8 +212,12 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                                 <GraduationCap size={22} className="text-white" />
                             </div>
                             <div>
-                                <h2 className="text-xl font-bold text-white tracking-tight">Add New Student</h2>
-                                <p className="text-sm text-blue-200/60 font-normal mt-0.5">Auto-generated password will be sent to the college email</p>
+                                <h2 className="text-xl font-bold text-white tracking-tight">Add New {isInternal ? 'Internal' : ''} Student</h2>
+                                <p className="text-sm text-blue-200/60 font-normal mt-0.5">
+                                    {isInternal 
+                                        ? 'Isolated record for internal exams and seating' 
+                                        : 'Auto-generated password will be sent to the college email'}
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -271,7 +279,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                                 <div className="grid grid-cols-2 gap-5">
                                     <div className="space-y-1.5">
                                         <div className="text-sm font-semibold text-gray-700 ml-1">
-                                            Register Number <span className="text-red-500">*</span>
+                                            {isInternal ? 'Register Number / Class Roll No' : 'Register Number'} <span className="text-red-500">*</span>
                                         </div>
                                         <Input aria-label="Input" id="register-number"
                                             autoComplete="off"

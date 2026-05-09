@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Card, CardBody, Button } from "@heroui/react";
-import { BookOpen, Plus, Clock, FileText, AlertCircle, ArrowLeft, CheckCircle, CalendarDays, Upload, Pencil, Trash2 } from "lucide-react";
+import { BookOpen, Plus, Clock, FileText, AlertCircle, ArrowLeft, CheckCircle, CalendarDays, Upload, Pencil, Trash2, Users } from "lucide-react";
 import { toast } from 'react-hot-toast';
 import { ExamService } from '../services/examService';
 import { SeriesService } from '../services/seriesService';
@@ -378,6 +378,17 @@ const ExamSeriesList: React.FC = () => {
                                     </div>
 
                                     <div className="flex items-center gap-2 pt-1">
+                                        {examType === 'Internal' && (
+                                            <Button
+                                                size="sm"
+                                                variant="flat"
+                                                className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-bold"
+                                                startContent={<Users size={14} />}
+                                                onPress={() => navigate(`/admin/exams/series/${seriesId}/internal/${examGroup.branches[0]?.examId}`)}
+                                            >
+                                                Students
+                                            </Button>
+                                        )}
                                         <Button
                                             size="sm"
                                             variant="flat"
@@ -394,7 +405,7 @@ const ExamSeriesList: React.FC = () => {
                                             startContent={<Trash2 size={14} />}
                                             onPress={() => handleDeleteClick(examGroup.branches.map(b => b.examId))}
                                         >
-                                            Delete Group
+                                            Delete
                                         </Button>
                                     </div>
                                 </CardBody>

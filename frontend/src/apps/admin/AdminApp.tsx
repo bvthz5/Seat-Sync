@@ -34,6 +34,8 @@ import ExamDateDetail from './pages/ExamDateDetail';
 import AuditLogs from './pages/AuditLogs';
 import DataCleanup from './pages/DataCleanup';
 import Profile from './pages/Profile';
+import InternalExamDetailPage from './pages/InternalExamDetailPage';
+import InternalStudents from './pages/InternalStudents';
 import NotFound from '../../pages/NotFound';
 const AdminApp: React.FC = () => {
     return (
@@ -49,11 +51,13 @@ const AdminApp: React.FC = () => {
                     {/* PRIMARY OPERATIONS - All Exam Admins */}
                     <Route path="dashboard" element={<Dashboard />} />
                     <Route path="profile" element={<Profile />} />
-                    <Route path="students" element={<Students />} />
+                    <Route path="students/endsem" element={<Students />} />
+                    <Route path="students/internal" element={<InternalStudents />} />
                     <Route path="exams" element={<SeriesSelection />} />
                     <Route path="exams/series/:seriesId" element={<ExamSeriesList />} />
                     <Route path="exams/series/:seriesId/dates" element={<ExamDates />} />
                     <Route path="exams/series/:seriesId/dates/:date" element={<ExamDateDetail />} />
+                    <Route path="exams/series/:seriesId/internal/:examId" element={<InternalExamDetailPage />} />
                     <Route path="seating/endsem" element={<SeatingPlans />} />
                     <Route path="seating/internal" element={<InternalSeatingPage />} />
                     <Route path="invigilators" element={<Invigilators />} />

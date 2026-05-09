@@ -18,6 +18,7 @@ interface EditStudentModalProps {
     onClose: () => void;
     onSuccess: () => void;
     student: any;
+    isInternal?: boolean;
 }
 
 interface ProgramWithDuration {
@@ -33,7 +34,8 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
     isOpen,
     onClose,
     onSuccess,
-    student
+    student,
+    isInternal = false,
 }) => {
     const [loading, setLoading] = useState(false);
     const [departments, setDepartments] = useState<any[]>([]);
@@ -114,7 +116,8 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
 
     const fetchMasterDataAndSetForm = async () => {
         try {
-            const response = await api.get('/students/meta/create-options');
+            const url = isInternal ? '/internal/students/filter-options' : '/students/meta/create-options';
+            const response = await api.get(url);
             const fetchedDepts = response.data.departments || [];
             const fetchedProgs = response.data.programs || [];
             
@@ -125,7 +128,7 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
             if (student) {
                 setFormData({
                     RegisterNumber: student.RegisterNumber || "",
-                    FullName: student.User?.FullName || "",
+                    FullName: isInternal ? (student.FullName || "") : (student.User?.FullName || ""),
                     Email: student.User?.Email || "",
                     DepartmentID: student.DepartmentID?.toString() || "",
                     ProgramID: student.ProgramID?.toString() || "",
@@ -157,7 +160,9 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
 
         setLoading(true);
         try {
-            await api.put(`/students/${student.StudentID}`, {
+            const baseUrl = isInternal ? '/internal/students' : '/students';
+            const studentId = isInternal ? student.InternalStudentID : student.StudentID;
+            await api.put(`${baseUrl}/${studentId}`, {
                 RegisterNumber: formData.RegisterNumber.trim().toUpperCase(),
                 FullName: formData.FullName.trim(),
                 Email: formData.Email.trim().toLowerCase(),

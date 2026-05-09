@@ -1,6 +1,6 @@
 import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from "../config/database.js";
-import { InternalBlock } from "./InternalBlock.js";
+import InternalBlock from "./InternalBlock.js";
 
 interface InternalFloorAttributes {
   FloorID: number;

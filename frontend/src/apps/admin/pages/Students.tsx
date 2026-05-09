@@ -510,67 +510,71 @@ const Students: React.FC = () => {
             {/* Header Title with Actions */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Student Management</h1>
-                    <p className="text-gray-500 text-sm mt-1">Manage and monitor all student academic records across departments.</p>
+                    <h1 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                        <GraduationCap className="text-indigo-600" size={24}/> University Students
+                    </h1>
+                    <p className="text-slate-500 font-medium text-xs mt-0.5">End-Semester Examination Management Portal</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <Button 
-                        className="bg-red-50 text-red-600 font-medium hover:bg-red-100 border border-red-200"
-                        startContent={<Trash2 size={16} />}
-                        onPress={() => setIsDeleteAllOpen(true)}
-                        radius="lg"
+                        color="danger" 
+                        variant="shadow" 
+                        startContent={<Trash2 size={18}/>} 
+                        onPress={() => setIsDeleteAllOpen(true)} 
+                        className="font-black rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-red-200"
                     >
                         Delete All
                     </Button>
                     <Button 
-                        className="bg-slate-50 text-slate-700 font-medium hover:bg-slate-100 border border-slate-200"
-                        startContent={<FileDown size={16} />}
+                        variant="shadow" 
+                        startContent={<FileDown size={18}/>} 
                         onPress={handleExport}
-                        radius="lg"
+                        className="font-black rounded-xl bg-gradient-to-r from-slate-700 to-slate-900 text-white shadow-slate-200"
                     >
                         Export
                     </Button>
                     <Button 
-                        className="bg-amber-50 text-amber-700 font-medium hover:bg-amber-100 border border-amber-200"
-                        startContent={<Key size={16} />}
+                        variant="shadow" 
+                        color="warning" 
+                        startContent={<KeyRound size={18}/>} 
                         onPress={handleExportCredentials}
-                        radius="lg"
-                        title="Download student passwords (formula based)"
+                        className="font-black rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-orange-200"
                     >
                         Passwords
                     </Button>
-                    <Button
-    className="bg-blue-50 text-blue-700 font-medium border border-blue-100 hover:bg-blue-100"
-    startContent={<FileSpreadsheet size={16} />}
-    onPress={() => setIsImportOpen(true)}
-    radius="lg"
->
-    Import Data
-</Button>
-<Button
-    className="bg-purple-50 text-purple-700 font-medium whitespace-nowrap border border-purple-100 hover:bg-purple-100"
-    startContent={<BookOpen size={16} />}
-    onPress={async () => {
-        toast.loading("Syncing semesters...", { id: "sync-sems" });
-        try {
-            await api.post('/students/sync-semesters');
-            toast.success("Semesters synced successfully", { id: "sync-sems" });
-            fetchStudents();
-        } catch (error: any) {
-            toast.error(error?.response?.data?.message || "Failed to sync", { id: "sync-sems" });
-        }
-    }}
-    radius="lg"
-    title="Ensure DB semesters match dynamic date calculations"
->
-    Sync Semesters
-</Button>
-
                     <Button 
-                        className="bg-blue-600 text-white font-semibold shadow-lg shadow-blue-600/20 hover:shadow-xl hover:scale-[1.02] transition-all"
-                        startContent={<Plus size={16} />}
-                        onPress={() => setIsAddOpen(true)}
-                        radius="lg"
+                        color="primary" 
+                        variant="shadow" 
+                        startContent={<FileSpreadsheet size={18}/>} 
+                        onPress={() => setIsImportOpen(true)} 
+                        className="font-black rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-emerald-200"
+                    >
+                        Import Data
+                    </Button>
+                    <Button 
+                        color="secondary" 
+                        variant="shadow" 
+                        startContent={<BookOpen size={18}/>} 
+                        onPress={async () => {
+                            toast.loading("Syncing semesters...", { id: "sync-sems" });
+                            try {
+                                await api.post('/students/sync-semesters');
+                                toast.success("Semesters synced successfully", { id: "sync-sems" });
+                                fetchStudents();
+                            } catch (error: any) {
+                                toast.error(error?.response?.data?.message || "Failed to sync", { id: "sync-sems" });
+                            }
+                        }}
+                        className="font-black rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 text-white shadow-purple-200"
+                    >
+                        Sync Semesters
+                    </Button>
+                    <Button 
+                        color="primary" 
+                        variant="shadow"
+                        startContent={<Plus size={18}/>} 
+                        onPress={() => setIsAddOpen(true)} 
+                        className="font-black rounded-xl bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-200"
                     >
                         Add Student
                     </Button>

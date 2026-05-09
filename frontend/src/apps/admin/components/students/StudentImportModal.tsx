@@ -9,9 +9,13 @@ interface StudentImportModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSuccess: () => void;
+    isInternal?: boolean;
+    internalExamId?: number;
 }
 
-const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose, onSuccess }) => {
+import { InternalStudentService } from '../../services/internalStudentService';
+
+const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose, onSuccess, isInternal = false, internalExamId }) => {
     const [file, setFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -55,7 +59,12 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
         }, 500);
 
         try {
-            const response = await academicService.importStudents(file);
+            let response;
+            if (isInternal) {
+                response = await InternalStudentService.importStudents(file, internalExamId as any);
+            } else {
+                response = await academicService.importStudents(file);
+            }
             clearInterval(progressInterval);
             setProgress(100);
             
@@ -110,7 +119,7 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
                                 <FileSpreadsheet className="w-5 h-5 text-green-600" />
                                 Import Students
                             </h2>
-                            <p className="text-gray-500 text-sm mt-1">Bulk upload students via Excel</p>
+                            <p className="text-gray-500 text-sm mt-1">Bulk upload students via Excel or CSV</p>
                         </div>
                         <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                             <X className="w-5 h-5 text-gray-400" />
@@ -185,7 +194,7 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
                                 name="fileUpload"
                                 aria-label="Upload Excel File"
                                 className="hidden"
-                                accept=".xlsx, .xls"
+                                accept=".xlsx, .xls, .csv"
                                 onChange={handleFileChange}
                             />
 
@@ -200,7 +209,7 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
                                 </div>
                             ) : (
                                 <div>
-                                    <h3 className="text-gray-900 font-bold text-lg">Click to Upload Excel</h3>
+                                    <h3 className="text-gray-900 font-bold text-lg">Click to Upload Excel or CSV</h3>
                                     <p className="text-gray-400 text-sm mt-1">or drag and drop file here</p>
                                 </div>
                             )}
@@ -227,7 +236,7 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
                         {/* Formatting Guide */}
                         <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
                             <h4 className="text-blue-900 text-base font-semibold mb-3 flex items-center gap-2">
-  <Info className="w-4 h-4 text-blue-500" /> Expected Excel Columns
+  <Info className="w-4 h-4 text-blue-500" /> Expected File Columns
 </h4>
 <div className="grid grid-cols-2 md:grid-cols-3 gap-x-10 gap-y-2">
   <ul className="space-y-2 text-sm text-blue-900/80 font-medium">

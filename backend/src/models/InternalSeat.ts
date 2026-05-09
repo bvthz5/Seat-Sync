@@ -1,6 +1,6 @@
 import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from "../config/database.js";
-import { InternalRoom } from "./InternalRoom.js";
+import InternalRoom from "./InternalRoom.js";
 
 interface InternalSeatAttributes {
   SeatID: number;

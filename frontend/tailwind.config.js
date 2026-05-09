@@ -11,46 +11,47 @@ export default {
     theme: {
         extend: {
             colors: {
-                // SeatSync Brand Palette
-                background: "#F5F8FC",
+                // SeatSync Brand Palette - Premium Indigo/Violet
+                background: "#f8fafc",
                 surface: "#ffffff",
-                border: "#cbd5e1",
+                border: "#e2e8f0",
 
                 primary: {
-                    DEFAULT: "#0A1F44", // SeatSync Navy
-                    foreground: "#FFFFFF", // White text
-                    50: "#e6e9ef",
-                    100: "#c1c9d6",
-                    200: "#9ba8bd",
-                    300: "#7488a4",
-                    400: "#4e678b",
-                    500: "#0A1F44", // Main
-                    600: "#081936",
-                    700: "#061329",
-                    800: "#040c1b",
-                    900: "#02060e",
+                    DEFAULT: "#6366f1", // Indigo 500
+                    foreground: "#ffffff",
+                    50: "#f5f7ff",
+                    100: "#ebf0fe",
+                    200: "#ced9fd",
+                    300: "#adc0fc",
+                    400: "#8da7fa",
+                    500: "#6366f1",
+                    600: "#4f46e5",
+                    700: "#4338ca",
+                    800: "#3730a3",
+                    900: "#312e81",
                 },
                 secondary: {
-                    DEFAULT: "#1F4E79", // SeatSync Blue
-                    foreground: "#FFFFFF",
+                    DEFAULT: "#8b5cf6", // Violet 500
+                    foreground: "#ffffff",
                 },
                 accent: {
-                    DEFAULT: "#D4AF37", // SeatSync Gold
+                    DEFAULT: "#f59e0b", // Amber 500
                     foreground: "#000000",
                 },
                 // Functional Status Colors
-                success: "#22c55e",
-                warning: "#eab308",
+                success: "#10b981",
+                warning: "#f59e0b",
                 danger: "#ef4444",
-                info: "#3b82f6",
+                info: "#0ea5e9",
             },
             fontFamily: {
-                sans: ["Inter", "system-ui", "sans-serif"],
+                sans: ["Outfit", "Inter", "system-ui", "sans-serif"],
             },
             animation: {
                 'float-slow': 'float 8s ease-in-out infinite',
                 'float-medium': 'float 6s ease-in-out infinite',
                 'shake': 'shake 0.5s cubic-bezier(.36,.07,.19,.97) both',
+                'pulse-soft': 'pulse-soft 2s ease-in-out infinite',
             },
             keyframes: {
                 float: {
@@ -62,8 +63,18 @@ export default {
                     '20%, 80%': { transform: 'translate3d(2px, 0, 0)' },
                     '30%, 50%, 70%': { transform: 'translate3d(-4px, 0, 0)' },
                     '40%, 60%': { transform: 'translate3d(4px, 0, 0)' },
+                },
+                'pulse-soft': {
+                    '0%, 100%': { opacity: 1 },
+                    '50%': { opacity: 0.8, transform: 'scale(0.98)' },
                 }
             },
+            boxShadow: {
+                'premium': '0 10px 30px -5px rgba(0, 0, 0, 0.04), 0 6px 15px -6px rgba(0, 0, 0, 0.02)',
+                'premium-hover': '0 20px 40px -5px rgba(0, 0, 0, 0.06), 0 10px 20px -8px rgba(0, 0, 0, 0.03)',
+                'glass': '0 8px 32px 0 rgba(31, 38, 135, 0.07)',
+            }
+
         },
     },
     plugins: [heroui()],

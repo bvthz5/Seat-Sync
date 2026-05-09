@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { 
     ChevronLeft, 
     MapPin, 
@@ -17,6 +17,8 @@ import SeatingVisualization from '../components/SeatingVisualization';
 
 const StudentSeating: React.FC = () => {
     const { examId } = useParams<{ examId: string }>();
+    const [searchParams] = useSearchParams();
+    const isInternal = searchParams.get('isInternal') === 'true';
     const [seatingData, setSeatingData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -25,7 +27,7 @@ const StudentSeating: React.FC = () => {
         try {
             setLoading(true);
             setError(null);
-            const res = await studentPortalApi.getSeating(examId);
+            const res = await studentPortalApi.getSeating(examId, isInternal);
             
             // Check for visibility restriction from backend
             if (res?.visibilityError) {
