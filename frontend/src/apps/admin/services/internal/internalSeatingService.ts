@@ -10,8 +10,8 @@ export const InternalSeatingService = {
     },
 
     /** Get distinct exam dates for internal series */
-    getExamDates: async (seriesId?: number) => {
-        const r = await api.get(`${PREFIX}/exam-dates`, { params: { seriesId } });
+    getExamDates: async (seriesId?: number, session?: string) => {
+        const r = await api.get(`${PREFIX}/exam-dates`, { params: { seriesId, session } });
         return r.data;
     },
 
@@ -24,6 +24,12 @@ export const InternalSeatingService = {
     /** Get hall layout with current allocations */
     getHallLayout: async (hallId: number, examDate: string, session: string, seriesId: number) => {
         const r = await api.get(`${PREFIX}/halls/${hallId}/layout`, { params: { examDate, session, seriesId } });
+        return r.data;
+    },
+
+    /** Get global allocation summary for a slot */
+    getSummary: async (examDate: string, session: string, seriesId: number) => {
+        const r = await api.get(`${PREFIX}/summary`, { params: { examDate, session, seriesId } });
         return r.data;
     },
 

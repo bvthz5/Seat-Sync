@@ -10,7 +10,8 @@ import {
     InternalStudent, 
     Department,
     InternalBlock,
-    InternalFloor
+    InternalFloor,
+    InternalExamRegistration
 } from '../../models/index.js';
 import { InternalSeatAllocator } from '../../engines/internal/internalSeatAllocator.engine.js';
 
@@ -35,9 +36,13 @@ export const internalSeatingController = {
     /** Get distinct exam dates for internal series */
     getExamDates: async (req: Request, res: Response) => {
         try {
-            const { seriesId } = req.query;
+            const { seriesId, session } = req.query;
+            const where: any = {};
+            if (seriesId) where.InternalExamSeriesID = seriesId as any;
+            if (session) where.Session = session as string;
+
             const dates = await InternalExam.findAll({
-                where: seriesId ? { InternalExamSeriesID: seriesId as any } : {},
+                where,
                 attributes: [[sequelize.fn('DISTINCT', sequelize.col('ExamDate')), 'ExamDate']],
                 order: [['ExamDate', 'ASC']]
             });
@@ -100,6 +105,83 @@ export const internalSeatingController = {
             });
 
             return res.json({ room, seats, allocations });
+        } catch (error: any) {
+            return res.status(500).json({ message: error.message });
+        }
+    },
+
+    /** Get global summary of allocations for a slot */
+    getSummary: async (req: Request, res: Response) => {
+        try {
+            const { examDate, session, seriesId } = req.query;
+            
+            // 1. Find exams for this slot
+            const exams = await InternalExam.findAll({
+                where: {
+                    ExamDate: examDate as string,
+                    Session: session as string,
+                    InternalExamSeriesID: seriesId as any
+                },
+                attributes: ['InternalExamID']
+            });
+            
+            if (exams.length === 0) return res.json(null);
+            
+            const examIds = exams.map(e => e.InternalExamID);
+            
+            // 2. Count total registrations
+            const totalStudents = await InternalExamRegistration.count({
+                where: { InternalExamID: { [Op.in]: examIds } }
+            });
+            
+            // 3. Get hall usage
+            const allocations = await InternalSeatAllocation.findAll({
+                where: { InternalExamID: { [Op.in]: examIds } },
+                include: [{
+                    model: InternalSeat,
+                    as: 'Seat',
+                    include: [{ model: InternalRoom, as: 'Room' }]
+                }]
+            });
+            
+            if (allocations.length === 0) {
+                return res.json({
+                    assignedCount: 0,
+                    unassignedCount: totalStudents,
+                    hallUsage: []
+                });
+            }
+            
+            const hallStatsMap = new Map<number, { hallId: number, hallCode: string, used: number, total: number }>();
+            
+            for (const alloc of allocations) {
+                const seat = (alloc as any).Seat;
+                if (!seat || !seat.Room) continue;
+                const room = seat.Room;
+                
+                if (!hallStatsMap.has(room.RoomID)) {
+                    const activeSeatCount = await InternalSeat.count({
+                        where: { RoomID: room.RoomID, IsActive: true }
+                    });
+                    hallStatsMap.set(room.RoomID, {
+                        hallId: room.RoomID,
+                        hallCode: room.RoomCode,
+                        used: 0,
+                        total: activeSeatCount
+                    });
+                }
+                hallStatsMap.get(room.RoomID)!.used++;
+            }
+            
+            const hallUsage = Array.from(hallStatsMap.values());
+            const assignedCount = hallUsage.reduce((sum, h) => sum + h.used, 0);
+            
+            return res.json({
+                assignedCount,
+                unassignedCount: Math.max(0, totalStudents - assignedCount),
+                hallUsage: hallUsage.sort((a, b) => a.hallCode.localeCompare(b.hallCode))
+            });
+            
         } catch (error: any) {
             return res.status(500).json({ message: error.message });
         }

@@ -91,14 +91,40 @@ const InternalSeatingPlans: React.FC = () => {
         })();
     }, []);
 
+    // Fetch Exam Dates when series or session changes
     useEffect(() => {
-        if (selectedSeries) {
+        if (selectedSeries && selectedSession) {
             (async () => {
-                const dates = await InternalSeatingService.getExamDates(Number(selectedSeries));
+                const dates = await InternalSeatingService.getExamDates(Number(selectedSeries), selectedSession);
                 setExamDates(dates || []);
+                // If current selected date is not in the new list, clear it
+                if (selectedDate && !dates.includes(selectedDate)) {
+                    setSelectedDate('');
+                }
             })();
         }
-    }, [selectedSeries]);
+    }, [selectedSeries, selectedSession]);
+
+    // Auto-fetch existing seating summary when criteria are complete
+    useEffect(() => {
+        if (selectedSeries && selectedDate && selectedSession) {
+            (async () => {
+                try {
+                    const summary = await InternalSeatingService.getSummary(selectedDate, selectedSession, Number(selectedSeries));
+                    if (summary && summary.hallUsage.length > 0) {
+                        setStats(summary);
+                        // Also auto-select halls if we just loaded an existing summary
+                        setSelectedHalls(summary.hallUsage.map((h: any) => h.hallId));
+                    } else {
+                        // If no existing allocation, reset stats so they see the "No Seating Generated" screen
+                        setStats(null);
+                    }
+                } catch (e) {
+                    console.error("Failed to load existing seating summary", e);
+                }
+            })();
+        }
+    }, [selectedSeries, selectedDate, selectedSession]);
 
     // --- Actions ---
     const handleGenerate = async () => {
@@ -163,41 +189,16 @@ const InternalSeatingPlans: React.FC = () => {
                                 <h3 className="text-sm font-black uppercase tracking-widest text-slate-800">Exam Details</h3>
                             </div>
                             
-                            <div className="flex flex-col gap-8 pl-1">
-                                {/* Manual Label for Series */}
-                                <div className="flex flex-col gap-2">
-                                    <label className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Select Exam Series</label>
-                                    <Select 
-                                        placeholder="Choose internal series..."
-                                        variant="bordered" 
-                                        className="max-w-full"
-                                        selectedKeys={selectedSeries ? [selectedSeries] : []}
-                                        onSelectionChange={(keys) => setSelectedSeries(Array.from(keys)[0] as string)}
-                                        classNames={{
-                                            trigger: "h-12 border-slate-200 hover:border-indigo-400 transition-colors bg-white shadow-sm",
-                                            value: "text-slate-700 font-medium",
-                                            selectorIcon: "right-3 text-slate-400"
-                                        }}
-                                        popoverProps={{
-                                            classNames: {
-                                                content: "bg-white border border-slate-200 shadow-2xl p-2 rounded-2xl opacity-100",
-                                            }
-                                        }}
-                                    >
-                                        {seriesList.map(s => (
-                                            <SelectItem key={s.ExamSeriesID} textValue={s.SeriesName} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">{s.SeriesName}</SelectItem>
-                                        ))}
-                                    </Select>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="flex flex-col gap-8 pl-1">
+                                    {/* 1. Exam Series */}
                                     <div className="flex flex-col gap-2">
-                                        <label className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Exam Date</label>
+                                        <label className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Select Exam Series</label>
                                         <Select 
-                                            placeholder="Pick date"
-                                            variant="bordered"
-                                            selectedKeys={selectedDate ? [selectedDate] : []}
-                                            onSelectionChange={(keys) => setSelectedDate(Array.from(keys)[0] as string)}
+                                            placeholder="Choose internal series..."
+                                            variant="bordered" 
+                                            className="max-w-full"
+                                            selectedKeys={selectedSeries ? [selectedSeries] : []}
+                                            onSelectionChange={(keys) => setSelectedSeries(Array.from(keys)[0] as string)}
                                             classNames={{
                                                 trigger: "h-12 border-slate-200 hover:border-indigo-400 transition-colors bg-white shadow-sm",
                                                 value: "text-slate-700 font-medium",
@@ -209,13 +210,15 @@ const InternalSeatingPlans: React.FC = () => {
                                                 }
                                             }}
                                         >
-                                            {examDates.map(d => (
-                                                <SelectItem key={d} textValue={d} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">{d}</SelectItem>
+                                            {seriesList.map(s => (
+                                                <SelectItem key={s.ExamSeriesID} textValue={s.SeriesName} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">{s.SeriesName}</SelectItem>
                                             ))}
                                         </Select>
                                     </div>
+
+                                    {/* 2. Session */}
                                     <div className="flex flex-col gap-2">
-                                        <label className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Session</label>
+                                        <label className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Select Session</label>
                                         <Select 
                                             placeholder="Select slot"
                                             variant="bordered"
@@ -236,8 +239,33 @@ const InternalSeatingPlans: React.FC = () => {
                                             <SelectItem key="AN" textValue="Afternoon" className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">Afternoon (AN)</SelectItem>
                                         </Select>
                                     </div>
+
+                                    {/* 3. Exam Date */}
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Exam Date</label>
+                                        <Select 
+                                            placeholder={!selectedSession ? "Select session first..." : "Pick date"}
+                                            variant="bordered"
+                                            isDisabled={!selectedSession}
+                                            selectedKeys={selectedDate ? [selectedDate] : []}
+                                            onSelectionChange={(keys) => setSelectedDate(Array.from(keys)[0] as string)}
+                                            classNames={{
+                                                trigger: "h-12 border-slate-200 hover:border-indigo-400 transition-colors bg-white shadow-sm",
+                                                value: "text-slate-700 font-medium",
+                                                selectorIcon: "right-3 text-slate-400"
+                                            }}
+                                            popoverProps={{
+                                                classNames: {
+                                                    content: "bg-white border border-slate-200 shadow-2xl p-2 rounded-2xl opacity-100",
+                                                }
+                                            }}
+                                        >
+                                            {examDates.map(d => (
+                                                <SelectItem key={d} textValue={d} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">{d}</SelectItem>
+                                            ))}
+                                        </Select>
+                                    </div>
                                 </div>
-                            </div>
                         </section>
 
                         {/* Step 2: Room Settings */}
@@ -248,19 +276,27 @@ const InternalSeatingPlans: React.FC = () => {
                             </div>
                             
                             <div className="flex flex-col gap-8 pl-1">
-                                <div className="flex items-center justify-between p-5 rounded-[2rem] bg-slate-50 border border-slate-100 group hover:border-indigo-200 transition-all duration-300">
-                                    <div className="flex flex-col">
-                                        <span className="text-xs font-black text-slate-800">Shuffle Rooms</span>
-                                        <span className="text-[10px] text-slate-400 font-bold mt-1 italic">Randomize sequence</span>
+                                <div 
+                                    onClick={() => setShuffleRooms(!shuffleRooms)}
+                                    className={`
+                                        flex items-center justify-between p-5 rounded-[2rem] border-2 cursor-pointer transition-all duration-500 group
+                                        ${shuffleRooms 
+                                            ? 'bg-indigo-50/50 border-indigo-200 shadow-xl shadow-indigo-100/20' 
+                                            : 'bg-slate-50/50 border-slate-100 hover:border-indigo-100 hover:bg-white'}
+                                    `}
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-500 ${shuffleRooms ? 'bg-indigo-600 text-white shadow-lg rotate-12' : 'bg-white text-slate-400 border border-slate-100'}`}>
+                                            <ArrowRightLeft size={18} className={shuffleRooms ? 'animate-pulse' : ''} />
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className={`text-xs font-black transition-colors ${shuffleRooms ? 'text-indigo-900' : 'text-slate-800'}`}>Shuffle Rooms</span>
+                                            <span className="text-[10px] text-slate-400 font-bold mt-0.5 italic">Randomize sequence</span>
+                                        </div>
                                     </div>
-                                    <Switch 
-                                        isSelected={shuffleRooms} 
-                                        onValueChange={setShuffleRooms} 
-                                        color="primary"
-                                        classNames={{
-                                            wrapper: "group-data-[selected=true]:bg-indigo-600",
-                                        }}
-                                    />
+                                    <div className={`w-11 h-6 rounded-full p-1 transition-all duration-500 relative ${shuffleRooms ? 'bg-indigo-600' : 'bg-slate-200'}`}>
+                                        <div className={`w-4 h-4 rounded-full bg-white shadow-md transition-all duration-500 transform ${shuffleRooms ? 'translate-x-5' : 'translate-x-0'}`} />
+                                    </div>
                                 </div>
 
                                 <div className="flex flex-col gap-4">
