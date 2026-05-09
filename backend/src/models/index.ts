@@ -131,14 +131,6 @@ NotificationRecipient.belongsTo(User, {
     as: "User"
 });
 
-export { InternalExamSeries } from './InternalExamSeries.js';
-export { InternalExam } from './InternalExam.js';
-export { InternalExamDepartment } from './InternalExamDepartment.js';
-export { default as InternalBlock } from './InternalBlock.js';
-export { default as InternalFloor } from './InternalFloor.js';
-export { default as InternalRoom } from './InternalRoom.js';
-export { default as InternalSeat } from './InternalSeat.js';
-
 import { InternalExamSeries } from './InternalExamSeries.js';
 import { InternalExam } from './InternalExam.js';
 import { InternalExamDepartment } from './InternalExamDepartment.js';
@@ -147,6 +139,16 @@ import InternalFloor from './InternalFloor.js';
 import InternalRoom from './InternalRoom.js';
 import InternalSeat from './InternalSeat.js';
 import ExamSeries from './ExamSeries.js';
+
+export { 
+    InternalExamSeries, 
+    InternalExam, 
+    InternalExamDepartment, 
+    InternalBlock, 
+    InternalFloor, 
+    InternalRoom, 
+    InternalSeat 
+};
 
 // Internal Exam Associations
 ExamSeries.hasMany(InternalExam, { foreignKey: 'InternalExamSeriesID', onDelete: 'CASCADE' });
@@ -161,13 +163,15 @@ InternalExamDepartment.belongsTo(Department, { foreignKey: 'DepartmentID' });
 // ═══════════════════════════════════════════════════════════════
 // INTERNAL STUDENT ECOSYSTEM — Completely isolated from EndSem
 // ═══════════════════════════════════════════════════════════════
-export { default as InternalStudent } from './InternalStudent.js';
-export { default as InternalExamRegistration } from './InternalExamRegistration.js';
-export { default as InternalSeatAllocation } from './InternalSeatAllocation.js';
-
 import InternalStudent from './InternalStudent.js';
 import InternalExamRegistration from './InternalExamRegistration.js';
 import InternalSeatAllocation from './InternalSeatAllocation.js';
+
+export { 
+    InternalStudent, 
+    InternalExamRegistration, 
+    InternalSeatAllocation 
+};
 import Semester from './Semester.js';
 
 // InternalStudent ↔ User (shared auth layer)
@@ -195,7 +199,6 @@ InternalExamRegistration.belongsTo(InternalStudent, { foreignKey: 'InternalStude
 InternalStudent.hasMany(InternalExamRegistration, { foreignKey: 'InternalStudentID', onDelete: 'CASCADE' });
 
 // InternalSeatAllocation associations
-import { InternalSeat } from './InternalSeat.js';
 
 InternalSeatAllocation.belongsTo(InternalExam, { foreignKey: 'InternalExamID', onDelete: 'CASCADE' });
 InternalExam.hasMany(InternalSeatAllocation, { foreignKey: 'InternalExamID', onDelete: 'CASCADE' });
