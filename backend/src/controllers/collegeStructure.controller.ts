@@ -1,10 +1,14 @@
 // --- DELETE ALL STRUCTURE DATA --- 
 import { InvigilatorAssignment } from "../models/InvigilatorAssignment.js";
+import { IncidentReport } from "../models/IncidentReport.js";
+import { DutySwap } from "../models/DutySwap.js";
 
 export const deleteAllStructureData = async (req: Request, res: Response) => {
     try {
         await sequelize.transaction(async (t) => {
             // Delete from child tables first to avoid FK constraint errors
+            await IncidentReport.destroy({ where: {}, transaction: t });
+            await DutySwap.destroy({ where: {}, transaction: t });
             await InvigilatorAssignment.destroy({ where: {}, transaction: t });
             await SeatAllocation.destroy({ where: {}, transaction: t });
             await Seat.destroy({ where: {}, transaction: t });
