@@ -166,11 +166,13 @@ InternalExamDepartment.belongsTo(Department, { foreignKey: 'DepartmentID' });
 import InternalStudent from './InternalStudent.js';
 import InternalExamRegistration from './InternalExamRegistration.js';
 import InternalSeatAllocation from './InternalSeatAllocation.js';
+import { InternalSeatSnapshot } from './InternalSeatSnapshot.js';
 
 export { 
     InternalStudent, 
     InternalExamRegistration, 
-    InternalSeatAllocation 
+    InternalSeatAllocation,
+    InternalSeatSnapshot
 };
 import Semester from './Semester.js';
 
@@ -207,6 +209,13 @@ InternalSeat.hasMany(InternalSeatAllocation, { foreignKey: 'InternalSeatID', as:
 
 InternalSeatAllocation.belongsTo(InternalStudent, { foreignKey: 'InternalStudentID', as: 'Student', onDelete: 'CASCADE' });
 InternalStudent.hasMany(InternalSeatAllocation, { foreignKey: 'InternalStudentID', as: 'Allocations', onDelete: 'CASCADE' });
+
+// InternalSeatSnapshot Associations
+InternalSeatSnapshot.belongsTo(InternalExamSeries, { foreignKey: 'SeriesID', as: 'Series', onDelete: 'CASCADE' });
+InternalExamSeries.hasMany(InternalSeatSnapshot, { foreignKey: 'SeriesID', as: 'Snapshots', onDelete: 'CASCADE' });
+
+InternalSeatAllocation.belongsTo(InternalSeatSnapshot, { foreignKey: 'SnapshotID', as: 'Snapshot', onDelete: 'SET NULL' });
+InternalSeatSnapshot.hasMany(InternalSeatAllocation, { foreignKey: 'SnapshotID', as: 'Allocations', onDelete: 'CASCADE' });
 
 // Internal Structure Associations (already defined in model files, but ensuring consistency here)
 InternalBlock.hasMany(InternalFloor, { foreignKey: 'BlockID', as: 'Floors', onDelete: 'CASCADE' });

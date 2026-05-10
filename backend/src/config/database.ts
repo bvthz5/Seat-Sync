@@ -307,6 +307,9 @@ async function ensureSchemaIntegrity() {
 
                 IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Invigilators]') AND name = 'DepartmentID')
                 ALTER TABLE [dbo].[Invigilators] ADD [DepartmentID] INT NULL;
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Invigilators]') AND name = 'FacultyID')
+                ALTER TABLE [dbo].[Invigilators] ADD [FacultyID] INT NULL;
             END
         `, { type: QueryTypes.RAW });
 
@@ -1011,10 +1014,70 @@ async function ensureSchemaIntegrity() {
                     IF NOT EXISTS (
                         SELECT * FROM sys.columns 
                         WHERE object_id = OBJECT_ID(N'[dbo].[InternalStudents]') 
+                        AND name = 'internalStudentUUID'
+                    )
+                    BEGIN
+                        ALTER TABLE [dbo].[InternalStudents] ADD [internalStudentUUID] UNIQUEIDENTIFIER DEFAULT NEWID();
+                        PRINT 'Added internalStudentUUID to InternalStudents';
+                    END
+
+                    IF NOT EXISTS (
+                        SELECT * FROM sys.columns 
+                        WHERE object_id = OBJECT_ID(N'[dbo].[InternalStudents]') 
+                        AND name = 'classRollNumber'
+                    )
+                    BEGIN
+                        ALTER TABLE [dbo].[InternalStudents] ADD [classRollNumber] NVARCHAR(50) NULL;
+                        PRINT 'Added classRollNumber to InternalStudents';
+                    END
+
+                    IF NOT EXISTS (
+                        SELECT * FROM sys.columns 
+                        WHERE object_id = OBJECT_ID(N'[dbo].[InternalStudents]') 
+                        AND name = 'gender'
+                    )
+                    BEGIN
+                        ALTER TABLE [dbo].[InternalStudents] ADD [gender] NVARCHAR(10) NULL;
+                        PRINT 'Added gender to InternalStudents';
+                    END
+
+                    IF NOT EXISTS (
+                        SELECT * FROM sys.columns 
+                        WHERE object_id = OBJECT_ID(N'[dbo].[InternalStudents]') 
+                        AND name = 'section'
+                    )
+                    BEGIN
+                        ALTER TABLE [dbo].[InternalStudents] ADD [section] NVARCHAR(10) NULL;
+                        PRINT 'Added section to InternalStudents';
+                    END
+
+                    IF NOT EXISTS (
+                        SELECT * FROM sys.columns 
+                        WHERE object_id = OBJECT_ID(N'[dbo].[InternalStudents]') 
+                        AND name = 'currentAcademicYear'
+                    )
+                    BEGIN
+                        ALTER TABLE [dbo].[InternalStudents] ADD [currentAcademicYear] NVARCHAR(20) NULL;
+                        PRINT 'Added currentAcademicYear to InternalStudents';
+                    END
+
+                    IF NOT EXISTS (
+                        SELECT * FROM sys.columns 
+                        WHERE object_id = OBJECT_ID(N'[dbo].[InternalStudents]') 
+                        AND name = 'sourceFile'
+                    )
+                    BEGIN
+                        ALTER TABLE [dbo].[InternalStudents] ADD [sourceFile] NVARCHAR(255) NULL;
+                        PRINT 'Added sourceFile to InternalStudents';
+                    END
+
+                    IF NOT EXISTS (
+                        SELECT * FROM sys.columns 
+                        WHERE object_id = OBJECT_ID(N'[dbo].[InternalStudents]') 
                         AND name = 'Source'
                     )
                     BEGIN
-                        ALTER TABLE [dbo].[InternalStudents] ADD [Source] NVARCHAR(30) NOT NULL DEFAULT 'Imported';
+                        ALTER TABLE [dbo].[InternalStudents] ADD [Source] NVARCHAR(30) NOT NULL DEFAULT 'Imported' WITH VALUES;
                         PRINT 'Added Source to InternalStudents';
                     END
                     
@@ -1024,9 +1087,33 @@ async function ensureSchemaIntegrity() {
                         AND name = 'Status'
                     )
                     BEGIN
-                        ALTER TABLE [dbo].[InternalStudents] ADD [Status] NVARCHAR(20) NOT NULL DEFAULT 'ACTIVE';
+                        ALTER TABLE [dbo].[InternalStudents] ADD [Status] NVARCHAR(20) NOT NULL DEFAULT 'ACTIVE' WITH VALUES;
                         PRINT 'Added Status to InternalStudents';
                     END
+                END
+
+                -- Internal Seating System Columns
+                IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalSeatAllocations' AND TABLE_SCHEMA = 'dbo')
+                BEGIN
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[InternalSeatAllocations]') AND name = 'SnapshotID')
+                    BEGIN
+                        ALTER TABLE [dbo].[InternalSeatAllocations] ADD [SnapshotID] INT NULL;
+                        PRINT 'Added SnapshotID to InternalSeatAllocations';
+                    END
+                END
+
+                IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalSeatSnapshots' AND TABLE_SCHEMA = 'dbo')
+                BEGIN
+                    CREATE TABLE [dbo].[InternalSeatSnapshots] (
+                        [SnapshotID] INT IDENTITY(1,1) PRIMARY KEY,
+                        [Title] NVARCHAR(100) NOT NULL,
+                        [Session] NVARCHAR(10) NOT NULL,
+                        [ExamDate] DATE NOT NULL,
+                        [SeriesID] INT NOT NULL REFERENCES [dbo].[InternalExamSeries]([InternalExamSeriesID]),
+                        [createdAt] DATETIME NOT NULL DEFAULT GETDATE(),
+                        [updatedAt] DATETIME NOT NULL DEFAULT GETDATE()
+                    );
+                    PRINT 'Created InternalSeatSnapshots table';
                 END
             `, { type: QueryTypes.RAW });
         }
