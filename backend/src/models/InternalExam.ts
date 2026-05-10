@@ -13,6 +13,8 @@ export class InternalExam extends Model {
     declare public Duration: number;
     declare public StartTime: string;
     declare public EndTime: string;
+    declare public createdAt: Date;
+    declare public updatedAt: Date;
 }
 
 InternalExam.init({
@@ -61,6 +63,14 @@ InternalExam.init({
     EndTime: {
         type: DataTypes.STRING(15),
         allowNull: true,
+    },
+    createdAt: {
+        type: DataTypes.DATE,
+        field: "createdAt",
+    },
+    updatedAt: {
+        type: DataTypes.DATE,
+        field: "updatedAt",
     }
 }, {
     sequelize,

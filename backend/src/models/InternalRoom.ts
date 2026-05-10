@@ -16,6 +16,8 @@ interface InternalRoomAttributes {
   SeatMode: "Dual" | "Single" | "Mixed";
   Status: "Active" | "Inactive";
   ExamUsable: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 interface InternalRoomCreationAttributes extends Optional<InternalRoomAttributes, "RoomID" | "RowLayout" | "SeatsPerBench" | "OverrideCap" | "RoomType" | "SeatMode"> { }
@@ -34,6 +36,8 @@ export class InternalRoom extends Model<InternalRoomAttributes, InternalRoomCrea
   declare SeatMode: "Dual" | "Single" | "Mixed";
   declare Status: "Active" | "Inactive";
   declare ExamUsable: boolean;
+  declare createdAt: Date;
+  declare updatedAt: Date;
   declare Block?: InternalBlock;
   declare Floor?: InternalFloor;
 }
@@ -106,6 +110,14 @@ InternalRoom.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: true,
+    },
+    createdAt: {
+      type: DataTypes.DATE,
+      field: "createdAt",
+    },
+    updatedAt: {
+      type: DataTypes.DATE,
+      field: "updatedAt",
     },
   },
   {

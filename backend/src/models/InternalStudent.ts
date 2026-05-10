@@ -16,8 +16,9 @@ interface InternalStudentAttributes {
     SemesterID: number | null;
     BatchYear: number | null;
     AcademicYear: string | null;
-    Status: "ACTIVE" | "GRADUATED" | "DROPPED";
     Source: "Self Registered" | "Admin Added" | "Imported";
+    createdAt?: Date;
+    updatedAt?: Date;
 }
 
 interface InternalStudentCreationAttributes
@@ -36,8 +37,9 @@ export class InternalStudent extends Model<InternalStudentAttributes, InternalSt
     declare SemesterID: number | null;
     declare BatchYear: number | null;
     declare AcademicYear: string | null;
-    declare Status: "ACTIVE" | "GRADUATED" | "DROPPED";
-    declare Source: "Self Registered" | "Admin Added" | "Imported";
+        declare Source: "Self Registered" | "Admin Added" | "Imported";
+    declare createdAt: Date;
+    declare updatedAt: Date;
 
     // Associations
     declare Department?: any;
@@ -101,6 +103,14 @@ InternalStudent.init(
             allowNull: false,
             defaultValue: "Imported",
             validate: { isIn: [["Self Registered", "Admin Added", "Imported"]] },
+        },
+        createdAt: {
+            type: DataTypes.DATE,
+            field: "createdAt",
+        },
+        updatedAt: {
+            type: DataTypes.DATE,
+            field: "updatedAt",
         },
     },
     {

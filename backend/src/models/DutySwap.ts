@@ -60,12 +60,12 @@ DutySwap.init(
       defaultValue: "PENDING",
     },
     CreatedAt: {
-      type: "DATETIME2",
+      type: DataTypes.DATE,
       allowNull: false,
       defaultValue: sequelize.literal('GETDATE()'),
     },
     UpdatedAt: {
-      type: "DATETIME2",
+      type: DataTypes.DATE,
       allowNull: false,
       defaultValue: sequelize.literal('GETDATE()'),
     },

@@ -407,25 +407,26 @@ export const getStudentsForInternalExam = async (req: Request, res: Response) =>
             where: { InternalExamID: examId },
             include: [{
                 model: InternalStudent,
+                as: 'Student',
                 include: [
                     { model: Department, attributes: ['DepartmentID', 'DepartmentCode', 'DepartmentName'] },
                     { model: Program, attributes: ['ProgramID', 'ProgramName'] },
                     { model: Semester, attributes: ['SemesterID', 'SemesterNumber'] },
                 ],
             }],
-            order: [[InternalStudent, 'RegisterNumber', 'ASC']],
+            order: [[{ model: InternalStudent, as: 'Student' }, 'RegisterNumber', 'ASC']],
         });
 
         const students = registrations.map((reg: any) => ({
             registrationId: reg.InternalExamRegistrationID,
-            internalStudentId: reg.InternalStudent?.InternalStudentID,
-            registerNumber: reg.InternalStudent?.RegisterNumber,
-            fullName: reg.InternalStudent?.FullName,
-            department: reg.InternalStudent?.Department?.DepartmentName,
-            departmentCode: reg.InternalStudent?.Department?.DepartmentCode,
-            program: reg.InternalStudent?.Program?.ProgramName,
-            semester: reg.InternalStudent?.Semester?.SemesterNumber,
-            batchYear: reg.InternalStudent?.BatchYear,
+            internalStudentId: reg.Student?.InternalStudentID,
+            registerNumber: reg.Student?.RegisterNumber,
+            fullName: reg.Student?.FullName,
+            department: reg.Student?.Department?.DepartmentName,
+            departmentCode: reg.Student?.Department?.DepartmentCode,
+            program: reg.Student?.Program?.ProgramName,
+            semester: reg.Student?.Semester?.SemesterNumber,
+            batchYear: reg.Student?.BatchYear,
         }));
 
         res.json({

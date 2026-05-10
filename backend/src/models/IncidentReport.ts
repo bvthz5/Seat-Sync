@@ -57,6 +57,11 @@ IncidentReport.init(
       allowNull: false,
       defaultValue: "PENDING",
     },
+    CreatedAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: sequelize.literal('GETDATE()'),
+    },
   },
   {
     sequelize,

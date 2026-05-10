@@ -462,10 +462,29 @@ async function ensureSchemaIntegrity() {
                     [SemesterID]   INT NULL REFERENCES [dbo].[Semesters]([SemesterID]),
                     [Description]  NVARCHAR(255) NULL,
                     [IsActive]     BIT NOT NULL DEFAULT 1,
-                    [createdAt]    DATETIME NOT NULL DEFAULT GETDATE(),
-                    [updatedAt]    DATETIME NOT NULL DEFAULT GETDATE()
+                    [createdAt]    DATETIME2 NOT NULL DEFAULT GETDATE(),
+                    [updatedAt]    DATETIME2 NOT NULL DEFAULT GETDATE()
                 );
                 PRINT 'Created ExamSeries table';
+            END
+            ELSE
+            BEGIN
+                -- Upgrade to DATETIME2 if needed
+                IF (SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'ExamSeries' AND COLUMN_NAME = 'createdAt') = 'datetime'
+                BEGIN
+                    DECLARE @CName nvarchar(200);
+                    SELECT @CName = name FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID('ExamSeries') AND parent_column_id = (SELECT column_id FROM sys.columns WHERE name = 'createdAt' AND object_id = OBJECT_ID('ExamSeries'));
+                    IF @CName IS NOT NULL EXEC('ALTER TABLE ExamSeries DROP CONSTRAINT ' + @CName);
+                    
+                    SELECT @CName = name FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID('ExamSeries') AND parent_column_id = (SELECT column_id FROM sys.columns WHERE name = 'updatedAt' AND object_id = OBJECT_ID('ExamSeries'));
+                    IF @CName IS NOT NULL EXEC('ALTER TABLE ExamSeries DROP CONSTRAINT ' + @CName);
+                    
+                    ALTER TABLE [dbo].[ExamSeries] ALTER COLUMN [createdAt] DATETIME2 NOT NULL;
+                    ALTER TABLE [dbo].[ExamSeries] ALTER COLUMN [updatedAt] DATETIME2 NOT NULL;
+                    ALTER TABLE [dbo].[ExamSeries] ADD DEFAULT GETDATE() FOR [createdAt];
+                    ALTER TABLE [dbo].[ExamSeries] ADD DEFAULT GETDATE() FOR [updatedAt];
+                    PRINT 'Upgraded ExamSeries timestamps to DATETIME2';
+                END
             END
         `, { type: QueryTypes.RAW });
 
@@ -928,12 +947,35 @@ async function ensureSchemaIntegrity() {
                     [SeatMode]     NVARCHAR(20)  NOT NULL DEFAULT 'Dual',
                     [Status]       NVARCHAR(20)  NOT NULL DEFAULT 'Active',
                     [ExamUsable]   BIT NOT NULL DEFAULT 1,
-                    [createdAt]    DATETIME NOT NULL DEFAULT GETDATE(),
-                    [updatedAt]    DATETIME NOT NULL DEFAULT GETDATE()
+                    [createdAt]    DATETIME2 NOT NULL DEFAULT GETDATE(),
+                    [updatedAt]    DATETIME2 NOT NULL DEFAULT GETDATE()
                 );
                 PRINT 'Created InternalRooms table';
             END
-            ELSE
+        `, { type: QueryTypes.RAW });
+
+        // Upgrade InternalRooms to DATETIME2
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalRooms' AND TABLE_SCHEMA = 'dbo')
+            AND (SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'InternalRooms' AND COLUMN_NAME = 'createdAt') = 'datetime'
+            BEGIN
+                DECLARE @CName nvarchar(200);
+                SELECT @CName = name FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID('InternalRooms') AND parent_column_id = (SELECT column_id FROM sys.columns WHERE name = 'createdAt' AND object_id = OBJECT_ID('InternalRooms'));
+                IF @CName IS NOT NULL EXEC('ALTER TABLE InternalRooms DROP CONSTRAINT ' + @CName);
+                
+                SELECT @CName = name FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID('InternalRooms') AND parent_column_id = (SELECT column_id FROM sys.columns WHERE name = 'updatedAt' AND object_id = OBJECT_ID('InternalRooms'));
+                IF @CName IS NOT NULL EXEC('ALTER TABLE InternalRooms DROP CONSTRAINT ' + @CName);
+                
+                ALTER TABLE [dbo].[InternalRooms] ALTER COLUMN [createdAt] DATETIME2 NOT NULL;
+                ALTER TABLE [dbo].[InternalRooms] ALTER COLUMN [updatedAt] DATETIME2 NOT NULL;
+                ALTER TABLE [dbo].[InternalRooms] ADD DEFAULT GETDATE() FOR [createdAt];
+                ALTER TABLE [dbo].[InternalRooms] ADD DEFAULT GETDATE() FOR [updatedAt];
+                PRINT 'Upgraded InternalRooms timestamps to DATETIME2';
+            END
+        `, { type: QueryTypes.RAW });
+
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalRooms' AND TABLE_SCHEMA = 'dbo')
             BEGIN
                 IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[InternalRooms]') AND name = 'RoomType')
                 BEGIN
@@ -975,9 +1017,21 @@ async function ensureSchemaIntegrity() {
                     [Type]        NVARCHAR(50) NOT NULL,
                     [Description] NVARCHAR(MAX) NOT NULL,
                     [Status]      NVARCHAR(20) NOT NULL DEFAULT 'PENDING',
-                    [CreatedAt]   DATETIME NOT NULL DEFAULT GETDATE()
+                    [CreatedAt]   DATETIME2 NOT NULL DEFAULT GETDATE()
                 );
                 PRINT 'Created IncidentReports table';
+            END
+            ELSE
+            BEGIN
+                IF (SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'IncidentReports' AND COLUMN_NAME = 'CreatedAt') = 'datetime'
+                BEGIN
+                    DECLARE @CName nvarchar(200);
+                    SELECT @CName = name FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID('IncidentReports') AND parent_column_id = (SELECT column_id FROM sys.columns WHERE name = 'CreatedAt' AND object_id = OBJECT_ID('IncidentReports'));
+                    IF @CName IS NOT NULL EXEC('ALTER TABLE IncidentReports DROP CONSTRAINT ' + @CName);
+                    ALTER TABLE [dbo].[IncidentReports] ALTER COLUMN [CreatedAt] DATETIME2 NOT NULL;
+                    ALTER TABLE [dbo].[IncidentReports] ADD DEFAULT GETDATE() FOR [CreatedAt];
+                    PRINT 'Upgraded IncidentReports timestamps to DATETIME2';
+                END
             END
         `, { type: QueryTypes.RAW });
 
@@ -993,10 +1047,30 @@ async function ensureSchemaIntegrity() {
                     [SubstituteID] INT NULL REFERENCES [dbo].[Faculties]([FacultyID]),
                     [Reason]       NVARCHAR(MAX) NOT NULL,
                     [Status]       NVARCHAR(20) NOT NULL DEFAULT 'PENDING',
-                    [CreatedAt]    DATETIME NOT NULL DEFAULT GETDATE(),
-                    [UpdatedAt]    DATETIME NOT NULL DEFAULT GETDATE()
+                    [CreatedAt]    DATETIME2 NOT NULL DEFAULT GETDATE(),
+                    [UpdatedAt]    DATETIME2 NOT NULL DEFAULT GETDATE()
                 );
                 PRINT 'Created DutySwaps table';
+            END
+        `, { type: QueryTypes.RAW });
+
+        // Upgrade DutySwaps to DATETIME2
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'DutySwaps' AND TABLE_SCHEMA = 'dbo')
+            AND (SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'DutySwaps' AND COLUMN_NAME = 'CreatedAt') = 'datetime'
+            BEGIN
+                DECLARE @CName nvarchar(200);
+                SELECT @CName = name FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID('DutySwaps') AND parent_column_id = (SELECT column_id FROM sys.columns WHERE name = 'CreatedAt' AND object_id = OBJECT_ID('DutySwaps'));
+                IF @CName IS NOT NULL EXEC('ALTER TABLE DutySwaps DROP CONSTRAINT ' + @CName);
+                
+                SELECT @CName = name FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID('DutySwaps') AND parent_column_id = (SELECT column_id FROM sys.columns WHERE name = 'UpdatedAt' AND object_id = OBJECT_ID('DutySwaps'));
+                IF @CName IS NOT NULL EXEC('ALTER TABLE DutySwaps DROP CONSTRAINT ' + @CName);
+                
+                ALTER TABLE [dbo].[DutySwaps] ALTER COLUMN [CreatedAt] DATETIME2 NOT NULL;
+                ALTER TABLE [dbo].[DutySwaps] ALTER COLUMN [UpdatedAt] DATETIME2 NOT NULL;
+                ALTER TABLE [dbo].[DutySwaps] ADD DEFAULT GETDATE() FOR [CreatedAt];
+                ALTER TABLE [dbo].[DutySwaps] ADD DEFAULT GETDATE() FOR [UpdatedAt];
+                PRINT 'Upgraded DutySwaps timestamps to DATETIME2';
             END
         `, { type: QueryTypes.RAW });
 
@@ -1008,91 +1082,32 @@ async function ensureSchemaIntegrity() {
     try {
         const dialect = sequelize.getDialect();
         if (dialect === 'mssql') {
+            const columns = [
+                { name: 'internalStudentUUID', type: 'UNIQUEIDENTIFIER DEFAULT NEWID()' },
+                { name: 'classRollNumber', type: 'NVARCHAR(50) NULL' },
+                { name: 'gender', type: 'NVARCHAR(10) NULL' },
+                { name: 'section', type: 'NVARCHAR(10) NULL' },
+                { name: 'currentAcademicYear', type: 'NVARCHAR(20) NULL' },
+                { name: 'sourceFile', type: 'NVARCHAR(255) NULL' },
+                { name: 'Source', type: 'NVARCHAR(30) NOT NULL DEFAULT \'Imported\' WITH VALUES' },
+                { name: 'Status', type: 'NVARCHAR(20) NOT NULL DEFAULT \'ACTIVE\' WITH VALUES' }
+            ];
+
+            for (const col of columns) {
+                await sequelize.query(`
+                    IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalStudents' AND TABLE_SCHEMA = 'dbo')
+                    BEGIN
+                        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[InternalStudents]') AND name = '${col.name}')
+                        BEGIN
+                            ALTER TABLE [dbo].[InternalStudents] ADD [${col.name}] ${col.type};
+                            PRINT 'Added ${col.name} to InternalStudents';
+                        END
+                    END
+                `, { type: QueryTypes.RAW });
+            }
+
+            // Internal Seating System Columns
             await sequelize.query(`
-                IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalStudents' AND TABLE_SCHEMA = 'dbo')
-                BEGIN
-                    IF NOT EXISTS (
-                        SELECT * FROM sys.columns 
-                        WHERE object_id = OBJECT_ID(N'[dbo].[InternalStudents]') 
-                        AND name = 'internalStudentUUID'
-                    )
-                    BEGIN
-                        ALTER TABLE [dbo].[InternalStudents] ADD [internalStudentUUID] UNIQUEIDENTIFIER DEFAULT NEWID();
-                        PRINT 'Added internalStudentUUID to InternalStudents';
-                    END
-
-                    IF NOT EXISTS (
-                        SELECT * FROM sys.columns 
-                        WHERE object_id = OBJECT_ID(N'[dbo].[InternalStudents]') 
-                        AND name = 'classRollNumber'
-                    )
-                    BEGIN
-                        ALTER TABLE [dbo].[InternalStudents] ADD [classRollNumber] NVARCHAR(50) NULL;
-                        PRINT 'Added classRollNumber to InternalStudents';
-                    END
-
-                    IF NOT EXISTS (
-                        SELECT * FROM sys.columns 
-                        WHERE object_id = OBJECT_ID(N'[dbo].[InternalStudents]') 
-                        AND name = 'gender'
-                    )
-                    BEGIN
-                        ALTER TABLE [dbo].[InternalStudents] ADD [gender] NVARCHAR(10) NULL;
-                        PRINT 'Added gender to InternalStudents';
-                    END
-
-                    IF NOT EXISTS (
-                        SELECT * FROM sys.columns 
-                        WHERE object_id = OBJECT_ID(N'[dbo].[InternalStudents]') 
-                        AND name = 'section'
-                    )
-                    BEGIN
-                        ALTER TABLE [dbo].[InternalStudents] ADD [section] NVARCHAR(10) NULL;
-                        PRINT 'Added section to InternalStudents';
-                    END
-
-                    IF NOT EXISTS (
-                        SELECT * FROM sys.columns 
-                        WHERE object_id = OBJECT_ID(N'[dbo].[InternalStudents]') 
-                        AND name = 'currentAcademicYear'
-                    )
-                    BEGIN
-                        ALTER TABLE [dbo].[InternalStudents] ADD [currentAcademicYear] NVARCHAR(20) NULL;
-                        PRINT 'Added currentAcademicYear to InternalStudents';
-                    END
-
-                    IF NOT EXISTS (
-                        SELECT * FROM sys.columns 
-                        WHERE object_id = OBJECT_ID(N'[dbo].[InternalStudents]') 
-                        AND name = 'sourceFile'
-                    )
-                    BEGIN
-                        ALTER TABLE [dbo].[InternalStudents] ADD [sourceFile] NVARCHAR(255) NULL;
-                        PRINT 'Added sourceFile to InternalStudents';
-                    END
-
-                    IF NOT EXISTS (
-                        SELECT * FROM sys.columns 
-                        WHERE object_id = OBJECT_ID(N'[dbo].[InternalStudents]') 
-                        AND name = 'Source'
-                    )
-                    BEGIN
-                        ALTER TABLE [dbo].[InternalStudents] ADD [Source] NVARCHAR(30) NOT NULL DEFAULT 'Imported' WITH VALUES;
-                        PRINT 'Added Source to InternalStudents';
-                    END
-                    
-                    IF NOT EXISTS (
-                        SELECT * FROM sys.columns 
-                        WHERE object_id = OBJECT_ID(N'[dbo].[InternalStudents]') 
-                        AND name = 'Status'
-                    )
-                    BEGIN
-                        ALTER TABLE [dbo].[InternalStudents] ADD [Status] NVARCHAR(20) NOT NULL DEFAULT 'ACTIVE' WITH VALUES;
-                        PRINT 'Added Status to InternalStudents';
-                    END
-                END
-
-                -- Internal Seating System Columns
                 IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalSeatAllocations' AND TABLE_SCHEMA = 'dbo')
                 BEGIN
                     IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[InternalSeatAllocations]') AND name = 'SnapshotID')
@@ -1101,7 +1116,9 @@ async function ensureSchemaIntegrity() {
                         PRINT 'Added SnapshotID to InternalSeatAllocations';
                     END
                 END
+            `, { type: QueryTypes.RAW });
 
+            await sequelize.query(`
                 IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalSeatSnapshots' AND TABLE_SCHEMA = 'dbo')
                 BEGIN
                     CREATE TABLE [dbo].[InternalSeatSnapshots] (
@@ -1110,10 +1127,29 @@ async function ensureSchemaIntegrity() {
                         [Session] NVARCHAR(10) NOT NULL,
                         [ExamDate] DATE NOT NULL,
                         [SeriesID] INT NOT NULL REFERENCES [dbo].[InternalExamSeries]([InternalExamSeriesID]),
-                        [createdAt] DATETIME NOT NULL DEFAULT GETDATE(),
-                        [updatedAt] DATETIME NOT NULL DEFAULT GETDATE()
+                        [createdAt] DATETIME2 NOT NULL DEFAULT GETDATE(),
+                        [updatedAt] DATETIME2 NOT NULL DEFAULT GETDATE()
                     );
                     PRINT 'Created InternalSeatSnapshots table';
+                END
+            `, { type: QueryTypes.RAW });
+
+            await sequelize.query(`
+                IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalSeatSnapshots' AND TABLE_SCHEMA = 'dbo')
+                AND (SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'InternalSeatSnapshots' AND COLUMN_NAME = 'createdAt') = 'datetime'
+                BEGIN
+                    DECLARE @CName nvarchar(200);
+                    SELECT @CName = name FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID('InternalSeatSnapshots') AND parent_column_id = (SELECT column_id FROM sys.columns WHERE name = 'createdAt' AND object_id = OBJECT_ID('InternalSeatSnapshots'));
+                    IF @CName IS NOT NULL EXEC('ALTER TABLE InternalSeatSnapshots DROP CONSTRAINT ' + @CName);
+                    
+                    SELECT @CName = name FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID('InternalSeatSnapshots') AND parent_column_id = (SELECT column_id FROM sys.columns WHERE name = 'updatedAt' AND object_id = OBJECT_ID('InternalSeatSnapshots'));
+                    IF @CName IS NOT NULL EXEC('ALTER TABLE InternalSeatSnapshots DROP CONSTRAINT ' + @CName);
+                    
+                    ALTER TABLE [dbo].[InternalSeatSnapshots] ALTER COLUMN [createdAt] DATETIME2 NOT NULL;
+                    ALTER TABLE [dbo].[InternalSeatSnapshots] ALTER COLUMN [updatedAt] DATETIME2 NOT NULL;
+                    ALTER TABLE [dbo].[InternalSeatSnapshots] ADD DEFAULT GETDATE() FOR [createdAt];
+                    ALTER TABLE [dbo].[InternalSeatSnapshots] ADD DEFAULT GETDATE() FOR [updatedAt];
+                    PRINT 'Upgraded InternalSeatSnapshots timestamps to DATETIME2';
                 END
             `, { type: QueryTypes.RAW });
         }

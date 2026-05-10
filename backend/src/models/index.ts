@@ -197,8 +197,8 @@ InternalExamRegistration.belongsTo(InternalExam, { foreignKey: 'InternalExamID',
 InternalExam.hasMany(InternalExamRegistration, { foreignKey: 'InternalExamID', onDelete: 'CASCADE' });
 
 // InternalExamRegistration ↔ InternalStudent
-InternalExamRegistration.belongsTo(InternalStudent, { foreignKey: 'InternalStudentID', onDelete: 'CASCADE' });
-InternalStudent.hasMany(InternalExamRegistration, { foreignKey: 'InternalStudentID', onDelete: 'CASCADE' });
+InternalExamRegistration.belongsTo(InternalStudent, { foreignKey: 'InternalStudentID', as: 'Student', onDelete: 'CASCADE' });
+InternalStudent.hasMany(InternalExamRegistration, { foreignKey: 'InternalStudentID', as: 'Registrations', onDelete: 'CASCADE' });
 
 // InternalSeatAllocation associations
 InternalSeatAllocation.belongsTo(InternalExam, { foreignKey: 'InternalExamID', as: 'Exam', onDelete: 'CASCADE' });

@@ -503,7 +503,7 @@ export const getStudentSeating = async (req: Request, res: Response) => {
             const room = seat?.InternalRoom;
             const layout = await InternalSeatAllocation.findAll({ 
                 where: { InternalExamID: targetExam.InternalExamID }, 
-                include: [{ model: InternalSeat, required: true, where: { InternalRoomID: seat.InternalRoomID } }, { model: InternalStudent, include: [{ model: User, attributes: ["FullName"] }] }] 
+                include: [{ model: InternalSeat, required: true, where: { InternalRoomID: seat.InternalRoomID } }, { model: InternalStudent, as: 'Student', include: [{ model: User, attributes: ["FullName"] }] }] 
             });
             const roomLayout = layout.map((item: any) => ({ 
                 studentId: item.InternalStudentID, 

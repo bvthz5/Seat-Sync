@@ -4,8 +4,9 @@ import { sequelize } from '../config/database.js';
 export class InternalExamSeries extends Model {
     public InternalExamSeriesID!: number;
     public SeriesName!: string;
-    public AcademicYearID!: number;
     public IsActive!: boolean;
+    public createdAt!: Date;
+    public updatedAt!: Date;
 }
 
 InternalExamSeries.init({
@@ -25,6 +26,14 @@ InternalExamSeries.init({
     IsActive: {
         type: DataTypes.BOOLEAN,
         defaultValue: true,
+    },
+    createdAt: {
+        type: DataTypes.DATE,
+        field: "createdAt",
+    },
+    updatedAt: {
+        type: DataTypes.DATE,
+        field: "updatedAt",
     }
 }, {
     sequelize,
