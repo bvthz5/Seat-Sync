@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { Op } from 'sequelize';
+import { Op, QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database.js';
 import { 
     InternalRoom, 
@@ -11,7 +11,8 @@ import {
     Department,
     InternalBlock,
     InternalFloor,
-    InternalExamRegistration
+    InternalExamRegistration,
+    InternalExamDepartment
 } from '../../models/index.js';
 import { InternalSeatAllocator } from '../../engines/internal/internalSeatAllocator.engine.js';
 
@@ -33,22 +34,63 @@ export const internalSeatingController = {
         }
     },
 
-    /** Get distinct exam dates for internal series */
     getExamDates: async (req: Request, res: Response) => {
         try {
             const { seriesId, session } = req.query;
-            const where: any = {};
-            if (seriesId) where.InternalExamSeriesID = seriesId as any;
-            if (session) where.Session = session as string;
+            if (!seriesId) return res.json([]);
 
-            const dates = await InternalExam.findAll({
-                where,
-                attributes: [[sequelize.fn('DISTINCT', sequelize.col('ExamDate')), 'ExamDate']],
-                order: [['ExamDate', 'ASC']]
-            });
-            return res.json(dates.map((d: any) => d.ExamDate));
+            // If session provided, filter dates to only those with exams in that session
+            // UPPER() ensures case-insensitive match regardless of how data was stored
+            const sessionFilter = session
+                ? `AND UPPER(Session) = UPPER(:session)`
+                : '';
+
+            const results = await sequelize.query(
+                `SELECT DISTINCT CONVERT(VARCHAR, ExamDate, 23) as examDate
+                 FROM InternalExams 
+                 WHERE InternalExamSeriesID = :seriesId
+                 ${sessionFilter}
+                 ORDER BY examDate ASC`,
+                {
+                    replacements: { seriesId: Number(seriesId), session: session || null },
+                    type: QueryTypes.SELECT
+                }
+            );
+
+            console.log(`getExamDates: Series=${seriesId}, Session=${session}, Found ${results.length} dates`);
+            return res.json(results);
         } catch (error: any) {
+            console.error('getExamDates Error:', error);
             return res.status(500).json({ message: error.message });
+        }
+    },
+
+    /** Get all sessions available for a series */
+    getSessions: async (req: Request, res: Response) => {
+        try {
+            const { seriesId } = req.query;
+            if (!seriesId) return res.json(['FN', 'AN']);
+
+            const results = await sequelize.query(
+                `SELECT DISTINCT UPPER(Session) as session
+                 FROM InternalExams 
+                 WHERE InternalExamSeriesID = :seriesId
+                 ORDER BY session ASC`,
+                {
+                    replacements: { seriesId: Number(seriesId) },
+                    type: QueryTypes.SELECT
+                }
+            );
+
+            const sessions = results.length > 0
+                ? (results as any[]).map((r: any) => r.session)
+                : ['FN', 'AN'];
+
+            console.log(`getSessions: Series=${seriesId}, Found sessions:`, sessions);
+            return res.json(sessions);
+        } catch (error: any) {
+            console.error('getSessions Error:', error);
+            return res.json(['FN', 'AN']);
         }
     },
 
@@ -62,6 +104,12 @@ export const internalSeatingController = {
                     Session: session as string,
                     InternalExamSeriesID: seriesId as any
                 },
+                include: [
+                    {
+                        model: InternalExamDepartment,
+                        include: [{ model: Department }]
+                    }
+                ],
                 order: [['StartTime', 'ASC']]
             });
             return res.json(exams);
@@ -70,13 +118,18 @@ export const internalSeatingController = {
         }
     },
 
-    /** Get hall layout with current allocations */
+    /** Get hall layout with current allocations — returns bench-grouped view */
     getHallLayout: async (req: Request, res: Response) => {
         try {
             const { hallId } = req.params;
             const { examDate, session, seriesId } = req.query;
 
-            const room = await InternalRoom.findByPk(hallId as string);
+            const room = await InternalRoom.findByPk(hallId as string, {
+                include: [
+                    { model: InternalBlock, as: 'Block' },
+                    { model: InternalFloor, as: 'Floor' }
+                ]
+            });
             if (!room) return res.status(404).json({ message: "Room not found" });
 
             const seats = await InternalSeat.findAll({
@@ -84,28 +137,84 @@ export const internalSeatingController = {
                 order: [['RowLabel', 'ASC'], ['BenchNumber', 'ASC'], ['SeatNumber', 'ASC']]
             });
 
-            // Fetch allocations for this hall on this date/session
-            const examIds = await InternalExam.findAll({
-                where: { ExamDate: examDate as string, Session: session as string, InternalExamSeriesID: seriesId as any },
-                attributes: ['InternalExamID']
-            }).then(exs => exs.map(e => e.InternalExamID));
-
-            const allocations = await InternalSeatAllocation.findAll({
-                where: {
-                    InternalSeatID: { [Op.in]: seats.map(s => s.SeatID) },
-                    InternalExamID: { [Op.in]: examIds }
-                },
-                include: [
+            // Fetch exams and their allocations for this hall
+            const examRows = examDate && session && seriesId
+                ? await sequelize.query(
+                    `SELECT InternalExamID, SubjectCode, SubjectName FROM InternalExams
+                     WHERE UPPER(Session) = UPPER(:session)
+                       AND (CONVERT(VARCHAR, ExamDate, 23) = :examDate OR CAST(ExamDate AS DATE) = :examDate)
+                       AND InternalExamSeriesID = :seriesId`,
                     {
-                        model: InternalStudent,
-                        as: 'Student',
-                        include: [{ model: Department, as: 'Department' }]
+                        replacements: { session, examDate, seriesId },
+                        type: QueryTypes.SELECT
                     }
-                ]
-            });
+                ) as any[]
+                : [];
 
-            return res.json({ room, seats, allocations });
+            console.log(`[getHallLayout] Found ${examRows.length} exams for Hall=${hallId}, Date=${examDate}, Session=${session}`);
+
+            const examMap = new Map<number, { subjectCode: string; subjectName: string }>();
+            for (const ex of examRows as any[]) {
+                examMap.set(ex.InternalExamID, { subjectCode: ex.SubjectCode, subjectName: ex.SubjectName });
+            }
+
+            const seatIds = seats.map(s => s.SeatID);
+            const allocations = examRows.length > 0 ? await InternalSeatAllocation.findAll({
+                where: {
+                    InternalSeatID: { [Op.in]: seatIds.length > 0 ? seatIds : [-1] },
+                    InternalExamID: { [Op.in]: examRows.map((e: any) => e.InternalExamID) }
+                },
+                include: [{
+                    model: InternalStudent,
+                    as: 'Student',
+                    include: [{ model: Department, as: 'Department' }]
+                }]
+            }) : [];
+
+            // Build seat → allocation map
+            const allocMap = new Map<number, any>();
+            for (const alloc of allocations as any[]) {
+                allocMap.set(alloc.InternalSeatID, alloc);
+            }
+
+            // Build bench-grouped structure
+            const benchMap = new Map<string, Map<number, { left?: any; right?: any }>>();
+            for (const seat of seats) {
+                if (!benchMap.has(seat.RowLabel)) benchMap.set(seat.RowLabel, new Map());
+                const rowMap = benchMap.get(seat.RowLabel)!;
+                if (!rowMap.has(seat.BenchNumber)) rowMap.set(seat.BenchNumber, {});
+                const bench = rowMap.get(seat.BenchNumber)!;
+                const alloc = allocMap.get(seat.SeatID);
+                const seatInfo = {
+                    seatId: seat.SeatID,
+                    seatNumber: seat.SeatNumber,
+                    studentId: alloc?.InternalStudentID || null,
+                    registerNumber: alloc?.Student?.RegisterNumber || null,
+                    name: alloc?.Student?.FullName || null,
+                    deptCode: alloc?.Student?.Department?.DepartmentCode || null,
+                    subjectCode: alloc ? examMap.get(alloc.InternalExamID)?.subjectCode || null : null,
+                    subjectName: alloc ? examMap.get(alloc.InternalExamID)?.subjectName || null : null,
+                };
+                if (seat.SeatNumber === 1) bench.left = seatInfo;
+                else bench.right = seatInfo;
+            }
+
+            // Convert to sorted array
+            const rows = [...benchMap.keys()].sort().map(rowLabel => ({
+                rowLabel,
+                benches: [...benchMap.get(rowLabel)!.entries()]
+                    .sort(([a], [b]) => a - b)
+                    .map(([benchNumber, bench]) => ({ benchNumber, ...bench }))
+            }));
+
+            return res.json({
+                room: { ...room.toJSON(), Block: (room as any).Block, Floor: (room as any).Floor },
+                rows,
+                totalSeats: seatIds.length,
+                filledSeats: allocMap.size
+            });
         } catch (error: any) {
+            console.error('getHallLayout Error:', error);
             return res.status(500).json({ message: error.message });
         }
     },
@@ -114,74 +223,93 @@ export const internalSeatingController = {
     getSummary: async (req: Request, res: Response) => {
         try {
             const { examDate, session, seriesId } = req.query;
-            
-            // 1. Find exams for this slot
-            const exams = await InternalExam.findAll({
-                where: {
-                    ExamDate: examDate as string,
-                    Session: session as string,
-                    InternalExamSeriesID: seriesId as any
-                },
-                attributes: ['InternalExamID']
-            });
-            
-            if (exams.length === 0) return res.json(null);
-            
-            const examIds = exams.map(e => e.InternalExamID);
-            
-            // 2. Count total registrations
-            const totalStudents = await InternalExamRegistration.count({
-                where: { InternalExamID: { [Op.in]: examIds } }
-            });
-            
-            // 3. Get hall usage
-            const allocations = await InternalSeatAllocation.findAll({
-                where: { InternalExamID: { [Op.in]: examIds } },
+
+            // 1. Load ALL active, exam-usable internal rooms with their seat counts
+            const allRooms = await InternalRoom.findAll({
+                where: { Status: 'Active', ExamUsable: true },
                 include: [{
                     model: InternalSeat,
-                    as: 'Seat',
-                    include: [{ model: InternalRoom, as: 'Room' }]
-                }]
+                    where: { IsActive: true },
+                    required: false  // LEFT JOIN — rooms with no seats still appear
+                }],
+                order: [['RoomCode', 'ASC']]
             });
-            
-            if (allocations.length === 0) {
-                return res.json({
-                    assignedCount: 0,
-                    unassignedCount: totalStudents,
-                    hallUsage: []
+
+            // Build a map: roomId -> { hallId, hallCode, total, used }
+            const hallStatsMap = new Map<number, { hallId: number; hallCode: string; total: number; used: number }>();
+            for (const room of allRooms) {
+                const seats = (room as any).InternalSeats || [];
+                hallStatsMap.set(room.RoomID, {
+                    hallId: room.RoomID,
+                    hallCode: room.RoomCode,
+                    total: seats.length,
+                    used: 0
                 });
             }
-            
-            const hallStatsMap = new Map<number, { hallId: number, hallCode: string, used: number, total: number }>();
-            
-            for (const alloc of allocations) {
-                const seat = (alloc as any).Seat;
-                if (!seat || !seat.Room) continue;
-                const room = seat.Room;
+
+            // 2. If a date/session/series was provided, overlay allocation counts
+            if (examDate && session && seriesId) {
+                console.log(`[getSummary] Fetching summary for: Date=${examDate}, Session=${session}, Series=${seriesId}`);
                 
-                if (!hallStatsMap.has(room.RoomID)) {
-                    const activeSeatCount = await InternalSeat.count({
-                        where: { RoomID: room.RoomID, IsActive: true }
+                // Use robust date matching and case-insensitive session matching
+                const examRows = await sequelize.query(
+                    `SELECT InternalExamID FROM InternalExams
+                     WHERE UPPER(Session) = UPPER(:session)
+                       AND (CONVERT(VARCHAR, ExamDate, 23) = :examDate OR CAST(ExamDate AS DATE) = :examDate)
+                       AND InternalExamSeriesID = :seriesId`,
+                    {
+                        replacements: { session, examDate, seriesId },
+                        type: QueryTypes.SELECT
+                    }
+                ) as any[];
+
+                console.log(`[getSummary] Found ${examRows.length} matching exams`);
+
+                if (examRows.length > 0) {
+                    const examIds = examRows.map((e: any) => e.InternalExamID || e.internalexamid);
+                    console.log(`[getSummary] Exam IDs: ${examIds.join(', ')}`);
+
+                    const allocations = await InternalSeatAllocation.findAll({
+                        where: { InternalExamID: { [Op.in]: examIds } },
+                        include: [{
+                            model: InternalSeat,
+                            as: 'Seat',
+                            attributes: ['RoomID']
+                        }]
                     });
-                    hallStatsMap.set(room.RoomID, {
-                        hallId: room.RoomID,
-                        hallCode: room.RoomCode,
-                        used: 0,
-                        total: activeSeatCount
-                    });
+
+                    console.log(`[getSummary] Found ${allocations.length} total allocations for these exams`);
+
+                    let matchedAllocations = 0;
+                    for (const alloc of allocations) {
+                        const seat = (alloc as any).Seat;
+                        if (!seat?.RoomID) continue;
+                        
+                        // Ensure RoomID is a number for Map lookup
+                        const roomId = Number(seat.RoomID);
+                        const stats = hallStatsMap.get(roomId);
+                        if (stats) {
+                            stats.used++;
+                            matchedAllocations++;
+                        }
+                    }
+                    console.log(`[getSummary] Successfully mapped ${matchedAllocations} allocations to halls`);
                 }
-                hallStatsMap.get(room.RoomID)!.used++;
             }
-            
-            const hallUsage = Array.from(hallStatsMap.values());
-            const assignedCount = hallUsage.reduce((sum, h) => sum + h.used, 0);
-            
-            return res.json({
-                assignedCount,
-                unassignedCount: Math.max(0, totalStudents - assignedCount),
-                hallUsage: hallUsage.sort((a, b) => a.hallCode.localeCompare(b.hallCode))
-            });
-            
+
+            // 3. Return all halls sorted by code
+            return res.json(
+                Array.from(hallStatsMap.values())
+                    .sort((a, b) => a.hallCode.localeCompare(b.hallCode))
+                    .map(h => ({
+                        hallId: h.hallId,
+                        hallCode: h.hallCode,
+                        capacity: h.total,
+                        totalSeats: h.total,
+                        filledSeats: h.used
+                    }))
+            );
+
         } catch (error: any) {
             return res.status(500).json({ message: error.message });
         }
@@ -267,6 +395,61 @@ export const internalSeatingController = {
             });
 
             return res.json({ success: true });
+        } catch (error: any) {
+            return res.status(500).json({ message: error.message });
+        }
+    },
+
+    /** Clear ALL allocations for a specific date and session */
+    clearAllAllocations: async (req: Request, res: Response) => {
+        try {
+            const { examDate, session } = req.query;
+            if (!examDate || !session) return res.status(400).json({ message: "examDate and session required" });
+
+            const exams = await InternalExam.findAll({
+                where: { ExamDate: examDate as string, Session: session as string },
+                attributes: ['InternalExamID']
+            });
+
+            if (exams.length === 0) return res.json({ message: "No exams found for this slot" });
+
+            const examIds = exams.map(e => e.InternalExamID);
+
+            const deleted = await InternalSeatAllocation.destroy({
+                where: { InternalExamID: { [Op.in]: examIds } }
+            });
+
+            return res.json({ message: `Cleared ${deleted} allocations` });
+        } catch (error: any) {
+            return res.status(500).json({ message: error.message });
+        }
+    },
+
+    /** Quick add an exam slot (placeholder for internal exams) */
+    quickAddSlot: async (req: Request, res: Response) => {
+        try {
+            const { examDate, session, seriesId } = req.body;
+            return res.json({ message: "Slot handled via exam import." });
+        } catch (error: any) {
+            return res.status(500).json({ message: error.message });
+        }
+    },
+
+    /** Get students registered for a specific internal exam */
+    getExamStudents: async (req: Request, res: Response) => {
+        try {
+            const { examId } = req.params;
+            const registrations = await InternalExamRegistration.findAll({
+                where: { InternalExamID: examId },
+                include: [
+                    {
+                        model: InternalStudent,
+                        as: 'Student',
+                        include: [{ model: Department, as: 'Department' }]
+                    }
+                ]
+            });
+            return res.json({ students: registrations.map(r => r.Student) });
         } catch (error: any) {
             return res.status(500).json({ message: error.message });
         }

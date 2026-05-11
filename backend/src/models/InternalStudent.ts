@@ -16,6 +16,7 @@ interface InternalStudentAttributes {
     SemesterID: number | null;
     BatchYear: number | null;
     AcademicYear: string | null;
+    Status: string;
     Source: "Self Registered" | "Admin Added" | "Imported";
     createdAt?: Date;
     updatedAt?: Date;
@@ -23,7 +24,7 @@ interface InternalStudentAttributes {
 
 interface InternalStudentCreationAttributes
     extends Optional<InternalStudentAttributes,
-        "InternalStudentID" | "UserID" | "Status" | "Source" | "DepartmentID" | "ProgramID" | "SemesterID" | "BatchYear" | "AcademicYear"
+        "InternalStudentID" | "UserID" | "Source" | "Status" | "DepartmentID" | "ProgramID" | "SemesterID" | "BatchYear" | "AcademicYear"
     > {}
 
 export class InternalStudent extends Model<InternalStudentAttributes, InternalStudentCreationAttributes>
@@ -37,7 +38,8 @@ export class InternalStudent extends Model<InternalStudentAttributes, InternalSt
     declare SemesterID: number | null;
     declare BatchYear: number | null;
     declare AcademicYear: string | null;
-        declare Source: "Self Registered" | "Admin Added" | "Imported";
+    declare Status: string;
+    declare Source: "Self Registered" | "Admin Added" | "Imported";
     declare createdAt: Date;
     declare updatedAt: Date;
 

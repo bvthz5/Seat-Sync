@@ -11,7 +11,7 @@ import * as XLSX from 'xlsx';
 import { BulkStudentImportService } from '../services/bulkStudentImport.service.js';
 import { emailService } from '../services/email.service.js';
 import { normalizeProgram, parseBatchString, mapProgramToDepartment, resolveOrCreateProgram, resolveOrCreateDepartment } from '../services/academicNormalizer.service.js';
-import { generateDefaultPassword } from '../utils/student.utils.js';
+import { generateDefaultPassword, generateStudentEmail } from '../utils/student.utils.js';
 
 const STUDENT_EMAIL_DOMAIN = 'sjcetpalai.ac.in';
 

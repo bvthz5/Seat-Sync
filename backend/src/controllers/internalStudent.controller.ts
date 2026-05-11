@@ -57,7 +57,7 @@ export const getAllInternalStudents = async (req: Request, res: Response) => {
         const { count, rows } = await InternalStudent.findAndCountAll({
             where,
             include: [
-                { model: Department, attributes: ['DepartmentID', 'DepartmentCode', 'DepartmentName'] },
+                { model: Department, as: 'Department', attributes: ['DepartmentID', 'DepartmentCode', 'DepartmentName'] },
                 { model: Program, attributes: ['ProgramID', 'ProgramName', 'ProgramCode'] },
                 { model: Semester, attributes: ['SemesterID', 'SemesterNumber'] },
                 { model: User, attributes: ['UserID', 'Email'] }
@@ -409,7 +409,7 @@ export const getStudentsForInternalExam = async (req: Request, res: Response) =>
                 model: InternalStudent,
                 as: 'Student',
                 include: [
-                    { model: Department, attributes: ['DepartmentID', 'DepartmentCode', 'DepartmentName'] },
+                    { model: Department, as: 'Department', attributes: ['DepartmentID', 'DepartmentCode', 'DepartmentName'] },
                     { model: Program, attributes: ['ProgramID', 'ProgramName'] },
                     { model: Semester, attributes: ['SemesterID', 'SemesterNumber'] },
                 ],
@@ -637,7 +637,7 @@ export const exportInternalStudentCredentials = async (req: Request, res: Respon
 
         const students = await InternalStudent.findAll({
             include: [
-                { model: Department, attributes: ['DepartmentName', 'DepartmentCode'] },
+                { model: Department, as: 'Department', attributes: ['DepartmentName', 'DepartmentCode'] },
                 { model: Program, attributes: ['ProgramCode', 'ProgramName'] },
                 { model: User, attributes: ['Email'] }
             ],

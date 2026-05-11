@@ -181,16 +181,16 @@ InternalStudent.belongsTo(User, { foreignKey: 'UserID', onDelete: 'NO ACTION' })
 User.hasOne(InternalStudent, { foreignKey: 'UserID' });
 
 // InternalStudent ↔ Department
-InternalStudent.belongsTo(Department, { foreignKey: 'DepartmentID', onDelete: 'NO ACTION' });
-Department.hasMany(InternalStudent, { foreignKey: 'DepartmentID', onDelete: 'NO ACTION' });
+InternalStudent.belongsTo(Department, { foreignKey: 'DepartmentID', as: 'Department', onDelete: 'NO ACTION' });
+Department.hasMany(InternalStudent, { foreignKey: 'DepartmentID', as: 'InternalStudents', onDelete: 'NO ACTION' });
 
 // InternalStudent ↔ Program
 InternalStudent.belongsTo(Program, { foreignKey: 'ProgramID', onDelete: 'NO ACTION' });
-Program.hasMany(InternalStudent, { foreignKey: 'ProgramID', onDelete: 'NO ACTION' });
+Program.hasMany(InternalStudent, { foreignKey: 'ProgramID', as: 'InternalStudents', onDelete: 'NO ACTION' });
 
 // InternalStudent ↔ Semester
 InternalStudent.belongsTo(Semester, { foreignKey: 'SemesterID', onDelete: 'NO ACTION' });
-Semester.hasMany(InternalStudent, { foreignKey: 'SemesterID', onDelete: 'NO ACTION' });
+Semester.hasMany(InternalStudent, { foreignKey: 'SemesterID', as: 'InternalStudents', onDelete: 'NO ACTION' });
 
 // InternalExamRegistration ↔ InternalExam (mapping: student appears for this exam)
 InternalExamRegistration.belongsTo(InternalExam, { foreignKey: 'InternalExamID', onDelete: 'CASCADE' });

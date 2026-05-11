@@ -7,7 +7,7 @@ import crypto from "crypto";
 import { sequelize } from "../config/database.js";
 import { emailService } from "../services/email.service.js";
 import { validateInvigilatorRequest } from "../utils/invigilator-request.validation.js";
-
+import { notificationService } from "../services/notification.service.js";
 const ACTIVATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 
 const createActivationToken = () => ({

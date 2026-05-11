@@ -50,10 +50,6 @@ InternalSeatSnapshot.init(
             allowNull: false,
             references: { model: "InternalExamSeries", key: "InternalExamSeriesID" },
         },
-        createdAt: {
-            type: DataTypes.DATE,
-            field: "createdAt",
-        },
     },
     {
         sequelize,

@@ -39,16 +39,17 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { InternalSeatingService } from '../../services/internal/internalSeatingService';
-import { SeatingService } from '../../services/seatingService'; // for generic series list if needed
-import { academicService } from '../../services/academicService';
+import { SeatingService } from '../../services/seatingService';
+import api from '../../../../services/api';
 
 const InternalSeatingPlans: React.FC = () => {
     // --- State ---
     const [seriesList, setSeriesList] = useState<any[]>([]);
+    const [availableSessions, setAvailableSessions] = useState<string[]>([]);
     const [selectedSeries, setSelectedSeries] = useState<string>('');
-    const [examDates, setExamDates] = useState<string[]>([]);
+    const [examDates, setExamDates] = useState<any[]>([]);
     const [selectedDate, setSelectedDate] = useState<string>('');
-    const [selectedSession, setSelectedSession] = useState<'FN' | 'AN'>('FN');
+    const [selectedSession, setSelectedSession] = useState<string>('');
     
     const [halls, setHalls] = useState<any[]>([]);
     const [hallSearch, setHallSearch] = useState<string>('');
@@ -66,8 +67,11 @@ const InternalSeatingPlans: React.FC = () => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [hallDetail, setHallDetail] = useState<any>(null);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
+    const [loadingDetail, setLoadingDetail] = useState(false);
     
     // Layout & Stats
+    const [hallSummary, setHallSummary] = useState<any[]>([]);
+    const [loadingSummary, setLoadingSummary] = useState(false);
     const [stats, setStats] = useState<any>(null);
 
     // --- Loaders ---
@@ -78,11 +82,7 @@ const InternalSeatingPlans: React.FC = () => {
                 const series = await SeatingService.getSeries('Internal');
                 setSeriesList(series || []);
                 
-                // Fetch Departments
-                const depts = await academicService.getDepartments();
-                setDepartments(depts.data || []);
-                
-                // Fetch Active Halls
+                // Fetch Active Halls (halls list for sidebar checkbox)
                 const h = await InternalSeatingService.getHalls();
                 setHalls(h || []);
             } catch (e) {
@@ -91,45 +91,79 @@ const InternalSeatingPlans: React.FC = () => {
         })();
     }, []);
 
-    // Fetch Exam Dates when series or session changes
+    // When series changes: reset everything, fetch available sessions for that series
     useEffect(() => {
-        if (selectedSeries && selectedSession) {
+        if (selectedSeries) {
+            setSelectedDate('');
+            setSelectedSession('');
+            setExamDates([]);
+            setAvailableSessions([]);
             (async () => {
-                const dates = await InternalSeatingService.getExamDates(Number(selectedSeries), selectedSession);
-                setExamDates(dates || []);
-                // If current selected date is not in the new list, clear it
-                if (selectedDate && !dates.includes(selectedDate)) {
-                    setSelectedDate('');
+                try {
+                    const sessions = await InternalSeatingService.getSessions(Number(selectedSeries));
+                    setAvailableSessions(Array.isArray(sessions) ? sessions : ['FN', 'AN']);
+                } catch (err) {
+                    console.error('Failed to fetch sessions:', err);
+                    setAvailableSessions(['FN', 'AN']);
                 }
             })();
+        } else {
+            setAvailableSessions([]);
+            setSelectedSession('');
+            setSelectedDate('');
+            setExamDates([]);
+        }
+    }, [selectedSeries]);
+
+    // When session changes: fetch dates that have exams in that session
+    useEffect(() => {
+        if (selectedSeries && selectedSession) {
+            setSelectedDate('');
+            (async () => {
+                try {
+                    const dates = await InternalSeatingService.getExamDates(Number(selectedSeries), selectedSession);
+                    setExamDates(Array.isArray(dates) ? dates : []);
+                } catch (err) {
+                    console.error('Failed to fetch exam dates:', err);
+                    setExamDates([]);
+                }
+            })();
+        } else {
+            setExamDates([]);
+            setSelectedDate('');
         }
     }, [selectedSeries, selectedSession]);
 
-    // Auto-fetch existing seating summary when criteria are complete
+    // Always load hall summary from internal structure; overlay fills when date/series selected
     useEffect(() => {
-        if (selectedSeries && selectedDate && selectedSession) {
-            (async () => {
-                try {
-                    const summary = await InternalSeatingService.getSummary(selectedDate, selectedSession, Number(selectedSeries));
-                    if (summary && summary.hallUsage.length > 0) {
-                        setStats(summary);
-                        // Also auto-select halls if we just loaded an existing summary
-                        setSelectedHalls(summary.hallUsage.map((h: any) => h.hallId));
-                    } else {
-                        // If no existing allocation, reset stats so they see the "No Seating Generated" screen
+        (async () => {
+            setLoadingSummary(true);
+            try {
+                const summary = await InternalSeatingService.getSummary(
+                    selectedDate || '', selectedSession, Number(selectedSeries) || 0
+                );
+                if (Array.isArray(summary)) {
+                    setHallSummary(summary);
+                    if (selectedDate && summary.some((h: any) => h.filledSeats > 0)) {
+                        const totalAssigned = summary.reduce((s: number, h: any) => s + h.filledSeats, 0);
+                        const totalSeats = summary.reduce((s: number, h: any) => s + h.totalSeats, 0);
+                        setStats({ assignedCount: totalAssigned, unassignedCount: 0, totalSeats, hallUsage: summary });
+                    } else if (!selectedDate) {
                         setStats(null);
                     }
-                } catch (e) {
-                    console.error("Failed to load existing seating summary", e);
                 }
-            })();
-        }
+            } catch (e) {
+                console.error('Failed to load hall summary', e);
+            } finally {
+                setLoadingSummary(false);
+            }
+        })();
     }, [selectedSeries, selectedDate, selectedSession]);
 
     // --- Actions ---
     const handleGenerate = async () => {
-        if (!selectedSeries || !selectedDate || selectedHalls.length === 0) {
-            toast.error("Please complete selections in the sidebar");
+        if (!selectedSeries || !selectedDate || !selectedSession || selectedHalls.length === 0) {
+            toast.error("Select series, session, date and at least one hall");
             return;
         }
 
@@ -145,10 +179,26 @@ const InternalSeatingPlans: React.FC = () => {
                 secondaryDeptId: secondaryDept ? Number(secondaryDept) : undefined,
                 shuffleRooms
             });
-            
-            toast.success(`Allocated ${result.assignedCount} students across ${result.hallUsage.length} halls`);
-            setStats(result);
+
+            console.log('[Generate Result]', result);
+
+            if (result?.assignedCount > 0) {
+                toast.success(`✅ ${result.assignedCount} students seated across ${result.hallUsage?.length || selectedHalls.length} halls`);
+            } else {
+                toast.error(`⚠️ Generation ran but 0 students were assigned. Check that registrations exist for this date/session.`);
+            }
+
+            // Reload the hall summary
+            const refreshed = await InternalSeatingService.getSummary(selectedDate, selectedSession, Number(selectedSeries));
+            console.log('[Hall Summary]', refreshed);
+            if (Array.isArray(refreshed)) {
+                setHallSummary(refreshed);
+                const totalAssigned = refreshed.reduce((s: number, h: any) => s + h.filledSeats, 0);
+                const totalSeats = refreshed.reduce((s: number, h: any) => s + h.totalSeats, 0);
+                setStats({ assignedCount: totalAssigned, unassignedCount: result?.unassignedCount || 0, totalSeats, hallUsage: refreshed });
+            }
         } catch (e: any) {
+            console.error('[Generate Error]', e);
             toast.error(e.response?.data?.message || "Generation failed");
         } finally {
             setIsGenerating(false);
@@ -156,20 +206,25 @@ const InternalSeatingPlans: React.FC = () => {
     };
 
     const openHallDetail = async (hallId: number) => {
+        setLoadingDetail(true);
+        setHallDetail(null);
+        setIsDetailOpen(true);
         try {
             const detail = await InternalSeatingService.getHallLayout(hallId, selectedDate, selectedSession, Number(selectedSeries));
             setHallDetail(detail);
-            setIsDetailOpen(true);
         } catch {
             toast.error("Failed to load hall details");
+            setIsDetailOpen(false);
+        } finally {
+            setLoadingDetail(false);
         }
     };
 
     // --- Renderers ---
     return (
-        <div className="flex h-[calc(100vh-8rem)] w-full gap-6 text-slate-900">
+        <div className="flex h-[calc(100vh-8rem)] w-full gap-4 text-slate-900">
             {/* --- LEFT SIDEBAR (Wizard Control Panel) --- */}
-            <aside className="w-96 h-full flex flex-col gap-6">
+            <aside className="w-[340px] shrink-0 h-full flex flex-col gap-6">
                 <Card className="flex-1 p-8 glass-card border-slate-200/50 shadow-2xl overflow-y-auto custom-scrollbar bg-white/80 backdrop-blur-xl">
                     <div className="flex items-center gap-4 mb-10 pb-6 border-b border-slate-100">
                         <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 flex items-center justify-center text-white shadow-xl rotate-3">
@@ -220,9 +275,10 @@ const InternalSeatingPlans: React.FC = () => {
                                     <div className="flex flex-col gap-2">
                                         <label className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Select Session</label>
                                         <Select 
-                                            placeholder="Select slot"
+                                            placeholder={!selectedSeries ? "Select series first..." : "Select session"}
                                             variant="bordered"
-                                            selectedKeys={[selectedSession]}
+                                            isDisabled={!selectedSeries || availableSessions.length === 0}
+                                            selectedKeys={selectedSession ? [selectedSession] : []}
                                             onSelectionChange={(keys) => setSelectedSession(Array.from(keys)[0] as any)}
                                             classNames={{
                                                 trigger: "h-12 border-slate-200 hover:border-indigo-400 transition-colors bg-white shadow-sm",
@@ -235,8 +291,11 @@ const InternalSeatingPlans: React.FC = () => {
                                                 }
                                             }}
                                         >
-                                            <SelectItem key="FN" textValue="Forenoon" className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">Forenoon (FN)</SelectItem>
-                                            <SelectItem key="AN" textValue="Afternoon" className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">Afternoon (AN)</SelectItem>
+                                            {availableSessions.map((s) => (
+                                                <SelectItem key={s} textValue={s === 'FN' ? 'Forenoon' : s === 'AN' ? 'Afternoon' : s} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">
+                                                    {s === 'FN' ? 'Forenoon (FN)' : s === 'AN' ? 'Afternoon (AN)' : s}
+                                                </SelectItem>
+                                            ))}
                                         </Select>
                                     </div>
 
@@ -244,9 +303,9 @@ const InternalSeatingPlans: React.FC = () => {
                                     <div className="flex flex-col gap-2">
                                         <label className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Exam Date</label>
                                         <Select 
-                                            placeholder={!selectedSession ? "Select session first..." : "Pick date"}
+                                            placeholder={!selectedSession ? "Select session first..." : examDates.length === 0 ? "No dates found" : "Pick date"}
                                             variant="bordered"
-                                            isDisabled={!selectedSession}
+                                            isDisabled={!selectedSession || examDates.length === 0}
                                             selectedKeys={selectedDate ? [selectedDate] : []}
                                             onSelectionChange={(keys) => setSelectedDate(Array.from(keys)[0] as string)}
                                             classNames={{
@@ -260,9 +319,15 @@ const InternalSeatingPlans: React.FC = () => {
                                                 }
                                             }}
                                         >
-                                            {examDates.map(d => (
-                                                <SelectItem key={d} textValue={d} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">{d}</SelectItem>
-                                            ))}
+                                            {examDates.map((d: any) => {
+                                                const dateStr = typeof d === 'string' ? d : d.examDate;
+                                                const label = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                                                return (
+                                                    <SelectItem key={dateStr} textValue={label} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">
+                                                        {label}
+                                                    </SelectItem>
+                                                );
+                                            })}
                                         </Select>
                                     </div>
                                 </div>
@@ -335,37 +400,44 @@ const InternalSeatingPlans: React.FC = () => {
                                         <div className="flex items-center justify-between px-1">
                                             <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Available Halls</label>
                                             <span className="text-[10px] font-black bg-slate-100 px-2 py-0.5 rounded-full text-slate-500">
-                                                {halls.filter(h => h.RoomCode.toLowerCase().includes(hallSearch.toLowerCase())).length} Found
+                                                {loadingSummary ? 'Loading...' : `${hallSummary.filter(h => h.hallCode.toLowerCase().includes(hallSearch.toLowerCase())).length} Found`}
                                             </span>
                                         </div>
                                         <ScrollShadow className="h-60 p-4 border-2 border-slate-100 rounded-3xl bg-slate-50/30">
                                             <div className="grid grid-cols-1 gap-2">
-                                                {halls
-                                                    .filter(hall => hall.RoomCode.toLowerCase().includes(hallSearch.toLowerCase()))
+                                                {(hallSummary.length > 0 ? hallSummary : halls.map(h => ({ hallId: h.RoomID, hallCode: h.RoomCode, totalSeats: h.TotalCapacity || 0, filledSeats: 0, capacity: h.TotalCapacity || 0 })))
+                                                    .filter(hall => hall.hallCode.toLowerCase().includes(hallSearch.toLowerCase()))
                                                     .map(hall => (
                                                         <div 
-                                                            key={hall.RoomID}
+                                                            key={hall.hallId}
                                                             onClick={() => {
-                                                                if (selectedHalls.includes(hall.RoomID)) {
-                                                                    setSelectedHalls(selectedHalls.filter(id => id !== hall.RoomID));
+                                                                if (selectedHalls.includes(hall.hallId)) {
+                                                                    setSelectedHalls(selectedHalls.filter(id => id !== hall.hallId));
                                                                 } else {
-                                                                    setSelectedHalls([...selectedHalls, hall.RoomID]);
+                                                                    setSelectedHalls([...selectedHalls, hall.hallId]);
                                                                 }
                                                             }}
                                                             className={`
                                                                 flex items-center justify-between p-3 rounded-xl border-2 cursor-pointer transition-all duration-300
-                                                                ${selectedHalls.includes(hall.RoomID) 
+                                                                ${selectedHalls.includes(hall.hallId) 
                                                                     ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-100' 
                                                                     : 'bg-white border-slate-100 text-slate-600 hover:border-indigo-200'}
                                                             `}
                                                         >
                                                             <div className="flex items-center gap-3">
-                                                                <div className={`w-2 h-2 rounded-full ${selectedHalls.includes(hall.RoomID) ? 'bg-white' : 'bg-emerald-500'} animate-pulse`} />
-                                                                <span className="text-xs font-black tracking-tight">{hall.RoomCode}</span>
+                                                                <div className={`w-2 h-2 rounded-full ${selectedHalls.includes(hall.hallId) ? 'bg-white' : hall.filledSeats > 0 ? 'bg-emerald-400' : 'bg-slate-300'} ${hall.filledSeats > 0 ? 'animate-pulse' : ''}`} />
+                                                                <span className="text-xs font-black tracking-tight">{hall.hallCode}</span>
                                                             </div>
-                                                            <span className={`text-[10px] font-bold ${selectedHalls.includes(hall.RoomID) ? 'text-indigo-100' : 'text-slate-400'}`}>
-                                                                {hall.TotalCapacity} Seats
-                                                            </span>
+                                                            <div className="flex flex-col items-end">
+                                                                <span className={`text-[10px] font-bold ${selectedHalls.includes(hall.hallId) ? 'text-indigo-100' : 'text-slate-400'}`}>
+                                                                    {hall.totalSeats} Seats
+                                                                </span>
+                                                                {hall.filledSeats > 0 && (
+                                                                    <span className={`text-[9px] font-black ${selectedHalls.includes(hall.hallId) ? 'text-indigo-200' : 'text-emerald-600'}`}>
+                                                                        {hall.filledSeats} filled
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     ))}
                                             </div>
@@ -475,241 +547,303 @@ const InternalSeatingPlans: React.FC = () => {
                 </Card>
             </aside>
 
-            {/* --- MAIN DASHBOARD (Hall Grid & Preview) --- */}
-            <main className="flex-1 flex flex-col gap-6">
+            {/* --- CENTER: Hall Grid + Stats --- */}
+            <main className="flex-1 min-w-0 flex flex-col gap-4 overflow-hidden">
                 {/* Statistics Banner */}
-                {stats ? (
-                    <motion.div 
-                        initial={{ opacity: 0, y: -20 }} 
-                        animate={{ opacity: 1, y: 0 }}
-                        className="grid grid-cols-4 gap-4"
-                    >
-                        <Card className="p-4 glass-card border-emerald-100 bg-emerald-50/30 flex flex-row items-center gap-4">
-                            <div className="w-12 h-12 rounded-2xl bg-emerald-500 flex items-center justify-center text-white shadow-lg">
-                                <CheckCircle2 size={24} />
+                {stats && (
+                    <div className="grid grid-cols-3 gap-3 shrink-0">
+                        <Card className="p-4 border-emerald-100 bg-emerald-50/50 flex flex-row items-center gap-3 shadow-sm">
+                            <div className="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center text-white shadow">
+                                <CheckCircle2 size={20} />
                             </div>
                             <div>
-                                <h4 className="text-2xl font-black text-emerald-600 leading-none">{stats.assignedCount}</h4>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mt-1">Students Seated</p>
+                                <h4 className="text-xl font-black text-emerald-600 leading-none">{stats.assignedCount}</h4>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500 mt-0.5">Seated</p>
                             </div>
                         </Card>
-                        <Card className="p-4 glass-card border-orange-100 bg-orange-50/30 flex flex-row items-center gap-4">
-                            <div className="w-12 h-12 rounded-2xl bg-orange-500 flex items-center justify-center text-white shadow-lg">
-                                <AlertCircle size={24} />
+                        <Card className="p-4 border-blue-100 bg-blue-50/50 flex flex-row items-center gap-3 shadow-sm">
+                            <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white shadow">
+                                <Layers size={20} />
                             </div>
                             <div>
-                                <h4 className="text-2xl font-black text-orange-600 leading-none">{stats.unassignedCount}</h4>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-orange-500 mt-1">Unassigned</p>
+                                <h4 className="text-xl font-black text-blue-600 leading-none">{stats.totalSeats}</h4>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-blue-500 mt-0.5">Total Seats</p>
                             </div>
                         </Card>
-                        <Card className="p-4 glass-card border-indigo-100 bg-indigo-50/30 flex flex-row items-center gap-4 col-span-2">
-                             <div className="flex-1 space-y-2">
-                                <div className="flex justify-between items-center px-1">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500">Global Utilization</span>
+                        <Card className="p-4 border-indigo-100 bg-indigo-50/50 flex flex-row items-center gap-3 shadow-sm col-span-1">
+                            <div className="flex-1 space-y-1.5">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-indigo-500">Utilization</span>
                                     <span className="text-xs font-bold text-indigo-700">
-                                        {Math.round((stats.assignedCount / (stats.assignedCount + stats.unassignedCount || 1)) * 100)}%
+                                        {stats.totalSeats > 0 ? Math.round((stats.assignedCount / stats.totalSeats) * 100) : 0}%
                                     </span>
                                 </div>
-                                <Progress 
-                                    value={(stats.assignedCount / (stats.assignedCount + stats.unassignedCount || 1)) * 100} 
-                                    color="secondary" 
-                                    className="h-2"
-                                />
-                             </div>
+                                <Progress value={stats.totalSeats > 0 ? (stats.assignedCount / stats.totalSeats) * 100 : 0} color="secondary" className="h-1.5" />
+                            </div>
                         </Card>
-                    </motion.div>
-                ) : (
-                    <Card className="p-12 glass-card border-dashed border-2 border-slate-200 flex flex-col items-center justify-center text-center">
-                        <div className="w-20 h-20 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 mb-4 animate-pulse">
-                            <Monitor size={40} />
-                        </div>
-                        <h3 className="text-xl font-bold text-slate-600">No Seating Generated</h3>
-                        <p className="text-sm text-slate-400 max-w-xs mt-2 italic">Select your criteria on the left and click "Generate" to start the allocation engine.</p>
-                    </Card>
+                    </div>
                 )}
 
-                {/* Hall Grid */}
-                <div className="flex-1 overflow-y-auto scrollbar-hide pr-1">
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                        {stats?.hallUsage.map((h: any) => (
-                            <motion.div key={h.hallId} whileHover={{ y: -5 }} transition={{ duration: 0.3 }}>
-                                <Card className="overflow-hidden glass-card border-slate-200/50 hover:border-indigo-200 transition-all shadow-xl group">
-                                    <div className="p-5 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-500 shadow-inner">
-                                                <MapPin size={20} />
-                                            </div>
-                                            <div>
-                                                <h4 className="font-black text-base text-slate-800">{h.hallCode}</h4>
-                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">Internal Exam Hall</p>
-                                            </div>
-                                        </div>
-                                        <Button 
-                                            size="sm" 
-                                            variant="flat" 
-                                            color="secondary"
-                                            className="font-black text-[10px] uppercase tracking-wider h-8"
-                                            onPress={() => openHallDetail(h.hallId)}
+                {/* Hall Cards Grid */}
+                <div className="flex-1 overflow-y-auto scrollbar-hide">
+                    {selectedHalls.length === 0 ? (
+                        <Card className="p-12 border-dashed border-2 border-slate-200 flex flex-col items-center justify-center text-center h-64">
+                            <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 mb-4 animate-pulse">
+                                <Monitor size={32} />
+                            </div>
+                            <h3 className="text-lg font-bold text-slate-600">No Halls Selected</h3>
+                            <p className="text-sm text-slate-400 max-w-xs mt-2">Select halls from the sidebar to begin.</p>
+                        </Card>
+                    ) : (
+                        <div className="grid grid-cols-2 gap-4">
+                            {selectedHalls.map((hallId: number) => {
+                                // Merge summary info if available
+                                const summary = hallSummary.find((h: any) => h.hallId === hallId);
+                                const hallInfo = halls.find((h: any) => h.RoomID === hallId);
+                                const code = summary?.hallCode || hallInfo?.RoomCode || `Hall #${hallId}`;
+                                const filled = summary?.filledSeats ?? 0;
+                                const total = summary?.totalSeats ?? hallInfo?.TotalSeats ?? 0;
+                                const pct = total > 0 ? Math.round((filled / total) * 100) : 0;
+                                const isViewing = isDetailOpen && hallDetail?.room?.RoomID === hallId;
+                                return (
+                                    <motion.div key={hallId} whileHover={{ y: -3 }} transition={{ duration: 0.2 }}>
+                                        <Card
+                                            className={`overflow-hidden cursor-pointer transition-all duration-300 shadow-md hover:shadow-xl border-2 ${isViewing ? 'border-indigo-400 ring-2 ring-indigo-200' : filled > 0 ? 'border-emerald-200 hover:border-indigo-200' : 'border-slate-200 hover:border-indigo-200'}`}
+                                            onClick={() => openHallDetail(hallId)}
                                         >
-                                            View Layout
-                                        </Button>
-                                    </div>
-                                    <div className="p-6 space-y-4">
-                                        <div className="flex justify-between items-center px-1">
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Hall Occupancy</span>
-                                            <span className="text-sm font-black text-indigo-600">{h.used} / {h.total}</span>
-                                        </div>
-                                        <Progress 
-                                            value={(h.used / h.total) * 100} 
-                                            color={h.used === h.total ? 'secondary' : 'primary'} 
-                                            className="h-2"
-                                        />
-                                        <div className="flex gap-2">
-                                            <Chip size="sm" variant="flat" color="primary" className="text-[9px] font-black px-1 uppercase tracking-tighter">
-                                                {h.used} Seats Used
-                                            </Chip>
-                                            <Chip size="sm" variant="flat" color="default" className="text-[9px] font-black px-1 uppercase tracking-tighter">
-                                                {h.total - h.used} Available
-                                            </Chip>
-                                        </div>
-                                    </div>
-                                </Card>
-                            </motion.div>
-                        ))}
-                    </div>
+                                            <div className="p-4 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+                                                <div className="flex items-center gap-2.5">
+                                                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-inner transition-all duration-300 ${isViewing ? 'bg-indigo-600 text-white' : filled > 0 ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'}`}>
+                                                        <MapPin size={18} />
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="font-black text-sm text-slate-800">{code}</h4>
+                                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                                                            {filled > 0 ? `${pct}% Full` : 'Not yet generated'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                {isViewing && <Chip size="sm" color="secondary" variant="flat" className="text-[9px] font-black">Viewing</Chip>}
+                                            </div>
+                                            <div className="px-4 py-3 space-y-2">
+                                                <Progress value={pct} color={pct >= 100 ? 'success' : filled > 0 ? 'primary' : 'default'} className="h-1.5" />
+                                                <div className="flex gap-1.5">
+                                                    <Chip size="sm" variant="flat" color={filled > 0 ? 'success' : 'default'} className="text-[9px] font-black px-1">{filled} Seated</Chip>
+                                                    <Chip size="sm" variant="flat" color="default" className="text-[9px] font-black px-1">{total - filled} Free</Chip>
+                                                </div>
+                                            </div>
+                                        </Card>
+                                    </motion.div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             </main>
 
-            {/* --- HALL DETAIL MODAL (Blueprint View) --- */}
-            <Modal 
-                isOpen={isDetailOpen} 
-                onOpenChange={setIsDetailOpen} 
-                size="5xl" 
-                scrollBehavior="inside"
-                classNames={{
-                    base: "glass-card border-slate-200/50 shadow-2xl",
-                    header: "border-b border-slate-100 bg-slate-50/50",
-                    footer: "border-t border-slate-100 bg-slate-50/50"
-                }}
-            >
-                <ModalContent>
-                    {(onClose) => (
-                        <>
-                            <ModalHeader className="flex items-center gap-4 p-6">
-                                <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-xl">
-                                    <Layout size={24} />
-                                </div>
-                                <div>
-                                    <h3 className="text-2xl font-black text-slate-900 leading-none">{hallDetail?.room?.RoomCode}</h3>
-                                    <p className="text-[11px] font-black text-indigo-500 uppercase tracking-[0.2em] mt-1.5 italic">Real-Time Blueprint Visualization</p>
-                                </div>
-                            </ModalHeader>
-                            <ModalBody className="p-8 bg-slate-50/30 overflow-hidden">
-                                {/* Blueprint Legend */}
-                                <div className="flex gap-6 mb-8 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm overflow-x-auto no-scrollbar">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-4 h-4 rounded bg-indigo-500" />
-                                        <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Occupied</span>
+            {/* --- RIGHT PANEL: Room Blueprint View --- */}
+            <AnimatePresence>
+                {isDetailOpen && (
+                    <motion.aside
+                        key="room-panel"
+                        initial={{ opacity: 0, x: 60 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 60 }}
+                        transition={{ duration: 0.35, ease: 'easeOut' }}
+                        className="w-[420px] shrink-0 h-full flex flex-col"
+                    >
+                        <Card className="flex-1 flex flex-col overflow-hidden border-slate-200 shadow-2xl">
+                            {/* Panel Header */}
+                            <div className="p-4 border-b border-slate-100 bg-gradient-to-r from-indigo-600 to-violet-700 text-white flex items-center justify-between shrink-0">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
+                                        <Layout size={18} />
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-4 h-4 rounded border-2 border-indigo-200 bg-white" />
-                                        <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Available</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-4 h-4 rounded bg-red-100 border border-red-200" />
-                                        <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Disabled</span>
-                                    </div>
-                                    <Divider orientation="vertical" className="h-4" />
-                                    <div className="flex items-center gap-2">
-                                        <ArrowRightLeft size={14} className="text-indigo-400" />
-                                        <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Dual Seating (L/R)</span>
+                                    <div>
+                                        <h3 className="font-black text-base leading-none">
+                                            {hallDetail?.room?.RoomCode || 'Loading…'}
+                                        </h3>
+                                        <p className="text-[10px] font-bold opacity-70 mt-0.5 uppercase tracking-wider">
+                                            {hallDetail ? `${hallDetail.filledSeats} / ${hallDetail.totalSeats} seats` : 'Room Blueprint'}
+                                        </p>
                                     </div>
                                 </div>
+                                <button
+                                    onClick={() => { setIsDetailOpen(false); setHallDetail(null); }}
+                                    className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/30 flex items-center justify-center transition-all"
+                                >
+                                    <span className="text-white font-black text-sm">✕</span>
+                                </button>
+                            </div>
 
-                                {/* The Actual Blueprint Visualization */}
-                                <div className="relative bg-[#0f172a] rounded-3xl p-12 border-4 border-slate-800 shadow-2xl min-h-[600px] overflow-auto custom-scrollbar group">
-                                    {/* Blueprint Grid Lines */}
-                                    <div className="absolute inset-0 opacity-10 pointer-events-none" 
-                                        style={{ backgroundImage: 'radial-gradient(#334155 1px, transparent 0)', backgroundSize: '24px 24px' }} 
-                                    />
-                                    
-                                    {/* Blackboard */}
-                                    <div className="mx-auto w-1/3 h-4 bg-slate-700 rounded-b-xl mb-24 relative flex justify-center border-b-4 border-slate-600 shadow-[0_10px_20px_-5px_rgba(0,0,0,0.5)]">
-                                        <div className="absolute -top-12 text-[10px] font-black text-slate-500 tracking-[0.5em] uppercase opacity-50">Blackboard / Front</div>
-                                    </div>
+                            {/* Blueprint Content */}
+                            <div className="flex-1 overflow-y-auto bg-[#0f172a] relative">
+                                {/* Grid dots */}
+                                <div className="absolute inset-0 opacity-10 pointer-events-none"
+                                    style={{ backgroundImage: 'radial-gradient(#334155 1px, transparent 0)', backgroundSize: '20px 20px' }} />
 
-                                    {/* Classroom Layout Renderer */}
-                                    <div className="flex flex-wrap justify-center gap-16 relative">
-                                        {hallDetail && (() => {
-                                            const benchGroups: Record<string, any[]> = {};
-                                            hallDetail.seats.forEach((s: any) => {
-                                                if (!benchGroups[s.RowLabel]) benchGroups[s.RowLabel] = [];
-                                                // Find existing bench or create
-                                                let bench = benchGroups[s.RowLabel].find(b => b.num === s.BenchNumber);
-                                                if (!bench) {
-                                                    bench = { num: s.BenchNumber, left: null, right: null };
-                                                    benchGroups[s.RowLabel].push(bench);
+                                {loadingDetail ? (
+                                    <div className="flex items-center justify-center h-full">
+                                        <div className="flex flex-col items-center gap-3 text-slate-400">
+                                            <RefreshCcw size={32} className="animate-spin text-indigo-400" />
+                                            <span className="text-xs font-bold uppercase tracking-wider">Loading Blueprint…</span>
+                                        </div>
+                                    </div>
+                                ) : hallDetail ? (
+                                    <div className="relative p-6">
+                                        {/* Blackboard */}
+                                        <div className="mx-auto w-2/3 h-3 bg-slate-700 rounded-b-lg mb-8 flex justify-center border-b-4 border-slate-600">
+                                            <span className="absolute -mt-6 text-[9px] font-black text-slate-500 tracking-[0.4em] uppercase opacity-60">FRONT</span>
+                                        </div>
+
+                                        {/* Subject Legend */}
+                                        {hallDetail.rows?.length > 0 && (() => {
+                                            const subjects = new Map<string, string>();
+                                            for (const row of hallDetail.rows) {
+                                                for (const bench of row.benches) {
+                                                    if (bench.left?.subjectCode) subjects.set(bench.left.subjectCode, bench.left.subjectName || bench.left.subjectCode);
+                                                    if (bench.right?.subjectCode) subjects.set(bench.right.subjectCode, bench.right.subjectName || bench.right.subjectCode);
                                                 }
-                                                if (s.SeatNumber === 1) bench.left = s;
-                                                else bench.right = s;
-                                            });
-
-                                            return Object.entries(benchGroups).sort(([a], [b]) => a.localeCompare(b)).map(([col, benches]) => (
-                                                <div key={col} className="flex flex-col gap-8">
-                                                    <div className="text-center mb-4">
-                                                        <span className="px-4 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 text-[10px] font-black tracking-widest">COLUMN {col}</span>
-                                                    </div>
-                                                    {benches.sort((a, b) => a.num - b.num).map(bench => (
-                                                        <div key={bench.num} className="flex gap-1 relative p-1 rounded-xl border-2 border-transparent hover:border-slate-700 hover:bg-slate-800/30 transition-all duration-300">
-                                                            <div className="absolute -left-6 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-600 opacity-50">B{bench.num}</div>
-                                                            {/* Left Seat */}
-                                                            <SeatIcon 
-                                                                seat={bench.left} 
-                                                                allocation={hallDetail.allocations.find((a: any) => a.InternalSeatID === bench.left?.SeatID)}
-                                                            />
-                                                            {/* Right Seat */}
-                                                            <SeatIcon 
-                                                                seat={bench.right} 
-                                                                allocation={hallDetail.allocations.find((a: any) => a.InternalSeatID === bench.right?.SeatID)}
-                                                            />
+                                            }
+                                            const COLORS = ['#818cf8','#34d399','#f472b6','#fb923c','#67e8f9','#a3e635','#fbbf24','#e879f9'];
+                                            const colorMap = new Map([...subjects.keys()].map((k, i) => [k, COLORS[i % COLORS.length]!]));
+                                            return (
+                                                <div className="mb-6 flex flex-wrap gap-2">
+                                                    {[...subjects.entries()].map(([code, name]) => (
+                                                        <div key={code} className="flex items-center gap-1.5 bg-slate-800 rounded-lg px-2 py-1">
+                                                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: colorMap.get(code) }} />
+                                                            <span className="text-[10px] font-bold text-slate-300">{code}</span>
                                                         </div>
                                                     ))}
                                                 </div>
-                                            ));
+                                            );
                                         })()}
+
+                                        {/* Column layout */}
+                                        <div className="flex gap-8 justify-center flex-wrap">
+                                            {hallDetail.rows?.map((row: any) => {
+                                                const COLORS = ['#818cf8','#34d399','#f472b6','#fb923c','#67e8f9','#a3e635','#fbbf24','#e879f9'];
+                                                const subjectColorMap = new Map<string, string>();
+                                                let colorIdx = 0;
+                                                const getColor = (code: string) => {
+                                                    if (!code) return '#475569';
+                                                    if (!subjectColorMap.has(code)) subjectColorMap.set(code, COLORS[colorIdx++ % COLORS.length]!);
+                                                    return subjectColorMap.get(code)!;
+                                                };
+                                                // Build shared color map from all rows
+                                                for (const r of hallDetail.rows) {
+                                                    for (const b of r.benches) {
+                                                        if (b.left?.subjectCode) getColor(b.left.subjectCode);
+                                                        if (b.right?.subjectCode) getColor(b.right.subjectCode);
+                                                    }
+                                                }
+                                                return (
+                                                    <div key={row.rowLabel} className="flex flex-col items-center gap-3">
+                                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest bg-slate-800 px-2 py-0.5 rounded">
+                                                            COL {row.rowLabel}
+                                                        </span>
+                                                        {row.benches.map((bench: any) => (
+                                                            <InternalBenchView
+                                                                key={bench.benchNumber}
+                                                                bench={bench}
+                                                                getSubjectColor={getColor}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
-                                </div>
-                            </ModalBody>
-                            <ModalFooter className="p-6">
-                                <Button color="danger" variant="flat" className="font-bold" onPress={onClose}>Close Visualizer</Button>
-                                <Button color="primary" className="font-black px-8" startContent={<Save size={18} />}>Save Layout</Button>
-                            </ModalFooter>
-                        </>
-                    )}
-                </ModalContent>
-            </Modal>
+                                ) : null}
+                            </div>
+                        </Card>
+                    </motion.aside>
+                )}
+            </AnimatePresence>
         </div>
     );
 };
 
-// --- Sub-Components ---
-const SeatIcon: React.FC<{ seat: any, allocation: any }> = ({ seat, allocation }) => {
-    if (!seat) return <div className="w-14 h-14" />; // Spacer
+/* ── Bench Card for Room View ── */
+const SUBJ_COLORS = ['#818cf8','#34d399','#f472b6','#fb923c','#67e8f9','#a3e635','#fbbf24','#e879f9'];
+const globalSubjectColorMap = new Map<string, string>();
+let globalColorIdx = 0;
+const getGlobalSubjectColor = (code: string) => {
+    if (!code) return '#475569';
+    if (!globalSubjectColorMap.has(code)) {
+        globalSubjectColorMap.set(code, SUBJ_COLORS[globalColorIdx++ % SUBJ_COLORS.length]!);
+    }
+    return globalSubjectColorMap.get(code)!;
+};
 
+const InternalBenchView: React.FC<{ bench: any; getSubjectColor: (c: string) => string }> = ({ bench, getSubjectColor }) => {
+    const renderSeat = (seat: any | null | undefined, side: 'L' | 'R') => {
+        const isEmpty = !seat || !seat.studentId;
+        const color = isEmpty ? null : getSubjectColor(seat.subjectCode || '');
+        return (
+            <Tooltip
+                isDisabled={isEmpty}
+                content={seat && seat.studentId ? (
+                    <div className="p-2 space-y-0.5 min-w-[140px]">
+                        <p className="font-black text-indigo-300 text-[11px]">{seat.name}</p>
+                        <p className="text-[10px] text-slate-300">Reg: <span className="font-bold text-white">{seat.registerNumber}</span></p>
+                        <p className="text-[10px] text-slate-300">Dept: <span className="font-bold text-white">{seat.deptCode}</span></p>
+                        <div className="flex items-center gap-1 mt-1">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color || '#475569' }} />
+                            <span className="text-[10px] text-slate-400">{seat.subjectCode}</span>
+                        </div>
+                    </div>
+                ) : null}
+                classNames={{ content: "bg-slate-900 border border-slate-700 p-0 rounded-xl" }}
+                placement="right"
+            >
+                <div
+                    className={`w-[52px] h-[52px] rounded-xl flex flex-col items-center justify-center text-center transition-all duration-200 cursor-pointer border-2 ${
+                        isEmpty
+                            ? 'bg-slate-800/40 border-slate-700 text-slate-600 hover:border-slate-600'
+                            : 'border-transparent shadow-lg hover:scale-105'
+                    }`}
+                    style={isEmpty ? {} : { backgroundColor: `${color}22`, borderColor: color || '#475569' }}
+                >
+                    {isEmpty ? (
+                        <span className="text-[10px] font-black opacity-40">{side}</span>
+                    ) : (
+                        <>
+                            <span className="text-[9px] font-black leading-none" style={{ color: color || '#fff' }}>
+                                {seat.subjectCode?.slice(0, 4)}
+                            </span>
+                            <span className="text-[10px] font-black text-white leading-none mt-0.5">
+                                {seat.registerNumber?.slice(-4)}
+                            </span>
+                        </>
+                    )}
+                </div>
+            </Tooltip>
+        );
+    };
+
+    return (
+        <div className="flex items-center gap-1 group relative">
+            <span className="absolute -left-5 text-[8px] font-black text-slate-600 opacity-50">B{bench.benchNumber}</span>
+            {renderSeat(bench.left, 'L')}
+            <div className="w-0.5 h-8 bg-slate-700 rounded" />
+            {renderSeat(bench.right, 'R')}
+        </div>
+    );
+};
+
+// --- Legacy SeatIcon (kept for backward compat, not used in new panel) ---
+const SeatIcon: React.FC<{ seat: any, allocation: any }> = ({ seat, allocation }) => {
+    if (!seat) return <div className="w-14 h-14" />;
     const isOccupied = !!allocation;
     const isDisabled = !seat.IsActive;
-
     const content = (
-        <motion.div 
-            whileHover={{ scale: 1.1, rotate: isOccupied ? 2 : 0 }}
-            className={`
-                w-14 h-14 rounded-xl flex items-center justify-center text-xs transition-all duration-500 cursor-pointer border-2
-                ${isDisabled 
-                    ? 'bg-red-900/20 border-red-800/30 text-red-700 opacity-50' 
-                    : isOccupied 
-                        ? 'bg-indigo-600 border-indigo-500 text-white shadow-[0_5px_15px_rgba(79,70,229,0.3)]' 
-                        : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:bg-slate-700 hover:border-slate-600'}
-            `}
+        <motion.div
+            whileHover={{ scale: 1.1 }}
+            className={`w-14 h-14 rounded-xl flex items-center justify-center text-xs transition-all duration-300 cursor-pointer border-2 ${
+                isDisabled ? 'bg-red-900/20 border-red-800/30 text-red-700 opacity-50'
+                : isOccupied ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg'
+                : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:bg-slate-700'}`}
         >
             {isOccupied ? (
                 <div className="flex flex-col items-center leading-none">
@@ -721,26 +855,17 @@ const SeatIcon: React.FC<{ seat: any, allocation: any }> = ({ seat, allocation }
             )}
         </motion.div>
     );
-
     if (isOccupied) {
         return (
-            <Tooltip 
-                content={
-                    <div className="p-3 space-y-1">
-                        <p className="font-black text-indigo-400 text-xs mb-1">{allocation.Student?.FullName}</p>
-                        <p className="text-[10px] font-bold text-slate-300">Reg: {allocation.Student?.RegisterNumber}</p>
-                        <p className="text-[10px] font-bold text-slate-300">Dept: {allocation.Student?.Department?.DepartmentCode}</p>
-                        <p className="text-[10px] font-bold text-slate-300">Seat ID: {seat.SeatID}</p>
-                    </div>
-                }
+            <Tooltip
+                content={<div className="p-3 space-y-1">
+                    <p className="font-black text-indigo-400 text-xs">{allocation.Student?.FullName}</p>
+                    <p className="text-[10px] text-slate-300">Reg: {allocation.Student?.RegisterNumber}</p>
+                </div>}
                 classNames={{ content: "bg-slate-900 border border-slate-800 p-0" }}
-                placement="top"
-            >
-                {content}
-            </Tooltip>
+            >{content}</Tooltip>
         );
     }
-
     return content;
 };
 
