@@ -477,7 +477,7 @@ export const internalSeatingController = {
                 },
                 include: [{
                     model: InternalExamDepartment,
-                    as: 'Departments',
+                    as: 'InternalExamDepartments',
                     attributes: ['DepartmentID']
                 }],
                 transaction
@@ -495,7 +495,7 @@ export const internalSeatingController = {
             
             for (const exam of exams) {
                 examIds.add(exam.InternalExamID);
-                const depts = (exam as any).Departments || [];
+                const depts = (exam as any).InternalExamDepartments || [];
                 
                 if (depts.length === 0) {
                     console.log(`[autoRegisterStudents] Exam ${exam.InternalExamID} (${exam.SubjectCode}) has no departments configured`);
