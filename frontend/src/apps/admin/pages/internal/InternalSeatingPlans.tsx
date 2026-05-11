@@ -36,7 +36,7 @@ import {
     Layout,
     ArrowRightLeft
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { InternalSeatingService } from '../../services/internal/internalSeatingService';
 import { SeatingService } from '../../services/seatingService';
@@ -846,26 +846,32 @@ const InternalSeatingPlans: React.FC = () => {
                 </div>
             </main>
 
-            {/* --- RIGHT PANEL: Room Blueprint View --- */}
-            <AnimatePresence>
-                {isDetailOpen && (
-                    <motion.aside
-                        key="room-panel"
-                        initial={{ opacity: 0, x: 60 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: 60 }}
-                        transition={{ duration: 0.35, ease: 'easeOut' }}
-                        className="w-[420px] shrink-0 h-full flex flex-col"
-                    >
-                        <Card className="flex-1 flex flex-col overflow-hidden border-slate-200 shadow-2xl">
-                            {/* Panel Header */}
-                            <div className="p-4 border-b border-slate-100 bg-gradient-to-r from-indigo-600 to-violet-700 text-white flex items-center justify-between shrink-0">
+            {/* --- ROOM LAYOUT MODAL --- */}
+            <Modal 
+                isOpen={isDetailOpen} 
+                onOpenChange={(open) => {
+                    setIsDetailOpen(open);
+                    if (!open) setHallDetail(null);
+                }}
+                size="4xl"
+                backdrop="blur"
+                scrollBehavior="inside"
+                classNames={{
+                    backdrop: "bg-black/50",
+                    base: "bg-white border-slate-200",
+                }}
+            >
+                <ModalContent>
+                    {(onClose) => (
+                        <>
+                            {/* Modal Header */}
+                            <ModalHeader className="flex items-center justify-between bg-gradient-to-r from-indigo-600 to-violet-700 text-white rounded-t-lg">
                                 <div className="flex items-center gap-3">
                                     <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
                                         <Layout size={18} />
                                     </div>
                                     <div>
-                                        <h3 className="font-black text-base leading-none">
+                                        <h3 className="font-black text-lg leading-none">
                                             {hallDetail?.room?.RoomCode || 'Loading…'}
                                         </h3>
                                         <p className="text-[10px] font-bold opacity-70 mt-0.5 uppercase tracking-wider">
@@ -873,29 +879,23 @@ const InternalSeatingPlans: React.FC = () => {
                                         </p>
                                     </div>
                                 </div>
-                                <button
-                                    onClick={() => { setIsDetailOpen(false); setHallDetail(null); }}
-                                    className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/30 flex items-center justify-center transition-all"
-                                >
-                                    <span className="text-white font-black text-sm">✕</span>
-                                </button>
-                            </div>
+                            </ModalHeader>
 
-                            {/* Blueprint Content */}
-                            <div className="flex-1 overflow-y-auto bg-[#0f172a] relative">
+                            {/* Modal Body */}
+                            <ModalBody className="bg-[#0f172a] relative p-6">
                                 {/* Grid dots */}
                                 <div className="absolute inset-0 opacity-10 pointer-events-none"
                                     style={{ backgroundImage: 'radial-gradient(#334155 1px, transparent 0)', backgroundSize: '20px 20px' }} />
 
                                 {loadingDetail ? (
-                                    <div className="flex items-center justify-center h-full">
+                                    <div className="flex items-center justify-center h-96">
                                         <div className="flex flex-col items-center gap-3 text-slate-400">
                                             <RefreshCcw size={32} className="animate-spin text-indigo-400" />
                                             <span className="text-xs font-bold uppercase tracking-wider">Loading Blueprint…</span>
                                         </div>
                                     </div>
                                 ) : hallDetail ? (
-                                    <div className="relative p-6">
+                                    <div className="relative">
                                         {/* Blackboard */}
                                         <div className="mx-auto w-2/3 h-3 bg-slate-700 rounded-b-lg mb-8 flex justify-center border-b-4 border-slate-600">
                                             <span className="absolute -mt-6 text-[9px] font-black text-slate-500 tracking-[0.4em] uppercase opacity-60">FRONT</span>
@@ -924,8 +924,8 @@ const InternalSeatingPlans: React.FC = () => {
                                             );
                                         })()}
 
-                                        {/* Column layout */}
-                                        <div className="flex gap-6 justify-center flex-wrap">
+                                        {/* Column layout - ABCDE format like college structure */}
+                                        <div className="flex gap-8 justify-center items-start overflow-x-auto pb-4">
                                             {hallDetail.rows?.map((row: any) => {
                                                 const COLORS = ['#818cf8','#34d399','#f472b6','#fb923c','#67e8f9','#a3e635','#fbbf24','#e879f9'];
                                                 const subjectColorMap = new Map<string, string>();
@@ -943,28 +943,41 @@ const InternalSeatingPlans: React.FC = () => {
                                                     }
                                                 }
                                                 return (
-                                                    <div key={row.rowLabel} className="flex flex-col items-center gap-2.5">
-                                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest bg-slate-800 px-2 py-0.5 rounded">
-                                                            COL {row.rowLabel}
+                                                    <div key={row.rowLabel} className="flex flex-col items-center gap-3 shrink-0">
+                                                        <span className="text-base font-black text-white bg-gradient-to-br from-violet-600 to-indigo-700 px-3.5 py-2 rounded-lg shadow-lg min-w-[60px] text-center">
+                                                            {row.rowLabel}
                                                         </span>
-                                                        {row.benches.map((bench: any) => (
-                                                            <InternalBenchView
-                                                                key={bench.benchNumber}
-                                                                bench={bench}
-                                                                getSubjectColor={getColor}
-                                                            />
-                                                        ))}
+                                                        <div className="flex flex-col gap-2">
+                                                            {row.benches.map((bench: any) => (
+                                                                <div key={bench.benchNumber} className="flex gap-1">
+                                                                    {/* Left Seat */}
+                                                                    <InternalBenchView
+                                                                        key={`${row.rowLabel}-${bench.benchNumber}-left`}
+                                                                        bench={{ ...bench, seatOnly: bench.left }}
+                                                                        getSubjectColor={getColor}
+                                                                    />
+                                                                    {/* Right Seat */}
+                                                                    {bench.right && (
+                                                                        <InternalBenchView
+                                                                            key={`${row.rowLabel}-${bench.benchNumber}-right`}
+                                                                            bench={{ ...bench, seatOnly: bench.right }}
+                                                                            getSubjectColor={getColor}
+                                                                        />
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
                                                     </div>
                                                 );
                                             })}
                                         </div>
                                     </div>
                                 ) : null}
-                            </div>
-                        </Card>
-                    </motion.aside>
-                )}
-            </AnimatePresence>
+                            </ModalBody>
+                        </>
+                    )}
+                </ModalContent>
+            </Modal>
         </div>
     );
 };
@@ -1033,6 +1046,12 @@ const InternalBenchView: React.FC<{ bench: any; getSubjectColor: (c: string) => 
         );
     };
 
+    // If seatOnly is set, render just that single seat (for ABCDE layout)
+    if (bench.seatOnly) {
+        return renderSeat(bench.seatOnly, bench.seatOnly === bench.left ? 'L' : 'R');
+    }
+
+    // Otherwise render both seats with divider (legacy layout)
     return (
         <div className="flex items-center gap-1 group relative">
             <span className="absolute -left-6 text-[8px] font-black text-slate-600 opacity-50">B{bench.benchNumber}</span>

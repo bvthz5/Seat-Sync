@@ -40,7 +40,7 @@ export const InternalStructureImport: React.FC<{ onChange?: () => void }> = ({ o
         if (isCsv) parseFile(file); else parseExcel(file);
     };
 
-    const processRawData = (data: any[]): CSVData[] => {
+    const processRawData = (data: any[]): any[] => {
         if (!data || data.length === 0) return [];
         const headers = Object.keys(data[0]);
         let roomCol = headers.find(h => h.toLowerCase().includes('room') || h.toLowerCase() === 'code');
@@ -54,13 +54,23 @@ export const InternalStructureImport: React.FC<{ onChange?: () => void }> = ({ o
 
             if (!roomVal) return null;
 
-            return {
+            // Build result with required fields
+            const result: any = {
                 BlockName: '', // Backend deduces from RoomCode
                 FloorNumber: floorVal ? String(floorVal).trim() : '',
                 RoomCode: String(roomVal).trim(),
                 Capacity: capVal ? String(capVal).trim() : '0'
             };
-        }).filter(Boolean) as CSVData[];
+
+            // Preserve all other columns (A, B, C, D, E, F for bench counts)
+            for (const header of headers) {
+                if (!['BlockName', 'FloorNumber', 'RoomCode', 'Capacity', 'room', 'code', 'capacity', 'cap', 'floor', 'level'].some(h => header.toLowerCase() === h)) {
+                    result[header] = row[header] !== undefined ? String(row[header]).trim() : '';
+                }
+            }
+
+            return result;
+        }).filter(Boolean);
     };
 
     const parseExcel = async (file: File) => {

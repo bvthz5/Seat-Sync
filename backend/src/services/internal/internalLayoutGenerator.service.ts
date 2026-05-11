@@ -35,6 +35,27 @@ export class InternalLayoutGeneratorService {
     }
 
     /**
+     * Generates row layout based on specified benches per row (respects Excel column structure).
+     * E.g., if capacity=60 and benchesPerRow=6, creates columns with 6 benches each.
+     */
+    static generateRowLayoutFromBenchesPerRow(capacity: number, benchesPerRow: number): number[] {
+        const spb = 2; // Dual Seating
+        const totalBenches = Math.ceil(capacity / spb);
+        const columnCount = Math.ceil(totalBenches / benchesPerRow);
+        
+        const layout: number[] = [];
+        let remaining = totalBenches;
+        
+        for (let i = 0; i < columnCount; i++) {
+            const take = Math.min(remaining, benchesPerRow);
+            layout.push(take);
+            remaining -= take;
+        }
+        
+        return layout;
+    }
+
+    /**
      * Generates all seat records for a room based on its layout.
      */
     static async generateSeats(room: InternalRoom, transaction?: Transaction) {

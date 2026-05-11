@@ -66,7 +66,65 @@ export class InternalInfrastructureImportService {
                 }
 
                 // 3. Resolve Room
-                const capacity = parseInt(String(row.Capacity || row.capacity || 0)) || 0;
+                const capacity = parseInt(String(row.Capacity || row.capacity || row['Total'] || row['Total Capacity'] || 0)) || 0;
+                
+                // Extract row layout from Excel columns
+                // The columns might be named A, B, C or __EMPTY, __EMPTY_1, __EMPTY_2, etc.
+                let rowLayout: number[] = [];
+                
+                console.log(`[ImportService] ========== Parsing room: ${resolved.roomName} ==========`);
+                console.log(`[ImportService] Row keys:`, Object.keys(row));
+                console.log(`[ImportService] Full row data:`, row);
+                
+                // Try standard column labels first (A, B, C, D, E, F)
+                const columnLabels = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+                for (const colLabel of columnLabels) {
+                    const val = row[colLabel] || row[`Column${colLabel}`] || row[`column${colLabel}`];
+                    if (val !== undefined && val !== null && val !== '') {
+                        const benches = parseInt(String(val).trim());
+                        if (!isNaN(benches) && benches > 0) {
+                            rowLayout.push(benches);
+                        } else if (!isNaN(benches) && benches === 0) {
+                            break;
+                        }
+                    }
+                }
+                
+                // If still no layout, try __EMPTY columns (XLSX parsing of merged cells)
+                if (rowLayout.length === 0) {
+                    console.log(`[ImportService] Trying __EMPTY columns for ${resolved.roomName}`);
+                    let emptyIdx = 0;
+                    while (true) {
+                        const emptyKey = emptyIdx === 0 ? '__EMPTY' : `__EMPTY_${emptyIdx}`;
+                        const val = row[emptyKey];
+                        
+                        if (val !== undefined && val !== null && val !== '') {
+                            const benches = parseInt(String(val).trim());
+                            console.log(`[ImportService] ${emptyKey}: value="${val}" → parsed=${benches}`);
+                            
+                            if (!isNaN(benches) && benches > 0) {
+                                rowLayout.push(benches);
+                                console.log(`[ImportService] Added to layout: ${emptyKey}=${benches}, layout now: [${rowLayout.join(', ')}]`);
+                            } else if (!isNaN(benches) && benches === 0) {
+                                console.log(`[ImportService] Found zero at ${emptyKey}, stopping`);
+                                break;
+                            }
+                        } else {
+                            console.log(`[ImportService] ${emptyKey}: empty/null, stopping`);
+                            break;
+                        }
+                        emptyIdx++;
+                        if (emptyIdx > 20) break;
+                    }
+                }
+                
+                console.log(`[ImportService] ✓ Final rowLayout for ${resolved.roomName}: [${rowLayout.join(', ')}]`);
+                
+                // If no row layout found, auto-generate from capacity
+                if (rowLayout.length === 0) {
+                    console.log(`[ImportService] No layout found, auto-generating from capacity ${capacity}`);
+                    rowLayout = InternalLayoutGeneratorService.generateRowLayout(capacity);
+                }
                 
                 const [room, roomCreated] = await InternalRoom.findOrCreate({
                     where: { RoomCode: resolved.roomName, FloorID: floorId },
@@ -75,7 +133,7 @@ export class InternalInfrastructureImportService {
                         FloorID: floorId,
                         RoomCode: resolved.roomName,
                         TotalCapacity: capacity,
-                        RowLayout: InternalLayoutGeneratorService.generateRowLayout(capacity),
+                        RowLayout: rowLayout,
                         SeatsPerBench: 2,
                         RoomType: 'Classroom',
                         SeatMode: 'Dual',
@@ -92,7 +150,7 @@ export class InternalInfrastructureImportService {
                 } else {
                     // Update capacity and regenerate layout/seats
                     room.TotalCapacity = capacity;
-                    room.RowLayout = InternalLayoutGeneratorService.generateRowLayout(capacity);
+                    room.RowLayout = rowLayout;
                     await room.save({ transaction: t });
                     await InternalLayoutGeneratorService.generateSeats(room, t);
                 }
