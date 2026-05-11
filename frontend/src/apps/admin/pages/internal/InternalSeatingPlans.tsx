@@ -320,13 +320,22 @@ const InternalSeatingPlans: React.FC = () => {
     };
 
     const openHallDetail = async (hallId: number) => {
+        // Require all three selections to view hall layout
+        if (!selectedSeries || !selectedSession || !selectedDate) {
+            toast.error("Please select exam series, session, and date first");
+            return;
+        }
+
         setLoadingDetail(true);
         setHallDetail(null);
         setIsDetailOpen(true);
         try {
+            console.log(`[openHallDetail] Loading hall ${hallId} for ${selectedDate} ${selectedSession}`);
             const detail = await InternalSeatingService.getHallLayout(hallId, selectedDate, selectedSession, Number(selectedSeries));
+            console.log(`[openHallDetail] Success:`, detail);
             setHallDetail(detail);
-        } catch {
+        } catch (error: any) {
+            console.error(`[openHallDetail] Error:`, error);
             toast.error("Failed to load hall details");
             setIsDetailOpen(false);
         } finally {
@@ -746,18 +755,24 @@ const InternalSeatingPlans: React.FC = () => {
                                     const isViewing = isDetailOpen && hallDetail?.room?.RoomID === hallId;
                                     // Only show as allocated if date is selected AND has filledSeats > 0
                                     const isAllocated = selectedDate && filled > 0;
+                                    const canViewLayout = selectedSeries && selectedSession && selectedDate;
                                     
                                     return (
-                                        <motion.div key={hallId} whileHover={{ y: -3 }} transition={{ duration: 0.2 }}>
-                                            <Card
-                                                className={`overflow-hidden cursor-pointer transition-all duration-300 shadow-md hover:shadow-xl border-2 ${
-                                                    isViewing
-                                                        ? 'border-indigo-400 ring-2 ring-indigo-200'
-                                                        : isAllocated
+                                        <Tooltip
+                                            isDisabled={canViewLayout}
+                                            content={!canViewLayout ? "Select exam details first" : "Click to view room layout"}
+                                            color={!canViewLayout ? "danger" : "default"}
+                                        >
+                                            <motion.div key={hallId} whileHover={{ y: -3 }} transition={{ duration: 0.2 }}>
+                                                <Card
+                                                    className={`overflow-hidden ${canViewLayout ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'} transition-all duration-300 shadow-md hover:shadow-xl border-2 ${
+                                                        isViewing
+                                                            ? 'border-indigo-400 ring-2 ring-indigo-200'
+                                                            : isAllocated
                                                         ? 'border-emerald-300 bg-emerald-50/30 hover:border-emerald-400 hover:shadow-emerald-100'
                                                         : 'border-slate-200 hover:border-indigo-200'
                                                 }`}
-                                                onClick={() => openHallDetail(hallId)}
+                                                onClick={() => canViewLayout && openHallDetail(hallId)}
                                             >
                                                 <div className={`p-4 flex items-center justify-between border-b ${
                                                     isAllocated
@@ -822,6 +837,7 @@ const InternalSeatingPlans: React.FC = () => {
                                                 </div>
                                             </Card>
                                         </motion.div>
+                                        </Tooltip>
                                     );
                                 })}
                         </div>
