@@ -643,46 +643,107 @@ const InternalSeatingPlans: React.FC = () => {
                         </Card>
                     ) : (
                         <div className="grid grid-cols-2 gap-4">
-                            {selectedHalls.map((hallId: number) => {
-                                // Merge summary info if available
-                                const summary = hallSummary.find((h: any) => h.hallId === hallId);
-                                const hallInfo = halls.find((h: any) => h.RoomID === hallId);
-                                const code = summary?.hallCode || hallInfo?.RoomCode || `Hall #${hallId}`;
-                                const filled = summary?.filledSeats ?? 0;
-                                const total = summary?.totalSeats ?? hallInfo?.TotalSeats ?? 0;
-                                const pct = total > 0 ? Math.round((filled / total) * 100) : 0;
-                                const isViewing = isDetailOpen && hallDetail?.room?.RoomID === hallId;
-                                return (
-                                    <motion.div key={hallId} whileHover={{ y: -3 }} transition={{ duration: 0.2 }}>
-                                        <Card
-                                            className={`overflow-hidden cursor-pointer transition-all duration-300 shadow-md hover:shadow-xl border-2 ${isViewing ? 'border-indigo-400 ring-2 ring-indigo-200' : filled > 0 ? 'border-emerald-200 hover:border-indigo-200' : 'border-slate-200 hover:border-indigo-200'}`}
-                                            onClick={() => openHallDetail(hallId)}
-                                        >
-                                            <div className="p-4 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
-                                                <div className="flex items-center gap-2.5">
-                                                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-inner transition-all duration-300 ${isViewing ? 'bg-indigo-600 text-white' : filled > 0 ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'}`}>
-                                                        <MapPin size={18} />
+                            {selectedHalls
+                                .map((hallId: number) => {
+                                    const summary = hallSummary.find((h: any) => h.hallId === hallId);
+                                    const hallInfo = halls.find((h: any) => h.RoomID === hallId);
+                                    const filled = summary?.filledSeats ?? 0;
+                                    const total = summary?.totalSeats ?? hallInfo?.TotalSeats ?? 0;
+                                    return { hallId, summary, hallInfo, filled, total };
+                                })
+                                .sort((a, b) => {
+                                    // Allocated halls (filled > 0) first, then by fill percentage descending
+                                    if ((a.filled > 0) !== (b.filled > 0)) {
+                                        return a.filled > 0 ? -1 : 1;
+                                    }
+                                    // Both allocated or both empty - sort by fill percentage
+                                    const pctA = a.total > 0 ? (a.filled / a.total) * 100 : 0;
+                                    const pctB = b.total > 0 ? (b.filled / b.total) * 100 : 0;
+                                    return pctB - pctA;
+                                })
+                                .map(({ hallId, summary, hallInfo, filled, total }) => {
+                                    const code = summary?.hallCode || hallInfo?.RoomCode || `Hall #${hallId}`;
+                                    const pct = total > 0 ? Math.round((filled / total) * 100) : 0;
+                                    const isViewing = isDetailOpen && hallDetail?.room?.RoomID === hallId;
+                                    const isAllocated = filled > 0;
+                                    
+                                    return (
+                                        <motion.div key={hallId} whileHover={{ y: -3 }} transition={{ duration: 0.2 }}>
+                                            <Card
+                                                className={`overflow-hidden cursor-pointer transition-all duration-300 shadow-md hover:shadow-xl border-2 ${
+                                                    isViewing
+                                                        ? 'border-indigo-400 ring-2 ring-indigo-200'
+                                                        : isAllocated
+                                                        ? 'border-emerald-300 bg-emerald-50/30 hover:border-emerald-400 hover:shadow-emerald-100'
+                                                        : 'border-slate-200 hover:border-indigo-200'
+                                                }`}
+                                                onClick={() => openHallDetail(hallId)}
+                                            >
+                                                <div className={`p-4 flex items-center justify-between border-b ${
+                                                    isAllocated
+                                                        ? 'bg-gradient-to-r from-emerald-50 to-emerald-25 border-emerald-100'
+                                                        : 'bg-gradient-to-r from-slate-50 to-white border-slate-100'
+                                                }`}>
+                                                    <div className="flex items-center gap-2.5">
+                                                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-inner transition-all duration-300 ${
+                                                            isViewing
+                                                                ? 'bg-indigo-600 text-white'
+                                                                : isAllocated
+                                                                ? 'bg-emerald-500 text-white'
+                                                                : 'bg-indigo-100 text-indigo-600'
+                                                        }`}>
+                                                            <MapPin size={18} />
+                                                        </div>
+                                                        <div>
+                                                            <h4 className="font-black text-sm text-slate-800">{code}</h4>
+                                                            <p className={`text-[9px] font-bold uppercase tracking-wider ${
+                                                                isAllocated ? 'text-emerald-600' : 'text-slate-400'
+                                                            }`}>
+                                                                {isAllocated ? `${pct}% Full • Allocated` : 'Not yet allocated'}
+                                                            </p>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <h4 className="font-black text-sm text-slate-800">{code}</h4>
-                                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                                                            {filled > 0 ? `${pct}% Full` : 'Not yet generated'}
-                                                        </p>
+                                                    {isViewing && <Chip size="sm" color="secondary" variant="flat" className="text-[9px] font-black">Viewing</Chip>}
+                                                    {isAllocated && !isViewing && (
+                                                        <Chip 
+                                                            size="sm" 
+                                                            color="success" 
+                                                            variant="flat" 
+                                                            className="text-[9px] font-black"
+                                                        >
+                                                            ✓ Allocated
+                                                        </Chip>
+                                                    )}
+                                                </div>
+                                                <div className="px-4 py-3 space-y-2">
+                                                    <Progress 
+                                                        value={pct} 
+                                                        color={pct >= 100 ? 'success' : isAllocated ? 'success' : 'default'} 
+                                                        className="h-1.5" 
+                                                    />
+                                                    <div className="flex gap-1.5">
+                                                        <Chip 
+                                                            size="sm" 
+                                                            variant="flat" 
+                                                            color={isAllocated ? 'success' : 'default'} 
+                                                            className="text-[9px] font-black px-1"
+                                                        >
+                                                            {filled} Seated
+                                                        </Chip>
+                                                        <Chip 
+                                                            size="sm" 
+                                                            variant="flat" 
+                                                            color="default" 
+                                                            className="text-[9px] font-black px-1"
+                                                        >
+                                                            {total - filled} Free
+                                                        </Chip>
                                                     </div>
                                                 </div>
-                                                {isViewing && <Chip size="sm" color="secondary" variant="flat" className="text-[9px] font-black">Viewing</Chip>}
-                                            </div>
-                                            <div className="px-4 py-3 space-y-2">
-                                                <Progress value={pct} color={pct >= 100 ? 'success' : filled > 0 ? 'primary' : 'default'} className="h-1.5" />
-                                                <div className="flex gap-1.5">
-                                                    <Chip size="sm" variant="flat" color={filled > 0 ? 'success' : 'default'} className="text-[9px] font-black px-1">{filled} Seated</Chip>
-                                                    <Chip size="sm" variant="flat" color="default" className="text-[9px] font-black px-1">{total - filled} Free</Chip>
-                                                </div>
-                                            </div>
-                                        </Card>
-                                    </motion.div>
-                                );
-                            })}
+                                            </Card>
+                                        </motion.div>
+                                    );
+                                })}
                         </div>
                     )}
                 </div>
