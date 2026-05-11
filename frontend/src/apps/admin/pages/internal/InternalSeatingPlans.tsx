@@ -199,26 +199,41 @@ const InternalSeatingPlans: React.FC = () => {
         }
     }, [selectedSeries, selectedSession]);
 
-    // Always load hall summary from internal structure; overlay fills when date/series selected
+    // Only load hall summary when all three selections (series, session, date) are made
     useEffect(() => {
         (async () => {
+            // Only fetch summary if all required fields are selected
+            if (!selectedSeries || !selectedSession || !selectedDate) {
+                setHallSummary([]);
+                setStats(null);
+                return;
+            }
+
             setLoadingSummary(true);
             try {
                 const summary = await InternalSeatingService.getSummary(
-                    selectedDate || '', selectedSession, Number(selectedSeries) || 0
+                    selectedDate, selectedSession, Number(selectedSeries)
                 );
                 if (Array.isArray(summary)) {
                     setHallSummary(summary);
-                    if (selectedDate && summary.some((h: any) => h.filledSeats > 0)) {
-                        const totalAssigned = summary.reduce((s: number, h: any) => s + h.filledSeats, 0);
-                        const totalSeats = summary.reduce((s: number, h: any) => s + h.totalSeats, 0);
-                        setStats({ assignedCount: totalAssigned, unassignedCount: 0, totalSeats, hallUsage: summary });
-                    } else if (!selectedDate) {
+                    const totalAssigned = summary.reduce((s: number, h: any) => s + (h.filledSeats || 0), 0);
+                    const totalSeats = summary.reduce((s: number, h: any) => s + (h.totalSeats || 0), 0);
+                    
+                    if (totalAssigned > 0 || totalSeats > 0) {
+                        setStats({ 
+                            assignedCount: totalAssigned, 
+                            unassignedCount: 0, 
+                            totalSeats, 
+                            hallUsage: summary 
+                        });
+                    } else {
                         setStats(null);
                     }
                 }
             } catch (e) {
                 console.error('Failed to load hall summary', e);
+                setHallSummary([]);
+                setStats(null);
             } finally {
                 setLoadingSummary(false);
             }
@@ -729,7 +744,8 @@ const InternalSeatingPlans: React.FC = () => {
                                     const code = summary?.hallCode || hallInfo?.RoomCode || `Hall #${hallId}`;
                                     const pct = total > 0 ? Math.round((filled / total) * 100) : 0;
                                     const isViewing = isDetailOpen && hallDetail?.room?.RoomID === hallId;
-                                    const isAllocated = filled > 0;
+                                    // Only show as allocated if date is selected AND has filledSeats > 0
+                                    const isAllocated = selectedDate && filled > 0;
                                     
                                     return (
                                         <motion.div key={hallId} whileHover={{ y: -3 }} transition={{ duration: 0.2 }}>
