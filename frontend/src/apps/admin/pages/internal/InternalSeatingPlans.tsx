@@ -144,6 +144,12 @@ const InternalSeatingPlans: React.FC = () => {
                 // Fetch Active Halls (halls list for sidebar checkbox)
                 const h = await InternalSeatingService.getHalls();
                 setHalls(h || []);
+                
+                // Auto-select all halls if none are already selected
+                if (selectedHalls.length === 0 && h && h.length > 0) {
+                    const allHallIds = h.map((hall: any) => hall.RoomID);
+                    setSelectedHalls(allHallIds);
+                }
             } catch (e) {
                 toast.error("Failed to initialize seating data");
             }
