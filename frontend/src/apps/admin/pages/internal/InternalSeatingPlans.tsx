@@ -828,7 +828,7 @@ const InternalSeatingPlans: React.FC = () => {
                                         })()}
 
                                         {/* Column layout */}
-                                        <div className="flex gap-8 justify-center flex-wrap">
+                                        <div className="flex gap-6 justify-center flex-wrap">
                                             {hallDetail.rows?.map((row: any) => {
                                                 const COLORS = ['#818cf8','#34d399','#f472b6','#fb923c','#67e8f9','#a3e635','#fbbf24','#e879f9'];
                                                 const subjectColorMap = new Map<string, string>();
@@ -846,7 +846,7 @@ const InternalSeatingPlans: React.FC = () => {
                                                     }
                                                 }
                                                 return (
-                                                    <div key={row.rowLabel} className="flex flex-col items-center gap-3">
+                                                    <div key={row.rowLabel} className="flex flex-col items-center gap-2.5">
                                                         <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest bg-slate-800 px-2 py-0.5 rounded">
                                                             COL {row.rowLabel}
                                                         </span>
@@ -903,27 +903,33 @@ const InternalBenchView: React.FC<{ bench: any; getSubjectColor: (c: string) => 
                     </div>
                 ) : null}
                 classNames={{ content: "bg-slate-900 border border-slate-700 p-0 rounded-xl" }}
-                placement="right"
+                placement="top"
             >
                 <div
-                    className={`w-[52px] h-[52px] rounded-xl flex flex-col items-center justify-center text-center transition-all duration-200 cursor-pointer border-2 ${
+                    className={`w-[60px] rounded-xl flex flex-col items-center justify-center text-center transition-all duration-200 cursor-pointer border-2 p-1.5 ${
                         isEmpty
-                            ? 'bg-slate-800/40 border-slate-700 text-slate-600 hover:border-slate-600'
-                            : 'border-transparent shadow-lg hover:scale-105'
+                            ? 'bg-slate-800/40 border-slate-700 text-slate-600 hover:border-slate-600 min-h-[60px]'
+                            : 'border-transparent shadow-lg hover:scale-105 min-h-[72px]'
                     }`}
                     style={isEmpty ? {} : { backgroundColor: `${color}22`, borderColor: color || '#475569' }}
                 >
                     {isEmpty ? (
                         <span className="text-[10px] font-black opacity-40">{side}</span>
                     ) : (
-                        <>
-                            <span className="text-[9px] font-black leading-none" style={{ color: color || '#fff' }}>
+                        <div className="flex flex-col items-center gap-0.5 w-full">
+                            <span className="text-[8px] font-black leading-none" style={{ color: color || '#fff' }}>
                                 {seat.subjectCode?.slice(0, 4)}
                             </span>
-                            <span className="text-[10px] font-black text-white leading-none mt-0.5">
+                            <span className="text-[9px] font-black text-white leading-none">
                                 {seat.registerNumber?.slice(-4)}
                             </span>
-                        </>
+                            <span className="text-[7px] font-bold text-slate-300 leading-tight text-center max-w-full truncate px-0.5">
+                                {seat.name?.split(' ').slice(0, 2).join('\n')}
+                            </span>
+                            <span className="text-[7px] font-bold text-slate-400 leading-none">
+                                {seat.deptCode}
+                            </span>
+                        </div>
                     )}
                 </div>
             </Tooltip>
@@ -932,9 +938,9 @@ const InternalBenchView: React.FC<{ bench: any; getSubjectColor: (c: string) => 
 
     return (
         <div className="flex items-center gap-1 group relative">
-            <span className="absolute -left-5 text-[8px] font-black text-slate-600 opacity-50">B{bench.benchNumber}</span>
+            <span className="absolute -left-6 text-[8px] font-black text-slate-600 opacity-50">B{bench.benchNumber}</span>
             {renderSeat(bench.left, 'L')}
-            <div className="w-0.5 h-8 bg-slate-700 rounded" />
+            <div className="w-0.5 h-12 bg-slate-700 rounded" />
             {renderSeat(bench.right, 'R')}
         </div>
     );
