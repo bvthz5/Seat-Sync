@@ -772,7 +772,8 @@ const InternalSeatingPlans: React.FC = () => {
                                                         ? 'border-emerald-300 bg-emerald-50/30 hover:border-emerald-400 hover:shadow-emerald-100'
                                                         : 'border-slate-200 hover:border-indigo-200'
                                                 }`}
-                                                onClick={() => canViewLayout && openHallDetail(hallId)}
+                                                onPress={() => canViewLayout && openHallDetail(hallId)}
+                                                    isPressable={canViewLayout}
                                             >
                                                 <div className={`p-4 flex items-center justify-between border-b ${
                                                     isAllocated
