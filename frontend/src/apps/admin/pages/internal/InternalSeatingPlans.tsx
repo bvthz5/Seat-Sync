@@ -43,17 +43,42 @@ import { SeatingService } from '../../services/seatingService';
 import api from '../../../../services/api';
 
 const InternalSeatingPlans: React.FC = () => {
-    // --- State ---
+    // --- State (with localStorage persistence) ---
     const [seriesList, setSeriesList] = useState<any[]>([]);
     const [availableSessions, setAvailableSessions] = useState<string[]>([]);
-    const [selectedSeries, setSelectedSeries] = useState<string>('');
+    const [selectedSeries, setSelectedSeries] = useState<string>(() => {
+        try {
+            return localStorage.getItem('seating_selectedSeries') || '';
+        } catch {
+            return '';
+        }
+    });
     const [examDates, setExamDates] = useState<any[]>([]);
-    const [selectedDate, setSelectedDate] = useState<string>('');
-    const [selectedSession, setSelectedSession] = useState<string>('');
+    const [selectedDate, setSelectedDate] = useState<string>(() => {
+        try {
+            return localStorage.getItem('seating_selectedDate') || '';
+        } catch {
+            return '';
+        }
+    });
+    const [selectedSession, setSelectedSession] = useState<string>(() => {
+        try {
+            return localStorage.getItem('seating_selectedSession') || '';
+        } catch {
+            return '';
+        }
+    });
     
     const [halls, setHalls] = useState<any[]>([]);
     const [hallSearch, setHallSearch] = useState<string>('');
-    const [selectedHalls, setSelectedHalls] = useState<number[]>([]);
+    const [selectedHalls, setSelectedHalls] = useState<number[]>(() => {
+        try {
+            const stored = localStorage.getItem('seating_selectedHalls');
+            return stored ? JSON.parse(stored) : [];
+        } catch {
+            return [];
+        }
+    });
     const [departments, setDepartments] = useState<any[]>([]);
     
     // Settings
@@ -74,6 +99,39 @@ const InternalSeatingPlans: React.FC = () => {
     const [hallSummary, setHallSummary] = useState<any[]>([]);
     const [loadingSummary, setLoadingSummary] = useState(false);
     const [stats, setStats] = useState<any>(null);
+
+    // --- Persist state to localStorage ---
+    useEffect(() => {
+        try {
+            localStorage.setItem('seating_selectedSeries', selectedSeries);
+        } catch {
+            console.warn('Failed to save selectedSeries to localStorage');
+        }
+    }, [selectedSeries]);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem('seating_selectedDate', selectedDate);
+        } catch {
+            console.warn('Failed to save selectedDate to localStorage');
+        }
+    }, [selectedDate]);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem('seating_selectedSession', selectedSession);
+        } catch {
+            console.warn('Failed to save selectedSession to localStorage');
+        }
+    }, [selectedSession]);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem('seating_selectedHalls', JSON.stringify(selectedHalls));
+        } catch {
+            console.warn('Failed to save selectedHalls to localStorage');
+        }
+    }, [selectedHalls]);
 
     // --- Loaders ---
     useEffect(() => {
