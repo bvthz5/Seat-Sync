@@ -48,11 +48,13 @@ export class InternalSeatAllocator {
             transaction
         });
 
+        console.log(`[InternalSeatAllocator] Found ${exams.length} exams for date=${req.examDate}, session=${req.session}, series=${req.seriesId}`);
         if (exams.length === 0) {
             throw new Error("No internal exams found for this date and session.");
         }
 
         const examIds = exams.map(e => e.InternalExamID);
+        console.log(`[InternalSeatAllocator] Exam IDs: ${examIds.join(', ')}`);
 
         // 2. Fetch registered students grouped by exam (subject)
         const registrations = await InternalExamRegistration.findAll({
@@ -64,6 +66,13 @@ export class InternalSeatAllocator {
             }],
             transaction
         });
+
+        console.log(`[InternalSeatAllocator] Found ${registrations.length} student registrations for exams: ${examIds.join(', ')}`);
+        
+        if (registrations.length === 0) {
+            console.warn(`[InternalSeatAllocator] ⚠️  WARNING: No student registrations found! Check InternalExamRegistrations table for exam IDs: ${examIds.join(', ')}`);
+            throw new Error(`No student registrations found for this exam date/session. Please ensure students are registered for the exams on ${req.examDate} ${req.session}.`);
+        }
 
         // Group by examId → array of student info, sorted by register number
         const subjectQueues = new Map<number, any[]>();

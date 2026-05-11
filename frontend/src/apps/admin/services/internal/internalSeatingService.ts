@@ -54,6 +54,12 @@ export const InternalSeatingService = {
         return r.data;
     },
 
+    /** Auto-register students for exams based on department matching */
+    autoRegister: async (examDate: string, session: string, seriesId: number) => {
+        const r = await api.post(`${PREFIX}/auto-register`, { examDate, session, seriesId });
+        return r.data;
+    },
+
     /** Save manual allocation changes */
     save: async (payload: {
         examDate: string;
@@ -85,3 +91,4 @@ export const InternalSeatingService = {
         return r.data;
     }
 };
+

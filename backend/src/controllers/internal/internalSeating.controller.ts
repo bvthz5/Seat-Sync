@@ -315,15 +315,18 @@ export const internalSeatingController = {
         }
     },
 
-    /** Generate allocations using the engine */
+     /** Generate allocations using the engine */
     generateAllocation: async (req: Request, res: Response) => {
         const transaction = await sequelize.transaction();
         try {
+            console.log(`[generateAllocation] Request:`, req.body);
             const result = await InternalSeatAllocator.generate(req.body, transaction);
             await transaction.commit();
+            console.log(`[generateAllocation] Success:`, result);
             return res.json(result);
         } catch (error: any) {
             await transaction.rollback();
+            console.error(`[generateAllocation] Error:`, error.message);
             return res.status(500).json({ message: error.message });
         }
     },
@@ -451,6 +454,122 @@ export const internalSeatingController = {
             });
             return res.json({ students: registrations.map(r => r.Student) });
         } catch (error: any) {
+            return res.status(500).json({ message: error.message });
+        }
+    },
+
+    /** Auto-register students for internal exams based on department matching */
+    autoRegisterStudents: async (req: Request, res: Response) => {
+        const transaction = await sequelize.transaction();
+        try {
+            const { examDate, session, seriesId } = req.body;
+            
+            if (!examDate || !session || !seriesId) {
+                return res.status(400).json({ message: "examDate, session, and seriesId are required" });
+            }
+
+            // 1. Fetch all exams for this date/session/series
+            const exams = await InternalExam.findAll({
+                where: {
+                    ExamDate: examDate,
+                    Session: session,
+                    InternalExamSeriesID: seriesId
+                },
+                include: [{
+                    model: InternalExamDepartment,
+                    as: 'Departments',
+                    attributes: ['DepartmentID']
+                }],
+                transaction
+            });
+
+            if (exams.length === 0) {
+                return res.status(404).json({ message: "No exams found for this date/session/series" });
+            }
+
+            console.log(`[autoRegisterStudents] Found ${exams.length} exams for ${examDate} ${session}`);
+
+            // 2. Build a map: departmentId -> list of examIds
+            const deptToExams = new Map<number, number[]>();
+            const examIds = new Set<number>();
+            
+            for (const exam of exams) {
+                examIds.add(exam.InternalExamID);
+                const depts = (exam as any).Departments || [];
+                
+                if (depts.length === 0) {
+                    console.log(`[autoRegisterStudents] Exam ${exam.InternalExamID} (${exam.SubjectCode}) has no departments configured`);
+                } else {
+                    for (const dept of depts) {
+                        if (!deptToExams.has(dept.DepartmentID)) {
+                            deptToExams.set(dept.DepartmentID, []);
+                        }
+                        deptToExams.get(dept.DepartmentID)!.push(exam.InternalExamID);
+                    }
+                }
+            }
+
+            console.log(`[autoRegisterStudents] Department to Exams mapping:`, Array.from(deptToExams.entries()));
+
+            // 3. Fetch all active internal students grouped by department
+            const students = await InternalStudent.findAll({
+                where: { Status: 'ACTIVE' },
+                attributes: ['InternalStudentID', 'DepartmentID'],
+                transaction
+            });
+
+            console.log(`[autoRegisterStudents] Found ${students.length} active students`);
+
+            // 4. Get existing registrations to avoid duplicates
+            const existingRegs = await InternalExamRegistration.findAll({
+                where: { InternalExamID: { [Op.in]: Array.from(examIds) } },
+                attributes: ['InternalExamID', 'InternalStudentID'],
+                raw: true,
+                transaction
+            });
+
+            const existingSet = new Set<string>();
+            for (const reg of existingRegs) {
+                existingSet.add(`${reg.InternalExamID}-${reg.InternalStudentID}`);
+            }
+
+            console.log(`[autoRegisterStudents] Found ${existingRegs.length} existing registrations`);
+
+            // 5. Create new registrations
+            const newRegistrations: any[] = [];
+            
+            for (const student of students) {
+                const deptId = student.DepartmentID || 0;
+                const examIdsForDept = deptToExams.get(deptId) || [];
+                for (const examId of examIdsForDept) {
+                    const key = `${examId}-${student.InternalStudentID}`;
+                    if (!existingSet.has(key)) {
+                        newRegistrations.push({
+                            InternalExamID: examId,
+                            InternalStudentID: student.InternalStudentID
+                        });
+                    }
+                }
+            }
+
+            console.log(`[autoRegisterStudents] Creating ${newRegistrations.length} new registrations`);
+
+            if (newRegistrations.length > 0) {
+                await InternalExamRegistration.bulkCreate(newRegistrations, { transaction });
+            }
+
+            await transaction.commit();
+            
+            return res.json({
+                message: `Auto-registered students successfully`,
+                examCount: exams.length,
+                studentCount: students.length,
+                newRegistrations: newRegistrations.length,
+                totalRegistrations: existingRegs.length + newRegistrations.length
+            });
+        } catch (error: any) {
+            await transaction.rollback();
+            console.error('[autoRegisterStudents] Error:', error);
             return res.status(500).json({ message: error.message });
         }
     }

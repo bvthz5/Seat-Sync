@@ -10,6 +10,7 @@ router.get('/exams', internalSeatingController.getExams);
 router.get('/summary', internalSeatingController.getSummary);
 router.get('/halls/:hallId/layout', internalSeatingController.getHallLayout);
 router.post('/generate', internalSeatingController.generateAllocation);
+router.post('/auto-register', internalSeatingController.autoRegisterStudents);
 router.post('/save', internalSeatingController.saveAllocation);
 router.post('/slot', internalSeatingController.quickAddSlot);
 router.get('/exams/:examId/students', internalSeatingController.getExamStudents);

@@ -65,6 +65,7 @@ const InternalSeatingPlans: React.FC = () => {
     // View State
     const [activeStep, setActiveStep] = useState(1);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isAutoRegistering, setIsAutoRegistering] = useState(false);
     const [hallDetail, setHallDetail] = useState<any>(null);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
     const [loadingDetail, setLoadingDetail] = useState(false);
@@ -185,7 +186,7 @@ const InternalSeatingPlans: React.FC = () => {
             if (result?.assignedCount > 0) {
                 toast.success(`✅ ${result.assignedCount} students seated across ${result.hallUsage?.length || selectedHalls.length} halls`);
             } else {
-                toast.error(`⚠️ Generation ran but 0 students were assigned. Check that registrations exist for this date/session.`);
+                toast.error(`⚠️ No students assigned. Verify that students are registered for exams on ${selectedDate} (${selectedSession}). Check the console logs for details.`);
             }
 
             // Reload the hall summary
@@ -199,9 +200,43 @@ const InternalSeatingPlans: React.FC = () => {
             }
         } catch (e: any) {
             console.error('[Generate Error]', e);
-            toast.error(e.response?.data?.message || "Generation failed");
+            const errorMsg = e.response?.data?.message || e.message || "Generation failed";
+            toast.error(errorMsg);
         } finally {
             setIsGenerating(false);
+        }
+    };
+
+    const handleAutoRegister = async () => {
+        if (!selectedSeries || !selectedDate || !selectedSession) {
+            toast.error("Select series, session, and date first");
+            return;
+        }
+
+        setIsAutoRegistering(true);
+        try {
+            const result = await InternalSeatingService.autoRegister(
+                selectedDate,
+                selectedSession,
+                Number(selectedSeries)
+            );
+            
+            console.log('[AutoRegister Result]', result);
+            toast.success(
+                `✅ Auto-registered successfully!\n${result.newRegistrations} new registrations created\nTotal: ${result.totalRegistrations} students registered`
+            );
+
+            // Reload the hall summary
+            const refreshed = await InternalSeatingService.getSummary(selectedDate, selectedSession, Number(selectedSeries));
+            if (Array.isArray(refreshed)) {
+                setHallSummary(refreshed);
+            }
+        } catch (e: any) {
+            console.error('[AutoRegister Error]', e);
+            const errorMsg = e.response?.data?.message || e.message || "Auto-registration failed";
+            toast.error(errorMsg);
+        } finally {
+            setIsAutoRegistering(false);
         }
     };
 
@@ -531,7 +566,19 @@ const InternalSeatingPlans: React.FC = () => {
                         </section>
                     </div>
 
-                    <div className="mt-12 pt-8 border-t border-slate-100">
+                    <div className="mt-12 pt-8 border-t border-slate-100 space-y-3">
+                        <Button 
+                            color="warning" 
+                            fullWidth 
+                            size="lg" 
+                            variant="flat"
+                            className="font-black h-12 rounded-[2rem] text-sm tracking-wider uppercase"
+                            isLoading={isAutoRegistering}
+                            onPress={handleAutoRegister}
+                            startContent={!isAutoRegistering && <Users size={18} />}
+                        >
+                            Auto-Register Students
+                        </Button>
                         <Button 
                             color="primary" 
                             fullWidth 
