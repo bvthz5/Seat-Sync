@@ -11,7 +11,7 @@ import * as XLSX from 'xlsx';
 import { BulkStudentImportService } from '../services/bulkStudentImport.service.js';
 import { emailService } from '../services/email.service.js';
 import { normalizeProgram, parseBatchString, mapProgramToDepartment, resolveOrCreateProgram, resolveOrCreateDepartment } from '../services/academicNormalizer.service.js';
-import { generateDefaultPassword, generateStudentEmail } from '../utils/student.utils.js';
+import { generateDefaultPassword, generateStudentEmail, extractBatchYearFromRegisterNumber, extractProgramCodeFromRegisterNumber } from '../utils/student.utils.js';
 
 const STUDENT_EMAIL_DOMAIN = 'sjcetpalai.ac.in';
 
@@ -612,7 +612,9 @@ export const importStudents = async (req: Request, res: Response) => {
 
                 // 2. Resolve Semester
                 const existingStudent = existingStudentsMap.get(regNo);
-                const effectiveBatchYear = parsed.batchYear || existingStudent?.BatchYear || new Date().getFullYear();
+                // Try to get batch year from: parsed data > register number > existing student > current year
+                const joiningYearFromReg = extractBatchYearFromRegisterNumber(regNo);
+                const effectiveBatchYear = parsed.batchYear || joiningYearFromReg || existingStudent?.BatchYear || new Date().getFullYear();
                 
                 let parsedSemester = parsed.semester || normalizeSemesterNumber(semesterInput) || 1;
                 if (!parsed.semester && !semesterInput) {
@@ -668,8 +670,18 @@ export const importStudents = async (req: Request, res: Response) => {
                 try {
                     let currentUser = m.user;
                     if (!currentUser) {
+                        // Generate institutional email if not provided in import file
+                        // Use program code from register number for consistent email format
+                        const programCodeFromReg = extractProgramCodeFromRegisterNumber(m.regNo) || m.targetProgram?.ProgramCode || m.targetDept?.DepartmentCode || 'STUDENT';
+                        const generatedEmail = m.email || generateStudentEmail(
+                            m.normalizedName,
+                            m.batchYear,
+                            programCodeFromReg,
+                            m.targetProgram?.DurationYears || 2
+                        );
+                        
                         currentUser = await User.create({
-                            Email: m.email || `${m.regNo.toLowerCase()}@student.local`, // Guarantee uniqueness
+                            Email: generatedEmail,
                             FullName: m.normalizedName,
                             PasswordHash: m.password,
                             Role: 'student',
@@ -1479,7 +1491,8 @@ export const exportStudentCredentials = async (req: Request, res: Response) => {
             const email = s.User?.Email || generateStudentEmail(
                 fullName, 
                 s.BatchYear || new Date().getFullYear(), 
-                s.Program?.ProgramCode || s.Department?.DepartmentCode || 'STUDENT'
+                s.Program?.ProgramCode || s.Department?.DepartmentCode || 'STUDENT',
+                s.Program?.DurationYears || 2
             );
             
             deptGroups.get(deptName)?.push({

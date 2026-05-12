@@ -20,7 +20,7 @@ import os from 'os';
 import path from 'path';
 import mammoth from 'mammoth';
 import { sequelize } from '../config/database.js';
-import { generateDefaultPassword } from '../utils/student.utils.js';
+import { generateDefaultPassword, generateStudentEmail, extractBatchYearFromRegisterNumber, extractProgramCodeFromRegisterNumber } from '../utils/student.utils.js';
 
 const require = createRequire(import.meta.url);
 
@@ -1796,10 +1796,10 @@ export class ExamController {
                 const emailRaw = String(getEligibleCellValue(row, ['Email', 'Email Address', 'EmailAddress']) ?? '').trim();
                 const studentEmail = (emailRaw && emailRaw.includes('@')) 
                     ? emailRaw.toLowerCase() 
-                    : `${normalizedRegNo.toLowerCase()}@student.local`;
+                    : `${normalizedRegNo.toLowerCase()}@student.local`; // Temporary fallback
 
                 const user = await User.create({
-                    Email: studentEmail, // Guarantee uniqueness
+                    Email: studentEmail,
                     FullName: fullName,
                     PasswordHash: hashedPassword,
                     Role: 'student',
@@ -1816,6 +1816,8 @@ export class ExamController {
                 const deptId = defaultDepartmentId;
                 let progId = undefined;
                 let semId = undefined;
+                let batchYearForEmail = extractBatchYearFromRegisterNumber(normalizedRegNo) || new Date().getFullYear();
+                let programCodeForEmail = extractProgramCodeFromRegisterNumber(normalizedRegNo) || 'STUDENT';
 
                 if (deptId) {
                     try {
@@ -1823,6 +1825,17 @@ export class ExamController {
                         progId = program.ProgramID;
                         const semester = await resolveSemesterForEligibleImport(progId, row, transaction);
                         semId = semester.SemesterID;
+                        
+                        // Update user email with proper institutional email if not provided in import
+                        if (!emailRaw || !emailRaw.includes('@')) {
+                            const generatedEmail = generateStudentEmail(
+                                fullName,
+                                batchYearForEmail,
+                                programCodeForEmail,
+                                program.DurationYears || 2
+                            );
+                            await user.update({ Email: generatedEmail }, { transaction });
+                        }
                     } catch (e) {
                         console.warn('Error resolving academic details for row:', rowNumber);
                     }
@@ -1836,7 +1849,7 @@ export class ExamController {
                     DepartmentID: deptId,
                     ProgramID: progId,
                     SemesterID: semId,
-                    BatchYear: new Date().getFullYear()
+                    BatchYear: batchYearForEmail
                 } as any, { transaction });
                 
                 createdStudents++;

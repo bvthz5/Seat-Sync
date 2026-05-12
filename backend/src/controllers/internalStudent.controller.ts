@@ -671,7 +671,8 @@ export const exportInternalStudentCredentials = async (req: Request, res: Respon
             const email = s.User?.Email || generateStudentEmail(
                 fullName, 
                 s.BatchYear || new Date().getFullYear(), 
-                s.Program?.ProgramCode || s.Department?.DepartmentCode || 'STUDENT'
+                s.Program?.ProgramCode || s.Department?.DepartmentCode || 'STUDENT',
+                s.Program?.DurationYears || 2
             );
             
             deptGroups.get(deptName)?.push({
