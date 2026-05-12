@@ -42,7 +42,21 @@ function generateStudentEmail(fullName, joiningYear, programCode, durationYears 
     const duration = durationYears || 2;
     const emailYear = joiningYearNum + duration;
     
-    return `${cleanName}${emailYear}@${cleanProgram}.sjcetpalai.ac.in`;
+    // Check if program is integrated (MCAI, IMCA, or starts with INT)
+    const isIntegrated = 
+        cleanProgram.includes('mcai') || 
+        cleanProgram.includes('imca') || 
+        cleanProgram.startsWith('int');
+    
+    // Normalize program code for email domain (MCAI -> MCA)
+    let emailProgramCode = cleanProgram;
+    if (cleanProgram === 'mcai' || cleanProgram === 'imca') {
+        emailProgramCode = 'mca';
+    }
+    
+    const integratedSuffix = isIntegrated ? 'i' : '';
+    
+    return `${cleanName}${emailYear}${integratedSuffix}@${emailProgramCode}.sjcetpalai.ac.in`;
 }
 
 // Test cases
@@ -69,6 +83,13 @@ const testCases = [
         program: 'MBA',
         duration: 2,
         description: 'MBA student (2-year program) joining in 2025'
+    },
+    {
+        name: 'Rohith Satheeshan',
+        regNo: 'SJC24MCAI051',
+        program: 'MCAI',
+        duration: 5,
+        description: 'Integrated MCA student (5-year program) joining in 2024'
     }
 ];
 
@@ -95,3 +116,5 @@ console.log('✓ Batch year extracted from register number (e.g., 24 from SJC24M
 console.log('✓ Email year calculated as: joining year + duration');
 console.log('✓ For MCA (2 years): joining 2024 + 2 = 2026 (passout year)');
 console.log('✓ For BTech (4 years): joining 2022 + 4 = 2026 (passout year)');
+console.log('✓ For Integrated MCA (5 years): joining 2024 + 5 = 2029 (passout year) with "i" suffix');
+console.log('✓ Format: name + year + [i for integrated] + @ + program + ".sjcetpalai.ac.in"');

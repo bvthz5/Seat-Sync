@@ -59,11 +59,13 @@ export const extractProgramCodeFromRegisterNumber = (registerNumber: string): st
 
 /**
  * Generates an institutional email based on student details.
- * Format: firstname + lastname + (joiningYear + durationYears) + @ + programCode + ".sjcetpalai.ac.in"
+ * Format: firstname + lastname + (joiningYear + durationYears) + [i for integrated] + @ + programCode + ".sjcetpalai.ac.in"
  * For BTech (4 years): joiningYear + 4
- * For other programs (2 years): joiningYear + 2
+ * For MCA (2 years): joiningYear + 2
+ * For Integrated MCA (5 years): joiningYear + 5 + "i"
  * Example: John Doe (BTech, joining 2022) -> johndoe2026@btech.sjcetpalai.ac.in
  * Example: John Doe (MCA, joining 2024) -> johndoe2026@mca.sjcetpalai.ac.in
+ * Example: Rohith Satheeshan (Integrated MCA, joining 2024) -> rohithsatheeshan2029i@mca.sjcetpalai.ac.in
  */
 export const generateStudentEmail = (fullName: string, joiningYear: number | string, programCode: string, durationYears?: number): string => {
     const cleanName = fullName.toLowerCase().replace(/\s/g, '');
@@ -74,5 +76,19 @@ export const generateStudentEmail = (fullName: string, joiningYear: number | str
     const duration = durationYears || 2;
     const emailYear = joiningYearNum + duration;
     
-    return `${cleanName}${emailYear}@${cleanProgram}.sjcetpalai.ac.in`;
+    // Check if program is integrated (MCAI, IMCA, or starts with INT)
+    const isIntegrated = 
+        cleanProgram.includes('mcai') || 
+        cleanProgram.includes('imca') || 
+        cleanProgram.startsWith('int');
+    
+    // Normalize program code for email domain (MCAI -> MCA)
+    let emailProgramCode = cleanProgram;
+    if (cleanProgram === 'mcai' || cleanProgram === 'imca') {
+        emailProgramCode = 'mca';
+    }
+    
+    const integratedSuffix = isIntegrated ? 'i' : '';
+    
+    return `${cleanName}${emailYear}${integratedSuffix}@${emailProgramCode}.sjcetpalai.ac.in`;
 };
