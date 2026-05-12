@@ -36,29 +36,35 @@ export const internalSeatingController = {
 
     getExamDates: async (req: Request, res: Response) => {
         try {
-            const { seriesId, session } = req.query;
+            const { seriesId } = req.query;
             if (!seriesId) return res.json([]);
 
-            // If session provided, filter dates to only those with exams in that session
-            // UPPER() ensures case-insensitive match regardless of how data was stored
-            const sessionFilter = session
-                ? `AND UPPER(Session) = UPPER(:session)`
-                : '';
-
+            // Get all distinct date/session combinations with exam count
             const results = await sequelize.query(
-                `SELECT DISTINCT CONVERT(VARCHAR, ExamDate, 23) as examDate
-                 FROM InternalExams 
-                 WHERE InternalExamSeriesID = :seriesId
-                 ${sessionFilter}
-                 ORDER BY examDate ASC`,
+                `SELECT 
+                    CONVERT(VARCHAR, ie.ExamDate, 23) as examDate,
+                    ie.Session as session,
+                    COUNT(DISTINCT ie.InternalExamID) as examCount
+                 FROM InternalExams ie
+                 WHERE ie.InternalExamSeriesID = :seriesId
+                 GROUP BY ie.ExamDate, ie.Session
+                 ORDER BY ie.ExamDate ASC, ie.Session ASC`,
                 {
-                    replacements: { seriesId: Number(seriesId), session: session || null },
+                    replacements: { seriesId: Number(seriesId) },
                     type: QueryTypes.SELECT
                 }
             );
 
-            console.log(`getExamDates: Series=${seriesId}, Session=${session}, Found ${results.length} dates`);
-            return res.json(results);
+            // Transform to include exam names
+            const slots = results.map((row: any) => ({
+                examDate: row.examDate,
+                session: row.session,
+                examCount: parseInt(row.examCount) || 0,
+                examNames: []
+            }));
+
+            console.log(`getExamDates: Series=${seriesId}, Found ${slots.length} dates`);
+            return res.json(slots);
         } catch (error: any) {
             console.error('getExamDates Error:', error);
             return res.status(500).json({ message: error.message });

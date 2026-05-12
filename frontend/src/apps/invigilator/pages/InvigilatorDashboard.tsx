@@ -62,7 +62,6 @@ const NAV_GROUPS = [
     {
         title: 'OPERATIONS',
         items: [
-            { label: 'Swap Requests', icon: RefreshCcw, path: '/invigilator/swaps', id: 'swaps' },
             { label: 'Issue Reports', icon: AlertTriangle, path: '/invigilator/issues', id: 'issues' },
         ]
     }
@@ -734,39 +733,7 @@ export default function InvigilatorDashboard() {
                                     </div>
                                 </div>
 
-                                {/* Swap Requests Cards Stack */}
-                                <div className={`rounded-2xl border shadow-sm p-5 flex-1 ${darkMode ? 'bg-[#1e293b] border-slate-700' : 'bg-white border-slate-200/80'}`}>
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h3 className={`text-[16px] font-black flex items-center gap-2 ${darkMode ? 'text-white' : 'text-[#0F172A]'}`}>
-                                            <RefreshCcw size={16} className="text-[#2F3FA5]" /> Swap Queue
-                                        </h3>
-                                        <button className="text-[9px] font-bold text-[#2F3FA5] hover:text-white uppercase tracking-widest bg-blue-50 hover:bg-[#2F3FA5] px-2.5 py-1 rounded-lg transition-colors">View All</button>
-                                    </div>
-                                    <div className="space-y-3">
-                                        {!data?.swaps || data.swaps.length === 0 ? (
-                                            <div className="py-8 text-center">
-                                                <p className="text-slate-400 text-[11px] font-bold uppercase tracking-widest">No active requests</p>
-                                            </div>
-                                        ) : data.swaps.map(swap => (
-                                            <div key={swap.id} className={`p-3 sm:p-4 rounded-xl border transition-all shadow-sm group ${darkMode ? 'bg-slate-800/50 border-slate-700 hover:border-slate-500' : 'bg-slate-50 border-slate-100 hover:bg-white hover:border-blue-200 hover:shadow-md'}`}>
-                                                <div className="flex justify-between items-start mb-2 pointer-events-none">
-                                                    <span className={`text-[13px] font-black tracking-wide transition-colors ${darkMode ? 'text-white' : 'text-slate-800 group-hover:text-[#2F3FA5]'}`}>{swap.duty}</span>
-                                                    <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${swap.status === "Approved" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"
-                                                        }`}>
-                                                        {swap.status}
-                                                    </span>
-                                                </div>
-                                                <div className="flex flex-col gap-1.5">
-                                                    <div className="flex items-center justify-between">
-                                                        <p className="text-[11px] text-slate-500 font-bold">With: <span className={`font-black ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>{swap.with}</span></p>
-                                                        <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-md border shadow-sm ${darkMode ? 'bg-slate-700 text-slate-300 border-slate-600' : 'bg-white text-slate-500 border-slate-200'}`}>{swap.type}</span>
-                                                    </div>
-                                                    <p className="text-[10px] text-slate-400 font-medium italic truncate">"{swap.reason}"</p>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
+
                             </motion.div>
                         </div>
                     </div>

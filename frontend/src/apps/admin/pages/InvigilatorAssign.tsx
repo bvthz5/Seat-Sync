@@ -37,6 +37,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { SeatingService } from '../services/seatingService';
+import { InternalSeatingService } from '../services/internal/internalSeatingService';
 import { invigilatorService } from '../services/invigilatorService';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -92,11 +93,28 @@ const InvigilatorAssign: React.FC = () => {
         if (selectedSeries) {
             const fetchSlots = async () => {
                 try {
-                    const slotsData = await SeatingService.getExamDates(Number(selectedSeries));
-                    setSlots(slotsData);
-                    if (slotsData.length > 0) {
+                    // Get the selected series to check exam type
+                    const selectedSeriesObj = series.find(s => s.ExamSeriesID.toString() === selectedSeries);
+                    const isInternal = selectedSeriesObj?.ExamType === 'Internal';
+                    
+                    console.log('Selected Series:', selectedSeriesObj);
+                    console.log('Is Internal:', isInternal);
+                    
+                    // Call appropriate service based on exam type
+                    let slotsData;
+                    if (isInternal) {
+                        console.log('Fetching internal exam dates for series:', selectedSeries);
+                        slotsData = await InternalSeatingService.getExamDates(Number(selectedSeries));
+                    } else {
+                        console.log('Fetching regular exam dates for series:', selectedSeries);
+                        slotsData = await SeatingService.getExamDates(Number(selectedSeries));
+                    }
+                    
+                    console.log('Slots Data:', slotsData);
+                    setSlots(slotsData || []);
+                    if (slotsData && slotsData.length > 0) {
                         setSelectedDate(slotsData[0].examDate);
-                        setSelectedSession(slotsData[0].session);
+                        setSelectedSession(slotsData[0].session || 'FN');
                     } else {
                         setSelectedDate('');
                         setSelectedSession('FN');
@@ -105,11 +123,12 @@ const InvigilatorAssign: React.FC = () => {
                     }
                 } catch (err) {
                     console.error('Slot retrieval error:', err);
+                    toast.error('Failed to load exam dates');
                 }
             };
             fetchSlots();
         }
-    }, [selectedSeries]);
+    }, [selectedSeries, series]);
 
     useEffect(() => {
         if (selectedDate && selectedSession) {
