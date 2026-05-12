@@ -9,7 +9,7 @@
     "@react-aria/overlays": "^3.32.0",
     "@reduxjs/toolkit": "^2.11.2",
     "@types/papaparse": "^5.5.2",
-    "axios": "^1.13.2",
+    "axios": "^1.16.0",
     "browserslist": "^4.28.2",
     "caniuse-lite": "^1.0.30001788",
     "clsx": "^2.1.1",
@@ -38,7 +38,7 @@
     "vanta": "^0.5.24",
     "victory-vendor": "^37.3.6",
     "web-vitals": "^2.1.4",
-    "xlsx": "^0.18.5",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-latest/xlsx-latest.tgz",
     "xlsx-js-style": "^1.2.0"
   },
   "scripts": {
