@@ -501,37 +501,43 @@ const InternalSeatingPlans: React.FC = () => {
                                 </div>
                             ) : hallSummary.length > 0 ? (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                                    {hallSummary.map((h) => {
-                                        const pct = h.totalSeats > 0 ? Math.round((h.filledSeats / h.totalSeats) * 100) : 0;
-                                        return (
-                                            <motion.div key={h.hallId} whileHover={{ y: -4 }}>
-                                                <Card className="p-6 border border-slate-200 bg-white/80 backdrop-blur-md rounded-[20px] shadow-sm hover:shadow-xl transition-all group">
-                                                    <div className="flex items-center gap-4 mb-5">
-                                                        <div className="w-12 h-12 rounded-[14px] bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center transition-colors group-hover:bg-indigo-600 group-hover:text-white">
-                                                            <Armchair size={22} />
+                                    {[...hallSummary]
+                                        .sort((a, b) => {
+                                            // Allocated rooms (filledSeats > 0) first
+                                            if ((b.filledSeats > 0 ? 1 : 0) - (a.filledSeats > 0 ? 1 : 0) !== 0)
+                                                return (b.filledSeats > 0 ? 1 : 0) - (a.filledSeats > 0 ? 1 : 0);
+                                            // Secondary sort: by hallCode
+                                            return a.hallCode.localeCompare(b.hallCode);
+                                        })
+                                        .map((h) => {
+                                            const pct = h.totalSeats > 0 ? Math.round((h.filledSeats / h.totalSeats) * 100) : 0;
+                                            return (
+                                                <motion.div key={h.hallId} whileHover={{ y: -4 }}>
+                                                    <Card className="p-6 border border-slate-200 bg-white/80 backdrop-blur-md rounded-[20px] shadow-sm hover:shadow-xl transition-all group">
+                                                        <div className="flex items-center gap-4 mb-5">
+                                                            <div className="w-12 h-12 rounded-[14px] bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center transition-colors group-hover:bg-indigo-600 group-hover:text-white">
+                                                                <Armchair size={22} />
+                                                            </div>
+                                                            <div>
+                                                                <h4 className="text-[17px] font-bold text-slate-800">{h.hallCode}</h4>
+                                                                <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Internal Hall</p>
+                                                            </div>
                                                         </div>
-                                                        <div>
-                                                            <h4 className="text-[17px] font-bold text-slate-800">{h.hallCode}</h4>
-                                                            <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Internal Hall</p>
+                                                        <Progress value={pct} size="sm" color={pct >= 100 ? 'success' : pct > 0 ? 'warning' : 'default'} className="mb-4" />
+                                                        <div className="flex items-center justify-between">
+                                                            <div>
+                                                                <span className="text-[16px] font-black text-slate-800">{h.filledSeats}</span>
+                                                                <span className="text-[11px] text-slate-400 font-bold"> / {h.totalSeats}</span>
+                                                            </div>
+                                                            <Button size="sm" onPress={() => openHallDetail(h)}
+                                                                className="bg-slate-100 group-hover:bg-indigo-100 text-slate-600 group-hover:text-indigo-700 font-bold text-[10px] uppercase tracking-widest px-3 rounded-lg h-8">
+                                                                <Eye size={12} className="mr-1" /> View
+                                                            </Button>
                                                         </div>
-                                                    </div>
-                                                    
-                                                    <Progress value={pct} size="sm" color={pct >= 100 ? 'success' : pct > 0 ? 'warning' : 'default'} className="mb-4" />
-                                                    
-                                                    <div className="flex items-center justify-between">
-                                                        <div>
-                                                            <span className="text-[16px] font-black text-slate-800">{h.filledSeats}</span>
-                                                            <span className="text-[11px] text-slate-400 font-bold"> / {h.totalSeats}</span>
-                                                        </div>
-                                                        <Button size="sm" onPress={() => openHallDetail(h)}
-                                                            className="bg-slate-100 group-hover:bg-indigo-100 text-slate-600 group-hover:text-indigo-700 font-bold text-[10px] uppercase tracking-widest px-3 rounded-lg h-8">
-                                                            <Eye size={12} className="mr-1" /> View
-                                                        </Button>
-                                                    </div>
-                                                </Card>
-                                            </motion.div>
-                                        );
-                                    })}
+                                                    </Card>
+                                                </motion.div>
+                                            );
+                                        })}
                                 </div>
                             ) : (
                                 <div className="flex flex-col items-center justify-center min-h-[400px] bg-white rounded-[24px] border border-slate-200 border-dashed">
@@ -608,42 +614,53 @@ const InternalSeatingPlans: React.FC = () => {
                                                 <span className="text-lg font-black text-white">{row.rowLabel}</span>
                                             </div>
                                             <div className="flex flex-col gap-4">
-                                                {row.benches.map((bench: any) => (
-                                                    <div key={bench.benchNumber} className="flex gap-3 p-2 bg-slate-800/30 rounded-2xl border border-white/5 backdrop-blur-sm">
-                                                        {[bench.left, bench.right].map((seat, idx) => {
-                                                            const isEmpty = !seat?.studentId;
-                                                            const sStyle = getSubjectStyle(seat?.subjectCode);
-                                                            return (
-                                                                <Tooltip key={idx} isDisabled={isEmpty} content={
-                                                                    <div className="p-3">
-                                                                        <p className="font-black text-indigo-400 text-xs">{seat?.name}</p>
-                                                                        <p className="text-[10px] text-white opacity-80 mt-1">Reg: {seat?.registerNumber}</p>
-                                                                        <p className="text-[10px] text-white opacity-80">Dept: {seat?.deptCode}</p>
-                                                                    </div>
-                                                                } classNames={{ content: "bg-slate-900 border border-slate-800 p-0 rounded-xl shadow-2xl" }}>
-                                                                    <div className={`w-16 h-20 rounded-xl border-2 flex flex-col items-center justify-center transition-all cursor-pointer ${isEmpty 
-                                                                        ? 'bg-slate-900/50 border-slate-800 text-slate-700' 
-                                                                        : 'shadow-lg hover:scale-110 active:scale-95'}`}
-                                                                        style={isEmpty ? {} : { 
-                                                                            backgroundColor: `${sStyle.fill}40`, 
-                                                                            borderColor: sStyle.border,
-                                                                            boxShadow: `0 0 15px ${sStyle.fill}20`
-                                                                        }}>
-                                                                        {isEmpty ? (
-                                                                            <span className="text-[10px] font-black opacity-20">{idx === 0 ? 'L' : 'R'}</span>
-                                                                        ) : (
-                                                                            <>
-                                                                                <span className="text-[8px] font-black mb-1 px-1.5 py-0.5 rounded bg-black/40" style={{ color: sStyle.text }}>{seat.subjectCode?.slice(0, 4)}</span>
-                                                                                <span className="text-[11px] font-black text-white">{seat.registerNumber?.slice(-3)}</span>
-                                                                                <span className="text-[7px] font-bold text-slate-400 mt-1 uppercase tracking-tighter truncate w-12 text-center">{seat.name?.split(' ')[0]}</span>
-                                                                            </>
-                                                                        )}
-                                                                    </div>
-                                                                </Tooltip>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                ))}
+                                                {(() => {
+                                                    // Build a flat array of all seats in this row, left then right, for continuous numbering
+                                                    const seatsInRow = row.benches.flatMap((bench: any) => [bench.left, bench.right].filter(Boolean));
+                                                    let studentCounter = 1;
+                                                    return row.benches.map((bench: any) => (
+                                                        <div key={bench.benchNumber} className="flex gap-3 p-2 bg-slate-800/30 rounded-2xl border border-white/5 backdrop-blur-sm">
+                                                            {[bench.left, bench.right].map((seat, idx) => {
+                                                                const isEmpty = !seat?.studentId;
+                                                                const sStyle = getSubjectStyle(seat?.subjectCode);
+                                                                // Find the index of this seat among all non-empty seats in the row for continuous numbering
+                                                                let seatNumber = '';
+                                                                if (!isEmpty) {
+                                                                    seatNumber = studentCounter.toString().padStart(3, '0');
+                                                                    studentCounter++;
+                                                                }
+                                                                return (
+                                                                    <Tooltip key={idx} isDisabled={isEmpty} content={
+                                                                        <div className="p-3">
+                                                                            <p className="font-black text-indigo-400 text-xs">{seat?.name}</p>
+                                                                            <p className="text-[10px] text-white opacity-80 mt-1">Reg: {seat?.registerNumber}</p>
+                                                                            <p className="text-[10px] text-white opacity-80">Dept: {seat?.deptCode}</p>
+                                                                        </div>
+                                                                    } classNames={{ content: "bg-slate-900 border border-slate-800 p-0 rounded-xl shadow-2xl" }}>
+                                                                        <div className={`w-16 h-20 rounded-xl border-2 flex flex-col items-center justify-center transition-all cursor-pointer ${isEmpty 
+                                                                            ? 'bg-slate-900/50 border-slate-800 text-slate-700' 
+                                                                            : 'shadow-lg hover:scale-110 active:scale-95'}`}
+                                                                            style={isEmpty ? {} : { 
+                                                                                backgroundColor: `${sStyle.fill}40`, 
+                                                                                borderColor: sStyle.border,
+                                                                                boxShadow: `0 0 15px ${sStyle.fill}20`
+                                                                            }}>
+                                                                            {isEmpty ? (
+                                                                                <span className="text-[10px] font-black opacity-20">{idx === 0 ? 'L' : 'R'}</span>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <span className="text-[8px] font-black mb-1 px-1.5 py-0.5 rounded bg-black/40" style={{ color: sStyle.text }}>{seat.subjectCode?.slice(0, 4)}</span>
+                                                                                    <span className="text-[11px] font-black text-white">{seatNumber}</span>
+                                                                                    <span className="text-[7px] font-bold text-slate-400 mt-1 uppercase tracking-tighter truncate w-12 text-center">{seat.name?.split(' ')[0]}</span>
+                                                                                </>
+                                                                            )}
+                                                                        </div>
+                                                                    </Tooltip>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    ));
+                                                })()}
                                             </div>
                                         </div>
                                     ))}
