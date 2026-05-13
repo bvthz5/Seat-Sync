@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     ArrowLeft, Users, CheckCircle2, UserX, AlertCircle, AlertTriangle,
     Search, Filter, Save, FileSignature,
-    ChevronDown, Printer, FileText, Upload, LayoutGrid, RefreshCcw, ClipboardList, Lock
+    ChevronDown, Printer, FileText, Upload, LayoutGrid, RefreshCcw, ClipboardList, Lock,
+    DoorOpen
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
