@@ -686,11 +686,22 @@ export const importStudents = async (req: Request, res: Response) => {
                             PasswordHash: m.password,
                             Role: 'student',
                             IsActive: true,
-                            IsPasswordChanged: false // Force change on first login
+                            IsPasswordChanged: false, // Force change on first login
+                            FailedLoginAttempts: 0,
+                            AccountLockedUntil: null
                         }, { transaction: t });
                         if (m.email) existingUsersMapByEmail.set(m.email, currentUser);
-                    } else if (currentUser.FullName !== m.normalizedName) {
-                        await currentUser.update({ FullName: m.normalizedName }, { transaction: t });
+                    } else {
+                        // Ensure existing user is active and unlocked
+                        const updateData: any = {};
+                        if (currentUser.FullName !== m.normalizedName) updateData.FullName = m.normalizedName;
+                        if (!currentUser.IsActive) updateData.IsActive = true;
+                        if (currentUser.FailedLoginAttempts > 0) updateData.FailedLoginAttempts = 0;
+                        if (currentUser.AccountLockedUntil) updateData.AccountLockedUntil = null;
+
+                        if (Object.keys(updateData).length > 0) {
+                            await currentUser.update(updateData, { transaction: t });
+                        }
                     }
 
                     if (m.existingStudent) {
