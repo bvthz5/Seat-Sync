@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { Op, QueryTypes } from 'sequelize';
+import { Op, QueryTypes, fn, col, where } from 'sequelize';
 import { sequelize } from '../../config/database.js';
 import { 
     InternalRoom, 
@@ -39,37 +39,39 @@ export const internalSeatingController = {
             const { seriesId, session } = req.query;
             if (!seriesId) return res.json([]);
 
-            const whereClause = session 
-                ? `WHERE ie.InternalExamSeriesID = :seriesId AND ie.Session = :session`
-                : `WHERE ie.InternalExamSeriesID = :seriesId`;
+            const whereClause: any = { InternalExamSeriesID: Number(seriesId) };
+            if (session) {
+                whereClause[Op.and] = [where(fn('UPPER', col('Session')), (session as string).toUpperCase())];
+            }
 
-            const replacements: any = { seriesId: Number(seriesId) };
-            if (session) replacements.session = session;
+            const exams = await InternalExam.findAll({
+                where: whereClause,
+                attributes: ['ExamDate', 'Session'],
+                order: [['ExamDate', 'ASC']],
+                raw: true
+            });
 
-            // Get all distinct dates (and session if session is not provided)
-            const results = await sequelize.query(
-                `SELECT 
-                    CONVERT(VARCHAR, ie.ExamDate, 23) as examDate,
-                    ${session ? '' : 'ie.Session as session,'}
-                    COUNT(DISTINCT ie.InternalExamID) as examCount
-                 FROM InternalExams ie
-                 ${whereClause}
-                 GROUP BY ie.ExamDate ${session ? '' : ', ie.Session'}
-                 ORDER BY ie.ExamDate ASC ${session ? '' : ', ie.Session ASC'}`,
-                {
-                    replacements,
-                    type: QueryTypes.SELECT
+            // Group by date/session to match expected output
+            const slotsMap = new Map<string, any>();
+            for (const ex of (exams as any[])) {
+                let dStr = String(ex.ExamDate);
+                if (ex.ExamDate instanceof Date) {
+                    dStr = ex.ExamDate.toISOString().split('T')[0];
+                } else if (dStr.includes('T')) {
+                    dStr = dStr.split('T')[0] || dStr;
+                } else if (dStr.includes(' ')) {
+                    dStr = dStr.split(' ')[0] || dStr;
                 }
-            );
+                
+                const sess = ex.Session || '';
+                const key = `${dStr}_${sess}`;
+                if (!slotsMap.has(key)) {
+                    slotsMap.set(key, { examDate: dStr, session: sess, examCount: 0 });
+                }
+                slotsMap.get(key).examCount++;
+            }
 
-            // Transform to include session if it was provided
-            const slots = results.map((row: any) => ({
-                examDate: row.examDate,
-                session: session || row.session,
-                examCount: parseInt(row.examCount) || 0,
-                examNames: []
-            }));
-
+            const slots = Array.from(slotsMap.values());
             console.log(`getExamDates: Series=${seriesId}, Session=${session || 'ALL'}, Found ${slots.length} slots`);
             return res.json(slots);
         } catch (error: any) {
@@ -78,22 +80,16 @@ export const internalSeatingController = {
         }
     },
 
-    /** Get all sessions available for a series */
     getSessions: async (req: Request, res: Response) => {
         try {
             const { seriesId } = req.query;
             if (!seriesId) return res.json(['FN', 'AN']);
 
-            const results = await sequelize.query(
-                `SELECT DISTINCT UPPER(Session) as session
-                 FROM InternalExams 
-                 WHERE InternalExamSeriesID = :seriesId
-                 ORDER BY session ASC`,
-                {
-                    replacements: { seriesId: Number(seriesId) },
-                    type: QueryTypes.SELECT
-                }
-            );
+            const results = await InternalExam.findAll({
+                where: { InternalExamSeriesID: Number(seriesId) },
+                attributes: [[fn('DISTINCT', fn('UPPER', col('Session'))), 'session']],
+                raw: true
+            });
 
             const sessions = results.length > 0
                 ? (results as any[]).map((r: any) => r.session)
@@ -111,12 +107,16 @@ export const internalSeatingController = {
     getExams: async (req: Request, res: Response) => {
         try {
             const { examDate, session, seriesId } = req.query;
+            if (!examDate || examDate === 'undefined' || !session || session === 'undefined' || !seriesId || seriesId === 'undefined') {
+                return res.json([]);
+            }
+            const whereClause: any = {
+                ExamDate: examDate as string,
+                InternalExamSeriesID: Number(seriesId),
+                [Op.and]: [where(fn('UPPER', col('Session')), (session as string).toUpperCase())]
+            };
             const exams = await InternalExam.findAll({
-                where: {
-                    ExamDate: examDate as string,
-                    Session: session as string,
-                    InternalExamSeriesID: seriesId as any
-                },
+                where: whereClause,
                 include: [
                     {
                         model: InternalExamDepartment,
@@ -137,12 +137,22 @@ export const internalSeatingController = {
             const { hallId } = req.params;
             let { examDate, session, seriesId } = req.query as any;
 
+            if (!examDate || examDate === 'undefined' || !session || session === 'undefined' || !seriesId || seriesId === 'undefined') {
+                const room = await InternalRoom.findByPk(Number(hallId));
+                return res.json({
+                    hallId,
+                    hallCode: room?.RoomCode || 'Unknown',
+                    totalCapacity: room?.TotalCapacity || 0,
+                    layout: []
+                });
+            }
+
             // Clean date if it contains session suffix
             if (typeof examDate === 'string' && examDate.includes('-') && examDate.split('-').length > 3) {
                 examDate = examDate.split('-').slice(0, 3).join('-');
             }
 
-            const room = await InternalRoom.findByPk(hallId as string, {
+            const room = await InternalRoom.findByPk(Number(hallId), {
                 include: [
                     { model: InternalBlock, as: 'Block' },
                     { model: InternalFloor, as: 'Floor' }
@@ -151,25 +161,27 @@ export const internalSeatingController = {
             if (!room) return res.status(404).json({ message: "Room not found" });
 
             const seats = await InternalSeat.findAll({
-                where: { RoomID: hallId as any, IsActive: true },
+                where: { RoomID: Number(hallId), IsActive: true },
                 order: [['RowLabel', 'ASC'], ['BenchNumber', 'ASC'], ['SeatNumber', 'ASC']]
             });
 
             // Fetch exams and their allocations for this hall
+            console.log(`[getHallLayout] Params: Hall=${hallId}, Date=${examDate}, Session=${session}, Series=${seriesId}`);
+            
             const examRows = examDate && session && seriesId
-                ? await sequelize.query(
-                    `SELECT InternalExamID, SubjectCode, SubjectName FROM InternalExams
-                     WHERE UPPER(Session) = UPPER(:session)
-                       AND (CONVERT(VARCHAR, ExamDate, 23) = :examDate OR CAST(ExamDate AS DATE) = :examDate)
-                       AND InternalExamSeriesID = :seriesId`,
-                    {
-                        replacements: { session, examDate, seriesId },
-                        type: QueryTypes.SELECT
-                    }
-                ) as any[]
+                ? await InternalExam.findAll({
+                    where: {
+                        ExamDate: examDate,
+                        InternalExamSeriesID: Number(seriesId),
+                        [Op.and]: [where(fn('UPPER', col('Session')), (session as string).toUpperCase())]
+                    },
+                    attributes: ['InternalExamID', 'SubjectCode', 'SubjectName'],
+                    raw: true
+                })
                 : [];
 
-            console.log(`[getHallLayout] Found ${examRows.length} exams for Hall=${hallId}, Date=${examDate}, Session=${session}`);
+            const foundExamIds = examRows.map((e: any) => e.InternalExamID);
+            console.log(`[getHallLayout] Matching Exam IDs: ${foundExamIds.join(', ')}`);
 
             const examMap = new Map<number, { subjectCode: string; subjectName: string }>();
             for (const ex of examRows as any[]) {
@@ -189,6 +201,8 @@ export const internalSeatingController = {
                 }]
             }) : [];
 
+            console.log(`[getHallLayout] Found ${allocations.length} allocations for this hall`);
+
             // Build seat → allocation map
             const allocMap = new Map<number, any>();
             for (const alloc of allocations as any[]) {
@@ -197,12 +211,17 @@ export const internalSeatingController = {
 
             // Build bench-grouped structure
             const benchMap = new Map<string, Map<number, { left?: any; right?: any }>>();
+            let matchedCount = 0;
+            
             for (const seat of seats) {
                 if (!benchMap.has(seat.RowLabel)) benchMap.set(seat.RowLabel, new Map());
                 const rowMap = benchMap.get(seat.RowLabel)!;
                 if (!rowMap.has(seat.BenchNumber)) rowMap.set(seat.BenchNumber, {});
                 const bench = rowMap.get(seat.BenchNumber)!;
+                
                 const alloc = allocMap.get(seat.SeatID);
+                if (alloc) matchedCount++;
+
                 const seatInfo = {
                     seatId: seat.SeatID,
                     seatNumber: seat.SeatNumber,
@@ -216,6 +235,8 @@ export const internalSeatingController = {
                 if (seat.SeatNumber === 1) bench.left = seatInfo;
                 else bench.right = seatInfo;
             }
+
+            console.log(`[getHallLayout] Mapped ${matchedCount} seats to allocations out of ${seats.length} total seats`);
 
             // Convert to sorted array
             const rows = [...benchMap.keys()].sort().map(rowLabel => ({
@@ -270,26 +291,23 @@ export const internalSeatingController = {
                 });
             }
 
-            // 2. If a date/session/series was provided, overlay allocation counts
-            if (examDate && session && seriesId) {
+            if (examDate && examDate !== 'undefined' && session && session !== 'undefined' && seriesId && seriesId !== 'undefined') {
                 console.log(`[getSummary] Fetching summary for: Date=${examDate}, Session=${session}, Series=${seriesId}`);
                 
-                // Use robust date matching and case-insensitive session matching
-                const examRows = await sequelize.query(
-                    `SELECT InternalExamID FROM InternalExams
-                     WHERE UPPER(Session) = UPPER(:session)
-                       AND (CONVERT(VARCHAR, ExamDate, 23) = :examDate OR CAST(ExamDate AS DATE) = :examDate)
-                       AND InternalExamSeriesID = :seriesId`,
-                    {
-                        replacements: { session, examDate, seriesId },
-                        type: QueryTypes.SELECT
-                    }
-                ) as any[];
+                const whereClause: any = {
+                    ExamDate: examDate,
+                    InternalExamSeriesID: Number(seriesId),
+                    [Op.and]: [where(fn('UPPER', col('Session')), (session as string).toUpperCase())]
+                };
+                const exams = await InternalExam.findAll({
+                    where: whereClause,
+                    attributes: ['InternalExamID']
+                });
 
-                console.log(`[getSummary] Found ${examRows.length} matching exams`);
+                console.log(`[getSummary] Found ${exams.length} matching exams`);
 
-                if (examRows.length > 0) {
-                    const examIds = examRows.map((e: any) => e.InternalExamID || e.internalexamid);
+                if (exams.length > 0) {
+                    const examIds = exams.map(e => e.InternalExamID);
                     console.log(`[getSummary] Exam IDs: ${examIds.join(', ')}`);
 
                     const allocations = await InternalSeatAllocation.findAll({
@@ -374,7 +392,11 @@ export const internalSeatingController = {
             }
 
             const examIds = await InternalExam.findAll({
-                where: { ExamDate: examDate, Session: session, InternalExamSeriesID: seriesId },
+                where: { 
+                    ExamDate: examDate, 
+                    InternalExamSeriesID: Number(seriesId),
+                    [Op.and]: [where(fn('UPPER', col('Session')), (session as string).toUpperCase())]
+                },
                 attributes: ['InternalExamID']
             }).then(exs => exs.map(e => e.InternalExamID));
 
@@ -421,12 +443,16 @@ export const internalSeatingController = {
             }
 
             const examIds = await InternalExam.findAll({
-                where: { ExamDate: examDate, Session: session, InternalExamSeriesID: seriesId as any },
+                where: { 
+                    ExamDate: examDate, 
+                    InternalExamSeriesID: Number(seriesId),
+                    [Op.and]: [where(fn('UPPER', col('Session')), (session as string).toUpperCase())]
+                },
                 attributes: ['InternalExamID']
             }).then(exs => exs.map(e => e.InternalExamID));
 
             const hallSeats = await InternalSeat.findAll({
-                where: { RoomID: hallId as any },
+                where: { RoomID: Number(hallId) },
                 attributes: ['SeatID']
             });
             const seatIds = hallSeats.map(s => s.SeatID);
@@ -455,8 +481,12 @@ export const internalSeatingController = {
             }
             if (!examDate || !session) return res.status(400).json({ message: "examDate and session required" });
 
+            const whereClause: any = { 
+                ExamDate: examDate as string, 
+                [Op.and]: [where(fn('UPPER', col('Session')), (session as string).toUpperCase())]
+            };
             const exams = await InternalExam.findAll({
-                where: { ExamDate: examDate as string, Session: session as string },
+                where: whereClause,
                 attributes: ['InternalExamID']
             });
 
@@ -509,6 +539,9 @@ export const internalSeatingController = {
         const transaction = await sequelize.transaction();
         try {
             let { examDate, session, seriesId } = req.body;
+            if (!examDate || examDate === 'undefined' || !session || session === 'undefined' || !seriesId || seriesId === 'undefined') {
+                return res.status(400).json({ message: "Exam series, date, and session are required" });
+            }
             
             if (!examDate || !session || !seriesId) {
                 await transaction.rollback();
@@ -524,8 +557,8 @@ export const internalSeatingController = {
             const exams = await InternalExam.findAll({
                 where: {
                     ExamDate: examDate,
-                    Session: session,
-                    InternalExamSeriesID: seriesId
+                    InternalExamSeriesID: Number(seriesId),
+                    [Op.and]: [where(fn('UPPER', col('Session')), (session as string).toUpperCase())]
                 },
                 include: [{
                     model: InternalExamDepartment,

@@ -6,7 +6,9 @@ import {
     InternalExam, 
     InternalSeatAllocation, 
     InternalExamRegistration,
-    Department
+    InternalExamDepartment,
+    Department,
+    Subject
 } from '../../models/index.js';
 
 export interface InternalAllocationRequest {
@@ -69,35 +71,129 @@ export class InternalSeatAllocator {
 
         console.log(`[InternalSeatAllocator] Found ${registrations.length} student registrations for exams: ${examIds.join(', ')}`);
         
-        if (registrations.length === 0) {
-            console.warn(`[InternalSeatAllocator] ⚠️  WARNING: No student registrations found! Check InternalExamRegistrations table for exam IDs: ${examIds.join(', ')}`);
-            throw new Error(`No student registrations found for this exam date/session. Please ensure students are registered for the exams on ${req.examDate} ${req.session}.`);
-        }
-
         // Group by examId → array of student info, sorted by register number
         const subjectQueues = new Map<number, any[]>();
-        for (const reg of registrations) {
-            if (!subjectQueues.has(reg.InternalExamID)) subjectQueues.set(reg.InternalExamID, []);
-            subjectQueues.get(reg.InternalExamID)!.push({
-                studentId: reg.InternalStudentID,
-                examId: reg.InternalExamID,
-                regNo: reg.Student?.RegisterNumber || '',
-                name: reg.Student?.FullName || '',
-                deptId: reg.Student?.DepartmentID,
-                deptCode: reg.Student?.Department?.DepartmentCode || ''
+        examIds.forEach(id => subjectQueues.set(id, []));
+
+        if (registrations.length === 0) {
+            console.log(`[InternalSeatAllocator] No explicit registrations found. Attempting multi-tier implicit discovery...`);
+            
+            // Tier 1: Try InternalExamDepartment
+            let examDepts = await InternalExamDepartment.findAll({
+                where: { InternalExamID: { [Op.in]: examIds } },
+                transaction
             });
+
+            // Tier 2: If no departments linked, try Subject table via SubjectCode (Case-Insensitive)
+            if (examDepts.length === 0) {
+                console.log(`[InternalSeatAllocator] Tier 2: Checking Subjects table via SubjectCode (Case-Insensitive)...`);
+                const subjectCodes = [...new Set(exams.map(e => e.SubjectCode))];
+                const subjects = await Subject.findAll({
+                    where: {
+                        [Op.or]: subjectCodes.map(code => 
+                            where(fn('UPPER', col('SubjectCode')), code.toUpperCase())
+                        )
+                    },
+                    attributes: ['SubjectCode', 'DepartmentID'],
+                    transaction
+                });
+
+                if (subjects.length > 0) {
+                    const codeToDept = new Map<string, number>();
+                    subjects.forEach(s => codeToDept.set(s.SubjectCode.toUpperCase(), s.DepartmentID));
+                    
+                    const virtualDepts: any[] = [];
+                    for (const exam of exams) {
+                        const deptId = codeToDept.get(exam.SubjectCode.toUpperCase());
+                        if (deptId) {
+                            virtualDepts.push({ InternalExamID: exam.InternalExamID, DepartmentID: deptId });
+                        }
+                    }
+                    examDepts = virtualDepts;
+                }
+            }
+
+            // Tier 3: Prefix Matching (e.g. CST301 -> CS Department)
+            if (examDepts.length === 0) {
+                console.log(`[InternalSeatAllocator] Tier 3: Attempting Department Code prefix matching...`);
+                const allDepts = await Department.findAll({ attributes: ['DepartmentID', 'DepartmentCode'], transaction });
+                const virtualDepts: any[] = [];
+                
+                for (const exam of exams) {
+                    const code = exam.SubjectCode.toUpperCase();
+                    // Find the longest matching department code prefix
+                    const matchedDept = allDepts
+                        .filter(d => d.DepartmentCode && code.startsWith(d.DepartmentCode.toUpperCase()))
+                        .sort((a, b) => b.DepartmentCode.length - a.DepartmentCode.length)[0];
+                    
+                    if (matchedDept) {
+                        console.log(`[InternalSeatAllocator] Matched exam ${exam.SubjectCode} to department ${matchedDept.DepartmentCode} via prefix`);
+                        virtualDepts.push({ InternalExamID: exam.InternalExamID, DepartmentID: matchedDept.DepartmentID });
+                    }
+                }
+                examDepts = virtualDepts;
+            }
+
+            const deptIds = [...new Set(examDepts.map(d => d.DepartmentID))];
+            if (deptIds.length === 0) {
+                throw new Error(`No student registrations found and no departments could be resolved for these exams. Please ensure exams are linked to departments or have valid subject codes (e.g., CST301 for CS dept).`);
+            }
+
+            const students = await InternalStudent.findAll({
+                where: { DepartmentID: { [Op.in]: deptIds }, Status: 'ACTIVE' },
+                include: [{ model: Department, as: 'Department' }],
+                transaction
+            });
+
+            if (students.length === 0) {
+                throw new Error(`No active students found in the departments resolved for these exams (${deptIds.join(', ')}).`);
+            }
+
+            // Map students to exams based on department
+            const deptToExam = new Map<number, number>();
+            examDepts.forEach(ed => deptToExam.set(ed.DepartmentID, ed.InternalExamID));
+
+            for (const s of students) {
+                const eid = deptToExam.get(s.DepartmentID || 0);
+                if (eid && subjectQueues.has(eid)) {
+                    subjectQueues.get(eid)!.push({
+                        studentId: s.InternalStudentID,
+                        examId: eid,
+                        regNo: s.RegisterNumber || '',
+                        name: s.FullName || '',
+                        deptId: s.DepartmentID,
+                        deptCode: (s as any).Department?.DepartmentCode || ''
+                    });
+                }
+            }
+            console.log(`[InternalSeatAllocator] Implicitly matched ${students.length} students across ${subjectQueues.size} subjects`);
+        } else {
+            for (const reg of registrations) {
+                const eid = reg.InternalExamID;
+                if (!subjectQueues.has(eid)) subjectQueues.set(eid, []);
+                subjectQueues.get(eid)!.push({
+                    studentId: reg.InternalStudentID,
+                    examId: eid,
+                    regNo: reg.Student?.RegisterNumber || '',
+                    name: reg.Student?.FullName || '',
+                    deptId: reg.Student?.DepartmentID,
+                    deptCode: reg.Student?.Department?.DepartmentCode || ''
+                });
+            }
         }
 
-        // Sort each subject's students by register number (continuous order)
-        for (const [, queue] of subjectQueues) {
+        // Filter out empty queues and sort by reg number
+        const activeQueues = Array.from(subjectQueues.values()).filter(q => q.length > 0);
+        
+        if (activeQueues.length === 0) {
+            throw new Error("No students found to allocate for these exams.");
+        }
+
+        for (const queue of activeQueues) {
             queue.sort((a, b) => a.regNo.localeCompare(b.regNo, undefined, { numeric: true }));
         }
 
-        // Build an ordered list of queues (sorted by exam ID for determinism)
-        // Each queue is a subject pool sorted by reg number
-        const queues = [...subjectQueues.entries()]
-            .sort(([a], [b]) => a - b)
-            .map(([, q]) => q);
+        const queues = activeQueues;
 
         // 3. Fetch Halls and their ACTIVE seats
         let halls = await InternalRoom.findAll({
