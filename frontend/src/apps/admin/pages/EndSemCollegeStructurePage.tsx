@@ -10,6 +10,7 @@ import { useAuth } from '../../../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { structureService } from '../services/structureService';
 import { toast } from 'react-hot-toast';
+import ConfirmationModal from '../components/ConfirmationModal';
 
 /**
  * EndSemCollegeStructurePage
@@ -24,18 +25,19 @@ const EndSemCollegeStructurePage: React.FC = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
     const [selectedTab, setSelectedTab] = useState<string>("blocks");
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
     const isRootAdmin = user?.IsRootAdmin === true;
     const isReadOnly = !isRootAdmin;
 
     const handleDeleteAll = async () => {
-        if (!window.confirm('Are you sure you want to delete ALL structure data? This cannot be undone.')) return;
         try {
             await structureService.deleteAllStructureData();
             toast.success('All structure data deleted.');
             window.location.reload();
         } catch (err: any) {
             toast.error('Failed to delete all structure data.');
+            throw err; // Re-throw to allow modal to handle error state if needed
         }
     };
 
@@ -131,7 +133,7 @@ const EndSemCollegeStructurePage: React.FC = () => {
                             <StructureImport onChange={() => window.location.reload()} />
                             <button
                                 className="ml-2 px-4 py-2 bg-red-600 text-white rounded shadow hover:bg-red-700 transition"
-                                onClick={handleDeleteAll}
+                                onClick={() => setIsDeleteModalOpen(true)}
                                 type="button"
                             >
                                 Delete All
@@ -164,6 +166,17 @@ const EndSemCollegeStructurePage: React.FC = () => {
                     </div>
                 )}
             </div>
+
+            <ConfirmationModal
+                isOpen={isDeleteModalOpen}
+                onClose={() => setIsDeleteModalOpen(false)}
+                onConfirm={handleDeleteAll}
+                title="Delete All Structure Data"
+                message="Are you sure you want to delete ALL blocks, floors, rooms, and seating layouts? This operation is permanent and cannot be undone."
+                confirmText="Delete All"
+                cancelText="Cancel"
+                type="danger"
+            />
         </div>
     );
 };

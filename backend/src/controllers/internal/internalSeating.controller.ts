@@ -36,34 +36,41 @@ export const internalSeatingController = {
 
     getExamDates: async (req: Request, res: Response) => {
         try {
-            const { seriesId } = req.query;
+            const { seriesId, session } = req.query;
             if (!seriesId) return res.json([]);
 
-            // Get all distinct date/session combinations with exam count
+            const whereClause = session 
+                ? `WHERE ie.InternalExamSeriesID = :seriesId AND ie.Session = :session`
+                : `WHERE ie.InternalExamSeriesID = :seriesId`;
+
+            const replacements: any = { seriesId: Number(seriesId) };
+            if (session) replacements.session = session;
+
+            // Get all distinct dates (and session if session is not provided)
             const results = await sequelize.query(
                 `SELECT 
                     CONVERT(VARCHAR, ie.ExamDate, 23) as examDate,
-                    ie.Session as session,
+                    ${session ? '' : 'ie.Session as session,'}
                     COUNT(DISTINCT ie.InternalExamID) as examCount
                  FROM InternalExams ie
-                 WHERE ie.InternalExamSeriesID = :seriesId
-                 GROUP BY ie.ExamDate, ie.Session
-                 ORDER BY ie.ExamDate ASC, ie.Session ASC`,
+                 ${whereClause}
+                 GROUP BY ie.ExamDate ${session ? '' : ', ie.Session'}
+                 ORDER BY ie.ExamDate ASC ${session ? '' : ', ie.Session ASC'}`,
                 {
-                    replacements: { seriesId: Number(seriesId) },
+                    replacements,
                     type: QueryTypes.SELECT
                 }
             );
 
-            // Transform to include exam names
+            // Transform to include session if it was provided
             const slots = results.map((row: any) => ({
                 examDate: row.examDate,
-                session: row.session,
+                session: session || row.session,
                 examCount: parseInt(row.examCount) || 0,
                 examNames: []
             }));
 
-            console.log(`getExamDates: Series=${seriesId}, Found ${slots.length} dates`);
+            console.log(`getExamDates: Series=${seriesId}, Session=${session || 'ALL'}, Found ${slots.length} slots`);
             return res.json(slots);
         } catch (error: any) {
             console.error('getExamDates Error:', error);
@@ -128,7 +135,12 @@ export const internalSeatingController = {
     getHallLayout: async (req: Request, res: Response) => {
         try {
             const { hallId } = req.params;
-            const { examDate, session, seriesId } = req.query;
+            let { examDate, session, seriesId } = req.query as any;
+
+            // Clean date if it contains session suffix
+            if (typeof examDate === 'string' && examDate.includes('-') && examDate.split('-').length > 3) {
+                examDate = examDate.split('-').slice(0, 3).join('-');
+            }
 
             const room = await InternalRoom.findByPk(hallId as string, {
                 include: [
@@ -228,7 +240,12 @@ export const internalSeatingController = {
     /** Get global summary of allocations for a slot */
     getSummary: async (req: Request, res: Response) => {
         try {
-            const { examDate, session, seriesId } = req.query;
+            let { examDate, session, seriesId } = req.query as any;
+
+            // Clean date if it contains session suffix
+            if (typeof examDate === 'string' && examDate.includes('-') && examDate.split('-').length > 3) {
+                examDate = examDate.split('-').slice(0, 3).join('-');
+            }
 
             // 1. Load ALL active, exam-usable internal rooms with their seat counts
             const allRooms = await InternalRoom.findAll({
@@ -325,15 +342,23 @@ export const internalSeatingController = {
     generateAllocation: async (req: Request, res: Response) => {
         const transaction = await sequelize.transaction();
         try {
-            console.log(`[generateAllocation] Request:`, req.body);
-            const result = await InternalSeatAllocator.generate(req.body, transaction);
+            const payload = { ...req.body };
+            // Clean date if it contains session suffix
+            if (typeof payload.examDate === 'string' && payload.examDate.includes('-') && payload.examDate.split('-').length > 3) {
+                payload.examDate = payload.examDate.split('-').slice(0, 3).join('-');
+            }
+
+            console.log(`[generateAllocation] Request (Sanitized):`, payload);
+            const result = await InternalSeatAllocator.generate(payload, transaction);
             await transaction.commit();
             console.log(`[generateAllocation] Success:`, result);
             return res.json(result);
         } catch (error: any) {
             await transaction.rollback();
             console.error(`[generateAllocation] Error:`, error.message);
-            return res.status(500).json({ message: error.message });
+            // Use 400 for business logic/missing data errors
+            const status = error.message.includes('No student') ? 400 : 500;
+            return res.status(status).json({ message: error.message });
         }
     },
 
@@ -341,7 +366,12 @@ export const internalSeatingController = {
     saveAllocation: async (req: Request, res: Response) => {
         const transaction = await sequelize.transaction();
         try {
-            const { examDate, session, hallId, assignments, seriesId } = req.body;
+            let { examDate, session, hallId, seriesId, assignments } = req.body;
+
+            // Clean date if it contains session suffix
+            if (typeof examDate === 'string' && examDate.includes('-') && examDate.split('-').length > 3) {
+                examDate = examDate.split('-').slice(0, 3).join('-');
+            }
 
             const examIds = await InternalExam.findAll({
                 where: { ExamDate: examDate, Session: session, InternalExamSeriesID: seriesId },
@@ -382,8 +412,13 @@ export const internalSeatingController = {
     /** Clear allocations for a hall */
     clearAllocation: async (req: Request, res: Response) => {
         try {
-            const { examDate, session, hallId } = req.params;
+            let { examDate, session, hallId } = req.params;
             const { seriesId } = req.query;
+
+            // Clean date if it contains session suffix
+            if (typeof examDate === 'string' && examDate.includes('-') && examDate.split('-').length > 3) {
+                examDate = examDate.split('-').slice(0, 3).join('-');
+            }
 
             const examIds = await InternalExam.findAll({
                 where: { ExamDate: examDate, Session: session, InternalExamSeriesID: seriesId as any },
@@ -412,7 +447,12 @@ export const internalSeatingController = {
     /** Clear ALL allocations for a specific date and session */
     clearAllAllocations: async (req: Request, res: Response) => {
         try {
-            const { examDate, session } = req.query;
+            let { examDate, session } = req.query as any;
+
+            // Clean date if it contains session suffix
+            if (typeof examDate === 'string' && examDate.includes('-') && examDate.split('-').length > 3) {
+                examDate = examDate.split('-').slice(0, 3).join('-');
+            }
             if (!examDate || !session) return res.status(400).json({ message: "examDate and session required" });
 
             const exams = await InternalExam.findAll({
@@ -468,10 +508,16 @@ export const internalSeatingController = {
     autoRegisterStudents: async (req: Request, res: Response) => {
         const transaction = await sequelize.transaction();
         try {
-            const { examDate, session, seriesId } = req.body;
+            let { examDate, session, seriesId } = req.body;
             
             if (!examDate || !session || !seriesId) {
+                await transaction.rollback();
                 return res.status(400).json({ message: "examDate, session, and seriesId are required" });
+            }
+
+            // Clean date if it contains session suffix
+            if (typeof examDate === 'string' && examDate.includes('-') && examDate.split('-').length > 3) {
+                examDate = examDate.split('-').slice(0, 3).join('-');
             }
 
             // 1. Fetch all exams for this date/session/series
@@ -490,6 +536,7 @@ export const internalSeatingController = {
             });
 
             if (exams.length === 0) {
+                await transaction.rollback();
                 return res.status(404).json({ message: "No exams found for this date/session/series" });
             }
 

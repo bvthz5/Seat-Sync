@@ -88,7 +88,7 @@ export const initNotificationSocket = (userId: number, onNewNotification: (n: No
 
 // --- API Service ---
 
-const API_URL = 'http://localhost:5000/api/notifications';
+const API_URL = '/notifications';
 
 // Helper to get token (adjust based on your auth implementation)
 // Removed manual header generation. API interceptor handles tokens.

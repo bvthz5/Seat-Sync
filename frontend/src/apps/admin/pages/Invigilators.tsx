@@ -20,6 +20,7 @@ import {
     ChevronRight, Star, BookOpen, Award, RefreshCcw, FileText
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import ConfirmationModal from '../components/ConfirmationModal';
 import { invigilatorService, Invigilator, InvigilatorStats } from '../services/invigilatorService';
 import AddInvigilatorModal from '../components/invigilators/AddInvigilatorModal';
 import BulkImportModal from '../components/invigilators/BulkImportModal';
@@ -51,9 +52,9 @@ const resolveStatus = (inv: Invigilator): StatusKey => {
 };
 
 const STATUS_CFG = {
-    'active':   { label: 'Active',    dot: '#16a34a', bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0', glow: 'shadow-emerald-100' },
-    'on-leave': { label: 'On Leave',  dot: '#d97706', bg: '#fffbeb', text: '#b45309', border: '#fde68a', glow: 'shadow-amber-100'   },
-    'inactive': { label: 'Inactive',  dot: '#94a3b8', bg: '#f8fafc', text: '#475569', border: '#e2e8f0', glow: 'shadow-slate-100'   },
+    'active': { label: 'Active', dot: '#16a34a', bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0', glow: 'shadow-emerald-100' },
+    'on-leave': { label: 'On Leave', dot: '#d97706', bg: '#fffbeb', text: '#b45309', border: '#fde68a', glow: 'shadow-amber-100' },
+    'inactive': { label: 'Inactive', dot: '#94a3b8', bg: '#f8fafc', text: '#475569', border: '#e2e8f0', glow: 'shadow-slate-100' },
 } as const;
 
 const AVATAR_GRADIENTS = [
@@ -71,7 +72,7 @@ const CopyBtn: React.FC<{ text: string }> = ({ text }) => {
     const [copied, setCopied] = useState(false);
     const copy = (e: React.MouseEvent) => {
         e.stopPropagation();
-        navigator.clipboard.writeText(text).catch(() => {});
+        navigator.clipboard.writeText(text).catch(() => { });
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
     };
@@ -132,7 +133,7 @@ const ActionMenu: React.FC<{ menuId: string; items: ActionMenuItem[] }> = ({ men
         const menuW = 240;
         const menuH = items.length * 68 + 16;
         const left = rect.right - menuW < 8 ? rect.left : rect.right - menuW;
-        const top  = rect.bottom + menuH > window.innerHeight - 8 ? rect.top - menuH - 4 : rect.bottom + 6;
+        const top = rect.bottom + menuH > window.innerHeight - 8 ? rect.top - menuH - 4 : rect.bottom + 6;
         setPos({ top, left });
         setActiveMenuId(menuId); // close all others
         setOpen(true);
@@ -158,9 +159,8 @@ const ActionMenu: React.FC<{ menuId: string; items: ActionMenuItem[] }> = ({ men
     return (
         <>
             <button ref={btnRef} onClick={openMenu}
-                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
-                    open ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
-                }`}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${open ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
+                    }`}
                 title="Actions"
             >
                 <MoreVertical size={15} />
@@ -173,17 +173,15 @@ const ActionMenu: React.FC<{ menuId: string; items: ActionMenuItem[] }> = ({ men
                     <style>{`@keyframes amFadeScale{from{opacity:0;transform:scale(.94) translateY(-4px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
                     {items.map((item, i) => (
                         <button key={item.key} onClick={() => { item.onClick(); closeMenu(); }}
-                            className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-left transition-all group/item ${
-                                item.danger  ? 'hover:bg-rose-50 text-rose-600'
-                              : item.warning ? 'hover:bg-amber-50 text-amber-700'
-                              : 'hover:bg-slate-50 text-slate-700'
-                            } ${i < items.length - 1 ? 'border-b border-slate-50' : ''}`}
+                            className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-left transition-all group/item ${item.danger ? 'hover:bg-rose-50 text-rose-600'
+                                    : item.warning ? 'hover:bg-amber-50 text-amber-700'
+                                        : 'hover:bg-slate-50 text-slate-700'
+                                } ${i < items.length - 1 ? 'border-b border-slate-50' : ''}`}
                         >
-                            <span className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-                                item.danger  ? 'bg-rose-50 text-rose-400 group-hover/item:bg-rose-100'
-                              : item.warning ? 'bg-amber-50 text-amber-500 group-hover/item:bg-amber-100'
-                              : 'bg-slate-100 text-slate-400 group-hover/item:bg-slate-200'
-                            }`}>{item.icon}</span>
+                            <span className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${item.danger ? 'bg-rose-50 text-rose-400 group-hover/item:bg-rose-100'
+                                    : item.warning ? 'bg-amber-50 text-amber-500 group-hover/item:bg-amber-100'
+                                        : 'bg-slate-100 text-slate-400 group-hover/item:bg-slate-200'
+                                }`}>{item.icon}</span>
                             <div className="min-w-0 flex-1">
                                 <p className="text-[13px] font-semibold leading-tight">{item.label}</p>
                                 <p className={`text-[11px] mt-0.5 ${item.danger ? 'text-rose-400' : item.warning ? 'text-amber-500' : 'text-slate-400'}`}>{item.description}</p>
@@ -296,7 +294,7 @@ const ProfileDrawer: React.FC<{
                             <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Eligibility</p>
                                 <p className={`text-sm font-bold flex items-center gap-1 ${inv.isEligible ? 'text-emerald-600' : 'text-rose-500'}`}>
-                                    {inv.isEligible ? <><CheckCircle2 size={13}/> Eligible</> : <><AlertTriangle size={13}/> Ineligible</>}
+                                    {inv.isEligible ? <><CheckCircle2 size={13} /> Eligible</> : <><AlertTriangle size={13} /> Ineligible</>}
                                 </p>
                             </div>
                         </div>
@@ -337,16 +335,14 @@ const ProfileDrawer: React.FC<{
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2.5">Account Controls</p>
                         <div className="space-y-2">
                             <button onClick={() => { onToggleEligibility(inv.InvigilatorID); onClose(); }}
-                                className={`w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all hover:shadow-sm ${
-                                    inv.isEligible ? 'border-rose-100 bg-rose-50 hover:bg-rose-100 text-rose-700' : 'border-emerald-100 bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
-                                }`}>
+                                className={`w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all hover:shadow-sm ${inv.isEligible ? 'border-rose-100 bg-rose-50 hover:bg-rose-100 text-rose-700' : 'border-emerald-100 bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
+                                    }`}>
                                 {inv.isEligible ? <UserMinus size={15} /> : <CheckCircle2 size={15} />}
                                 <span className="text-sm font-semibold">{inv.isEligible ? 'Mark Ineligible' : 'Mark Eligible'}</span>
                             </button>
                             <button onClick={() => { onToggleFlag(inv.InvigilatorID); onClose(); }}
-                                className={`w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all hover:shadow-sm ${
-                                    inv.isFlagged ? 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700' : 'border-amber-100 bg-amber-50 hover:bg-amber-100 text-amber-700'
-                                }`}>
+                                className={`w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all hover:shadow-sm ${inv.isFlagged ? 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700' : 'border-amber-100 bg-amber-50 hover:bg-amber-100 text-amber-700'
+                                    }`}>
                                 <Flag size={15} />
                                 <span className="text-sm font-semibold">{inv.isFlagged ? 'Remove Leave Flag' : 'Flag for Leave'}</span>
                             </button>
@@ -367,25 +363,26 @@ const ProfileDrawer: React.FC<{
 /* ═══════════════════════════════════════════════════════════ */
 
 const Invigilators: React.FC = () => {
-    const [invigilators,        setInvigilators]        = useState<Invigilator[]>([]);
-    const [stats,               setStats]               = useState<InvigilatorStats>({ total: 0, active: 0, eligible: 0, onDuty: 0, flagged: 0 });
-    const [pendingRequestsCount,setPendingRequestsCount] = useState(0);
-    const [pendingSwapsCount,   setPendingSwapsCount]   = useState(0);
-    const [isLoading,           setIsLoading]           = useState(true);
-    const [searchQuery,         setSearchQuery]         = useState('');
-    const [selectedDept,        setSelectedDept]        = useState('');
-    const [selectedStatus,      setSelectedStatus]      = useState('');
-    const [page,                setPage]                = useState(1);
+    const [invigilators, setInvigilators] = useState<Invigilator[]>([]);
+    const [stats, setStats] = useState<InvigilatorStats>({ total: 0, active: 0, eligible: 0, onDuty: 0, flagged: 0 });
+    const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+    const [pendingSwapsCount, setPendingSwapsCount] = useState(0);
+    const [isLoading, setIsLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedDept, setSelectedDept] = useState('');
+    const [selectedStatus, setSelectedStatus] = useState('');
+    const [page, setPage] = useState(1);
     const rowsPerPage = 10;
 
-    const { isOpen: isAddOpen,    onOpen: onAddOpen,    onClose: onAddClose    } = useDisclosure();
+    const { isOpen: isAddOpen, onOpen: onAddOpen, onClose: onAddClose } = useDisclosure();
     const { isOpen: isDeleteOpen, onOpen: onOpenDelete, onClose: onCloseDelete } = useDisclosure();
-    const { isOpen: isBulkOpen,   onOpen: onBulkOpen,   onClose: onBulkClose  } = useDisclosure();
-    const { isOpen: isReqOpen,    onOpen: onReqOpen,    onClose: onReqClose   } = useDisclosure();
-    const { isOpen: isSwapOpen,   onOpen: onSwapOpen,   onClose: onSwapClose  } = useDisclosure();
+    const [isDeleteAllOpen, setIsDeleteAllOpen] = useState(false);
+    const { isOpen: isBulkOpen, onOpen: onBulkOpen, onClose: onBulkClose } = useDisclosure();
+    const { isOpen: isReqOpen, onOpen: onReqOpen, onClose: onReqClose } = useDisclosure();
+    const { isOpen: isSwapOpen, onOpen: onSwapOpen, onClose: onSwapClose } = useDisclosure();
 
-    const [selected,     setSelected]     = useState<Invigilator | null>(null);
-    const [drawerOpen,   setDrawerOpen]   = useState(false);
+    const [selected, setSelected] = useState<Invigilator | null>(null);
+    const [drawerOpen, setDrawerOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     /* ── data ─────────────────────────────────────────────── */
@@ -418,15 +415,26 @@ const Invigilators: React.FC = () => {
 
     const handleDelete = async () => {
         if (!selected) return;
-        setIsSubmitting(true);
         try {
             await invigilatorService.delete(selected.InvigilatorID);
             toast.success('Invigilator removed successfully');
-            onCloseDelete();
             fetchData();
         } catch (e: any) {
-            toast.error(e.response?.data?.message || 'Failed to remove invigilator');
-        } finally { setIsSubmitting(false); }
+            const msg = e.response?.data?.message || 'Failed to remove invigilator';
+            toast.error(msg);
+            throw e;
+        }
+    };
+
+    const handleDeleteAll = async () => {
+        try {
+            await invigilatorService.clearAll();
+            toast.success('All invigilators deleted');
+            fetchData();
+        } catch (e) {
+            toast.error('Failed to delete all invigilators');
+            throw e;
+        }
     };
 
     const handleToggleEligibility = async (id: number) => {
@@ -455,13 +463,13 @@ const Invigilators: React.FC = () => {
             || inv.Designation?.toLowerCase()?.includes(q)
             || inv.Department?.toLowerCase()?.includes(q)
             || staffId(inv.InvigilatorID).includes(q);
-        const matchDept   = !selectedDept   || inv.Department === selectedDept;
-        const st          = resolveStatus(inv);
+        const matchDept = !selectedDept || inv.Department === selectedDept;
+        const st = resolveStatus(inv);
         const matchStatus = !selectedStatus || st === selectedStatus;
         return matchSearch && matchDept && matchStatus;
     });
 
-    const pages     = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
+    const pages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
     const pageItems = filtered.slice((page - 1) * rowsPerPage, page * rowsPerPage);
     const hasFilters = searchQuery || selectedDept || selectedStatus;
 
@@ -529,17 +537,7 @@ const Invigilators: React.FC = () => {
                                 <Upload size={15} /> Import
                             </button>
                             <button
-                                onClick={async () => {
-                                    if (window.confirm('Are you sure you want to delete all invigilators? This cannot be undone.')) {
-                                        try {
-                                            await invigilatorService.clearAll();
-                                            toast.success('All invigilators deleted');
-                                            fetchData();
-                                        } catch (e) {
-                                            toast.error('Failed to delete all invigilators');
-                                        }
-                                    }
-                                }}
+                                onClick={() => setIsDeleteAllOpen(true)}
                                 className="h-10 px-4 rounded-[14px] border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 hover:border-rose-300 text-[13px] font-bold flex items-center gap-2 transition-all shadow-sm group">
                                 <Trash2 size={15} className="transition-transform group-hover:rotate-12" /> Delete All
                             </button>
@@ -560,10 +558,10 @@ const Invigilators: React.FC = () => {
 
                 {/* ── KPI Row ─────────────────────────────────── */}
                 <div className="grid grid-cols-4 gap-4">
-                    <KpiCard loading={isLoading} label="Total Registered" value={stats.total}   icon={<Briefcase size={19} className="text-slate-600" />}   accent="bg-slate-100" delta="All time" />
+                    <KpiCard loading={isLoading} label="Total Registered" value={stats.total} icon={<Briefcase size={19} className="text-slate-600" />} accent="bg-slate-100" delta="All time" />
                     <KpiCard loading={isLoading} label="Active & Eligible" value={stats.eligible} icon={<ShieldCheck size={19} className="text-emerald-600" />} accent="bg-emerald-50" />
-                    <KpiCard loading={isLoading} label="On Leave / Flagged" value={stats.flagged}  icon={<Clock size={19} className="text-amber-500" />}       accent="bg-amber-50" />
-                    <KpiCard loading={isLoading} label="Departments" value={uniqueDepts.length} icon={<Building2 size={19} className="text-blue-600" />}     accent="bg-blue-50" />
+                    <KpiCard loading={isLoading} label="On Leave / Flagged" value={stats.flagged} icon={<Clock size={19} className="text-amber-500" />} accent="bg-amber-50" />
+                    <KpiCard loading={isLoading} label="Departments" value={uniqueDepts.length} icon={<Building2 size={19} className="text-blue-600" />} accent="bg-blue-50" />
                 </div>
 
                 {/* ── Search + Filter ──────────────────────────── */}
@@ -738,20 +736,28 @@ const Invigilators: React.FC = () => {
                                     {/* Action menu */}
                                     <div className="flex justify-center" onClick={e => e.stopPropagation()}>
                                         <ActionMenu menuId={`inv-${inv.InvigilatorID}`} items={[
-                                            { key: 'view',   label: 'View Profile',   description: 'Full details & history',   icon: <Eye size={14} />,
-                                              onClick: () => openProfile(inv) },
-                                            { key: 'toggle', label: inv.isEligible ? 'Mark Ineligible' : 'Mark Eligible',
-                                              description: inv.isEligible ? 'Disable duty access' : 'Enable duty access',
-                                              icon: inv.isEligible ? <UserMinus size={14} /> : <CheckCircle2 size={14} />,
-                                              warning: inv.isEligible,
-                                              onClick: () => handleToggleEligibility(inv.InvigilatorID) },
-                                            { key: 'flag',   label: inv.isFlagged ? 'Remove Leave Flag' : 'Flag for Leave',
-                                              description: inv.isFlagged ? 'Remove leave status' : 'Put on leave',
-                                              icon: <Flag size={14} />, warning: !inv.isFlagged,
-                                              onClick: () => handleToggleFlag(inv.InvigilatorID) },
-                                            { key: 'delete', label: 'Remove Account', description: 'Permanently remove',
-                                              icon: <Trash2 size={14} />, danger: true,
-                                              onClick: () => { setSelected(inv); onOpenDelete(); } },
+                                            {
+                                                key: 'view', label: 'View Profile', description: 'Full details & history', icon: <Eye size={14} />,
+                                                onClick: () => openProfile(inv)
+                                            },
+                                            {
+                                                key: 'toggle', label: inv.isEligible ? 'Mark Ineligible' : 'Mark Eligible',
+                                                description: inv.isEligible ? 'Disable duty access' : 'Enable duty access',
+                                                icon: inv.isEligible ? <UserMinus size={14} /> : <CheckCircle2 size={14} />,
+                                                warning: inv.isEligible,
+                                                onClick: () => handleToggleEligibility(inv.InvigilatorID)
+                                            },
+                                            {
+                                                key: 'flag', label: inv.isFlagged ? 'Remove Leave Flag' : 'Flag for Leave',
+                                                description: inv.isFlagged ? 'Remove leave status' : 'Put on leave',
+                                                icon: <Flag size={14} />, warning: !inv.isFlagged,
+                                                onClick: () => handleToggleFlag(inv.InvigilatorID)
+                                            },
+                                            {
+                                                key: 'delete', label: 'Remove Account', description: 'Permanently remove',
+                                                icon: <Trash2 size={14} />, danger: true,
+                                                onClick: () => { setSelected(inv); onOpenDelete(); }
+                                            },
                                         ]} />
                                     </div>
                                 </div>
@@ -793,43 +799,26 @@ const Invigilators: React.FC = () => {
             <AddInvigilatorModal isOpen={isAddOpen} onClose={onAddClose} onSuccess={fetchData} existingInvigilators={invigilators} />
             <SwapRequestsModal isOpen={isSwapOpen} onClose={onSwapClose} onSuccess={fetchData} />
 
-            {/* Delete Confirm */}
-            {isDeleteOpen && createPortal(
-                <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 999998 }}>
-                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCloseDelete} />
-                    <div className="relative bg-white rounded-3xl shadow-2xl w-[420px] p-8 flex flex-col items-center text-center"
-                        style={{ animation: 'amFadeScale .2s cubic-bezier(.16,1,.3,1)' }}>
-                        <style>{`@keyframes amFadeScale{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}`}</style>
-                        <div className="w-16 h-16 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center mb-5 shadow-lg shadow-rose-50">
-                            <Trash2 size={24} className="text-rose-500" />
-                        </div>
-                        <h3 className="text-xl font-bold text-slate-900 mb-2">Remove Invigilator?</h3>
-                        <div className="mb-5">
-                            <p className="text-sm text-slate-500 leading-relaxed">
-                                This will permanently remove{' '}
-                                <span className="font-bold text-slate-900">{selected?.Name}</span>{' '}
-                                from the system.
-                            </p>
-                            <div className="mt-3 flex items-center justify-center gap-2 text-xs text-rose-500 font-semibold bg-rose-50 rounded-xl px-4 py-2.5">
-                                <AlertTriangle size={12} />
-                                This action cannot be undone
-                            </div>
-                        </div>
-                        <div className="flex gap-3 w-full">
-                            <button onClick={onCloseDelete}
-                                className="flex-1 h-11 rounded-xl border border-slate-200 bg-white text-slate-600 font-bold text-sm hover:bg-slate-50 transition-all">
-                                Cancel
-                            </button>
-                            <button onClick={handleDelete} disabled={isSubmitting}
-                                className="flex-1 h-11 rounded-xl bg-gradient-to-br from-rose-500 to-rose-600 text-white font-bold text-sm shadow-lg shadow-rose-500/30 hover:from-rose-600 hover:to-rose-700 transition-all disabled:opacity-60 flex items-center justify-center gap-2">
-                                {isSubmitting ? <><Spinner size="sm" color="white" /> Removing…</> : <><Trash2 size={14} /> Remove Account</>}
-                            </button>
-                        </div>
-                    </div>
-                </div>,
-                document.body
-            )}
+            {/* Confirmation Modals */}
+            <ConfirmationModal
+                isOpen={isDeleteOpen}
+                onClose={onCloseDelete}
+                onConfirm={handleDelete}
+                title="Remove Invigilator?"
+                message={`This will permanently remove ${selected?.Name} from the system. This action cannot be undone.`}
+                confirmText="Remove Account"
+                type="danger"
+            />
 
+            <ConfirmationModal
+                isOpen={isDeleteAllOpen}
+                onClose={() => setIsDeleteAllOpen(false)}
+                onConfirm={handleDeleteAll}
+                title="Delete All Invigilators?"
+                message="Are you sure you want to delete all invigilators? This action will permanently remove all staff records and cannot be undone."
+                confirmText="Delete All"
+                type="danger"
+            />
 
             {/* Bulk Import */}
             <BulkImportModal isOpen={isBulkOpen} onClose={onBulkClose} onSuccess={fetchData} />

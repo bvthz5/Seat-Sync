@@ -1,7 +1,11 @@
 import { Router } from 'express';
 import { internalSeatingController } from '../../controllers/internal/internalSeating.controller.js';
+import { AuthMiddleware } from '../../middlewares/auth.middleware.js';
 
 const router = Router();
+
+// Protect all internal seating routes
+router.use(AuthMiddleware.requireAuth);
 
 router.get('/halls', internalSeatingController.getHalls);
 router.get('/exam-dates', internalSeatingController.getExamDates);

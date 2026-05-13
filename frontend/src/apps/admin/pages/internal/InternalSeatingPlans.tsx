@@ -34,13 +34,92 @@ import {
     Monitor,
     Layers,
     Layout,
-    ArrowRightLeft
+    ArrowRightLeft,
+    Sparkles,
+    BarChart3
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { InternalSeatingService } from '../../services/internal/internalSeatingService';
 import { SeatingService } from '../../services/seatingService';
 import api from '../../../../services/api';
+
+/* ── Bench Card for Room View ── */
+const SUBJ_COLORS = ['#818cf8','#34d399','#f472b6','#fb923c','#67e8f9','#a3e635','#fbbf24','#e879f9'];
+const globalSubjectColorMap = new Map<string, string>();
+let globalColorIdx = 0;
+const getGlobalSubjectColor = (code: string) => {
+    if (!code) return '#475569';
+    if (!globalSubjectColorMap.has(code)) {
+        globalSubjectColorMap.set(code, SUBJ_COLORS[globalColorIdx++ % SUBJ_COLORS.length]!);
+    }
+    return globalSubjectColorMap.get(code)!;
+};
+
+const InternalBenchView: React.FC<{ bench: any; getSubjectColor: (c: string) => string }> = ({ bench, getSubjectColor }) => {
+    const renderSeat = (seat: any | null | undefined, side: 'L' | 'R') => {
+        const isEmpty = !seat || !seat.studentId;
+        const color = isEmpty ? null : getSubjectColor(seat.subjectCode || '');
+        return (
+            <Tooltip
+                isDisabled={isEmpty}
+                content={seat && seat.studentId ? (
+                    <div className="p-2 space-y-0.5 min-w-[140px]">
+                        <p className="font-black text-indigo-300 text-[11px]">{seat.name}</p>
+                        <p className="text-[10px] text-slate-300">Reg: <span className="font-bold text-white">{seat.registerNumber}</span></p>
+                        <p className="text-[10px] text-slate-300">Dept: <span className="font-bold text-white">{seat.deptCode}</span></p>
+                        <div className="flex items-center gap-1 mt-1">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color || '#475569' }} />
+                            <span className="text-[10px] text-slate-400">{seat.subjectCode}</span>
+                        </div>
+                    </div>
+                ) : null}
+                classNames={{ content: "bg-slate-900 border border-slate-700 p-0 rounded-xl" }}
+                placement="top"
+            >
+                <div
+                    className={`w-[54px] rounded-xl flex flex-col items-center justify-center text-center transition-all duration-300 cursor-pointer border-2 p-1.5 ${
+                        isEmpty
+                            ? 'bg-slate-800/40 border-slate-700 text-slate-600 hover:border-slate-600 min-h-[50px]'
+                            : 'border-transparent shadow-2xl hover:scale-110 min-h-[64px] hover:z-20'
+                    }`}
+                    style={isEmpty ? {} : { backgroundColor: `${color}20`, borderColor: color || '#475569', boxShadow: `0 8px 24px -8px ${color}44` }}
+                >
+                    {isEmpty ? (
+                        <span className="text-[9px] font-black opacity-30">{side}</span>
+                    ) : (
+                        <div className="flex flex-col items-center gap-0.5 w-full">
+                            <span className="text-[8px] font-black leading-none px-1 py-0.5 rounded bg-slate-900/50" style={{ color: color || '#fff' }}>
+                                {seat.subjectCode?.slice(0, 4)}
+                            </span>
+                            <span className="text-[9px] font-black text-white leading-none tracking-tighter">
+                                {seat.registerNumber?.slice(-3)}
+                            </span>
+                            <span className="text-[6.5px] font-bold text-slate-300 leading-[1.1] text-center max-w-full break-words line-clamp-2 whitespace-pre-line px-0.5 mt-0.5">
+                                {seat.name?.split(' ').slice(0, 1).join('\n')}
+                            </span>
+                        </div>
+                    )}
+                </div>
+            </Tooltip>
+        );
+    };
+
+    // If seatOnly is set, render just that single seat (for ABCDE layout)
+    if (bench.seatOnly) {
+        return renderSeat(bench.seatOnly, bench.seatOnly === bench.left ? 'L' : 'R');
+    }
+
+    // Otherwise render both seats with divider (legacy layout)
+    return (
+        <div className="flex items-center gap-1 group relative">
+            <span className="absolute -left-6 text-[8px] font-black text-slate-600 opacity-50">B{bench.benchNumber}</span>
+            {renderSeat(bench.left, 'L')}
+            <div className="w-0.5 h-12 bg-slate-700 rounded" />
+            {renderSeat(bench.right, 'R')}
+        </div>
+    );
+};
 
 const InternalSeatingPlans: React.FC = () => {
     // --- State (with localStorage persistence) ---
@@ -56,7 +135,9 @@ const InternalSeatingPlans: React.FC = () => {
     const [examDates, setExamDates] = useState<any[]>([]);
     const [selectedDate, setSelectedDate] = useState<string>(() => {
         try {
-            return localStorage.getItem('seating_selectedDate') || '';
+            const stored = localStorage.getItem('seating_selectedDate') || '';
+            // Sanitize: ensure only YYYY-MM-DD is stored in state
+            return stored.split('-').slice(0, 3).join('-');
         } catch {
             return '';
         }
@@ -144,11 +225,20 @@ const InternalSeatingPlans: React.FC = () => {
                 // Fetch Active Halls (halls list for sidebar checkbox)
                 const h = await InternalSeatingService.getHalls();
                 setHalls(h || []);
+
+                // Fetch Departments for Split Mode
+                const depts = await SeatingService.getDepartments();
+                setDepartments(depts || []);
                 
-                // Auto-select all halls if none are already selected
-                if (selectedHalls.length === 0 && h && h.length > 0) {
-                    const allHallIds = h.map((hall: any) => hall.RoomID);
-                    setSelectedHalls(allHallIds);
+                // Validate selectedHalls against fetched halls
+                if (h && h.length > 0) {
+                    const hallIdsInSystem = new Set(h.map((hall: any) => hall.RoomID));
+                    setSelectedHalls(prev => {
+                        const valid = prev.filter(id => hallIdsInSystem.has(id));
+                        // Auto-select all halls if none are already selected or all previously selected were invalid
+                        if (valid.length === 0) return h.map((hall: any) => hall.RoomID);
+                        return valid;
+                    });
                 }
             } catch (e) {
                 toast.error("Failed to initialize seating data");
@@ -347,35 +437,40 @@ const InternalSeatingPlans: React.FC = () => {
     return (
         <div className="flex h-[calc(100vh-8rem)] w-full gap-4 text-slate-900">
             {/* --- LEFT SIDEBAR (Wizard Control Panel) --- */}
-            <aside className="w-[340px] shrink-0 h-full flex flex-col gap-6">
-                <Card className="flex-1 p-8 glass-card border-slate-200/50 shadow-2xl overflow-y-auto custom-scrollbar bg-white/80 backdrop-blur-xl">
-                    <div className="flex items-center gap-4 mb-10 pb-6 border-b border-slate-100">
-                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 flex items-center justify-center text-white shadow-xl rotate-3">
-                            <Layout size={24} />
-                        </div>
-                        <div>
-                            <h2 className="font-black text-2xl tracking-tight text-slate-900 leading-none">Seating Wizard</h2>
-                            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-indigo-500 mt-2 italic">Internal Exam Engine</p>
+            <Card className="w-[380px] shrink-0 h-full overflow-hidden flex flex-col border-none shadow-2xl bg-white/80 backdrop-blur-md rounded-[2.5rem]">
+                    {/* Header */}
+                    <div className="p-8 bg-gradient-to-br from-slate-900 to-indigo-950 text-white relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-3xl" />
+                        <div className="flex items-center gap-4 mb-4 relative z-10">
+                            <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 backdrop-blur-xl flex items-center justify-center border border-white/10 shadow-inner">
+                                <Sparkles className="text-indigo-400" size={24} />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-black tracking-tight leading-none">Seating Wizard</h2>
+                                <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-[0.2em] mt-1.5 opacity-80">Internal Examinations</p>
+                            </div>
                         </div>
                     </div>
 
-                    <div className="flex flex-col gap-10">
-                        {/* Step 1: Exam Selection */}
+                    <div className="flex-1 overflow-y-auto p-8 space-y-12 scrollbar-hide">
+                        {/* Step 1: Selection Chain */}
                         <section className="animate-in fade-in slide-in-from-left duration-500">
                             <div className="flex items-center gap-3 mb-8">
                                 <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-xs font-black shadow-lg shadow-indigo-200">1</div>
-                                <h3 className="text-sm font-black uppercase tracking-widest text-slate-800">Exam Details</h3>
+                                <h3 className="text-xs font-black uppercase tracking-widest text-slate-800">Identity & Schedule</h3>
                             </div>
                             
-                                <div className="flex flex-col gap-8 pl-1">
+                            <div className="space-y-8 pl-1">
                                     {/* 1. Exam Series */}
                                     <div className="flex flex-col gap-2">
-                                        <label className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Select Exam Series</label>
+                                        <label htmlFor="examSeries" className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Select Exam Series</label>
                                         <Select 
+                                            id="examSeries"
+                                            name="examSeries"
                                             placeholder="Choose internal series..."
                                             variant="bordered" 
                                             className="max-w-full"
-                                            selectedKeys={selectedSeries ? [selectedSeries] : []}
+                                            selectedKeys={selectedSeries && seriesList.some(s => String(s.ExamSeriesID) === selectedSeries) ? [selectedSeries] : []}
                                             onSelectionChange={(keys) => setSelectedSeries(Array.from(keys)[0] as string)}
                                             classNames={{
                                                 trigger: "h-12 border-slate-200 hover:border-indigo-400 transition-colors bg-white shadow-sm",
@@ -389,19 +484,21 @@ const InternalSeatingPlans: React.FC = () => {
                                             }}
                                         >
                                             {seriesList.map(s => (
-                                                <SelectItem key={s.ExamSeriesID} textValue={s.SeriesName} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">{s.SeriesName}</SelectItem>
+                                                <SelectItem key={String(s.ExamSeriesID)} textValue={s.SeriesName} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">{s.SeriesName}</SelectItem>
                                             ))}
                                         </Select>
                                     </div>
 
                                     {/* 2. Session */}
                                     <div className="flex flex-col gap-2">
-                                        <label className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Select Session</label>
+                                        <label htmlFor="examSession" className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Select Session</label>
                                         <Select 
+                                            id="examSession"
+                                            name="examSession"
                                             placeholder={!selectedSeries ? "Select series first..." : "Select session"}
                                             variant="bordered"
                                             isDisabled={!selectedSeries || availableSessions.length === 0}
-                                            selectedKeys={selectedSession ? [selectedSession] : []}
+                                            selectedKeys={selectedSession && availableSessions.includes(selectedSession) ? [selectedSession] : []}
                                             onSelectionChange={(keys) => setSelectedSession(Array.from(keys)[0] as any)}
                                             classNames={{
                                                 trigger: "h-12 border-slate-200 hover:border-indigo-400 transition-colors bg-white shadow-sm",
@@ -424,13 +521,34 @@ const InternalSeatingPlans: React.FC = () => {
 
                                     {/* 3. Exam Date */}
                                     <div className="flex flex-col gap-2">
-                                        <label className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Exam Date</label>
+                                        <label htmlFor="examDate" className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Exam Date</label>
                                         <Select 
+                                            id="examDate"
+                                            name="examDate"
                                             placeholder={!selectedSession ? "Select session first..." : examDates.length === 0 ? "No dates found" : "Pick date"}
                                             variant="bordered"
                                             isDisabled={!selectedSession || examDates.length === 0}
-                                            selectedKeys={selectedDate ? [selectedDate] : []}
-                                            onSelectionChange={(keys) => setSelectedDate(Array.from(keys)[0] as string)}
+                                            selectedKeys={(() => {
+                                                if (!selectedDate || !selectedSession) return [];
+                                                const cleanDate = selectedDate.split('-').slice(0, 3).join('-');
+                                                const targetKey = `${cleanDate}-${selectedSession}`;
+                                                // Only return key if it's present in current examDates to avoid warnings
+                                                const exists = examDates.some(d => {
+                                                    const dStr = typeof d === 'string' ? d : d.examDate;
+                                                    const dKey = d.session ? `${dStr}-${d.session}` : dStr;
+                                                    return dKey === targetKey;
+                                                });
+                                                return exists ? [targetKey] : [];
+                                            })()}
+                                            onSelectionChange={(keys) => {
+                                                const key = Array.from(keys)[0] as string;
+                                                if (key && typeof key === 'string' && key.includes('-')) {
+                                                    const parts = key.split('-');
+                                                    if (parts.length >= 3) {
+                                                        setSelectedDate(`${parts[0]}-${parts[1]}-${parts[2]}`);
+                                                    }
+                                                }
+                                            }}
                                             classNames={{
                                                 trigger: "h-12 border-slate-200 hover:border-indigo-400 transition-colors bg-white shadow-sm",
                                                 value: "text-slate-700 font-medium",
@@ -442,12 +560,13 @@ const InternalSeatingPlans: React.FC = () => {
                                                 }
                                             }}
                                         >
-                                            {examDates.map((d: any) => {
+                                            {examDates.map((d: any, idx: number) => {
                                                 const dateStr = typeof d === 'string' ? d : d.examDate;
                                                 const label = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                                                const itemKey = d.session ? `${dateStr}-${d.session}` : `${dateStr}-${idx}`;
                                                 return (
-                                                    <SelectItem key={dateStr} textValue={label} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">
-                                                        {label}
+                                                    <SelectItem key={itemKey} textValue={label} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">
+                                                        {label} {d.session ? `(${d.session})` : ''}
                                                     </SelectItem>
                                                 );
                                             })}
@@ -459,13 +578,12 @@ const InternalSeatingPlans: React.FC = () => {
                         {/* Step 2: Room Settings */}
                         <section className="animate-in fade-in slide-in-from-left duration-500 delay-150">
                             <div className="flex items-center gap-3 mb-8">
-                                <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-xs font-black shadow-lg shadow-indigo-100">2</div>
-                                <h3 className="text-sm font-black uppercase tracking-widest text-slate-800">Hall Infrastructure</h3>
+                                <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-xs font-black shadow-lg shadow-indigo-200">2</div>
+                                <h3 className="text-xs font-black uppercase tracking-widest text-slate-800">Hall Infrastructure</h3>
                             </div>
                             
-                            <div className="flex flex-col gap-8 pl-1">
+                            <div className="space-y-8">
                                 <div 
-                                    onClick={() => setShuffleRooms(!shuffleRooms)}
                                     className={`
                                         flex items-center justify-between p-5 rounded-[2rem] border-2 cursor-pointer transition-all duration-500 group
                                         ${shuffleRooms 
@@ -478,19 +596,31 @@ const InternalSeatingPlans: React.FC = () => {
                                             <ArrowRightLeft size={18} className={shuffleRooms ? 'animate-pulse' : ''} />
                                         </div>
                                         <div className="flex flex-col">
-                                            <span className={`text-xs font-black transition-colors ${shuffleRooms ? 'text-indigo-900' : 'text-slate-800'}`}>Shuffle Rooms</span>
+                                            <label htmlFor="shuffleToggle" className={`text-xs font-black cursor-pointer transition-colors ${shuffleRooms ? 'text-indigo-900' : 'text-slate-800'}`}>Shuffle Rooms</label>
                                             <span className="text-[10px] text-slate-400 font-bold mt-0.5 italic">Randomize sequence</span>
                                         </div>
                                     </div>
-                                    <div className={`w-11 h-6 rounded-full p-1 transition-all duration-500 relative ${shuffleRooms ? 'bg-indigo-600' : 'bg-slate-200'}`}>
-                                        <div className={`w-4 h-4 rounded-full bg-white shadow-md transition-all duration-500 transform ${shuffleRooms ? 'translate-x-5' : 'translate-x-0'}`} />
+                                    <div className="flex items-center">
+                                        <input 
+                                            id="shuffleToggle"
+                                            type="checkbox" 
+                                            className="hidden" 
+                                            checked={shuffleRooms}
+                                            onChange={() => setShuffleRooms(!shuffleRooms)}
+                                        />
+                                        <div 
+                                            onClick={() => setShuffleRooms(!shuffleRooms)}
+                                            className={`w-11 h-6 rounded-full p-1 transition-all duration-500 relative ${shuffleRooms ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                                        >
+                                            <div className={`w-4 h-4 rounded-full bg-white shadow-md transition-all duration-500 transform ${shuffleRooms ? 'translate-x-5' : 'translate-x-0'}`} />
+                                        </div>
                                     </div>
                                 </div>
 
                                 <div className="flex flex-col gap-4">
                                     <div className="flex flex-col gap-2">
                                         <div className="flex items-center justify-between px-1 mb-1">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Hall Search & Bulk Actions</label>
+                                            <label htmlFor="hallSearch" className="text-[10px] font-black text-slate-400 uppercase tracking-wider cursor-pointer">Hall Search & Bulk Actions</label>
                                             <div className="flex gap-2">
                                                 <button 
                                                     onClick={() => setSelectedHalls(halls.filter(h => h.RoomCode.toLowerCase().includes(hallSearch.toLowerCase())).map(h => h.RoomID))}
@@ -510,6 +640,8 @@ const InternalSeatingPlans: React.FC = () => {
                                         <div className="relative group">
                                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 group-hover:text-indigo-400 transition-colors" size={14} />
                                             <input 
+                                                id="hallSearch"
+                                                name="hallSearch"
                                                 type="text"
                                                 placeholder="Search by hall name or code..."
                                                 value={hallSearch}
@@ -521,7 +653,7 @@ const InternalSeatingPlans: React.FC = () => {
 
                                     <div className="flex flex-col gap-3">
                                         <div className="flex items-center justify-between px-1">
-                                            <label className="text-xs font-black text-slate-500 uppercase tracking-wider">Available Halls</label>
+                                            <span className="text-xs font-black text-slate-500 uppercase tracking-wider">Available Halls</span>
                                             <span className="text-[10px] font-black bg-slate-100 px-2 py-0.5 rounded-full text-slate-500">
                                                 {loadingSummary ? 'Loading...' : `${hallSummary.filter(h => h.hallCode.toLowerCase().includes(hallSearch.toLowerCase())).length} Found`}
                                             </span>
@@ -573,14 +705,16 @@ const InternalSeatingPlans: React.FC = () => {
                         {/* Step 3: Distribution Logic */}
                         <section className="animate-in fade-in slide-in-from-left duration-500 delay-300">
                             <div className="flex items-center gap-3 mb-8">
-                                <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-xs font-black shadow-lg shadow-indigo-100">3</div>
-                                <h3 className="text-sm font-black uppercase tracking-widest text-slate-800">Allocation Engine</h3>
+                                <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-xs font-black shadow-lg shadow-indigo-200">3</div>
+                                <h3 className="text-xs font-black uppercase tracking-widest text-slate-800">Allocation Engine</h3>
                             </div>
 
-                            <div className="flex flex-col gap-8 pl-1">
+                            <div className="space-y-8">
                                 <div className="flex flex-col gap-2">
-                                    <label className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Distribution Mode</label>
+                                    <label htmlFor="allocationMode" className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Distribution Mode</label>
                                     <Select 
+                                        id="allocationMode"
+                                        name="allocationMode"
                                         placeholder="Choose logic..."
                                         variant="bordered"
                                         selectedKeys={[allocationMode]}
@@ -607,11 +741,14 @@ const InternalSeatingPlans: React.FC = () => {
                                 {allocationMode === 'split-dept' && (
                                     <div className="grid grid-cols-1 gap-4 animate-in zoom-in-95 duration-300">
                                         <div className="flex flex-col gap-2">
-                                            <label className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Primary Department</label>
+                                            <label htmlFor="primaryDept" className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Primary Department</label>
                                             <Select 
+                                                id="primaryDept"
+                                                name="primaryDept"
                                                 variant="bordered"
                                                 size="sm"
                                                 placeholder="Choose department..."
+                                                selectedKeys={primaryDept ? [primaryDept] : []}
                                                 onSelectionChange={(keys) => setPrimaryDept(Array.from(keys)[0] as string)}
                                                 classNames={{
                                                     trigger: "h-10 border-slate-200 bg-white",
@@ -624,15 +761,18 @@ const InternalSeatingPlans: React.FC = () => {
                                                     }
                                                 }}
                                             >
-                                                {departments.map(d => <SelectItem key={d.DepartmentID} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-lg transition-colors">{d.DepartmentCode}</SelectItem>)}
+                                                {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={d.DepartmentCode} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-lg transition-colors">{d.DepartmentCode}</SelectItem>)}
                                             </Select>
                                         </div>
                                         <div className="flex flex-col gap-2">
-                                            <label className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Secondary Department</label>
+                                            <label htmlFor="secondaryDept" className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Secondary Department</label>
                                             <Select 
+                                                id="secondaryDept"
+                                                name="secondaryDept"
                                                 variant="bordered"
                                                 size="sm"
                                                 placeholder="Choose department..."
+                                                selectedKeys={secondaryDept ? [secondaryDept] : []}
                                                 onSelectionChange={(keys) => setSecondaryDept(Array.from(keys)[0] as string)}
                                                 classNames={{
                                                     trigger: "h-10 border-slate-200 bg-white",
@@ -645,7 +785,7 @@ const InternalSeatingPlans: React.FC = () => {
                                                     }
                                                 }}
                                             >
-                                                {departments.map(d => <SelectItem key={d.DepartmentID} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-lg transition-colors">{d.DepartmentCode}</SelectItem>)}
+                                                {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={d.DepartmentCode} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-lg transition-colors">{d.DepartmentCode}</SelectItem>)}
                                             </Select>
                                         </div>
                                     </div>
@@ -654,16 +794,16 @@ const InternalSeatingPlans: React.FC = () => {
                         </section>
                     </div>
 
-                    <div className="mt-12 pt-8 border-t border-slate-100 space-y-3">
+                    <div className="p-8 border-t border-slate-100 space-y-4">
                         <Button 
                             color="warning" 
                             fullWidth 
                             size="lg" 
                             variant="flat"
-                            className="font-black h-12 rounded-[2rem] text-sm tracking-wider uppercase"
+                            className="font-black h-12 rounded-2xl text-[11px] tracking-widest uppercase transition-all hover:bg-warning/20"
                             isLoading={isAutoRegistering}
                             onPress={handleAutoRegister}
-                            startContent={!isAutoRegistering && <Users size={18} />}
+                            startContent={!isAutoRegistering && <Users size={16} />}
                         >
                             Auto-Register Students
                         </Button>
@@ -671,53 +811,86 @@ const InternalSeatingPlans: React.FC = () => {
                             color="primary" 
                             fullWidth 
                             size="lg" 
-                            className="font-black h-16 rounded-[2rem] shadow-2xl shadow-indigo-200 text-base tracking-wider uppercase group"
+                            className={`font-black h-16 rounded-2xl shadow-xl transition-all duration-500 text-sm tracking-widest uppercase group ${
+                                selectedSeries && selectedDate && selectedSession && selectedHalls.length > 0
+                                    ? 'bg-indigo-600 shadow-indigo-200 hover:scale-[1.02] hover:shadow-2xl'
+                                    : 'bg-slate-300'
+                            }`}
                             isLoading={isGenerating}
                             onPress={handleGenerate}
-                            startContent={!isGenerating && <RefreshCcw size={22} className="group-hover:rotate-180 transition-transform duration-700" />}
+                            startContent={!isGenerating && <RefreshCcw size={20} className="group-hover:rotate-180 transition-transform duration-700" />}
                         >
                             Generate Arrangement
                         </Button>
                     </div>
                 </Card>
-            </aside>
 
             {/* --- CENTER: Hall Grid + Stats --- */}
             <main className="flex-1 min-w-0 flex flex-col gap-4 overflow-hidden">
-                {/* Statistics Banner */}
-                {stats && (
-                    <div className="grid grid-cols-3 gap-3 shrink-0">
-                        <Card className="p-4 border-emerald-100 bg-emerald-50/50 flex flex-row items-center gap-3 shadow-sm">
-                            <div className="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center text-white shadow">
-                                <CheckCircle2 size={20} />
+            {/* --- TOP STATS BAR --- */}
+            <header className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 shrink-0">
+                {/* Seated Stats */}
+                <Card className="p-6 border-none shadow-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white relative overflow-hidden group">
+                    <div className="absolute -right-4 -top-4 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700" />
+                    <div className="flex items-center justify-between relative z-10">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-inner">
+                                <Users size={22} className="text-white" />
                             </div>
                             <div>
-                                <h4 className="text-xl font-black text-emerald-600 leading-none">{stats.assignedCount}</h4>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500 mt-0.5">Seated</p>
-                            </div>
-                        </Card>
-                        <Card className="p-4 border-blue-100 bg-blue-50/50 flex flex-row items-center gap-3 shadow-sm">
-                            <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white shadow">
-                                <Layers size={20} />
-                            </div>
-                            <div>
-                                <h4 className="text-xl font-black text-blue-600 leading-none">{stats.totalSeats}</h4>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-blue-500 mt-0.5">Total Seats</p>
-                            </div>
-                        </Card>
-                        <Card className="p-4 border-indigo-100 bg-indigo-50/50 flex flex-row items-center gap-3 shadow-sm col-span-1">
-                            <div className="flex-1 space-y-1.5">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-indigo-500">Utilization</span>
-                                    <span className="text-xs font-bold text-indigo-700">
-                                        {stats.totalSeats > 0 ? Math.round((stats.assignedCount / stats.totalSeats) * 100) : 0}%
-                                    </span>
+                                <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Students Seated</p>
+                                <div className="flex items-baseline gap-2 mt-1">
+                                    <h4 className="text-3xl font-black">{stats?.assignedCount || 0}</h4>
                                 </div>
-                                <Progress value={stats.totalSeats > 0 ? (stats.assignedCount / stats.totalSeats) * 100 : 0} color="secondary" className="h-1.5" />
                             </div>
-                        </Card>
+                        </div>
+                        <CheckCircle2 size={32} className="opacity-20 rotate-12" />
                     </div>
-                )}
+                </Card>
+
+                {/* Total Capacity */}
+                <Card className="p-6 border-none shadow-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white relative overflow-hidden group">
+                    <div className="absolute -right-4 -top-4 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700" />
+                    <div className="flex items-center justify-between relative z-10">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-inner">
+                                <Layout size={22} className="text-white" />
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Total Capacity</p>
+                                <h4 className="text-3xl font-black mt-1">{stats?.totalSeats || 0}</h4>
+                            </div>
+                        </div>
+                        <Layers size={32} className="opacity-20 rotate-12" />
+                    </div>
+                </Card>
+
+                {/* Utilization */}
+                <Card className="p-6 border-none shadow-xl bg-white relative overflow-hidden group border border-slate-100">
+                    <div className="flex items-center justify-between relative z-10">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center border border-slate-100 shadow-sm">
+                                <BarChart3 size={22} className="text-slate-600" />
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Hall Utilization</p>
+                                <h4 className="text-3xl font-black mt-1 text-slate-800">
+                                    {stats && stats.totalSeats > 0 ? Math.round((stats.assignedCount / stats.totalSeats) * 100) : 0}%
+                                </h4>
+                            </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                            <span className="text-[10px] font-black text-indigo-500 uppercase tracking-wider">Target: 100%</span>
+                            <Progress 
+                                value={stats && stats.totalSeats > 0 ? (stats.assignedCount / stats.totalSeats) * 100 : 0} 
+                                size="sm" 
+                                color="secondary" 
+                                className="w-24 h-2"
+                            />
+                        </div>
+                    </div>
+                </Card>
+            </header>
 
                 {/* Hall Cards Grid */}
                 <div className="flex-1 overflow-y-auto scrollbar-hide">
@@ -730,7 +903,7 @@ const InternalSeatingPlans: React.FC = () => {
                             <p className="text-sm text-slate-400 max-w-xs mt-2">Select halls from the sidebar to begin.</p>
                         </Card>
                     ) : (
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
                             {selectedHalls
                                 .map((hallId: number) => {
                                     const summary = hallSummary.find((h: any) => h.hallId === hallId);
@@ -759,11 +932,12 @@ const InternalSeatingPlans: React.FC = () => {
                                     
                                     return (
                                         <Tooltip
+                                            key={hallId}
                                             isDisabled={canViewLayout}
                                             content={!canViewLayout ? "Select exam details first" : "Click to view room layout"}
-                                            color={!canViewLayout ? "danger" : "default"}
+                                            color={!canViewLayout ? "primary" : "default"}
                                         >
-                                            <motion.div key={hallId} whileHover={{ y: -3 }} transition={{ duration: 0.2 }}>
+                                            <motion.div whileHover={{ y: -3 }} transition={{ duration: 0.2 }}>
                                                 <Card
                                                     className={`overflow-hidden ${canViewLayout ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'} transition-all duration-300 shadow-md hover:shadow-xl border-2 ${
                                                         isViewing
@@ -817,23 +991,36 @@ const InternalSeatingPlans: React.FC = () => {
                                                         color={pct >= 100 ? 'success' : isAllocated ? 'success' : 'default'} 
                                                         className="h-1.5" 
                                                     />
-                                                    <div className="flex gap-1.5">
-                                                        <Chip 
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex gap-1.5">
+                                                            <Chip 
+                                                                size="sm" 
+                                                                variant="flat" 
+                                                                color={isAllocated ? 'success' : 'default'} 
+                                                                className="text-[9px] font-black px-1"
+                                                            >
+                                                                {filled} Seated
+                                                            </Chip>
+                                                            <Chip 
+                                                                size="sm" 
+                                                                variant="flat" 
+                                                                color="default" 
+                                                                className="text-[9px] font-black px-1"
+                                                            >
+                                                                {total - filled} Free
+                                                            </Chip>
+                                                        </div>
+                                                        <Button 
                                                             size="sm" 
-                                                            variant="flat" 
-                                                            color={isAllocated ? 'success' : 'default'} 
-                                                            className="text-[9px] font-black px-1"
+                                                            variant="light" 
+                                                            color="primary"
+                                                            isIconOnly
+                                                            className="rounded-full hover:bg-indigo-50"
+                                                            onPress={() => openHallDetail(hallId)}
+                                                            isDisabled={!canViewLayout}
                                                         >
-                                                            {filled} Seated
-                                                        </Chip>
-                                                        <Chip 
-                                                            size="sm" 
-                                                            variant="flat" 
-                                                            color="default" 
-                                                            className="text-[9px] font-black px-1"
-                                                        >
-                                                            {total - filled} Free
-                                                        </Chip>
+                                                            <Monitor size={14} />
+                                                        </Button>
                                                     </div>
                                                 </div>
                                             </Card>
@@ -853,17 +1040,18 @@ const InternalSeatingPlans: React.FC = () => {
                     setIsDetailOpen(open);
                     if (!open) setHallDetail(null);
                 }}
-                size="4xl"
+                size="full"
                 backdrop="blur"
                 scrollBehavior="inside"
                 classNames={{
-                    backdrop: "bg-black/50",
-                    base: "bg-white border-slate-200",
+                    backdrop: "bg-black/60",
+                    base: "bg-white border-slate-200 h-[95vh]",
+                    closeButton: "hover:bg-white/10 active:bg-white/20 text-white p-2 text-lg transition-colors z-50",
                 }}
             >
                 <ModalContent>
                     {(onClose) => (
-                        <>
+                        <div className="flex flex-col h-full">
                             {/* Modal Header */}
                             <ModalHeader className="flex items-center justify-between bg-gradient-to-r from-indigo-600 to-violet-700 text-white rounded-t-lg">
                                 <div className="flex items-center gap-3">
@@ -913,11 +1101,14 @@ const InternalSeatingPlans: React.FC = () => {
                                             const COLORS = ['#818cf8','#34d399','#f472b6','#fb923c','#67e8f9','#a3e635','#fbbf24','#e879f9'];
                                             const colorMap = new Map([...subjects.keys()].map((k, i) => [k, COLORS[i % COLORS.length]!]));
                                             return (
-                                                <div className="mb-6 flex flex-wrap gap-2">
+                                                <div className="mb-10 flex flex-wrap gap-3 justify-center">
                                                     {[...subjects.entries()].map(([code, name]) => (
-                                                        <div key={code} className="flex items-center gap-1.5 bg-slate-800 rounded-lg px-2 py-1">
-                                                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: colorMap.get(code) }} />
-                                                            <span className="text-[10px] font-bold text-slate-300">{code}</span>
+                                                        <div key={code} className="flex items-center gap-2 bg-slate-800/50 backdrop-blur-md border border-white/5 rounded-[1.2rem] px-3.5 py-2 group hover:bg-slate-700/60 transition-all duration-300">
+                                                            <div className="w-3.5 h-3.5 rounded-full shadow-lg group-hover:scale-125 transition-transform" style={{ backgroundColor: colorMap.get(code) }} />
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[11px] font-black text-white leading-tight">{code}</span>
+                                                                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter truncate max-w-[100px] leading-tight mt-0.5">{name}</span>
+                                                            </div>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -925,7 +1116,7 @@ const InternalSeatingPlans: React.FC = () => {
                                         })()}
 
                                         {/* Column layout - ABCDE format like college structure */}
-                                        <div className="flex gap-8 justify-center items-start overflow-x-auto pb-4">
+                                        <div className="flex gap-10 justify-center items-start overflow-x-auto pb-10 scrollbar-hide px-4">
                                             {hallDetail.rows?.map((row: any) => {
                                                 const COLORS = ['#818cf8','#34d399','#f472b6','#fb923c','#67e8f9','#a3e635','#fbbf24','#e879f9'];
                                                 const subjectColorMap = new Map<string, string>();
@@ -943,13 +1134,16 @@ const InternalSeatingPlans: React.FC = () => {
                                                     }
                                                 }
                                                 return (
-                                                    <div key={row.rowLabel} className="flex flex-col items-center gap-3 shrink-0">
-                                                        <span className="text-base font-black text-white bg-gradient-to-br from-violet-600 to-indigo-700 px-3.5 py-2 rounded-lg shadow-lg min-w-[60px] text-center">
-                                                            {row.rowLabel}
-                                                        </span>
-                                                        <div className="flex flex-col gap-2">
+                                                    <div key={row.rowLabel} className="flex flex-col items-center gap-6 shrink-0">
+                                                        <div className="relative group">
+                                                            <div className="absolute inset-0 bg-white/20 blur-xl group-hover:bg-indigo-500/30 transition-all rounded-full" />
+                                                            <span className="relative text-xl font-black text-white px-5 py-2.5 rounded-2xl bg-slate-800/80 border border-white/10 shadow-2xl min-w-[70px] text-center block">
+                                                                {row.rowLabel}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex flex-col gap-3">
                                                             {row.benches.map((bench: any) => (
-                                                                <div key={bench.benchNumber} className="flex gap-1">
+                                                                <div key={bench.benchNumber} className="flex gap-2">
                                                                     {/* Left Seat */}
                                                                     <InternalBenchView
                                                                         key={`${row.rowLabel}-${bench.benchNumber}-left`}
@@ -974,90 +1168,30 @@ const InternalSeatingPlans: React.FC = () => {
                                     </div>
                                 ) : null}
                             </ModalBody>
-                        </>
+                            <ModalFooter className="bg-slate-50 border-t border-slate-100 flex justify-between items-center p-4">
+                                <div className="flex items-center gap-6">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-3 h-3 rounded-full bg-slate-700" />
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Empty Seat</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-3 h-3 rounded-full bg-indigo-500" />
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Occupied</span>
+                                    </div>
+                                </div>
+                                <Button 
+                                    color="danger" 
+                                    variant="flat" 
+                                    onPress={onClose}
+                                    className="font-black text-xs uppercase tracking-widest px-8 h-12 rounded-2xl"
+                                >
+                                    Close Layout
+                                </Button>
+                            </ModalFooter>
+                        </div>
                     )}
                 </ModalContent>
             </Modal>
-        </div>
-    );
-};
-
-/* ── Bench Card for Room View ── */
-const SUBJ_COLORS = ['#818cf8','#34d399','#f472b6','#fb923c','#67e8f9','#a3e635','#fbbf24','#e879f9'];
-const globalSubjectColorMap = new Map<string, string>();
-let globalColorIdx = 0;
-const getGlobalSubjectColor = (code: string) => {
-    if (!code) return '#475569';
-    if (!globalSubjectColorMap.has(code)) {
-        globalSubjectColorMap.set(code, SUBJ_COLORS[globalColorIdx++ % SUBJ_COLORS.length]!);
-    }
-    return globalSubjectColorMap.get(code)!;
-};
-
-const InternalBenchView: React.FC<{ bench: any; getSubjectColor: (c: string) => string }> = ({ bench, getSubjectColor }) => {
-    const renderSeat = (seat: any | null | undefined, side: 'L' | 'R') => {
-        const isEmpty = !seat || !seat.studentId;
-        const color = isEmpty ? null : getSubjectColor(seat.subjectCode || '');
-        return (
-            <Tooltip
-                isDisabled={isEmpty}
-                content={seat && seat.studentId ? (
-                    <div className="p-2 space-y-0.5 min-w-[140px]">
-                        <p className="font-black text-indigo-300 text-[11px]">{seat.name}</p>
-                        <p className="text-[10px] text-slate-300">Reg: <span className="font-bold text-white">{seat.registerNumber}</span></p>
-                        <p className="text-[10px] text-slate-300">Dept: <span className="font-bold text-white">{seat.deptCode}</span></p>
-                        <div className="flex items-center gap-1 mt-1">
-                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color || '#475569' }} />
-                            <span className="text-[10px] text-slate-400">{seat.subjectCode}</span>
-                        </div>
-                    </div>
-                ) : null}
-                classNames={{ content: "bg-slate-900 border border-slate-700 p-0 rounded-xl" }}
-                placement="top"
-            >
-                <div
-                    className={`w-[60px] rounded-xl flex flex-col items-center justify-center text-center transition-all duration-200 cursor-pointer border-2 p-1.5 ${
-                        isEmpty
-                            ? 'bg-slate-800/40 border-slate-700 text-slate-600 hover:border-slate-600 min-h-[60px]'
-                            : 'border-transparent shadow-lg hover:scale-105 min-h-[72px]'
-                    }`}
-                    style={isEmpty ? {} : { backgroundColor: `${color}22`, borderColor: color || '#475569' }}
-                >
-                    {isEmpty ? (
-                        <span className="text-[10px] font-black opacity-40">{side}</span>
-                    ) : (
-                        <div className="flex flex-col items-center gap-0.5 w-full">
-                            <span className="text-[8px] font-black leading-none" style={{ color: color || '#fff' }}>
-                                {seat.subjectCode?.slice(0, 4)}
-                            </span>
-                            <span className="text-[9px] font-black text-white leading-none">
-                                {seat.registerNumber?.slice(-4)}
-                            </span>
-                            <span className="text-[7px] font-bold text-slate-300 leading-tight text-center max-w-full truncate px-0.5">
-                                {seat.name?.split(' ').slice(0, 2).join('\n')}
-                            </span>
-                            <span className="text-[7px] font-bold text-slate-400 leading-none">
-                                {seat.deptCode}
-                            </span>
-                        </div>
-                    )}
-                </div>
-            </Tooltip>
-        );
-    };
-
-    // If seatOnly is set, render just that single seat (for ABCDE layout)
-    if (bench.seatOnly) {
-        return renderSeat(bench.seatOnly, bench.seatOnly === bench.left ? 'L' : 'R');
-    }
-
-    // Otherwise render both seats with divider (legacy layout)
-    return (
-        <div className="flex items-center gap-1 group relative">
-            <span className="absolute -left-6 text-[8px] font-black text-slate-600 opacity-50">B{bench.benchNumber}</span>
-            {renderSeat(bench.left, 'L')}
-            <div className="w-0.5 h-12 bg-slate-700 rounded" />
-            {renderSeat(bench.right, 'R')}
         </div>
     );
 };
