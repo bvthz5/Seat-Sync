@@ -612,22 +612,26 @@ const InternalSeatingPlans: React.FC = () => {
                                                                         <p className="text-[10px] text-white opacity-80">Dept: {seat?.deptCode}</p>
                                                                     </div>
                                                                 } classNames={{ content: "bg-slate-900 border border-slate-800 p-0 rounded-xl shadow-2xl" }}>
-                                                                    <div className={`w-16 h-20 rounded-xl border-2 flex flex-col items-center justify-center transition-all cursor-pointer ${isEmpty 
+                                                                    <div className={`w-20 h-24 rounded-xl border-2 flex flex-col items-center justify-center transition-all cursor-pointer ${isEmpty 
                                                                         ? 'bg-slate-900/50 border-slate-800 text-slate-700' 
                                                                         : 'shadow-lg hover:scale-110 active:scale-95'}`}
                                                                         style={isEmpty ? {} : { 
                                                                             backgroundColor: `${sStyle.fill}40`, 
                                                                             borderColor: sStyle.border,
-                                                                            boxShadow: `0 0 15px ${sStyle.fill}20`
+                                                                            boxShadow: `0 0 20px ${sStyle.fill}20`
                                                                         }}>
                                                                         {isEmpty ? (
                                                                             <span className="text-[10px] font-black opacity-20">{idx === 0 ? 'L' : 'R'}</span>
                                                                         ) : (
-                                                                            <>
-                                                                                <span className="text-[8px] font-black mb-1 px-1.5 py-0.5 rounded bg-black/40" style={{ color: sStyle.text }}>{seat.subjectCode?.slice(0, 4)}</span>
-                                                                                <span className="text-[10px] font-black text-white px-1 leading-tight text-center">{seat.registerNumber}</span>
-                                                                                <span className="text-[7px] font-bold text-slate-400 mt-1 uppercase tracking-tighter truncate w-12 text-center">{seat.name?.split(' ')[0]}</span>
-                                                                            </>
+                                                                                <>
+                                                                                    <span className="text-[8px] font-black mb-1 px-1.5 py-0.5 rounded bg-black/40" style={{ color: sStyle.text }}>{seat.subjectCode?.slice(0, 4)}</span>
+                                                                                    <span className="text-[10px] font-black text-white px-1 leading-tight text-center">{seat.registerNumber}</span>
+                                                                                    <div className="mt-1 w-full px-1 flex flex-col items-center">
+                                                                                        <span className="text-[7px] font-bold text-slate-400 uppercase tracking-tighter text-center leading-[1.1] line-clamp-2">
+                                                                                            {seat.name}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                </>
                                                                         )}
                                                                     </div>
                                                                 </Tooltip>
