@@ -486,9 +486,9 @@ const sanitizeEmailToken = (value: string) =>
         .trim();
 
 const buildEligibleStudentEmail = (fullName: string, registerNumber: string) => {
-    const nameToken = sanitizeEmailToken(fullName) || 'student';
-    const regToken = sanitizeEmailToken(registerNumber) || 'reg';
-    return `${nameToken}.${regToken}@students.local`;
+    const joiningYear = extractBatchYearFromRegisterNumber(registerNumber) || new Date().getFullYear();
+    const programCode = extractProgramCodeFromRegisterNumber(registerNumber) || 'student';
+    return generateStudentEmail(fullName, joiningYear, programCode);
 };
 
 const resolveProgramForEligibleImport = async (
@@ -1795,9 +1795,15 @@ export class ExamController {
 
                 // Extract email or generate a fallback
                 const emailRaw = String(getEligibleCellValue(row, ['Email', 'Email Address', 'EmailAddress']) ?? '').trim();
-                const studentEmail = (emailRaw && emailRaw.includes('@'))
+                let studentEmail = (emailRaw && emailRaw.includes('@'))
                     ? emailRaw.toLowerCase()
-                    : `${normalizedRegNo.toLowerCase()}@student.local`; // Temporary fallback
+                    : null;
+
+                if (!studentEmail) {
+                    const joiningYear = extractBatchYearFromRegisterNumber(normalizedRegNo) || new Date().getFullYear();
+                    const programCode = extractProgramCodeFromRegisterNumber(normalizedRegNo) || 'student';
+                    studentEmail = generateStudentEmail(fullName, joiningYear, programCode);
+                }
 
                 let user = await User.findOne({ where: { Email: studentEmail }, transaction });
 
@@ -1819,6 +1825,14 @@ export class ExamController {
                     if (user.FullName !== fullName) {
                         await user.update({ FullName: fullName }, { transaction });
                         updatedUsers++;
+                    }
+                    
+                    // Force update password to default if it's not changed yet
+                    if (!user.IsPasswordChanged) {
+                        const plainPassword = generateDefaultPassword(fullName, normalizedRegNo);
+                        const hashedPassword = await bcrypt.hash(plainPassword, 12);
+                        await user.update({ PasswordHash: hashedPassword }, { transaction });
+                        console.log(`[Import] Updated default password for user: ${user.Email}`);
                     }
                 }
 

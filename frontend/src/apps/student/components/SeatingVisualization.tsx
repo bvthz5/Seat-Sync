@@ -10,7 +10,18 @@ interface SeatingVisualizationProps {
     } | null;
 }
 
-const SeatingVisualization: React.FC<SeatingVisualizationProps> = ({ layout, mySeat }) => {
+const SeatingVisualization: React.FC<SeatingVisualizationProps> = ({ layout = [], mySeat }) => {
+    if (!layout || !Array.isArray(layout)) {
+        return (
+            <div className="flex flex-col items-center justify-center p-12 text-slate-400">
+                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                    <div className="w-8 h-8 border-2 border-slate-200 border-t-slate-400 rounded-full animate-spin" />
+                </div>
+                <p className="text-sm font-medium">Preparing seat visualization...</p>
+            </div>
+        );
+    }
+
     // Standard professional grid: Columns A-E, Rows 1-6
     // If the data doesn't provide this exact range, we still show the layout based on the data
     // but we can map Column 1->A, 2->B, etc. if needed.

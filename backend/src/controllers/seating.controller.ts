@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { Room, Seat, Student, User, Department, Exam, SeatAllocation, ExamSeries, Subject, Semester, Program, Zone, ExamSchedule, ExamRegistration } from "../models/index.js";
 import { Op, QueryTypes } from "sequelize";
 import { sequelize } from "../config/database.js";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import * as XLSX from "xlsx";
 import { generateSeats } from "../services/seatEngine.js";
 

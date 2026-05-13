@@ -26,8 +26,6 @@ export const extractBatchYearFromRegisterNumber = (registerNumber: string): numb
     const twoDigitYear = parseInt(batchYearMatch[1], 10);
     
     // Convert 2-digit year to 4-digit year
-    // Assuming 00-30 is 2000-2030, 31-99 is 1931-1999 (or could be future)
-    // For educational context, assume years in range 20-40 map to 2020-2040
     if (twoDigitYear >= 20 && twoDigitYear <= 99) {
         return 2000 + twoDigitYear;
     } else if (twoDigitYear >= 0 && twoDigitYear <= 19) {
@@ -41,7 +39,6 @@ export const extractBatchYearFromRegisterNumber = (registerNumber: string): numb
  * Extracts the program code from a register number.
  * Format: SJC[YY]PROGRAM[NUMBER] -> PROGRAM is the program code
  * Example: SJC24MCA058 -> MCA
- * Example: SJC22BTECH456 -> BTECH
  */
 export const extractProgramCodeFromRegisterNumber = (registerNumber: string): string | null => {
     if (!registerNumber || registerNumber.length < 7) return null;
@@ -59,21 +56,29 @@ export const extractProgramCodeFromRegisterNumber = (registerNumber: string): st
 
 /**
  * Generates an institutional email based on student details.
- * Format: firstname + lastname + (joiningYear + durationYears) + [i for integrated] + @ + programCode + ".sjcetpalai.ac.in"
- * For BTech (4 years): joiningYear + 4
- * For MCA (2 years): joiningYear + 2
- * For Integrated MCA (5 years): joiningYear + 5 + "i"
- * Example: John Doe (BTech, joining 2022) -> johndoe2026@btech.sjcetpalai.ac.in
- * Example: John Doe (MCA, joining 2024) -> johndoe2026@mca.sjcetpalai.ac.in
- * Example: Rohith Satheeshan (Integrated MCA, joining 2024) -> rohithsatheeshan2029i@mca.sjcetpalai.ac.in
+ * Format: firstname + [passoutYear] + @ + [programCode] + ".sjcetpalai.ac.in"
+ * Example: John Doe (BTech, joining 2022) -> johndoe2026@ce.sjcetpalai.ac.in
  */
 export const generateStudentEmail = (fullName: string, joiningYear: number | string, programCode: string, durationYears?: number): string => {
-    const cleanName = fullName.toLowerCase().replace(/\s/g, '');
-    const cleanProgram = programCode.toLowerCase().replace(/\s/g, '');
+    const cleanName = fullName.toLowerCase().replace(/[^a-z]/g, '');
+    const cleanProgram = programCode.toLowerCase().replace(/[^a-z0-9]/g, '');
     
     const joiningYearNum = typeof joiningYear === 'string' ? parseInt(joiningYear, 10) : joiningYear;
-    // Default to 2 years if durationYears not provided, BTech uses 4 years
-    const duration = durationYears || 2;
+    
+    // Automatically determine duration if not provided
+    let duration = durationYears;
+    if (duration === undefined) {
+        if (cleanProgram.includes('mca') && (cleanProgram.includes('i') || cleanProgram.includes('int'))) {
+            duration = 5; // Integrated MCA
+        } else if (cleanProgram.includes('mca') || cleanProgram.includes('mba') || cleanProgram.includes('mtech')) {
+            duration = 2; // PG courses
+        } else if (cleanProgram.includes('btech') || cleanProgram.includes('be') || cleanProgram.length <= 3) {
+            duration = 4; // UG Engineering (AD, CS, CE, EC, EE, ME etc. are often 2-3 letters)
+        } else {
+            duration = 4; // Default to 4 for others
+        }
+    }
+    
     const emailYear = joiningYearNum + duration;
     
     // Check if program is integrated (MCAI, IMCA, or starts with INT)
@@ -84,9 +89,12 @@ export const generateStudentEmail = (fullName: string, joiningYear: number | str
     
     // Normalize program code for email domain (MCAI -> MCA)
     let emailProgramCode = cleanProgram;
-    if (cleanProgram === 'mcai' || cleanProgram === 'imca') {
+    if (cleanProgram === 'mcai' || cleanProgram === 'imca' || cleanProgram.startsWith('intmca')) {
         emailProgramCode = 'mca';
     }
+    
+    // Map AD to ADS or keep as is? User example had 'ce'.
+    // We'll keep it as the program code for now as it's the standard.
     
     const integratedSuffix = isIntegrated ? 'i' : '';
     
