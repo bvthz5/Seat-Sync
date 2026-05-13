@@ -15,10 +15,7 @@ export interface InternalAllocationRequest {
     examDate: string;
     session: string;
     hallIds: number[];
-    mode: 'same-exam' | 'alternate' | 'left-only' | 'right-only' | 'split-dept';
     seriesId: number;
-    primaryDeptId?: number;
-    secondaryDeptId?: number;
     shuffleRooms?: boolean;
 }
 
@@ -31,11 +28,11 @@ export interface InternalAllocationResult {
 
 export class InternalSeatAllocator {
     /**
-     * Internal Exam Seating Engine:
-     * - 2 students per bench, always from DIFFERENT subjects
-     * - Students within each subject are in continuous Register Number order
-     * - Subjects are interleaved across benches: bench1=(A0,B0), bench2=(A1,B1), etc.
-     * - For >2 subjects, cycles: bench1=(A0,B0), bench2=(C0,A1), bench3=(B1,C1)...
+     * Internal Exam Seating Engine (Unified Algorithm):
+     * - Column-Continuous Allocation: Students are assigned in order down the left column and then the right column.
+     * - Interleaved Subjects: Subject queues are distributed between Left and Right pools to ensure different subjects sit together.
+     * - Register Number Continuity: Maintained within each column across room boundaries.
+     * - Fallback: If only one subject remains, it is split in half across both columns.
      */
     static async generate(req: InternalAllocationRequest, transaction: any): Promise<InternalAllocationResult> {
         console.log(`[InternalSeatAllocator] Generating seating for ${req.examDate} ${req.session} (Series: ${req.seriesId})`);
@@ -209,41 +206,57 @@ export class InternalSeatAllocator {
         const hallMap = new Map<number, InternalRoom>();
         halls.forEach(h => hallMap.set(h.RoomID, h));
 
-        // 4. Global interleaving state across all halls
-        // We track which queue index to use for left and right seats globally
-        // so register number continuity is maintained across room boundaries
-        let leftQueueIdx = 0;   // which subject pool the left seat picks from
-        let rightQueueIdx = 1 % queues.length;  // which pool the right seat picks from
+        // 4. Create Left and Right pools for column-continuous allocation
+        const leftPool: any[] = [];
+        const rightPool: any[] = [];
+        const totalStudents = activeQueues.reduce((s, q) => s + q.length, 0);
+        const targetPerPool = Math.ceil(totalStudents / 2);
+
+        // Sort queues by size descending to help balance pools
+        const sortedQueues = [...activeQueues].sort((a, b) => b.length - a.length);
+
+        if (sortedQueues.length === 1) {
+            // Case: Only one subject — split it in half
+            const q = sortedQueues[0];
+            const half = Math.ceil(q.length / 2);
+            leftPool.push(...q.slice(0, half));
+            rightPool.push(...q.slice(half));
+        } else {
+            // Case: Multiple subjects — distribute into pools to balance sizes
+            // We want to keep subjects together in columns
+            for (const q of sortedQueues) {
+                if (leftPool.length <= rightPool.length) {
+                    // Add to left pool
+                    // If this queue is so large it makes left pool much larger than half, split it
+                    if (leftPool.length + q.length > targetPerPool && rightPool.length < targetPerPool) {
+                        const neededForLeft = Math.max(0, targetPerPool - leftPool.length);
+                        leftPool.push(...q.slice(0, neededForLeft));
+                        rightPool.push(...q.slice(neededForLeft));
+                    } else {
+                        leftPool.push(...q);
+                    }
+                } else {
+                    // Add to right pool
+                    if (rightPool.length + q.length > targetPerPool && leftPool.length < targetPerPool) {
+                        const neededForRight = Math.max(0, targetPerPool - rightPool.length);
+                        rightPool.push(...q.slice(0, neededForRight));
+                        leftPool.push(...q.slice(neededForRight));
+                    } else {
+                        rightPool.push(...q);
+                    }
+                }
+            }
+        }
+
+        console.log(`[InternalSeatAllocator] Pools balanced: Left=${leftPool.length}, Right=${rightPool.length}`);
 
         let assignedCount = 0;
         const finalAllocations: any[] = [];
         const hallUsage: { hallId: number; hallCode: string; used: number; total: number }[] = [];
 
-        // Helper: advance to the next non-empty queue index (skipping empty ones)
-        const advanceQueue = (currentIdx: number): number => {
-            if (queues.length === 0) return 0;
-            let next = (currentIdx + 1) % queues.length;
-            // Skip empty queues
-            let tries = 0;
-            while (queues[next]!.length === 0 && tries < queues.length) {
-                next = (next + 1) % queues.length;
-                tries++;
-            }
-            return next;
-        };
-
-        // Helper: get next student from a specific queue; returns null if empty
-        const popFrom = (qIdx: number): any | null => {
-            if (qIdx >= queues.length || queues[qIdx]!.length === 0) return null;
-            return queues[qIdx]!.shift()!;
-        };
-
-        // Helper: count remaining students
-        const remainingTotal = () => queues.reduce((s, q) => s + q.length, 0);
-
-        // 5. Fill halls bench by bench
+        // 5. Fill halls column by column
         for (const hallId of hallIdsSorted) {
-            if (remainingTotal() === 0) break;
+            if (leftPool.length === 0 && rightPool.length === 0) break;
 
             const hall = hallMap.get(hallId)!;
             const activeSeats = await InternalSeat.findAll({
@@ -260,99 +273,22 @@ export class InternalSeatAllocator {
 
             let hallAssigned = 0;
 
-            // Group seats into benches: rowLabel → benchNumber → {left, right}
-            const benchGroups = new Map<string, Map<number, { left?: InternalSeat; right?: InternalSeat }>>();
-            for (const s of activeSeats) {
-                if (!benchGroups.has(s.RowLabel)) benchGroups.set(s.RowLabel, new Map());
-                const colMap = benchGroups.get(s.RowLabel)!;
-                if (!colMap.has(s.BenchNumber)) colMap.set(s.BenchNumber, {});
-                const bench = colMap.get(s.BenchNumber)!;
-                if (s.SeatNumber === 1) bench.left = s;
-                else if (s.SeatNumber === 2) bench.right = s;
-            }
+            for (const seat of activeSeats) {
+                let student = null;
+                if (seat.SeatNumber === 1) {
+                    if (leftPool.length > 0) student = leftPool.shift();
+                } else if (seat.SeatNumber === 2) {
+                    if (rightPool.length > 0) student = rightPool.shift();
+                }
 
-            const sortedRowLabels = [...benchGroups.keys()].sort();
-
-            for (const colLabel of sortedRowLabels) {
-                const colMap = benchGroups.get(colLabel)!;
-                const sortedBenches = [...colMap.keys()].sort((a, b) => a - b);
-
-                for (const benchNum of sortedBenches) {
-                    if (remainingTotal() === 0) break;
-                    const bench = colMap.get(benchNum)!;
-
-                    // Skip to valid left queue (non-empty)
-                    leftQueueIdx = advanceQueue((leftQueueIdx - 1 + queues.length) % queues.length);
-                    
-                    // Find a left queue that has students
-                    let leftStudent = null;
-                    let rightStudent = null;
-                    let triedQueues = 0;
-
-                    // Pick left student
-                    while (triedQueues < queues.length && leftStudent === null) {
-                        if (queues[leftQueueIdx]!.length > 0) {
-                            leftStudent = popFrom(leftQueueIdx);
-                        } else {
-                            leftQueueIdx = advanceQueue(leftQueueIdx);
-                        }
-                        triedQueues++;
-                    }
-
-                    // Pick right student from a DIFFERENT subject queue
-                    if (bench.right && remainingTotal() > 0) {
-                        // Find a different non-empty queue for right seat
-                        rightQueueIdx = queues.length === 1
-                            ? leftQueueIdx  // Only one subject — same subject on both sides (unavoidable)
-                            : advanceQueue(leftQueueIdx); // Different subject
-
-                        // Ensure right isn't the same queue as left (unless no choice)
-                        let rightTries = 0;
-                        while (rightQueueIdx === leftQueueIdx && queues.length > 1 && rightTries < queues.length) {
-                            rightQueueIdx = advanceQueue(rightQueueIdx);
-                            rightTries++;
-                        }
-
-                        if (queues[rightQueueIdx]!.length > 0) {
-                            rightStudent = popFrom(rightQueueIdx);
-                        } else {
-                            // Right queue empty, pick any non-empty queue
-                            for (let i = 0; i < queues.length; i++) {
-                                if (queues[i]!.length > 0 && (i !== leftQueueIdx || queues.length === 1)) {
-                                    rightStudent = queues[i]!.shift()!;
-                                    rightQueueIdx = i;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    // Advance left queue for next bench
-                    if (queues.length > 1) {
-                        leftQueueIdx = advanceQueue(rightQueueIdx);
-                    }
-
-                    // Commit left seat
-                    if (leftStudent && bench.left) {
-                        finalAllocations.push({
-                            InternalExamID: leftStudent.examId,
-                            InternalSeatID: bench.left.SeatID,
-                            InternalStudentID: leftStudent.studentId
-                        });
-                        assignedCount++;
-                        hallAssigned++;
-                    }
-
-                    // Commit right seat
-                    if (rightStudent && bench.right) {
-                        finalAllocations.push({
-                            InternalExamID: rightStudent.examId,
-                            InternalSeatID: bench.right.SeatID,
-                            InternalStudentID: rightStudent.studentId
-                        });
-                        assignedCount++;
-                        hallAssigned++;
-                    }
+                if (student) {
+                    finalAllocations.push({
+                        InternalExamID: student.examId,
+                        InternalSeatID: seat.SeatID,
+                        InternalStudentID: student.studentId
+                    });
+                    assignedCount++;
+                    hallAssigned++;
                 }
             }
 
@@ -365,8 +301,7 @@ export class InternalSeatAllocator {
         }
 
         // 6. Collect unassigned students
-        const unassignedStudents: any[] = [];
-        for (const q of queues) unassignedStudents.push(...q);
+        const unassignedStudents: any[] = [...leftPool, ...rightPool];
 
         // 7. Persist — clear existing and bulk insert
         const allHallSeats = await InternalSeat.findAll({
