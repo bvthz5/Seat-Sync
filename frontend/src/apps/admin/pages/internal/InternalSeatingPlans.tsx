@@ -1,34 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    Button, 
-    Card, 
-    Select, 
-    SelectItem, 
-    Switch, 
-    Checkbox, 
-    Divider, 
-    Tooltip, 
-    Chip, 
-    Progress, 
-    Modal, 
-    ModalContent, 
-    ModalHeader, 
-    ModalBody, 
+import {
+    Button,
+    Card,
+    Select,
+    SelectItem,
+    Switch,
+    Checkbox,
+    Divider,
+    Tooltip,
+    Chip,
+    Progress,
+    Modal,
+    ModalContent,
+    ModalHeader,
+    ModalBody,
     ModalFooter,
     ScrollShadow
 } from '@heroui/react';
-import { 
-    Calendar, 
-    Clock, 
-    Settings, 
-    Users, 
-    MapPin, 
-    RefreshCcw, 
-    Save, 
-    Trash2, 
-    CheckCircle2, 
-    AlertCircle, 
-    Info, 
+import {
+    Calendar,
+    Clock,
+    Settings,
+    Users,
+    MapPin,
+    RefreshCcw,
+    Save,
+    Trash2,
+    CheckCircle2,
+    AlertCircle,
+    Info,
     ChevronRight,
     Search,
     Monitor,
@@ -45,7 +45,7 @@ import { SeatingService } from '../../services/seatingService';
 import api from '../../../../services/api';
 
 /* ── Bench Card for Room View ── */
-const SUBJ_COLORS = ['#818cf8','#34d399','#f472b6','#fb923c','#67e8f9','#a3e635','#fbbf24','#e879f9'];
+const SUBJ_COLORS = ['#818cf8', '#34d399', '#f472b6', '#fb923c', '#67e8f9', '#a3e635', '#fbbf24', '#e879f9'];
 const globalSubjectColorMap = new Map<string, string>();
 let globalColorIdx = 0;
 const getGlobalSubjectColor = (code: string) => {
@@ -78,11 +78,10 @@ const InternalBenchView: React.FC<{ bench: any; getSubjectColor: (c: string) => 
                 placement="top"
             >
                 <div
-                    className={`w-[54px] rounded-xl flex flex-col items-center justify-center text-center transition-all duration-300 cursor-pointer border-2 p-1.5 ${
-                        isEmpty
+                    className={`w-[54px] rounded-xl flex flex-col items-center justify-center text-center transition-all duration-300 cursor-pointer border-2 p-1.5 ${isEmpty
                             ? 'bg-slate-800/40 border-slate-700 text-slate-600 hover:border-slate-600 min-h-[50px]'
                             : 'border-transparent shadow-2xl hover:scale-110 min-h-[64px] hover:z-20'
-                    }`}
+                        }`}
                     style={isEmpty ? {} : { backgroundColor: `${color}20`, borderColor: color || '#475569', boxShadow: `0 8px 24px -8px ${color}44` }}
                 >
                     {isEmpty ? (
@@ -149,7 +148,7 @@ const InternalSeatingPlans: React.FC = () => {
             return '';
         }
     });
-    
+
     const [halls, setHalls] = useState<any[]>([]);
     const [hallSearch, setHallSearch] = useState<string>('');
     const [selectedHalls, setSelectedHalls] = useState<number[]>(() => {
@@ -161,13 +160,13 @@ const InternalSeatingPlans: React.FC = () => {
         }
     });
     const [departments, setDepartments] = useState<any[]>([]);
-    
+
     // Settings
     const [allocationMode, setAllocationMode] = useState<string>('same-exam');
     const [shuffleRooms, setShuffleRooms] = useState(false);
     const [primaryDept, setPrimaryDept] = useState<string>('');
     const [secondaryDept, setSecondaryDept] = useState<string>('');
-    
+
     // View State
     const [activeStep, setActiveStep] = useState(1);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -175,7 +174,7 @@ const InternalSeatingPlans: React.FC = () => {
     const [hallDetail, setHallDetail] = useState<any>(null);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
     const [loadingDetail, setLoadingDetail] = useState(false);
-    
+
     // Layout & Stats
     const [hallSummary, setHallSummary] = useState<any[]>([]);
     const [loadingSummary, setLoadingSummary] = useState(false);
@@ -221,7 +220,7 @@ const InternalSeatingPlans: React.FC = () => {
                 // Fetch Internal Series
                 const series = await SeatingService.getSeries('Internal');
                 setSeriesList(series || []);
-                
+
                 // Fetch Active Halls (halls list for sidebar checkbox)
                 const h = await InternalSeatingService.getHalls();
                 setHalls(h || []);
@@ -229,7 +228,7 @@ const InternalSeatingPlans: React.FC = () => {
                 // Fetch Departments for Split Mode
                 const depts = await SeatingService.getDepartments();
                 setDepartments(depts || []);
-                
+
                 // Validate selectedHalls against fetched halls
                 if (h && h.length > 0) {
                     const hallIdsInSystem = new Set(h.map((hall: any) => hall.RoomID));
@@ -308,13 +307,13 @@ const InternalSeatingPlans: React.FC = () => {
                     setHallSummary(summary);
                     const totalAssigned = summary.reduce((s: number, h: any) => s + (h.filledSeats || 0), 0);
                     const totalSeats = summary.reduce((s: number, h: any) => s + (h.totalSeats || 0), 0);
-                    
+
                     if (totalAssigned > 0 || totalSeats > 0) {
-                        setStats({ 
-                            assignedCount: totalAssigned, 
-                            unassignedCount: 0, 
-                            totalSeats, 
-                            hallUsage: summary 
+                        setStats({
+                            assignedCount: totalAssigned,
+                            unassignedCount: 0,
+                            totalSeats,
+                            hallUsage: summary
                         });
                     } else {
                         setStats(null);
@@ -389,7 +388,7 @@ const InternalSeatingPlans: React.FC = () => {
                 selectedSession,
                 Number(selectedSeries)
             );
-            
+
             console.log('[AutoRegister Result]', result);
             toast.success(
                 `✅ Auto-registered successfully!\n${result.newRegistrations} new registrations created\nTotal: ${result.totalRegistrations} students registered`
@@ -438,459 +437,458 @@ const InternalSeatingPlans: React.FC = () => {
         <div className="flex h-[calc(100vh-8rem)] w-full gap-4 text-slate-900">
             {/* --- LEFT SIDEBAR (Wizard Control Panel) --- */}
             <Card className="w-[380px] shrink-0 h-full overflow-hidden flex flex-col border-none shadow-2xl bg-white/80 backdrop-blur-md rounded-[2.5rem]">
-                    {/* Header */}
-                    <div className="p-8 bg-gradient-to-br from-slate-900 to-indigo-950 text-white relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-3xl" />
-                        <div className="flex items-center gap-4 mb-4 relative z-10">
-                            <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 backdrop-blur-xl flex items-center justify-center border border-white/10 shadow-inner">
-                                <Sparkles className="text-indigo-400" size={24} />
-                            </div>
-                            <div>
-                                <h2 className="text-xl font-black tracking-tight leading-none">Seating Wizard</h2>
-                                <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-[0.2em] mt-1.5 opacity-80">Internal Examinations</p>
-                            </div>
+                {/* Header */}
+                <div className="p-8 bg-gradient-to-br from-slate-900 to-indigo-950 text-white relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-3xl" />
+                    <div className="flex items-center gap-4 mb-4 relative z-10">
+                        <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 backdrop-blur-xl flex items-center justify-center border border-white/10 shadow-inner">
+                            <Sparkles className="text-indigo-400" size={24} />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-black tracking-tight leading-none">Seating Wizard</h2>
+                            <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-[0.2em] mt-1.5 opacity-80">Internal Examinations</p>
                         </div>
                     </div>
+                </div>
 
-                    <div className="flex-1 overflow-y-auto p-8 space-y-12 scrollbar-hide">
-                        {/* Step 1: Selection Chain */}
-                        <section className="animate-in fade-in slide-in-from-left duration-500">
-                            <div className="flex items-center gap-3 mb-8">
-                                <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-xs font-black shadow-lg shadow-indigo-200">1</div>
-                                <h3 className="text-xs font-black uppercase tracking-widest text-slate-800">Identity & Schedule</h3>
-                            </div>
-                            
-                            <div className="space-y-8 pl-1">
-                                    {/* 1. Exam Series */}
-                                    <div className="flex flex-col gap-2">
-                                        <label htmlFor="examSeries" className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Select Exam Series</label>
-                                        <Select 
-                                            id="examSeries"
-                                            name="examSeries"
-                                            placeholder="Choose internal series..."
-                                            variant="bordered" 
-                                            className="max-w-full"
-                                            selectedKeys={selectedSeries && seriesList.some(s => String(s.ExamSeriesID) === selectedSeries) ? [selectedSeries] : []}
-                                            onSelectionChange={(keys) => setSelectedSeries(Array.from(keys)[0] as string)}
-                                            classNames={{
-                                                trigger: "h-12 border-slate-200 hover:border-indigo-400 transition-colors bg-white shadow-sm",
-                                                value: "text-slate-700 font-medium",
-                                                selectorIcon: "right-3 text-slate-400"
-                                            }}
-                                            popoverProps={{
-                                                classNames: {
-                                                    content: "bg-white border border-slate-200 shadow-2xl p-2 rounded-2xl opacity-100",
-                                                }
-                                            }}
-                                        >
-                                            {seriesList.map(s => (
-                                                <SelectItem key={String(s.ExamSeriesID)} textValue={s.SeriesName} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">{s.SeriesName}</SelectItem>
-                                            ))}
-                                        </Select>
-                                    </div>
+                <div className="flex-1 overflow-y-auto p-8 space-y-12 scrollbar-hide">
+                    {/* Step 1: Selection Chain */}
+                    <section className="animate-in fade-in slide-in-from-left duration-500">
+                        <div className="flex items-center gap-3 mb-8">
+                            <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-xs font-black shadow-lg shadow-indigo-200">1</div>
+                            <h3 className="text-xs font-black uppercase tracking-widest text-slate-800">Identity & Schedule</h3>
+                        </div>
 
-                                    {/* 2. Session */}
-                                    <div className="flex flex-col gap-2">
-                                        <label htmlFor="examSession" className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Select Session</label>
-                                        <Select 
-                                            id="examSession"
-                                            name="examSession"
-                                            placeholder={!selectedSeries ? "Select series first..." : "Select session"}
-                                            variant="bordered"
-                                            isDisabled={!selectedSeries || availableSessions.length === 0}
-                                            selectedKeys={selectedSession && availableSessions.includes(selectedSession) ? [selectedSession] : []}
-                                            onSelectionChange={(keys) => setSelectedSession(Array.from(keys)[0] as any)}
-                                            classNames={{
-                                                trigger: "h-12 border-slate-200 hover:border-indigo-400 transition-colors bg-white shadow-sm",
-                                                value: "text-slate-700 font-medium",
-                                                selectorIcon: "right-3 text-slate-400"
-                                            }}
-                                            popoverProps={{
-                                                classNames: {
-                                                    content: "bg-white border border-slate-200 shadow-2xl p-2 rounded-2xl opacity-100",
-                                                }
-                                            }}
-                                        >
-                                            {availableSessions.map((s) => (
-                                                <SelectItem key={s} textValue={s === 'FN' ? 'Forenoon' : s === 'AN' ? 'Afternoon' : s} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">
-                                                    {s === 'FN' ? 'Forenoon (FN)' : s === 'AN' ? 'Afternoon (AN)' : s}
-                                                </SelectItem>
-                                            ))}
-                                        </Select>
-                                    </div>
-
-                                    {/* 3. Exam Date */}
-                                    <div className="flex flex-col gap-2">
-                                        <label htmlFor="examDate" className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Exam Date</label>
-                                        <Select 
-                                            id="examDate"
-                                            name="examDate"
-                                            placeholder={!selectedSession ? "Select session first..." : examDates.length === 0 ? "No dates found" : "Pick date"}
-                                            variant="bordered"
-                                            isDisabled={!selectedSession || examDates.length === 0}
-                                            selectedKeys={(() => {
-                                                if (!selectedDate || !selectedSession) return [];
-                                                const cleanDate = selectedDate.split('-').slice(0, 3).join('-');
-                                                const targetKey = `${cleanDate}-${selectedSession}`;
-                                                // Only return key if it's present in current examDates to avoid warnings
-                                                const exists = examDates.some(d => {
-                                                    const dStr = typeof d === 'string' ? d : d.examDate;
-                                                    const dKey = d.session ? `${dStr}-${d.session}` : dStr;
-                                                    return dKey === targetKey;
-                                                });
-                                                return exists ? [targetKey] : [];
-                                            })()}
-                                            onSelectionChange={(keys) => {
-                                                const key = Array.from(keys)[0] as string;
-                                                if (key && typeof key === 'string' && key.includes('-')) {
-                                                    const parts = key.split('-');
-                                                    if (parts.length >= 3) {
-                                                        setSelectedDate(`${parts[0]}-${parts[1]}-${parts[2]}`);
-                                                    }
-                                                }
-                                            }}
-                                            classNames={{
-                                                trigger: "h-12 border-slate-200 hover:border-indigo-400 transition-colors bg-white shadow-sm",
-                                                value: "text-slate-700 font-medium",
-                                                selectorIcon: "right-3 text-slate-400"
-                                            }}
-                                            popoverProps={{
-                                                classNames: {
-                                                    content: "bg-white border border-slate-200 shadow-2xl p-2 rounded-2xl opacity-100",
-                                                }
-                                            }}
-                                        >
-                                            {examDates.map((d: any, idx: number) => {
-                                                const dateStr = typeof d === 'string' ? d : d.examDate;
-                                                const label = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-                                                const itemKey = d.session ? `${dateStr}-${d.session}` : `${dateStr}-${idx}`;
-                                                return (
-                                                    <SelectItem key={itemKey} textValue={label} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">
-                                                        {label} {d.session ? `(${d.session})` : ''}
-                                                    </SelectItem>
-                                                );
-                                            })}
-                                        </Select>
-                                    </div>
-                                </div>
-                        </section>
-
-                        {/* Step 2: Room Settings */}
-                        <section className="animate-in fade-in slide-in-from-left duration-500 delay-150">
-                            <div className="flex items-center gap-3 mb-8">
-                                <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-xs font-black shadow-lg shadow-indigo-200">2</div>
-                                <h3 className="text-xs font-black uppercase tracking-widest text-slate-800">Hall Infrastructure</h3>
-                            </div>
-                            
-                            <div className="space-y-8">
-                                <div 
-                                    className={`
-                                        flex items-center justify-between p-5 rounded-[2rem] border-2 cursor-pointer transition-all duration-500 group
-                                        ${shuffleRooms 
-                                            ? 'bg-indigo-50/50 border-indigo-200 shadow-xl shadow-indigo-100/20' 
-                                            : 'bg-slate-50/50 border-slate-100 hover:border-indigo-100 hover:bg-white'}
-                                    `}
+                        <div className="space-y-8 pl-1">
+                            {/* 1. Exam Series */}
+                            <div className="flex flex-col gap-2">
+                                <label htmlFor="examSeries" className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Select Exam Series</label>
+                                <Select
+                                    id="examSeries"
+                                    name="examSeries"
+                                    placeholder="Choose internal series..."
+                                    variant="bordered"
+                                    className="max-w-full"
+                                    selectedKeys={selectedSeries && seriesList.some(s => String(s.ExamSeriesID) === selectedSeries) ? [selectedSeries] : []}
+                                    onSelectionChange={(keys) => setSelectedSeries(Array.from(keys)[0] as string)}
+                                    classNames={{
+                                        trigger: "h-12 border-slate-200 hover:border-indigo-400 transition-colors bg-white shadow-sm",
+                                        value: "text-slate-700 font-medium",
+                                        selectorIcon: "right-3 text-slate-400"
+                                    }}
+                                    popoverProps={{
+                                        classNames: {
+                                            content: "bg-white border border-slate-200 shadow-2xl p-2 rounded-2xl opacity-100",
+                                        }
+                                    }}
                                 >
-                                    <div className="flex items-center gap-4">
-                                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-500 ${shuffleRooms ? 'bg-indigo-600 text-white shadow-lg rotate-12' : 'bg-white text-slate-400 border border-slate-100'}`}>
-                                            <ArrowRightLeft size={18} className={shuffleRooms ? 'animate-pulse' : ''} />
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <label htmlFor="shuffleToggle" className={`text-xs font-black cursor-pointer transition-colors ${shuffleRooms ? 'text-indigo-900' : 'text-slate-800'}`}>Shuffle Rooms</label>
-                                            <span className="text-[10px] text-slate-400 font-bold mt-0.5 italic">Randomize sequence</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center">
-                                        <input 
-                                            id="shuffleToggle"
-                                            type="checkbox" 
-                                            className="hidden" 
-                                            checked={shuffleRooms}
-                                            onChange={() => setShuffleRooms(!shuffleRooms)}
-                                        />
-                                        <div 
-                                            onClick={() => setShuffleRooms(!shuffleRooms)}
-                                            className={`w-11 h-6 rounded-full p-1 transition-all duration-500 relative ${shuffleRooms ? 'bg-indigo-600' : 'bg-slate-200'}`}
-                                        >
-                                            <div className={`w-4 h-4 rounded-full bg-white shadow-md transition-all duration-500 transform ${shuffleRooms ? 'translate-x-5' : 'translate-x-0'}`} />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex flex-col gap-4">
-                                    <div className="flex flex-col gap-2">
-                                        <div className="flex items-center justify-between px-1 mb-1">
-                                            <label htmlFor="hallSearch" className="text-[10px] font-black text-slate-400 uppercase tracking-wider cursor-pointer">Hall Search & Bulk Actions</label>
-                                            <div className="flex gap-2">
-                                                <button 
-                                                    onClick={() => setSelectedHalls(halls.filter(h => h.RoomCode.toLowerCase().includes(hallSearch.toLowerCase())).map(h => h.RoomID))}
-                                                    className="text-[9px] font-black text-indigo-600 hover:text-indigo-700 transition-colors uppercase tracking-tight"
-                                                >
-                                                    Select All
-                                                </button>
-                                                <Divider orientation="vertical" className="h-2 bg-slate-200" />
-                                                <button 
-                                                    onClick={() => setSelectedHalls([])}
-                                                    className="text-[9px] font-black text-slate-400 hover:text-red-500 transition-colors uppercase tracking-tight"
-                                                >
-                                                    Undo All
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div className="relative group">
-                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 group-hover:text-indigo-400 transition-colors" size={14} />
-                                            <input 
-                                                id="hallSearch"
-                                                name="hallSearch"
-                                                type="text"
-                                                placeholder="Search by hall name or code..."
-                                                value={hallSearch}
-                                                onChange={(e) => setHallSearch(e.target.value)}
-                                                className="w-full h-10 pl-10 pr-4 rounded-xl border-2 border-slate-100 bg-slate-50/50 text-xs font-bold text-slate-700 placeholder:text-slate-300 focus:border-indigo-400 focus:bg-white transition-all outline-none"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="flex flex-col gap-3">
-                                        <div className="flex items-center justify-between px-1">
-                                            <span className="text-xs font-black text-slate-500 uppercase tracking-wider">Available Halls</span>
-                                            <span className="text-[10px] font-black bg-slate-100 px-2 py-0.5 rounded-full text-slate-500">
-                                                {loadingSummary ? 'Loading...' : `${hallSummary.filter(h => h.hallCode.toLowerCase().includes(hallSearch.toLowerCase())).length} Found`}
-                                            </span>
-                                        </div>
-                                        <ScrollShadow className="h-60 p-4 border-2 border-slate-100 rounded-3xl bg-slate-50/30">
-                                            <div className="grid grid-cols-1 gap-2">
-                                                {(hallSummary.length > 0 ? hallSummary : halls.map(h => ({ hallId: h.RoomID, hallCode: h.RoomCode, totalSeats: h.TotalCapacity || 0, filledSeats: 0, capacity: h.TotalCapacity || 0 })))
-                                                    .filter(hall => hall.hallCode.toLowerCase().includes(hallSearch.toLowerCase()))
-                                                    .map(hall => (
-                                                        <div 
-                                                            key={hall.hallId}
-                                                            onClick={() => {
-                                                                if (selectedHalls.includes(hall.hallId)) {
-                                                                    setSelectedHalls(selectedHalls.filter(id => id !== hall.hallId));
-                                                                } else {
-                                                                    setSelectedHalls([...selectedHalls, hall.hallId]);
-                                                                }
-                                                            }}
-                                                            className={`
-                                                                flex items-center justify-between p-3 rounded-xl border-2 cursor-pointer transition-all duration-300
-                                                                ${selectedHalls.includes(hall.hallId) 
-                                                                    ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-100' 
-                                                                    : 'bg-white border-slate-100 text-slate-600 hover:border-indigo-200'}
-                                                            `}
-                                                        >
-                                                            <div className="flex items-center gap-3">
-                                                                <div className={`w-2 h-2 rounded-full ${selectedHalls.includes(hall.hallId) ? 'bg-white' : hall.filledSeats > 0 ? 'bg-emerald-400' : 'bg-slate-300'} ${hall.filledSeats > 0 ? 'animate-pulse' : ''}`} />
-                                                                <span className="text-xs font-black tracking-tight">{hall.hallCode}</span>
-                                                            </div>
-                                                            <div className="flex flex-col items-end">
-                                                                <span className={`text-[10px] font-bold ${selectedHalls.includes(hall.hallId) ? 'text-indigo-100' : 'text-slate-400'}`}>
-                                                                    {hall.totalSeats} Seats
-                                                                </span>
-                                                                {hall.filledSeats > 0 && (
-                                                                    <span className={`text-[9px] font-black ${selectedHalls.includes(hall.hallId) ? 'text-indigo-200' : 'text-emerald-600'}`}>
-                                                                        {hall.filledSeats} filled
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                            </div>
-                                        </ScrollShadow>
-                                    </div>
-                                </div>
-                            </div>
-                        </section>
-
-                        {/* Step 3: Distribution Logic */}
-                        <section className="animate-in fade-in slide-in-from-left duration-500 delay-300">
-                            <div className="flex items-center gap-3 mb-8">
-                                <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-xs font-black shadow-lg shadow-indigo-200">3</div>
-                                <h3 className="text-xs font-black uppercase tracking-widest text-slate-800">Allocation Engine</h3>
+                                    {seriesList.map(s => (
+                                        <SelectItem key={String(s.ExamSeriesID)} textValue={s.SeriesName} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">{s.SeriesName}</SelectItem>
+                                    ))}
+                                </Select>
                             </div>
 
-                            <div className="space-y-8">
-                                <div className="flex flex-col gap-2">
-                                    <label htmlFor="allocationMode" className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Distribution Mode</label>
-                                    <Select 
-                                        id="allocationMode"
-                                        name="allocationMode"
-                                        placeholder="Choose logic..."
-                                        variant="bordered"
-                                        selectedKeys={[allocationMode]}
-                                        onSelectionChange={(keys) => setAllocationMode(Array.from(keys)[0] as string)}
-                                        classNames={{
-                                            trigger: "h-12 border-slate-200 hover:border-indigo-400 transition-colors bg-white shadow-sm",
-                                            value: "text-slate-700 font-medium",
-                                            selectorIcon: "right-3 text-slate-400"
-                                        }}
-                                        popoverProps={{
-                                            classNames: {
-                                                content: "bg-white border border-slate-200 shadow-2xl p-2 rounded-2xl opacity-100",
+                            {/* 2. Session */}
+                            <div className="flex flex-col gap-2">
+                                <label htmlFor="examSession" className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Select Session</label>
+                                <Select
+                                    id="examSession"
+                                    name="examSession"
+                                    placeholder={!selectedSeries ? "Select series first..." : "Select session"}
+                                    variant="bordered"
+                                    isDisabled={!selectedSeries || availableSessions.length === 0}
+                                    selectedKeys={selectedSession && availableSessions.includes(selectedSession) ? [selectedSession] : []}
+                                    onSelectionChange={(keys) => setSelectedSession(Array.from(keys)[0] as any)}
+                                    classNames={{
+                                        trigger: "h-12 border-slate-200 hover:border-indigo-400 transition-colors bg-white shadow-sm",
+                                        value: "text-slate-700 font-medium",
+                                        selectorIcon: "right-3 text-slate-400"
+                                    }}
+                                    popoverProps={{
+                                        classNames: {
+                                            content: "bg-white border border-slate-200 shadow-2xl p-2 rounded-2xl opacity-100",
+                                        }
+                                    }}
+                                >
+                                    {availableSessions.map((s) => (
+                                        <SelectItem key={s} textValue={s === 'FN' ? 'Forenoon' : s === 'AN' ? 'Afternoon' : s} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">
+                                            {s === 'FN' ? 'Forenoon (FN)' : s === 'AN' ? 'Afternoon (AN)' : s}
+                                        </SelectItem>
+                                    ))}
+                                </Select>
+                            </div>
+
+                            {/* 3. Exam Date */}
+                            <div className="flex flex-col gap-2">
+                                <label htmlFor="examDate" className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Exam Date</label>
+                                <Select
+                                    id="examDate"
+                                    name="examDate"
+                                    placeholder={!selectedSession ? "Select session first..." : examDates.length === 0 ? "No dates found" : "Pick date"}
+                                    variant="bordered"
+                                    isDisabled={!selectedSession || examDates.length === 0}
+                                    selectedKeys={(() => {
+                                        if (!selectedDate || !selectedSession) return [];
+                                        const cleanDate = selectedDate.split('-').slice(0, 3).join('-');
+                                        const targetKey = `${cleanDate}-${selectedSession}`;
+                                        // Only return key if it's present in current examDates to avoid warnings
+                                        const exists = examDates.some(d => {
+                                            const dStr = typeof d === 'string' ? d : d.examDate;
+                                            const dKey = d.session ? `${dStr}-${d.session}` : dStr;
+                                            return dKey === targetKey;
+                                        });
+                                        return exists ? [targetKey] : [];
+                                    })()}
+                                    onSelectionChange={(keys) => {
+                                        const key = Array.from(keys)[0] as string;
+                                        if (key && typeof key === 'string' && key.includes('-')) {
+                                            const parts = key.split('-');
+                                            if (parts.length >= 3) {
+                                                setSelectedDate(`${parts[0]}-${parts[1]}-${parts[2]}`);
                                             }
-                                        }}
-                                    >
-                                        <SelectItem key="same-exam" textValue="Same Exam Both Sides" className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">Same Exam Both Sides</SelectItem>
-                                        <SelectItem key="alternate" textValue="Alternate Subjects" className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">Alternate Subjects</SelectItem>
-                                        <SelectItem key="left-only" textValue="Left Side Only" className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">Left Side Only</SelectItem>
-                                        <SelectItem key="right-only" textValue="Right Side Only" className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">Right Side Only</SelectItem>
-                                        <SelectItem key="split-dept" textValue="Split By Department" className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">Split By Department</SelectItem>
-                                    </Select>
-                                </div>
+                                        }
+                                    }}
+                                    classNames={{
+                                        trigger: "h-12 border-slate-200 hover:border-indigo-400 transition-colors bg-white shadow-sm",
+                                        value: "text-slate-700 font-medium",
+                                        selectorIcon: "right-3 text-slate-400"
+                                    }}
+                                    popoverProps={{
+                                        classNames: {
+                                            content: "bg-white border border-slate-200 shadow-2xl p-2 rounded-2xl opacity-100",
+                                        }
+                                    }}
+                                >
+                                    {examDates.map((d: any, idx: number) => {
+                                        const dateStr = typeof d === 'string' ? d : d.examDate;
+                                        const label = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                                        const itemKey = d.session ? `${dateStr}-${d.session}` : `${dateStr}-${idx}`;
+                                        return (
+                                            <SelectItem key={itemKey} textValue={label} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">
+                                                {label} {d.session ? `(${d.session})` : ''}
+                                            </SelectItem>
+                                        );
+                                    })}
+                                </Select>
+                            </div>
+                        </div>
+                    </section>
 
-                                {allocationMode === 'split-dept' && (
-                                    <div className="grid grid-cols-1 gap-4 animate-in zoom-in-95 duration-300">
-                                        <div className="flex flex-col gap-2">
-                                            <label htmlFor="primaryDept" className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Primary Department</label>
-                                            <Select 
-                                                id="primaryDept"
-                                                name="primaryDept"
-                                                variant="bordered"
-                                                size="sm"
-                                                placeholder="Choose department..."
-                                                selectedKeys={primaryDept ? [primaryDept] : []}
-                                                onSelectionChange={(keys) => setPrimaryDept(Array.from(keys)[0] as string)}
-                                                classNames={{
-                                                    trigger: "h-10 border-slate-200 bg-white",
-                                                    value: "text-slate-700 font-medium",
-                                                    selectorIcon: "right-2 text-slate-400"
-                                                }}
-                                                popoverProps={{
-                                                    classNames: {
-                                                        content: "bg-white border border-slate-200 shadow-2xl p-1 rounded-xl opacity-100",
-                                                    }
-                                                }}
+                    {/* Step 2: Room Settings */}
+                    <section className="animate-in fade-in slide-in-from-left duration-500 delay-150">
+                        <div className="flex items-center gap-3 mb-8">
+                            <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-xs font-black shadow-lg shadow-indigo-200">2</div>
+                            <h3 className="text-xs font-black uppercase tracking-widest text-slate-800">Hall Infrastructure</h3>
+                        </div>
+
+                        <div className="space-y-8">
+                            <div
+                                className={`
+                                        flex items-center justify-between p-5 rounded-[2rem] border-2 cursor-pointer transition-all duration-500 group
+                                        ${shuffleRooms
+                                        ? 'bg-indigo-50/50 border-indigo-200 shadow-xl shadow-indigo-100/20'
+                                        : 'bg-slate-50/50 border-slate-100 hover:border-indigo-100 hover:bg-white'}
+                                    `}
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-500 ${shuffleRooms ? 'bg-indigo-600 text-white shadow-lg rotate-12' : 'bg-white text-slate-400 border border-slate-100'}`}>
+                                        <ArrowRightLeft size={18} className={shuffleRooms ? 'animate-pulse' : ''} />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <label htmlFor="shuffleToggle" className={`text-xs font-black cursor-pointer transition-colors ${shuffleRooms ? 'text-indigo-900' : 'text-slate-800'}`}>Shuffle Rooms</label>
+                                        <span className="text-[10px] text-slate-400 font-bold mt-0.5 italic">Randomize sequence</span>
+                                    </div>
+                                </div>
+                                <div className="flex items-center">
+                                    <input
+                                        id="shuffleToggle"
+                                        type="checkbox"
+                                        className="hidden"
+                                        checked={shuffleRooms}
+                                        onChange={() => setShuffleRooms(!shuffleRooms)}
+                                    />
+                                    <div
+                                        onClick={() => setShuffleRooms(!shuffleRooms)}
+                                        className={`w-11 h-6 rounded-full p-1 transition-all duration-500 relative ${shuffleRooms ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                                    >
+                                        <div className={`w-4 h-4 rounded-full bg-white shadow-md transition-all duration-500 transform ${shuffleRooms ? 'translate-x-5' : 'translate-x-0'}`} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-4">
+                                <div className="flex flex-col gap-2">
+                                    <div className="flex items-center justify-between px-1 mb-1">
+                                        <label htmlFor="hallSearch" className="text-[10px] font-black text-slate-400 uppercase tracking-wider cursor-pointer">Hall Search & Bulk Actions</label>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => setSelectedHalls(halls.filter(h => h.RoomCode.toLowerCase().includes(hallSearch.toLowerCase())).map(h => h.RoomID))}
+                                                className="text-[9px] font-black text-indigo-600 hover:text-indigo-700 transition-colors uppercase tracking-tight"
                                             >
-                                                {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={d.DepartmentCode} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-lg transition-colors">{d.DepartmentCode}</SelectItem>)}
-                                            </Select>
-                                        </div>
-                                        <div className="flex flex-col gap-2">
-                                            <label htmlFor="secondaryDept" className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Secondary Department</label>
-                                            <Select 
-                                                id="secondaryDept"
-                                                name="secondaryDept"
-                                                variant="bordered"
-                                                size="sm"
-                                                placeholder="Choose department..."
-                                                selectedKeys={secondaryDept ? [secondaryDept] : []}
-                                                onSelectionChange={(keys) => setSecondaryDept(Array.from(keys)[0] as string)}
-                                                classNames={{
-                                                    trigger: "h-10 border-slate-200 bg-white",
-                                                    value: "text-slate-700 font-medium",
-                                                    selectorIcon: "right-2 text-slate-400"
-                                                }}
-                                                popoverProps={{
-                                                    classNames: {
-                                                        content: "bg-white border border-slate-200 shadow-2xl p-1 rounded-xl opacity-100",
-                                                    }
-                                                }}
+                                                Select All
+                                            </button>
+                                            <Divider orientation="vertical" className="h-2 bg-slate-200" />
+                                            <button
+                                                onClick={() => setSelectedHalls([])}
+                                                className="text-[9px] font-black text-slate-400 hover:text-red-500 transition-colors uppercase tracking-tight"
                                             >
-                                                {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={d.DepartmentCode} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-lg transition-colors">{d.DepartmentCode}</SelectItem>)}
-                                            </Select>
+                                                Undo All
+                                            </button>
                                         </div>
                                     </div>
-                                )}
-                            </div>
-                        </section>
-                    </div>
+                                    <div className="relative group">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 group-hover:text-indigo-400 transition-colors" size={14} />
+                                        <input
+                                            id="hallSearch"
+                                            name="hallSearch"
+                                            type="text"
+                                            placeholder="Search by hall name or code..."
+                                            value={hallSearch}
+                                            onChange={(e) => setHallSearch(e.target.value)}
+                                            className="w-full h-10 pl-10 pr-4 rounded-xl border-2 border-slate-100 bg-slate-50/50 text-xs font-bold text-slate-700 placeholder:text-slate-300 focus:border-indigo-400 focus:bg-white transition-all outline-none"
+                                        />
+                                    </div>
+                                </div>
 
-                    <div className="p-8 border-t border-slate-100 space-y-4">
-                        <Button 
-                            color="warning" 
-                            fullWidth 
-                            size="lg" 
-                            variant="flat"
-                            className="font-black h-12 rounded-2xl text-[11px] tracking-widest uppercase transition-all hover:bg-warning/20"
-                            isLoading={isAutoRegistering}
-                            onPress={handleAutoRegister}
-                            startContent={!isAutoRegistering && <Users size={16} />}
-                        >
-                            Auto-Register Students
-                        </Button>
-                        <Button 
-                            color="primary" 
-                            fullWidth 
-                            size="lg" 
-                            className={`font-black h-16 rounded-2xl shadow-xl transition-all duration-500 text-sm tracking-widest uppercase group ${
-                                selectedSeries && selectedDate && selectedSession && selectedHalls.length > 0
-                                    ? 'bg-indigo-600 shadow-indigo-200 hover:scale-[1.02] hover:shadow-2xl'
-                                    : 'bg-slate-300'
+                                <div className="flex flex-col gap-3">
+                                    <div className="flex items-center justify-between px-1">
+                                        <span className="text-xs font-black text-slate-500 uppercase tracking-wider">Available Halls</span>
+                                        <span className="text-[10px] font-black bg-slate-100 px-2 py-0.5 rounded-full text-slate-500">
+                                            {loadingSummary ? 'Loading...' : `${hallSummary.filter(h => h.hallCode.toLowerCase().includes(hallSearch.toLowerCase())).length} Found`}
+                                        </span>
+                                    </div>
+                                    <ScrollShadow className="h-60 p-4 border-2 border-slate-100 rounded-3xl bg-slate-50/30">
+                                        <div className="grid grid-cols-1 gap-2">
+                                            {(hallSummary.length > 0 ? hallSummary : halls.map(h => ({ hallId: h.RoomID, hallCode: h.RoomCode, totalSeats: h.TotalCapacity || 0, filledSeats: 0, capacity: h.TotalCapacity || 0 })))
+                                                .filter(hall => hall.hallCode.toLowerCase().includes(hallSearch.toLowerCase()))
+                                                .map(hall => (
+                                                    <div
+                                                        key={hall.hallId}
+                                                        onClick={() => {
+                                                            if (selectedHalls.includes(hall.hallId)) {
+                                                                setSelectedHalls(selectedHalls.filter(id => id !== hall.hallId));
+                                                            } else {
+                                                                setSelectedHalls([...selectedHalls, hall.hallId]);
+                                                            }
+                                                        }}
+                                                        className={`
+                                                                flex items-center justify-between p-3 rounded-xl border-2 cursor-pointer transition-all duration-300
+                                                                ${selectedHalls.includes(hall.hallId)
+                                                                ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-100'
+                                                                : 'bg-white border-slate-100 text-slate-600 hover:border-indigo-200'}
+                                                            `}
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={`w-2 h-2 rounded-full ${selectedHalls.includes(hall.hallId) ? 'bg-white' : hall.filledSeats > 0 ? 'bg-emerald-400' : 'bg-slate-300'} ${hall.filledSeats > 0 ? 'animate-pulse' : ''}`} />
+                                                            <span className="text-xs font-black tracking-tight">{hall.hallCode}</span>
+                                                        </div>
+                                                        <div className="flex flex-col items-end">
+                                                            <span className={`text-[10px] font-bold ${selectedHalls.includes(hall.hallId) ? 'text-indigo-100' : 'text-slate-400'}`}>
+                                                                {hall.totalSeats} Seats
+                                                            </span>
+                                                            {hall.filledSeats > 0 && (
+                                                                <span className={`text-[9px] font-black ${selectedHalls.includes(hall.hallId) ? 'text-indigo-200' : 'text-emerald-600'}`}>
+                                                                    {hall.filledSeats} filled
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                        </div>
+                                    </ScrollShadow>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Step 3: Distribution Logic */}
+                    <section className="animate-in fade-in slide-in-from-left duration-500 delay-300">
+                        <div className="flex items-center gap-3 mb-8">
+                            <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-xs font-black shadow-lg shadow-indigo-200">3</div>
+                            <h3 className="text-xs font-black uppercase tracking-widest text-slate-800">Allocation Engine</h3>
+                        </div>
+
+                        <div className="space-y-8">
+                            <div className="flex flex-col gap-2">
+                                <label htmlFor="allocationMode" className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Distribution Mode</label>
+                                <Select
+                                    id="allocationMode"
+                                    name="allocationMode"
+                                    placeholder="Choose logic..."
+                                    variant="bordered"
+                                    selectedKeys={[allocationMode]}
+                                    onSelectionChange={(keys) => setAllocationMode(Array.from(keys)[0] as string)}
+                                    classNames={{
+                                        trigger: "h-12 border-slate-200 hover:border-indigo-400 transition-colors bg-white shadow-sm",
+                                        value: "text-slate-700 font-medium",
+                                        selectorIcon: "right-3 text-slate-400"
+                                    }}
+                                    popoverProps={{
+                                        classNames: {
+                                            content: "bg-white border border-slate-200 shadow-2xl p-2 rounded-2xl opacity-100",
+                                        }
+                                    }}
+                                >
+                                    <SelectItem key="same-exam" textValue="Same Exam Both Sides" className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">Same Exam Both Sides</SelectItem>
+                                    <SelectItem key="alternate" textValue="Alternate Subjects" className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">Alternate Subjects</SelectItem>
+                                    <SelectItem key="left-only" textValue="Left Side Only" className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">Left Side Only</SelectItem>
+                                    <SelectItem key="right-only" textValue="Right Side Only" className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">Right Side Only</SelectItem>
+                                    <SelectItem key="split-dept" textValue="Split By Department" className="font-medium text-slate-700 hover:bg-indigo-50 rounded-xl transition-colors">Split By Department</SelectItem>
+                                </Select>
+                            </div>
+
+                            {allocationMode === 'split-dept' && (
+                                <div className="grid grid-cols-1 gap-4 animate-in zoom-in-95 duration-300">
+                                    <div className="flex flex-col gap-2">
+                                        <label htmlFor="primaryDept" className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Primary Department</label>
+                                        <Select
+                                            id="primaryDept"
+                                            name="primaryDept"
+                                            variant="bordered"
+                                            size="sm"
+                                            placeholder="Choose department..."
+                                            selectedKeys={primaryDept ? [primaryDept] : []}
+                                            onSelectionChange={(keys) => setPrimaryDept(Array.from(keys)[0] as string)}
+                                            classNames={{
+                                                trigger: "h-10 border-slate-200 bg-white",
+                                                value: "text-slate-700 font-medium",
+                                                selectorIcon: "right-2 text-slate-400"
+                                            }}
+                                            popoverProps={{
+                                                classNames: {
+                                                    content: "bg-white border border-slate-200 shadow-2xl p-1 rounded-xl opacity-100",
+                                                }
+                                            }}
+                                        >
+                                            {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={d.DepartmentCode} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-lg transition-colors">{d.DepartmentCode}</SelectItem>)}
+                                        </Select>
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        <label htmlFor="secondaryDept" className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 ml-1">Secondary Department</label>
+                                        <Select
+                                            id="secondaryDept"
+                                            name="secondaryDept"
+                                            variant="bordered"
+                                            size="sm"
+                                            placeholder="Choose department..."
+                                            selectedKeys={secondaryDept ? [secondaryDept] : []}
+                                            onSelectionChange={(keys) => setSecondaryDept(Array.from(keys)[0] as string)}
+                                            classNames={{
+                                                trigger: "h-10 border-slate-200 bg-white",
+                                                value: "text-slate-700 font-medium",
+                                                selectorIcon: "right-2 text-slate-400"
+                                            }}
+                                            popoverProps={{
+                                                classNames: {
+                                                    content: "bg-white border border-slate-200 shadow-2xl p-1 rounded-xl opacity-100",
+                                                }
+                                            }}
+                                        >
+                                            {departments.map(d => <SelectItem key={String(d.DepartmentID)} textValue={d.DepartmentCode} className="font-medium text-slate-700 hover:bg-indigo-50 rounded-lg transition-colors">{d.DepartmentCode}</SelectItem>)}
+                                        </Select>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </section>
+                </div>
+
+                <div className="p-8 border-t border-slate-100 space-y-4">
+                    <Button
+                        color="warning"
+                        fullWidth
+                        size="lg"
+                        variant="flat"
+                        className="font-black h-12 rounded-2xl text-[11px] tracking-widest uppercase transition-all hover:bg-warning/20"
+                        isLoading={isAutoRegistering}
+                        onPress={handleAutoRegister}
+                        startContent={!isAutoRegistering && <Users size={16} />}
+                    >
+                        Auto-Register Students
+                    </Button>
+                    <Button
+                        color="primary"
+                        fullWidth
+                        size="lg"
+                        className={`font-black h-16 rounded-2xl shadow-xl transition-all duration-500 text-sm tracking-widest uppercase group ${selectedSeries && selectedDate && selectedSession && selectedHalls.length > 0
+                                ? 'bg-indigo-600 shadow-indigo-200 hover:scale-[1.02] hover:shadow-2xl'
+                                : 'bg-slate-300'
                             }`}
-                            isLoading={isGenerating}
-                            onPress={handleGenerate}
-                            startContent={!isGenerating && <RefreshCcw size={20} className="group-hover:rotate-180 transition-transform duration-700" />}
-                        >
-                            Generate Arrangement
-                        </Button>
-                    </div>
-                </Card>
+                        isLoading={isGenerating}
+                        onPress={handleGenerate}
+                        startContent={!isGenerating && <RefreshCcw size={20} className="group-hover:rotate-180 transition-transform duration-700" />}
+                    >
+                        Generate Arrangement
+                    </Button>
+                </div>
+            </Card>
 
             {/* --- CENTER: Hall Grid + Stats --- */}
             <main className="flex-1 min-w-0 flex flex-col gap-4 overflow-hidden">
-            {/* --- TOP STATS BAR --- */}
-            <header className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 shrink-0">
-                {/* Seated Stats */}
-                <Card className="p-6 border-none shadow-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white relative overflow-hidden group">
-                    <div className="absolute -right-4 -top-4 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700" />
-                    <div className="flex items-center justify-between relative z-10">
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-inner">
-                                <Users size={22} className="text-white" />
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Students Seated</p>
-                                <div className="flex items-baseline gap-2 mt-1">
-                                    <h4 className="text-3xl font-black">{stats?.assignedCount || 0}</h4>
+                {/* --- TOP STATS BAR --- */}
+                <header className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 shrink-0">
+                    {/* Seated Stats */}
+                    <Card className="p-6 border-none shadow-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white relative overflow-hidden group">
+                        <div className="absolute -right-4 -top-4 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700" />
+                        <div className="flex items-center justify-between relative z-10">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-inner">
+                                    <Users size={22} className="text-white" />
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Students Seated</p>
+                                    <div className="flex items-baseline gap-2 mt-1">
+                                        <h4 className="text-3xl font-black">{stats?.assignedCount || 0}</h4>
+                                    </div>
                                 </div>
                             </div>
+                            <CheckCircle2 size={32} className="opacity-20 rotate-12" />
                         </div>
-                        <CheckCircle2 size={32} className="opacity-20 rotate-12" />
-                    </div>
-                </Card>
+                    </Card>
 
-                {/* Total Capacity */}
-                <Card className="p-6 border-none shadow-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white relative overflow-hidden group">
-                    <div className="absolute -right-4 -top-4 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700" />
-                    <div className="flex items-center justify-between relative z-10">
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-inner">
-                                <Layout size={22} className="text-white" />
+                    {/* Total Capacity */}
+                    <Card className="p-6 border-none shadow-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white relative overflow-hidden group">
+                        <div className="absolute -right-4 -top-4 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700" />
+                        <div className="flex items-center justify-between relative z-10">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-inner">
+                                    <Layout size={22} className="text-white" />
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Total Capacity</p>
+                                    <h4 className="text-3xl font-black mt-1">{stats?.totalSeats || 0}</h4>
+                                </div>
                             </div>
-                            <div>
-                                <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Total Capacity</p>
-                                <h4 className="text-3xl font-black mt-1">{stats?.totalSeats || 0}</h4>
-                            </div>
+                            <Layers size={32} className="opacity-20 rotate-12" />
                         </div>
-                        <Layers size={32} className="opacity-20 rotate-12" />
-                    </div>
-                </Card>
+                    </Card>
 
-                {/* Utilization */}
-                <Card className="p-6 border-none shadow-xl bg-white relative overflow-hidden group border border-slate-100">
-                    <div className="flex items-center justify-between relative z-10">
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center border border-slate-100 shadow-sm">
-                                <BarChart3 size={22} className="text-slate-600" />
+                    {/* Utilization */}
+                    <Card className="p-6 border-none shadow-xl bg-white relative overflow-hidden group border border-slate-100">
+                        <div className="flex items-center justify-between relative z-10">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center border border-slate-100 shadow-sm">
+                                    <BarChart3 size={22} className="text-slate-600" />
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Hall Utilization</p>
+                                    <h4 className="text-3xl font-black mt-1 text-slate-800">
+                                        {stats && stats.totalSeats > 0 ? Math.round((stats.assignedCount / stats.totalSeats) * 100) : 0}%
+                                    </h4>
+                                </div>
                             </div>
-                            <div>
-                                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Hall Utilization</p>
-                                <h4 className="text-3xl font-black mt-1 text-slate-800">
-                                    {stats && stats.totalSeats > 0 ? Math.round((stats.assignedCount / stats.totalSeats) * 100) : 0}%
-                                </h4>
+                            <div className="flex flex-col items-end gap-1">
+                                <span className="text-[10px] font-black text-indigo-500 uppercase tracking-wider">Target: 100%</span>
+                                <Progress
+                                    value={stats && stats.totalSeats > 0 ? (stats.assignedCount / stats.totalSeats) * 100 : 0}
+                                    size="sm"
+                                    color="secondary"
+                                    className="w-24 h-2"
+                                />
                             </div>
                         </div>
-                        <div className="flex flex-col items-end gap-1">
-                            <span className="text-[10px] font-black text-indigo-500 uppercase tracking-wider">Target: 100%</span>
-                            <Progress 
-                                value={stats && stats.totalSeats > 0 ? (stats.assignedCount / stats.totalSeats) * 100 : 0} 
-                                size="sm" 
-                                color="secondary" 
-                                className="w-24 h-2"
-                            />
-                        </div>
-                    </div>
-                </Card>
-            </header>
+                    </Card>
+                </header>
 
                 {/* Hall Cards Grid */}
                 <div className="flex-1 overflow-y-auto scrollbar-hide">
@@ -929,7 +927,7 @@ const InternalSeatingPlans: React.FC = () => {
                                     // Only show as allocated if date is selected AND has filledSeats > 0
                                     const isAllocated = selectedDate && filled > 0;
                                     const canViewLayout = selectedSeries && selectedSession && selectedDate;
-                                    
+
                                     return (
                                         <Tooltip
                                             key={hallId}
@@ -939,92 +937,88 @@ const InternalSeatingPlans: React.FC = () => {
                                         >
                                             <motion.div whileHover={{ y: -3 }} transition={{ duration: 0.2 }}>
                                                 <Card
-                                                    className={`overflow-hidden ${canViewLayout ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'} transition-all duration-300 shadow-md hover:shadow-xl border-2 ${
-                                                        isViewing
+                                                    className={`overflow-hidden ${canViewLayout ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'} transition-all duration-300 shadow-md hover:shadow-xl border-2 ${isViewing
                                                             ? 'border-indigo-400 ring-2 ring-indigo-200'
                                                             : isAllocated
-                                                        ? 'border-emerald-300 bg-emerald-50/30 hover:border-emerald-400 hover:shadow-emerald-100'
-                                                        : 'border-slate-200 hover:border-indigo-200'
-                                                }`}
-                                                onPress={() => canViewLayout && openHallDetail(hallId)}
+                                                                ? 'border-emerald-300 bg-emerald-50/30 hover:border-emerald-400 hover:shadow-emerald-100'
+                                                                : 'border-slate-200 hover:border-indigo-200'
+                                                        }`}
+                                                    onPress={() => canViewLayout && openHallDetail(hallId)}
                                                     isPressable={canViewLayout}
-                                            >
-                                                <div className={`p-4 flex items-center justify-between border-b ${
-                                                    isAllocated
-                                                        ? 'bg-gradient-to-r from-emerald-50 to-emerald-25 border-emerald-100'
-                                                        : 'bg-gradient-to-r from-slate-50 to-white border-slate-100'
-                                                }`}>
-                                                    <div className="flex items-center gap-2.5">
-                                                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-inner transition-all duration-300 ${
-                                                            isViewing
-                                                                ? 'bg-indigo-600 text-white'
-                                                                : isAllocated
-                                                                ? 'bg-emerald-500 text-white'
-                                                                : 'bg-indigo-100 text-indigo-600'
+                                                >
+                                                    <div className={`p-4 flex items-center justify-between border-b ${isAllocated
+                                                            ? 'bg-gradient-to-r from-emerald-50 to-emerald-25 border-emerald-100'
+                                                            : 'bg-gradient-to-r from-slate-50 to-white border-slate-100'
                                                         }`}>
-                                                            <MapPin size={18} />
+                                                        <div className="flex items-center gap-2.5">
+                                                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-inner transition-all duration-300 ${isViewing
+                                                                    ? 'bg-indigo-600 text-white'
+                                                                    : isAllocated
+                                                                        ? 'bg-emerald-500 text-white'
+                                                                        : 'bg-indigo-100 text-indigo-600'
+                                                                }`}>
+                                                                <MapPin size={18} />
+                                                            </div>
+                                                            <div>
+                                                                <h4 className="font-black text-sm text-slate-800">{code}</h4>
+                                                                <p className={`text-[9px] font-bold uppercase tracking-wider ${isAllocated ? 'text-emerald-600' : 'text-slate-400'
+                                                                    }`}>
+                                                                    {isAllocated ? `${pct}% Full • Allocated` : 'Not yet allocated'}
+                                                                </p>
+                                                            </div>
                                                         </div>
-                                                        <div>
-                                                            <h4 className="font-black text-sm text-slate-800">{code}</h4>
-                                                            <p className={`text-[9px] font-bold uppercase tracking-wider ${
-                                                                isAllocated ? 'text-emerald-600' : 'text-slate-400'
-                                                            }`}>
-                                                                {isAllocated ? `${pct}% Full • Allocated` : 'Not yet allocated'}
-                                                            </p>
+                                                        {isViewing && <Chip size="sm" color="secondary" variant="flat" className="text-[9px] font-black">Viewing</Chip>}
+                                                        {isAllocated && !isViewing && (
+                                                            <Chip
+                                                                size="sm"
+                                                                color="success"
+                                                                variant="flat"
+                                                                className="text-[9px] font-black"
+                                                            >
+                                                                ✓ Allocated
+                                                            </Chip>
+                                                        )}
+                                                    </div>
+                                                    <div className="px-4 py-3 space-y-2">
+                                                        <Progress
+                                                            value={pct}
+                                                            color={pct >= 100 ? 'success' : isAllocated ? 'success' : 'default'}
+                                                            className="h-1.5"
+                                                        />
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex gap-1.5">
+                                                                <Chip
+                                                                    size="sm"
+                                                                    variant="flat"
+                                                                    color={isAllocated ? 'success' : 'default'}
+                                                                    className="text-[9px] font-black px-1"
+                                                                >
+                                                                    {filled} Seated
+                                                                </Chip>
+                                                                <Chip
+                                                                    size="sm"
+                                                                    variant="flat"
+                                                                    color="default"
+                                                                    className="text-[9px] font-black px-1"
+                                                                >
+                                                                    {total - filled} Free
+                                                                </Chip>
+                                                            </div>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="light"
+                                                                color="primary"
+                                                                isIconOnly
+                                                                className="rounded-full hover:bg-indigo-50"
+                                                                onPress={() => openHallDetail(hallId)}
+                                                                isDisabled={!canViewLayout}
+                                                            >
+                                                                <Monitor size={14} />
+                                                            </Button>
                                                         </div>
                                                     </div>
-                                                    {isViewing && <Chip size="sm" color="secondary" variant="flat" className="text-[9px] font-black">Viewing</Chip>}
-                                                    {isAllocated && !isViewing && (
-                                                        <Chip 
-                                                            size="sm" 
-                                                            color="success" 
-                                                            variant="flat" 
-                                                            className="text-[9px] font-black"
-                                                        >
-                                                            ✓ Allocated
-                                                        </Chip>
-                                                    )}
-                                                </div>
-                                                <div className="px-4 py-3 space-y-2">
-                                                    <Progress 
-                                                        value={pct} 
-                                                        color={pct >= 100 ? 'success' : isAllocated ? 'success' : 'default'} 
-                                                        className="h-1.5" 
-                                                    />
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="flex gap-1.5">
-                                                            <Chip 
-                                                                size="sm" 
-                                                                variant="flat" 
-                                                                color={isAllocated ? 'success' : 'default'} 
-                                                                className="text-[9px] font-black px-1"
-                                                            >
-                                                                {filled} Seated
-                                                            </Chip>
-                                                            <Chip 
-                                                                size="sm" 
-                                                                variant="flat" 
-                                                                color="default" 
-                                                                className="text-[9px] font-black px-1"
-                                                            >
-                                                                {total - filled} Free
-                                                            </Chip>
-                                                        </div>
-                                                        <Button 
-                                                            size="sm" 
-                                                            variant="light" 
-                                                            color="primary"
-                                                            isIconOnly
-                                                            className="rounded-full hover:bg-indigo-50"
-                                                            onPress={() => openHallDetail(hallId)}
-                                                            isDisabled={!canViewLayout}
-                                                        >
-                                                            <Monitor size={14} />
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            </Card>
-                                        </motion.div>
+                                                </Card>
+                                            </motion.div>
                                         </Tooltip>
                                     );
                                 })}
@@ -1034,8 +1028,8 @@ const InternalSeatingPlans: React.FC = () => {
             </main>
 
             {/* --- ROOM LAYOUT MODAL --- */}
-            <Modal 
-                isOpen={isDetailOpen} 
+            <Modal
+                isOpen={isDetailOpen}
                 onOpenChange={(open) => {
                     setIsDetailOpen(open);
                     if (!open) setHallDetail(null);
@@ -1098,7 +1092,7 @@ const InternalSeatingPlans: React.FC = () => {
                                                     if (bench.right?.subjectCode) subjects.set(bench.right.subjectCode, bench.right.subjectName || bench.right.subjectCode);
                                                 }
                                             }
-                                            const COLORS = ['#818cf8','#34d399','#f472b6','#fb923c','#67e8f9','#a3e635','#fbbf24','#e879f9'];
+                                            const COLORS = ['#818cf8', '#34d399', '#f472b6', '#fb923c', '#67e8f9', '#a3e635', '#fbbf24', '#e879f9'];
                                             const colorMap = new Map([...subjects.keys()].map((k, i) => [k, COLORS[i % COLORS.length]!]));
                                             return (
                                                 <div className="mb-10 flex flex-wrap gap-3 justify-center">
@@ -1118,7 +1112,7 @@ const InternalSeatingPlans: React.FC = () => {
                                         {/* Column layout - ABCDE format like college structure */}
                                         <div className="flex gap-10 justify-center items-start overflow-x-auto pb-10 scrollbar-hide px-4">
                                             {hallDetail.rows?.map((row: any) => {
-                                                const COLORS = ['#818cf8','#34d399','#f472b6','#fb923c','#67e8f9','#a3e635','#fbbf24','#e879f9'];
+                                                const COLORS = ['#818cf8', '#34d399', '#f472b6', '#fb923c', '#67e8f9', '#a3e635', '#fbbf24', '#e879f9'];
                                                 const subjectColorMap = new Map<string, string>();
                                                 let colorIdx = 0;
                                                 const getColor = (code: string) => {
@@ -1179,9 +1173,9 @@ const InternalSeatingPlans: React.FC = () => {
                                         <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Occupied</span>
                                     </div>
                                 </div>
-                                <Button 
-                                    color="danger" 
-                                    variant="flat" 
+                                <Button
+                                    color="danger"
+                                    variant="flat"
                                     onPress={onClose}
                                     className="font-black text-xs uppercase tracking-widest px-8 h-12 rounded-2xl"
                                 >
@@ -1204,10 +1198,9 @@ const SeatIcon: React.FC<{ seat: any, allocation: any }> = ({ seat, allocation }
     const content = (
         <motion.div
             whileHover={{ scale: 1.1 }}
-            className={`w-14 h-14 rounded-xl flex items-center justify-center text-xs transition-all duration-300 cursor-pointer border-2 ${
-                isDisabled ? 'bg-red-900/20 border-red-800/30 text-red-700 opacity-50'
-                : isOccupied ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg'
-                : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:bg-slate-700'}`}
+            className={`w-14 h-14 rounded-xl flex items-center justify-center text-xs transition-all duration-300 cursor-pointer border-2 ${isDisabled ? 'bg-red-900/20 border-red-800/30 text-red-700 opacity-50'
+                    : isOccupied ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg'
+                        : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:bg-slate-700'}`}
         >
             {isOccupied ? (
                 <div className="flex flex-col items-center leading-none">
