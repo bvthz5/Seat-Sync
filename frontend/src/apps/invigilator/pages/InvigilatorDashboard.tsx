@@ -35,6 +35,7 @@ interface DashboardData {
         id: number;
         exam: string;
         session: string;
+        date: string;
         roomID: number;
         room: string;
         block: string;
@@ -444,7 +445,7 @@ export default function InvigilatorDashboard() {
                 </header>
 
                 <main className="flex-1 overflow-y-auto custom-scrollbar relative">
-                    {console.log('[MAIN] Current activeNav:', activeNav), activeNav === 'dashboard' ? (
+                    {activeNav === 'dashboard' ? (
                         <>
                             {/* 2. HERO STATUS BANNER (FULL WIDTH) */}
                             <div className="px-4 sm:px-6 lg:px-8 pt-5 pb-6 w-full">
