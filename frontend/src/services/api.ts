@@ -127,6 +127,7 @@ api.interceptors.response.use(
 
                 const rawAccessToken = (response.data as any)?.accessToken;
                 const accessToken = typeof rawAccessToken === 'string' ? rawAccessToken.trim() : '';
+                
                 if (!accessToken) {
                     throw new Error('Refresh did not return a valid access token');
                 }
@@ -134,10 +135,13 @@ api.interceptors.response.use(
                 // Update the storage wrapper (also sanitizes values)
                 AccessTokenStore.setToken(accessToken);
 
+                // Update the Authorization header for all future requests
                 api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
 
+                // Process all queued requests with the new token
                 processQueue(null, accessToken);
 
+                // Update the header for the CURRENT request and retry it
                 if (originalRequest.headers) {
                     originalRequest.headers.Authorization = `Bearer ${accessToken}`;
                 }
@@ -145,14 +149,17 @@ api.interceptors.response.use(
                 return api(originalRequest);
             } catch (refreshError) {
                 processQueue(refreshError, null);
-                AccessTokenStore.clear(); // Clears localStorage
-                sessionStorage.removeItem('seat_sync_active'); // Ensure session is dead
+                
+                // Clear everything to force a clean logout if refresh fails
+                AccessTokenStore.clear();
+                sessionStorage.removeItem('seat_sync_active');
 
+                // Redirect based on the current portal
                 if (!window.location.pathname.includes('/login')) {
                     const currentPath = window.location.pathname.toLowerCase();
-                    if (currentPath.startsWith('/invigilator')) {
+                    if (currentPath.includes('/invigilator')) {
                         window.location.replace('/invigilator/login');
-                    } else if (currentPath.startsWith('/student')) {
+                    } else if (currentPath.includes('/student')) {
                         window.location.replace('/student/login');
                     } else {
                         window.location.replace('/admin/login');

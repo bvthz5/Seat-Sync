@@ -113,10 +113,7 @@ export class AuthService {
             throw new Error("Invalid refresh token or user is inactive");
         }
 
-        // Strict role check for refresh: admin/root admin/invigilator only
-        if (!['exam_admin', 'root_admin', 'admin', 'invigilator'].includes(user.Role as string)) {
-            throw new Error("Invalid role for this portal");
-        }
+
 
         const normalizedRole = this.normalizePortalRole(user.Role as string);
 
