@@ -183,7 +183,7 @@ const loadInternalStudent = async (userId: number) => {
         where: { UserID: userId },
         include: [
             { model: User, attributes: ["UserID", "Email", "FullName", "Role", "CreatedAt", "IsActive"], include: [{ model: UserProfile }] },
-            { model: Department, attributes: ["DepartmentID", "DepartmentCode", "DepartmentName"] },
+            { model: Department, as: 'Department', attributes: ["DepartmentID", "DepartmentCode", "DepartmentName"] },
             { model: Program, attributes: ["ProgramID", "ProgramName", "ProgramCode", "TotalSemesters"] },
             { model: Semester, attributes: ["SemesterID", "SemesterNumber", "SemesterName"] },
         ],
