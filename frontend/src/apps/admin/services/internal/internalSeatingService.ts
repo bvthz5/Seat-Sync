@@ -44,11 +44,7 @@ export const InternalSeatingService = {
         session: string;
         hallIds: number[];
         seriesId: number;
-        mode?: string;
-        primaryDeptId?: number;
-        secondaryDeptId?: number;
         shuffleRooms?: boolean;
-        roomCapacityLimit?: number;
     }) => {
         const r = await api.post(`${PREFIX}/generate`, payload);
         return r.data;

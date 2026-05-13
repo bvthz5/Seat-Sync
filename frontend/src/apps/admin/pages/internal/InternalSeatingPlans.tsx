@@ -99,10 +99,7 @@ const InternalSeatingPlans: React.FC = () => {
     const [departments, setDepartments] = useState<any[]>([]);
 
     // Allocation Logic
-    const [allocationMode, setAllocationMode] = useState<string>('same-exam');
     const [shuffleRooms, setShuffleRooms] = useState(false);
-    const [primaryDept, setPrimaryDept] = useState<string>('');
-    const [secondaryDept, setSecondaryDept] = useState<string>('');
 
     // Dashboard State
     const [hallSummary, setHallSummary] = useState<any[]>([]);
@@ -218,10 +215,7 @@ const InternalSeatingPlans: React.FC = () => {
                 examDate: selectedDate,
                 session: selectedSession,
                 hallIds: selectedHallIds.size > 0 ? Array.from(selectedHallIds) : halls.map(h => h.RoomID),
-                mode: allocationMode,
                 seriesId: Number(selectedSeries),
-                primaryDeptId: primaryDept ? Number(primaryDept) : undefined,
-                secondaryDeptId: secondaryDept ? Number(secondaryDept) : undefined,
                 shuffleRooms
             });
 
@@ -388,25 +382,15 @@ const InternalSeatingPlans: React.FC = () => {
                                         <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-extrabold flex items-center justify-center shrink-0">2</span>
                                         <span className="text-[11px] font-bold text-slate-700 uppercase tracking-widest">Allocation Engine</span>
                                     </div>
-                                    <Select aria-label="Allocation Mode" variant="bordered"
-                                        selectedKeys={['same-exam', 'alternate', 'split-dept'].includes(allocationMode) ? [allocationMode] : []}
-                                        onSelectionChange={(k) => setAllocationMode(Array.from(k)[0] as string)}
-                                        classNames={{ 
-                                            trigger: "h-11 border-slate-200 bg-white rounded-xl text-[13px] font-semibold transition-all hover:border-indigo-400 overflow-hidden",
-                                            value: "text-slate-700 pr-6",
-                                            selectorIcon: "right-3 text-slate-400",
-                                            popoverContent: "bg-white border border-slate-200 shadow-2xl rounded-2xl"
-                                        }}
-                                        popoverProps={{
-                                            classNames: {
-                                                content: "p-1 bg-white border-none shadow-none"
-                                            }
-                                        }}
-                                    >
-                                        <SelectItem key="same-exam" className="text-[13px] font-medium rounded-lg">Same Exam Both Sides</SelectItem>
-                                        <SelectItem key="alternate" className="text-[13px] font-medium rounded-lg">Alternate Subjects</SelectItem>
-                                        <SelectItem key="split-dept" className="text-[13px] font-medium rounded-lg">Split By Department</SelectItem>
-                                    </Select>
+                                    <div className="p-3 rounded-xl bg-indigo-50/50 border border-indigo-100/50">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <Zap size={14} className="text-indigo-600" />
+                                            <span className="text-[13px] font-bold text-indigo-900">Alternate Subject Logic</span>
+                                        </div>
+                                        <p className="text-[11px] text-indigo-700/70 font-medium leading-relaxed">
+                                            Students from different subjects will be seated together on each bench to ensure maximum integrity.
+                                        </p>
+                                    </div>
 
                                     <div 
                                         className="flex items-center justify-between px-4 py-3 rounded-2xl bg-white border border-slate-200 shadow-sm transition-all hover:border-indigo-300 group cursor-pointer active:scale-[0.98]"
@@ -614,53 +598,47 @@ const InternalSeatingPlans: React.FC = () => {
                                                 <span className="text-lg font-black text-white">{row.rowLabel}</span>
                                             </div>
                                             <div className="flex flex-col gap-4">
-                                                {(() => {
-                                                    // Build a flat array of all seats in this row, left then right, for continuous numbering
-                                                    const seatsInRow = row.benches.flatMap((bench: any) => [bench.left, bench.right].filter(Boolean));
-                                                    let studentCounter = 1;
-                                                    return row.benches.map((bench: any) => (
-                                                        <div key={bench.benchNumber} className="flex gap-3 p-2 bg-slate-800/30 rounded-2xl border border-white/5 backdrop-blur-sm">
-                                                            {[bench.left, bench.right].map((seat, idx) => {
-                                                                const isEmpty = !seat?.studentId;
-                                                                const sStyle = getSubjectStyle(seat?.subjectCode);
-                                                                // Find the index of this seat among all non-empty seats in the row for continuous numbering
-                                                                let seatNumber = '';
-                                                                if (!isEmpty) {
-                                                                    seatNumber = studentCounter.toString().padStart(3, '0');
-                                                                    studentCounter++;
-                                                                }
-                                                                return (
-                                                                    <Tooltip key={idx} isDisabled={isEmpty} content={
-                                                                        <div className="p-3">
-                                                                            <p className="font-black text-indigo-400 text-xs">{seat?.name}</p>
-                                                                            <p className="text-[10px] text-white opacity-80 mt-1">Reg: {seat?.registerNumber}</p>
-                                                                            <p className="text-[10px] text-white opacity-80">Dept: {seat?.deptCode}</p>
-                                                                        </div>
-                                                                    } classNames={{ content: "bg-slate-900 border border-slate-800 p-0 rounded-xl shadow-2xl" }}>
-                                                                        <div className={`w-16 h-20 rounded-xl border-2 flex flex-col items-center justify-center transition-all cursor-pointer ${isEmpty 
-                                                                            ? 'bg-slate-900/50 border-slate-800 text-slate-700' 
-                                                                            : 'shadow-lg hover:scale-110 active:scale-95'}`}
-                                                                            style={isEmpty ? {} : { 
-                                                                                backgroundColor: `${sStyle.fill}40`, 
-                                                                                borderColor: sStyle.border,
-                                                                                boxShadow: `0 0 15px ${sStyle.fill}20`
-                                                                            }}>
-                                                                            {isEmpty ? (
-                                                                                <span className="text-[10px] font-black opacity-20">{idx === 0 ? 'L' : 'R'}</span>
-                                                                            ) : (
+                                                {row.benches.map((bench: any) => (
+                                                    <div key={bench.benchNumber} className="flex gap-3 p-2 bg-slate-800/30 rounded-2xl border border-white/5 backdrop-blur-sm">
+                                                        {[bench.left, bench.right].map((seat, idx) => {
+                                                            const isEmpty = !seat?.studentId;
+                                                            const sStyle = getSubjectStyle(seat?.subjectCode);
+                                                            
+                                                            return (
+                                                                <Tooltip key={idx} isDisabled={isEmpty} content={
+                                                                    <div className="p-3">
+                                                                        <p className="font-black text-indigo-400 text-xs">{seat?.name}</p>
+                                                                        <p className="text-[10px] text-white opacity-80 mt-1">Reg: {seat?.registerNumber}</p>
+                                                                        <p className="text-[10px] text-white opacity-80">Dept: {seat?.deptCode}</p>
+                                                                    </div>
+                                                                } classNames={{ content: "bg-slate-900 border border-slate-800 p-0 rounded-xl shadow-2xl" }}>
+                                                                    <div className={`w-20 h-24 rounded-xl border-2 flex flex-col items-center justify-center transition-all cursor-pointer ${isEmpty 
+                                                                        ? 'bg-slate-900/50 border-slate-800 text-slate-700' 
+                                                                        : 'shadow-lg hover:scale-110 active:scale-95'}`}
+                                                                        style={isEmpty ? {} : { 
+                                                                            backgroundColor: `${sStyle.fill}40`, 
+                                                                            borderColor: sStyle.border,
+                                                                            boxShadow: `0 0 20px ${sStyle.fill}20`
+                                                                        }}>
+                                                                        {isEmpty ? (
+                                                                            <span className="text-[10px] font-black opacity-20">{idx === 0 ? 'L' : 'R'}</span>
+                                                                        ) : (
                                                                                 <>
                                                                                     <span className="text-[8px] font-black mb-1 px-1.5 py-0.5 rounded bg-black/40" style={{ color: sStyle.text }}>{seat.subjectCode?.slice(0, 4)}</span>
-                                                                                    <span className="text-[11px] font-black text-white">{seatNumber}</span>
-                                                                                    <span className="text-[7px] font-bold text-slate-400 mt-1 uppercase tracking-tighter truncate w-12 text-center">{seat.name?.split(' ')[0]}</span>
+                                                                                    <span className="text-[10px] font-black text-white px-1 leading-tight text-center">{seat.registerNumber}</span>
+                                                                                    <div className="mt-1 w-full px-1 flex flex-col items-center">
+                                                                                        <span className="text-[7px] font-bold text-slate-400 uppercase tracking-tighter text-center leading-[1.1] line-clamp-2">
+                                                                                            {seat.name}
+                                                                                        </span>
+                                                                                    </div>
                                                                                 </>
-                                                                            )}
-                                                                        </div>
-                                                                    </Tooltip>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    ));
-                                                })()}
+                                                                        )}
+                                                                    </div>
+                                                                </Tooltip>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                ))}
                                             </div>
                                         </div>
                                     ))}
