@@ -7,7 +7,7 @@ import { Department } from '../models/Department.js';
 import { Program } from '../models/Program.js';
 import { normalizeProgram, parseBatchString, mapProgramToDepartment, resolveOrCreateProgram, resolveOrCreateDepartment } from './academicNormalizer.service.js';
 import { Semester } from '../models/Semester.js';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { emailService } from './email.service.js';
 import { generateDefaultPassword } from '../utils/student.utils.js';
 
@@ -109,7 +109,7 @@ export class BulkStudentImportService {
                         registerNumber = "AUTO_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
                     }
                     
-const rowProgramRaw = row.ProgramName?.trim() || '';        
+                    const rowProgramRaw = row.ProgramName?.trim() || '';        
                     const parseBatch = (batchText: string) => {
                         if (!batchText) return null;
                         const text = batchText.replace(/batch\s*:/i, '').trim();
@@ -376,6 +376,7 @@ const rowProgramRaw = row.ProgramName?.trim() || '';
         // 1. Get all seats in the room with status = 'Available'
         // 2. Allocate seats sequentially to newly created students
         // 3. Mark seats as 'Occupied' and update SeatAllocation records
+        // 4. Update the seat status to 'Occupied'
 
         return {
             ...result,

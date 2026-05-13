@@ -6,7 +6,7 @@ import { Program } from '../models/Program.js';
 import { Semester } from '../models/Semester.js';
 import { sequelize } from '../config/database.js';
 import { Op } from 'sequelize';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import * as XLSX from 'xlsx';
 import { BulkStudentImportService } from '../services/bulkStudentImport.service.js';
 import { emailService } from '../services/email.service.js';
@@ -479,7 +479,7 @@ export const importStudents = async (req: Request, res: Response) => {
         });
         
         // Hash default password once to avoid O(N) bcrypt delay
-        const bcrypt = await import('bcryptjs');
+        // bcrypt is already imported at the top
 
         // Normalize keys helper
         const normalizeKey = (row: any, keys: string[]) => {

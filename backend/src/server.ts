@@ -38,8 +38,8 @@ const startServer = async () => {
     const httpServer = createServer(app);
     initSocket(httpServer);
 
-    // Start server (keeps health endpoints available in degraded mode)
-    const server = httpServer.listen(PORT, () => {
+    // Start server (explicitly listen on all interfaces for better localhost compatibility)
+    const server = httpServer.listen(PORT, '0.0.0.0', () => {
         console.log(`SeatSync API running at http://localhost:${PORT}`);
         console.log(`Swagger UI available at http://localhost:${PORT}/api-docs`);
         // Automatically open Swagger UI in the default browser

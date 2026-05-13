@@ -13,14 +13,36 @@ const api: AxiosInstance = axios.create({
 // Role-scoped token storage keys to prevent cross-contamination between Admin, Invigilator, and Student tabs
 const getStorageKey = () => {
     const path = window.location.pathname.toLowerCase();
-    if (path.startsWith('/admin')) return 'seat_sync_admin_token';
-    if (path.startsWith('/invigilator')) return 'seat_sync_invigilator_token';
-    if (path.startsWith('/student')) return 'seat_sync_student_token';
+    if (path.includes('/admin')) return 'seat_sync_admin_token';
+    if (path.includes('/invigilator')) return 'seat_sync_invigilator_token';
+    if (path.includes('/student')) return 'seat_sync_student_token';
     return 'accessToken'; // Fallback
 };
 
+// Advanced token retrieval with cross-role fallback to prevent 401s during transitions
+const getEffectiveToken = () => {
+    const primaryKey = getStorageKey();
+    const primaryToken = localStorage.getItem(primaryKey);
+    
+    if (primaryToken && primaryToken !== 'undefined' && primaryToken !== 'null') {
+        return primaryToken.trim();
+    }
+
+    // Fallback: check other known keys if on a transitionary path
+    const fallbackKeys = ['seat_sync_admin_token', 'seat_sync_invigilator_token', 'seat_sync_student_token', 'accessToken'];
+    for (const key of fallbackKeys) {
+        if (key === primaryKey) continue;
+        const fallbackToken = localStorage.getItem(key);
+        if (fallbackToken && fallbackToken !== 'undefined' && fallbackToken !== 'null') {
+            return fallbackToken.trim();
+        }
+    }
+    
+    return null;
+};
+
 export const AccessTokenStore = {
-    get token() { return localStorage.getItem(getStorageKey()); },
+    get token() { return getEffectiveToken(); },
     setToken: (t: string) => {
         const token = (t || '').trim();
         const key = getStorageKey();
