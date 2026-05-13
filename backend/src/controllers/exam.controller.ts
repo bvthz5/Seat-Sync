@@ -515,8 +515,8 @@ const resolveProgramForEligibleImport = async (
         if (program) return program;
 
         return Program.create({
-            ProgramName: programValue || programCodeValue,
-            ProgramCode: programCodeValue || undefined,
+            ProgramName: programValue || programCodeValue || `Program-${Date.now()}`,
+            ProgramCode: programCodeValue || `PRG-${departmentId}-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`,
             DepartmentID: departmentId,
             IsActive: true
         } as any, { transaction });
@@ -1798,19 +1798,28 @@ export class ExamController {
                     ? emailRaw.toLowerCase() 
                     : `${normalizedRegNo.toLowerCase()}@student.local`; // Temporary fallback
 
-                const user = await User.create({
-                    Email: studentEmail,
-                    FullName: fullName,
-                    PasswordHash: hashedPassword,
-                    Role: 'student',
-                    IsActive: true,
-                    IsPasswordChanged: false,
-                    IsActivated: false,
-                    FailedLoginAttempts: 0,
-                    AccountLockedUntil: null
-                } as any, { transaction });
-
-                createdUsers++;
+                let user = await User.findOne({ where: { Email: studentEmail }, transaction });
+                
+                if (!user) {
+                    user = await User.create({
+                        Email: studentEmail,
+                        FullName: fullName,
+                        PasswordHash: hashedPassword,
+                        Role: 'student',
+                        IsActive: true,
+                        IsPasswordChanged: false,
+                        IsActivated: false,
+                        FailedLoginAttempts: 0,
+                        AccountLockedUntil: null
+                    } as any, { transaction });
+                    createdUsers++;
+                } else {
+                    // Update user's name if needed
+                    if (user.FullName !== fullName) {
+                        await user.update({ FullName: fullName }, { transaction });
+                        updatedUsers++;
+                    }
+                }
 
                 // Resolve Department, Program, Semester for the NEW student
                 const deptId = defaultDepartmentId;
