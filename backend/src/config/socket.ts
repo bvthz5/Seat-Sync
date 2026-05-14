@@ -20,11 +20,14 @@ export const initSocket = (httpServer: HTTPServer) => {
                 if (
                     allowedOrigins.has(origin) ||
                     origin.startsWith("http://localhost:") ||
-                    origin.startsWith("http://127.0.0.1:")
+                    origin.startsWith("http://127.0.0.1:") ||
+                    origin.includes('ngrok') ||
+                    origin.includes('trycloudflare.com')
                 ) {
                     return callback(null, true);
                 }
 
+                console.warn(`[Socket.IO CORS Blocked] Origin: ${origin}`);
                 callback(new Error("Socket.IO CORS blocked"));
             },
             credentials: true,

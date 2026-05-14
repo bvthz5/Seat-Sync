@@ -40,7 +40,8 @@ export const initNotificationSocket = (userId: number, onNewNotification: (n: No
         reconnection: true,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
-        reconnectionAttempts: 5
+        reconnectionAttempts: 5,
+        transports: ['websocket']
     });
 
     socket.on('connect', () => {

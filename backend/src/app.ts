@@ -40,6 +40,12 @@ import seriesRoutes from "./routes/series.routes.js";
 
 const app = express();
 
+// Request logger for debugging
+app.use((req, res, next) => {
+    console.log(`[Request] ${req.method} ${req.path} - Origin: ${req.get('Origin')}`);
+    next();
+});
+
 
 // --- CORS Configuration ---
 app.use(cors({
@@ -70,6 +76,18 @@ app.use(cors({
 
 // --- Security Middleware: Helmet ---
 app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            "default-src": ["*"],
+            "connect-src": ["*", "https://*.trycloudflare.com", "https://assume-principles-unlimited-chair.trycloudflare.com", "https://*.ngrok-free.dev"],
+            "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "*"],
+            "style-src": ["'self'", "'unsafe-inline'", "*"],
+            "img-src": ["*", "data:", "https:"],
+            "font-src": ["*", "https:", "data:"],
+            "object-src": ["'none'"],
+            "upgrade-insecure-requests": [],
+        },
+    },
     crossOriginResourcePolicy: { policy: "cross-origin" } // Allow cross-origin resources
 }));
 

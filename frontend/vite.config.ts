@@ -18,6 +18,7 @@ export default defineConfig({
       timeout: 30000,
     },
     allowedHosts: [
+      'assume-principles-unlimited-chair.trycloudflare.com',
       'tucking-oversold-doctrine.ngrok-free.dev',
       'localhost',
       '127.0.0.1',

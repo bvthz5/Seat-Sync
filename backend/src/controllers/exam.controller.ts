@@ -1797,19 +1797,47 @@ export class ExamController {
                     ? emailRaw.toLowerCase() 
                     : `${normalizedRegNo.toLowerCase()}@student.local`;
 
-                const user = await User.create({
-                    Email: studentEmail, // Guarantee uniqueness
-                    FullName: fullName,
-                    PasswordHash: hashedPassword,
-                    Role: 'student',
-                    IsActive: true,
-                    IsPasswordChanged: false,
-                    IsActivated: false,
-                    FailedLoginAttempts: 0,
-                    AccountLockedUntil: null
-                } as any, { transaction });
+                let user = await User.findOne({
+                    where: { Email: studentEmail },
+                    transaction
+                });
 
-                createdUsers++;
+                if (!user) {
+                    try {
+                        user = await User.create({
+                            Email: studentEmail,
+                            FullName: fullName,
+                            PasswordHash: hashedPassword,
+                            Role: 'student',
+                            IsActive: true,
+                            IsPasswordChanged: false,
+                            IsActivated: false,
+                            FailedLoginAttempts: 0,
+                            AccountLockedUntil: null
+                        } as any, { transaction });
+                        createdUsers++;
+                    } catch (createErr: any) {
+                        if (createErr.name === 'SequelizeUniqueConstraintError' || createErr.number === 2601) {
+                            user = await User.findOne({
+                                where: { Email: studentEmail },
+                                transaction
+                            });
+                            if (!user) throw createErr;
+                        } else {
+                            throw createErr;
+                        }
+                    }
+                } else {
+                    // Update user if details changed
+                    const userUpdates: any = {};
+                    if (user.FullName !== fullName) userUpdates.FullName = fullName;
+                    if (user.Role !== 'student') userUpdates.Role = 'student';
+                    
+                    if (Object.keys(userUpdates).length > 0) {
+                        await user.update(userUpdates, { transaction });
+                        updatedUsers++;
+                    }
+                }
 
                 // Resolve Department, Program, Semester for the NEW student
                 const deptId = defaultDepartmentId;

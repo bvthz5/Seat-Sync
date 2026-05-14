@@ -21,7 +21,10 @@ export const initStudentNotificationSocket = (
     if (socket) return socket;
 
     const socketUrl = import.meta.env.VITE_SOCKET_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
-    socket = io(socketUrl, { withCredentials: true });
+    socket = io(socketUrl, { 
+        withCredentials: true,
+        transports: ['websocket']
+    });
 
     socket.on('connect', () => {
         socket?.emit('join_room', `user_${userId}`);
