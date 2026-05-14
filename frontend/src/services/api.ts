@@ -132,7 +132,7 @@ api.interceptors.response.use(
                         window.location.replace('/invigilator/login');
                     } else if (currentPath.startsWith('/student')) {
                         window.location.replace('/student/login');
-                    } else {
+                    } else if (currentPath.startsWith('/admin')) {
                         window.location.replace('/admin/login');
                     }
                 }
@@ -151,7 +151,7 @@ api.interceptors.response.use(
                     window.location.replace('/invigilator/login');
                 } else if (currentPath.startsWith('/student')) {
                     window.location.replace('/student/login');
-                } else {
+                } else if (currentPath.startsWith('/admin')) {
                     window.location.replace('/admin/login');
                 }
             }
@@ -182,7 +182,7 @@ api.interceptors.response.use(
                     window.location.replace('/invigilator/login');
                 } else if (currentPath.startsWith('/student')) {
                     window.location.replace('/student/login');
-                } else {
+                } else if (currentPath.startsWith('/admin')) {
                     window.location.replace('/admin/login');
                 }
             }
