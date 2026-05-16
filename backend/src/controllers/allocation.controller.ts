@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { Room, Seat, Student, Exam, SeatAllocation, Zone, ExamRegistration } from "../models/index.js";
+import { Room, Seat, Student, Exam, SeatAllocation, ExamRegistration } from "../models/index.js";
 import { Op } from "sequelize";
 import { sequelize } from "../config/database.js";
 
@@ -55,10 +55,6 @@ export const allocateSeats = async (req: Request, res: Response) => {
                     model: Seat,
                     where: { IsActive: true },
                     required: false // Left join to get room even if no seats (though unlikely usable)
-                },
-                {
-                    model: Zone,
-                    required: false
                 }
             ],
             order: [['RoomCode', 'ASC']], // Deterministic order
@@ -77,27 +73,12 @@ export const allocateSeats = async (req: Request, res: Response) => {
 
             // Sort seats based on Room Strategy
             // If HALL Mode, group by Zone. If ROOM, group by Row/Bench.
-            if (room.RoomType === 'HALL') {
-                // Group by Zone logic:
-                // We want to fill Zone 1, then Zone 2, etc.
-                // Or maybe distribute? "group seats by zone" usually means filling sequentially per zone.
-                seats.sort((a: any, b: any) => {
-                    // Sort by ZoneID (nulls last or first? usually we assign zones for a reason)
-                    if ((a.ZoneID || 999999) !== (b.ZoneID || 999999)) {
-                        return (a.ZoneID || 999999) - (b.ZoneID || 999999);
-                    }
-                    // Within Zone, normal sort
-                    if (a.RowIndex !== b.RowIndex) return a.RowIndex.localeCompare(b.RowIndex);
-                    return a.SeatIndex - b.SeatIndex;
-                });
-            } else {
-                // Standard Room: Sort by Row, then Bench, then Seat (Standard exam order)
-                seats.sort((a: any, b: any) => {
-                    if (a.RowIndex !== b.RowIndex) return a.RowIndex.localeCompare(b.RowIndex);
-                    if (a.BenchIndex !== b.BenchIndex) return a.BenchIndex - b.BenchIndex;
-                    return a.SeatIndex - b.SeatIndex;
-                });
-            }
+            // Standard Room: Sort by Row, then Bench, then Seat (Standard exam order)
+            seats.sort((a: any, b: any) => {
+                if (a.RowIndex !== b.RowIndex) return a.RowIndex.localeCompare(b.RowIndex);
+                if (a.BenchIndex !== b.BenchIndex) return a.BenchIndex - b.BenchIndex;
+                return a.SeatIndex - b.SeatIndex;
+            });
 
             // Check valid seats (not already allocated to another exam in same slot)
             // This requires checking SeatAllocation for *conflicting* exams.

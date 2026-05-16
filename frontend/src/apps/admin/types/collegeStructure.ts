@@ -40,10 +40,3 @@ export interface LayoutStats {
     totalSeats: number;
 }
 
-export interface Zone {
-    ZoneID: number;
-    RoomID: number;
-    ZoneCode: string;
-    ZoneName: string;
-    Color: string;
-}

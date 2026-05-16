@@ -18,11 +18,7 @@ export const importStructureMetrics = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "No CSV file uploaded" });
         }
         
-        const autoZone = req.body.autoZone === 'true' || req.body.autoZone === true;
-        const zoneCount = parseInt(req.body.zoneCount, 10) || 3;
-
-        console.log('[DEBUG] Processing import with:', { autoZone, zoneCount });
-        const result = await importService.importFromCSV(req.file.buffer, { autoZone, zoneCount });
+        const result = await importService.importFromCSV(req.file.buffer);
         res.status(200).json(result);
 
     } catch (error: any) {        
@@ -40,20 +36,15 @@ export const importStructureMetrics = async (req: Request, res: Response) => {
  */
 export const importStructureFromJSON = async (req: Request, res: Response) => {
     try {
-        const { data, autoZone, zoneCount } = req.body;
+        const { data } = req.body;
 
         if (!data || !Array.isArray(data) || data.length === 0) {
             return res.status(400).json({ message: "No data provided for import" });
         }
 
-        console.log('[DEBUG] JSON import received:', { records: data.length, autoZone, zoneCount });
+        console.log('[DEBUG] JSON import received:', { records: data.length });
 
-        const options = {
-            autoZone: autoZone === true || autoZone === 'true',
-            zoneCount: parseInt(zoneCount, 10) || 2
-        };
-
-        const result = await importService.importFromJSON(data, options);
+        const result = await importService.importFromJSON(data);
         res.status(200).json(result);
 
     } catch (error: any) {

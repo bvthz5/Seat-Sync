@@ -7,8 +7,7 @@ import {
     updateRoom,
     disableRoom,
     enableRoom,
-    deleteRoom,
-    autoZoneRoom
+    deleteRoom
 } from "../controllers/room.controller.js";
 
 const router = express.Router();
@@ -219,37 +218,6 @@ router.patch("/:roomId/disable", AuthMiddleware.requireRootAuth, disableRoom);
 router.patch("/:roomId/enable", AuthMiddleware.requireRootAuth, enableRoom);
 router.delete("/:id", AuthMiddleware.requireRootAuth, deleteRoom);
 
-/**
- * @swagger
- * /api/rooms/{roomId}/auto-zone:
- *   post:
- *     summary: Auto-zone a room
- *     tags: [Structure]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: roomId
- *         required: true
- *         schema:
- *           type: integer
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - zoneCount
- *             properties:
- *               zoneCount:
- *                 type: integer
- *     responses:
- *       200:
- *         description: Auto-zoning completed successfully
- *       400:
- *         description: Invalid input or failure
- */
-router.post("/:roomId/auto-zone", AuthMiddleware.requireRootAuth, autoZoneRoom);
+
 
 export default router;

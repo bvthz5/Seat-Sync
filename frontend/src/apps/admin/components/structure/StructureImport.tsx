@@ -22,8 +22,6 @@ export const StructureImport: React.FC<{ onChange?: () => void }> = ({ onChange 
     const [errors, setErrors] = useState<string[]>([]);
     const [loading, setLoading] = useState(false);
     const [isValidating, setIsValidating] = useState(false);
-    const [autoZone, setAutoZone] = useState(false);
-    const [zoneCount, setZoneCount] = useState<number>(2);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [importStatus, setImportStatus] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -191,7 +189,7 @@ const processRawData = (data: any[]): CSVData[] => {
         }, 400);
 
         try {
-            const result = await structureService.importStructure(file, { autoZone, zoneCount }, previewData);
+            const result = await structureService.importStructure(file, previewData);
             
             clearInterval(interval);
             setUploadProgress(100);
@@ -334,23 +332,6 @@ const processRawData = (data: any[]): CSVData[] => {
                                                     <p className="text-sm text-emerald-600/80 font-medium ml-7 mt-0.5">Structure mapped successfully.</p>
                                                 </div>
                                                 
-                                                {/* Auto-Zone Controls */}
-                                                <div className="flex items-center gap-4 border-l border-green-200 pl-4">
-                                                    <Checkbox isSelected={autoZone} onValueChange={setAutoZone} color="primary" className="text-sm font-semibold">
-                                                        Auto-Zone Rooms
-                                                    </Checkbox>
-                                                    {autoZone && (
-                                                        <Input name="custom-input" 
-                                                            type="number"
-                                                            size="sm"
-                                                            value={zoneCount.toString()}
-                                                            onValueChange={(val) => setZoneCount(Number(val) || 2)}
-                                                            className="w-24"
-                                                            min={1}
-                                                            max={10}
-                                                        />
-                                                    )}
-                                                </div>
                                             </div>
                                         )}
 

@@ -1,4 +1,4 @@
-import { Block, Floor, Room, Zone } from "../types/collegeStructure";
+import { Block, Floor, Room } from "../types/collegeStructure";
 import api from "../../../services/api"; // Correct path to shared api instance
 
 const PREFIX = '/admin/college-structure';
@@ -83,46 +83,25 @@ export const structureService = {
 
     // --- LAYOUT ---
     getRoomLayout: async (roomId: number) => {
-        const response = await api.get<{ room: Room, seats: any[], zones: any[], seatCount: number }>(`${PREFIX}/rooms/${roomId}/layout`);
-        return response.data;
-    },
-
-    // --- ZONES ---
-    getZones: async (roomId: number) => {
-        const response = await api.get<Zone[]>(`${PREFIX}/rooms/${roomId}/zones`);
-        return response.data;
-    },
-    createZone: async (roomId: number, data: { ZoneCode: string, ZoneName: string, Color?: string }) => {
-        const response = await api.post<Zone>(`${PREFIX}/rooms/${roomId}/zones`, data);
-        return response.data;
-    },
-    deleteZone: async (zoneId: number) => {
-        await api.delete(`${PREFIX}/zones/${zoneId}`);
-    },
-
-    // --- AUTO-ZONE ---
-    autoZoneRoom: async (roomId: number, zoneCount: number) => {
-        const response = await api.post(`${PREFIX}/rooms/${roomId}/auto-zone`, { zoneCount });
+        const response = await api.get<{ room: Room, seats: any[], seatCount: number }>(`${PREFIX}/rooms/${roomId}/layout`);
         return response.data;
     },
 
     // --- SEAT UPDATES ---
-    updateSeatZones: async (roomId: number, updates: { SeatID: number, ZoneID?: number | null, IsActive?: boolean }[]) => {
+    updateSeatStates: async (roomId: number, updates: { SeatID: number, IsActive?: boolean }[]) => {
         const response = await api.put(`${PREFIX}/rooms/${roomId}/seats`, { updates });
         return response.data;
     },
 
     // --- IMPORT ---
-    importStructure: async (file: File, options?: { autoZone: boolean, zoneCount: number }, previewData?: { BlockName: string, FloorNumber: string, RoomCode: string, Capacity: string, IsExamUsable: string }[]) => {
+    importStructure: async (file: File, previewData?: { BlockName: string, FloorNumber: string, RoomCode: string, Capacity: string, IsExamUsable: string }[]) => {
         // If pre-processed data is available, send as JSON to avoid backend re-parsing issues
         if (previewData && previewData.length > 0) {
-            console.log('[DEBUG] Sending pre-processed JSON data:', { records: previewData.length, options });
+            console.log('[DEBUG] Sending pre-processed JSON data:', { records: previewData.length });
             const response = await api.post<{ blocksCreated: number, floorsCreated: number, roomsCreated: number, roomsUpdated?: number }>(
                 `/college-structure/import/json`,
                 {
-                    data: previewData,
-                    autoZone: options?.autoZone || false,
-                    zoneCount: options?.zoneCount || 2
+                    data: previewData
                 }
             );
             return response.data;
@@ -131,10 +110,8 @@ export const structureService = {
         // Fallback: send raw file via FormData
         const formData = new FormData();
         formData.append('file', file);
-        if (options?.autoZone) formData.append('autoZone', 'true');
-        if (options?.zoneCount) formData.append('zoneCount', options.zoneCount.toString());
 
-        console.log('[DEBUG] Uploading file:', { fileName: file.name, fileSize: file.size, options });
+        console.log('[DEBUG] Uploading file:', { fileName: file.name, fileSize: file.size });
 
         const response = await api.post<{ blocksCreated: number, floorsCreated: number, roomsCreated: number, roomsUpdated?: number }>(
             `/college-structure/import/csv`,

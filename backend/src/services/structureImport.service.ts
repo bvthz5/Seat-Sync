@@ -217,7 +217,7 @@ export class StructureImportService {
         return results;
     }
 
-    async importFromCSV(fileBuffer: Buffer, options?: { autoZone: boolean; zoneCount: number }): Promise<ImportResult> {
+    async importFromCSV(fileBuffer: Buffer): Promise<ImportResult> {
         let parsedData;
         try {
             parsedData = await Promise.resolve(this.parseUnifiedFile(fileBuffer));
@@ -228,7 +228,7 @@ export class StructureImportService {
         let floorsCreated = 0;
         let roomsCreated = 0;
         let roomsUpdated = 0;
-        const roomsToZone: number[] = [];
+
 
         try {
             const blockCache = new Map<string, number>();
@@ -313,7 +313,7 @@ export class StructureImportService {
                     // Generate exact seats inside the room transaction       
                     await generateSeats(newRoom, transaction);
 
-                    if (options?.autoZone) roomsToZone.push(newRoom.RoomID);  
+
                 } else {
                     console.warn("Room already exists:", roomCode);
                     // Update existing room if totalCapacity or layout changed     
@@ -360,23 +360,13 @@ export class StructureImportService {
                         }
                     }
 
-                    if (options?.autoZone) roomsToZone.push(existingRoom.RoomID);
+
                 }
             }
 
             await transaction.commit();
 
-            if (options?.autoZone && roomsToZone.length > 0) {
-                const { RoomService } = await import('./room.service.js');
-                const roomService = new RoomService();
-                for (const rId of roomsToZone) {
-                    try {
-                        await roomService.autoZoneRoom(rId, options.zoneCount);
-                    } catch (err: any) {
-                        console.error(`AutoZoning failed for room ${rId}:`, err.message);
-                    }
-                }
-            }
+
 
             return {
                 blocksCreated,
@@ -395,8 +385,7 @@ export class StructureImportService {
      * Uses per-room transactions to avoid MSSQL transaction doom issues
      */
     async importFromJSON(
-        data: { BlockName: string; FloorNumber: string; RoomCode: string; Capacity: string; IsExamUsable: string }[],
-        options?: { autoZone: boolean; zoneCount: number }
+        data: { BlockName: string; FloorNumber: string; RoomCode: string; Capacity: string; IsExamUsable: string }[]
     ): Promise<ImportResult> {
         if (!data || data.length === 0) {
             throw new Error("No data provided for import");
@@ -406,7 +395,7 @@ export class StructureImportService {
         let floorsCreated = 0;
         let roomsCreated = 0;
         let roomsUpdated = 0;
-        const roomsToZone: number[] = [];
+
         const blockCache = new Map<string, number>();
         const floorCache = new Map<string, number>();
         const seenRoomCodes = new Set<string>();
@@ -534,7 +523,7 @@ export class StructureImportService {
                     }
 
                     roomsCreated++;
-                    if (options?.autoZone) roomsToZone.push(newRoom.RoomID);
+
                 } else {
                     console.warn("[JSON IMPORT] Room already exists:", roomCode);
                     let needsUpdate = false;
@@ -555,7 +544,7 @@ export class StructureImportService {
 
                     await transaction.commit();
 
-                    if (options?.autoZone) roomsToZone.push(existingRoom.RoomID);
+
                 }
             } catch (err: any) {
                 try { await transaction.rollback(); } catch (_) {}
@@ -564,18 +553,7 @@ export class StructureImportService {
             }
         }
 
-        // Auto-zone after all rooms are committed
-        if (options?.autoZone && roomsToZone.length > 0) {
-            const { RoomService } = await import('./room.service.js');
-            const roomService = new RoomService();
-            for (const rId of roomsToZone) {
-                try {
-                    await roomService.autoZoneRoom(rId, options.zoneCount);
-                } catch (err: any) {
-                    console.error(`[JSON IMPORT] AutoZoning failed for room ${rId}:`, err.message);
-                }
-            }
-        }
+
 
         if (roomsCreated === 0 && roomsUpdated === 0 && errors.length > 0) {
             throw new Error(`Import failed: ${errors[0]}`);

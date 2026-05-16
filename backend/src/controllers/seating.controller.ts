@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { Room, Seat, Student, User, Department, Exam, SeatAllocation, ExamSeries, Subject, Semester, Program, Zone, ExamSchedule, ExamRegistration } from "../models/index.js";
+import { Room, Seat, Student, User, Department, Exam, SeatAllocation, ExamSeries, Subject, Semester, Program, ExamSchedule, ExamRegistration } from "../models/index.js";
 import { Op, QueryTypes } from "sequelize";
 import { sequelize } from "../config/database.js";
 import bcrypt from "bcryptjs";
@@ -217,12 +217,7 @@ const getStudentsForExamSession = async (
 };
 
 const getDefaultZoneIdForRoom = async (roomId: number): Promise<number | null> => {
-    const zone = await Zone.findOne({
-        where: { RoomID: roomId },
-        attributes: ["ZoneID"],
-        order: [["ZoneID", "ASC"]],
-    }) as any;
-    return zone?.ZoneID ? Number(zone.ZoneID) : null;
+    return null;
 };
 
 const getSeatOrderBySchema = async (roomId: number, transaction?: any) => {

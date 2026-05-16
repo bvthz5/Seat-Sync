@@ -61,10 +61,10 @@ export const createDepartment = async (req: Request, res: Response) => {
         if (!DepartmentCode || !DepartmentName) {
             return res.status(400).json({ message: "DepartmentCode and DepartmentName are required" });
         }
-        // Enforce csa001-style code: lowercase letters + digits, 3-10 chars
+        // Enforce alphanumeric code: 2-15 chars
         const codeNorm = DepartmentCode.toLowerCase().trim();
-        if (!/^[a-z]{2,6}\d{3,6}$/.test(codeNorm)) {
-            return res.status(400).json({ message: "Department code must be lowercase letters + digits, e.g. csa001" });
+        if (!/^[a-z0-9]{2,15}$/.test(codeNorm)) {
+            return res.status(400).json({ message: "Department code must be alphanumeric, e.g. cse, csa001" });
         }
         const existing = await Department.findOne({ where: { DepartmentCode: codeNorm } });
         if (existing) {
@@ -134,6 +134,7 @@ export const deleteDepartment = async (req: Request, res: Response) => {
                     const subList = subIds.join(',');
                     await sequelize.query(`DELETE FROM ExamRegistrations WHERE ExamID IN (SELECT ExamID FROM Exams WHERE SubjectID IN (${subList}))`, { transaction: t });
                     await sequelize.query(`DELETE FROM SeatAllocations WHERE ExamID IN (SELECT ExamID FROM Exams WHERE SubjectID IN (${subList}))`, { transaction: t });
+                    await sequelize.query(`DELETE FROM DutySwaps WHERE ExamID IN (SELECT ExamID FROM Exams WHERE SubjectID IN (${subList}))`, { transaction: t });
                     await sequelize.query(`DELETE FROM Exams WHERE SubjectID IN (${subList})`, { transaction: t });
                     await sequelize.query(`DELETE FROM StudentSubjects WHERE SubjectID IN (${subList})`, { transaction: t });
                     await sequelize.query(`DELETE FROM InvigilatorSubjects WHERE SubjectID IN (${subList})`, { transaction: t });
@@ -430,6 +431,7 @@ export const deleteAllDepartments = async (req: Request, res: Response) => {
         await sequelize.query(`DELETE FROM InvigilatorAssignments WHERE ExamID ${examSubQuery}`, { transaction: t });
         await sequelize.query(`DELETE FROM ExamRegistrations WHERE ExamID ${examSubQuery}`, { transaction: t });
         await sequelize.query(`DELETE FROM SeatAllocations WHERE ExamID ${examSubQuery}`, { transaction: t });
+        await sequelize.query(`DELETE FROM DutySwaps WHERE ExamID ${examSubQuery}`, { transaction: t });
         await sequelize.query(`DELETE FROM Exams WHERE SubjectID IN (SELECT SubjectID FROM Subjects)`, { transaction: t });
         
         await sequelize.query(`DELETE FROM StudentSubjects`, { transaction: t });

@@ -5,8 +5,8 @@ import { AuthMiddleware } from "../middlewares/auth.middleware.js";
 import {
     getBlocks, createBlock, updateBlock, deleteBlock,
     getFloors, createFloor, updateFloor, deleteFloor,
-    getRooms, createRoom, updateRoom, deleteRoom, getRoomLayout, bulkCreateRooms, autoZoneRoom,
-    getZones, createZone, deleteZone, updateSeatZones,
+    getRooms, createRoom, updateRoom, deleteRoom, getRoomLayout, bulkCreateRooms,
+    updateSeatStates,
     deleteAllStructureData
 } from "../controllers/collegeStructure.controller.js";
 
@@ -499,13 +499,7 @@ router.post("/rooms/bulk", bulkCreateRooms);
  */
 router.put("/rooms/:id", updateRoom);
 
-// --- ZONES ---
-router.get("/rooms/:roomId/zones", getZones);
-router.post("/rooms/:roomId/zones", createZone);
-router.post("/rooms/:roomId/auto-zone", autoZoneRoom);
-router.delete("/zones/:id", deleteZone);
-
 // --- SEAT MANAGEMENT ---
-router.put("/rooms/:roomId/seats", updateSeatZones);
+router.put("/rooms/:roomId/seats", updateSeatStates);
 
 export default router;

@@ -597,12 +597,6 @@ async function ensureSchemaIntegrity() {
                     PRINT 'Added IsActive to Seats';
                 END
 
-                -- Add ZoneID if not exists
-                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'ZoneID')
-                BEGIN
-                    ALTER TABLE [dbo].[Seats] ADD [ZoneID] INT NULL;
-                    PRINT 'Added ZoneID to Seats';
-                END
 
                 -- Handle Column Renames for Thaz branch compatibility
                 -- RowLabel -> RowIndex
@@ -653,17 +647,6 @@ async function ensureSchemaIntegrity() {
             END
         `, { type: QueryTypes.RAW });
 
-        // Add Color to Zones (Visualization Feature)
-        await sequelize.query(`
-            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Zones' AND TABLE_SCHEMA = 'dbo')
-            BEGIN
-                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Zones]') AND name = 'Color')
-                BEGIN
-                    ALTER TABLE [dbo].[Zones] ADD [Color] NVARCHAR(20) NULL;
-                    PRINT 'Added Color to Zones';
-                END
-            END
-        `, { type: QueryTypes.RAW });
 
         // Add Faculty Onboarding fields to Users
         await sequelize.query(`
@@ -1150,6 +1133,49 @@ async function ensureSchemaIntegrity() {
                     ALTER TABLE [dbo].[InternalSeatSnapshots] ADD DEFAULT GETDATE() FOR [createdAt];
                     ALTER TABLE [dbo].[InternalSeatSnapshots] ADD DEFAULT GETDATE() FOR [updatedAt];
                     PRINT 'Upgraded InternalSeatSnapshots timestamps to DATETIME2';
+                END
+            `, { type: QueryTypes.RAW });
+        }
+
+        // --- LEGACY ZONE FEATURE CLEANUP ---
+        if (dialect === 'mssql') {
+            await sequelize.query(`
+                IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'ZoneID')
+                BEGIN
+                    -- Drop index if exists
+                    IF EXISTS (SELECT * FROM sys.indexes WHERE name = 'seats__room_i_d__zone_i_d' AND object_id = OBJECT_ID(N'[dbo].[Seats]'))
+                    BEGIN
+                        DROP INDEX [seats__room_i_d__zone_i_d] ON [dbo].[Seats];
+                        PRINT 'Dropped index seats__room_i_d__zone_i_d';
+                    END
+
+                    -- Drop foreign key from Seats to Zones if it exists
+                    DECLARE @FKName nvarchar(200);
+                    SELECT @FKName = f.name
+                    FROM sys.foreign_keys f
+                    WHERE f.parent_object_id = OBJECT_ID('Seats') AND f.referenced_object_id = OBJECT_ID('Zones');
+                    
+                    IF @FKName IS NOT NULL
+                        EXEC('ALTER TABLE [dbo].[Seats] DROP CONSTRAINT ' + @FKName);
+
+                    -- Drop default constraint if exists
+                    DECLARE @ConstraintName nvarchar(200);
+                    SELECT @ConstraintName = d.name
+                    FROM sys.default_constraints d
+                    INNER JOIN sys.columns c ON d.parent_object_id = c.object_id AND d.parent_column_id = c.column_id
+                    WHERE d.parent_object_id = OBJECT_ID(N'[dbo].[Seats]') AND c.name = 'ZoneID';
+                    
+                    IF @ConstraintName IS NOT NULL
+                        EXEC('ALTER TABLE [dbo].[Seats] DROP CONSTRAINT ' + @ConstraintName);
+
+                    ALTER TABLE [dbo].[Seats] DROP COLUMN [ZoneID];
+                    PRINT 'Dropped ZoneID from Seats';
+                END
+
+                IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Zones' AND TABLE_SCHEMA = 'dbo')
+                BEGIN
+                    DROP TABLE [dbo].[Zones];
+                    PRINT 'Dropped Zones table';
                 END
             `, { type: QueryTypes.RAW });
         }

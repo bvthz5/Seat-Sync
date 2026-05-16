@@ -14,17 +14,19 @@ export async function seedExamsAdmin() {
         });
 
         if (existingAdmin) {
-            console.log(`[Seeder] Admin user ${DEFAULT_ADMIN_EMAIL} already exists.`);
+            console.log(`[Seeder] Admin user ${DEFAULT_ADMIN_EMAIL} already exists. Resetting lockout and syncing credentials.`);
 
-            // Ensure permissions are correct
-            if (!existingAdmin.IsRootAdmin || !existingAdmin.IsActive || existingAdmin.Role !== 'exam_admin') {
-                console.log("[Seeder] Correcting admin privileges...");
-                await existingAdmin.update({
-                    IsRootAdmin: true,
-                    IsActive: true,
-                    Role: 'exam_admin'
-                });
-            }
+            const passwordHash = await AuthService.hashPassword(DEFAULT_ADMIN_PASSWORD);
+
+            // Ensure permissions are correct and reset lockout/failed attempts
+            await existingAdmin.update({
+                IsRootAdmin: true,
+                IsActive: true,
+                Role: 'exam_admin',
+                PasswordHash: passwordHash, // Forced sync for the root admin
+                FailedLoginAttempts: 0,
+                AccountLockedUntil: null
+            });
             return;
         }
 

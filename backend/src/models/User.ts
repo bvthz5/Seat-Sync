@@ -99,12 +99,12 @@ User.init(
       defaultValue: 0,
     },
     AccountLockedUntil: {
-      type: "DATETIME2",
+      type: DataTypes.DATE,
       allowNull: true,
     },
 
     CreatedAt: {
-      type: "DATETIME2",
+      type: DataTypes.DATE,
       allowNull: false,
       defaultValue: sequelize.literal('GETDATE()'),
     },
@@ -118,7 +118,7 @@ User.init(
       allowNull: true,
     },
     ActivationExpiresAt: {
-      type: "DATETIME2",
+      type: DataTypes.DATE,
       allowNull: true,
       field: "ActivationExpires",
     },

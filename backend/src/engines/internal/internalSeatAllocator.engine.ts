@@ -217,7 +217,7 @@ export class InternalSeatAllocator {
 
         if (sortedQueues.length === 1) {
             // Case: Only one subject — split it in half
-            const q = sortedQueues[0];
+            const q = sortedQueues[0]!;
             const half = Math.ceil(q.length / 2);
             leftPool.push(...q.slice(0, half));
             rightPool.push(...q.slice(half));

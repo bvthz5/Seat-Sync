@@ -26,73 +26,6 @@ interface BulkCreateRoomDTO {
 
 export class RoomService {
 
-    public async autoZoneRoom(roomId: number, zoneCount: number) {
-        const { Seat } = await import('../models/Seat.js');
-        const { Zone } = await import('../models/Zone.js');
-        return await sequelize.transaction(async (t: any) => {
-            // 1. Fetch active seats
-            const seats = await Seat.findAll({
-                where: { RoomID: roomId, IsActive: true },
-                transaction: t
-            });
-            if (seats.length === 0) {
-                throw new Error('No active seats found in this room');
-            }
-
-            // Remove existing zones
-            await Seat.update({ ZoneID: null }, { where: { RoomID: roomId }, transaction: t });
-            await Zone.destroy({ where: { RoomID: roomId }, transaction: t });
-
-            // 2. Find maxColumns
-            let maxColumns = 0;
-            for (const seat of seats) {
-                if (seat.BenchIndex > maxColumns) {
-                    maxColumns = seat.BenchIndex;
-                }
-            }
-
-            // 3. columnsPerZone
-            const columnsPerZone = Math.ceil(maxColumns / zoneCount);
-            const palette = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6'];
-            
-            const zones = [];
-            for (let i = 0; i < zoneCount; i++) {
-                const zone = await Zone.create({
-                    RoomID: roomId,
-                    ZoneCode: `Z${i + 1}`,
-                    ZoneName: `Zone ${i + 1}`,
-                    Color: palette[i % palette.length] || '#3b82f6'
-                }, { transaction: t });
-                zones.push(zone);
-            }
-
-            // 4. For each selected zone, run a bulk update for efficiency at scale
-            const updates = [];
-            for (let i = 0; i < zoneCount; i++) {
-                const assignedZone = zones[i];
-                if (!assignedZone) continue;
-                const minCol = i * columnsPerZone + 1;
-                let maxCol = (i + 1) * columnsPerZone;
-                if (i === zoneCount - 1) {
-                    maxCol = maxColumns; // ensure last zone covers everything remaining
-                }
-                
-                updates.push(Seat.update(
-                    { ZoneID: assignedZone.ZoneID },
-                    { 
-                        where: { 
-                            RoomID: roomId, 
-                            BenchIndex: { [Op.between]: [minCol, maxCol] } 
-                        },
-                        transaction: t
-                    }
-                ));
-            }
-            await Promise.all(updates);
-
-            return zones;
-        });
-    }
 
     async getRooms(blockId: number | undefined, floorId: number | undefined, options: { page?: number, limit?: number, search?: string, status?: string } = {}) {
         return roomRepo.findByLocation(blockId, floorId, options);
@@ -298,15 +231,6 @@ export class RoomService {
         if (oldRowLayout !== newRowLayout || oldSeatsPerBench !== newSeatsPerBench) {
             const { generateSeats } = await import('./seatEngine.js');
             await generateSeats(room);
-            const { Zone } = await import('../models/Zone.js');
-            const zoneCount = await Zone.count({ where: { RoomID: room.RoomID } });
-            if (zoneCount > 0) {
-                try {
-                    await this.autoZoneRoom(room.RoomID, zoneCount);
-                } catch(e: any) {
-                    console.error('Auto-zone failed after layout update in room.service:', e.message);
-                }
-            }
         }
 
         return room;

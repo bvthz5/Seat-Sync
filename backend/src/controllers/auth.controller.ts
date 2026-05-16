@@ -57,13 +57,13 @@ export class AuthController {
                     ip: req.ip || "",
                     userAgent: req.get('User-Agent') || ""
                 };
-                // Only log if user exists and is admin? Or log all failures?
-                // logActivity checks if user exists. If not, it skips. Perfect.
                 AdminService.logActivity(context, "Login Failure", `Failed login attempt: ${error.message}`);
             }
 
-            res.status(401).json({
-                error: "Authentication failed",
+            const statusCode = (error.message === "Invalid credentials" || error.message === "Invalid credentials or account is inactive") ? 401 : 500;
+
+            res.status(statusCode).json({
+                error: statusCode === 401 ? "Authentication failed" : "Internal server error",
                 message: error.message,
             });
         }

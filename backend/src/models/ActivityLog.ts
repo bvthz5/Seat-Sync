@@ -79,7 +79,7 @@ ActivityLog.init(
       allowNull: true,
     },
     Timestamp: {
-      type: "DATETIME2",
+      type: DataTypes.DATE,
       allowNull: false,
       defaultValue: sequelize.literal('GETDATE()'),
     },
