@@ -18,8 +18,10 @@ export default defineConfig({
       timeout: 30000,
     },
     allowedHosts: [
+      'lid-principle-surprise-lang.trycloudflare.com',
       'assume-principles-unlimited-chair.trycloudflare.com',
-      'tucking-oversold-doctrine.ngrok-free.dev',
+      '.trycloudflare.com',
+      '.ngrok-free.dev',
       'localhost',
       '127.0.0.1',
     ],

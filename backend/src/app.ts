@@ -79,7 +79,7 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             "default-src": ["*"],
-            "connect-src": ["*", "https://*.trycloudflare.com", "https://assume-principles-unlimited-chair.trycloudflare.com", "https://*.ngrok-free.dev"],
+            "connect-src": ["'self'", "*", "https://*.trycloudflare.com", "https://*.ngrok-free.dev", "wss://*.trycloudflare.com", "wss://*.ngrok-free.dev"],
             "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "*"],
             "style-src": ["'self'", "'unsafe-inline'", "*"],
             "img-src": ["*", "data:", "https:"],
