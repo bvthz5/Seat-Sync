@@ -121,17 +121,17 @@ export const getInternalFloors = async (req: Request, res: Response) => {
 };
 
 export const getFloorsByBlock = async (req: Request, res: Response) => {
-    try {
-      const blockId = Number(req.params.blockId);
-      const floors = await InternalFloor.findAll({
-        where: { BlockID: blockId },
-        order: [["FloorNumber", "ASC"]]
-      });
-      res.json(floors);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  };
+  try {
+    const blockId = Number(req.params.blockId);
+    const floors = await InternalFloor.findAll({
+      where: { BlockID: blockId },
+      order: [["FloorNumber", "ASC"]]
+    });
+    res.json(floors);
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
+};
 
 export const createInternalFloor = async (req: Request, res: Response) => {
   try {
@@ -233,7 +233,6 @@ export const createInternalRoom = async (req: Request, res: Response) => {
     const spb = SeatsPerBench || 2;
     const finalLayout: number[] = RowLayout || InternalLayoutGeneratorService.generateRowLayout(TotalCapacity || 0);
     const calcCapacity = TotalCapacity || finalLayout.reduce((a: number, b: number) => a + b, 0) * spb;
-    const resolvedSeatMode = SeatMode || (spb === 1 ? "Single" : "Dual");
 
     const room = await InternalRoom.create({
       BlockID, FloorID, RoomCode,
@@ -243,7 +242,7 @@ export const createInternalRoom = async (req: Request, res: Response) => {
       TotalCapacity: calcCapacity,
       RowLayout: finalLayout,
       SeatsPerBench: spb,
-      SeatMode: resolvedSeatMode,
+      SeatMode: SeatMode || "Dual",
       OverrideCap: OverrideCap ?? null,
     } as any);
 
@@ -286,10 +285,7 @@ export const updateInternalRoom = async (req: Request, res: Response) => {
       const newSpb = SeatsPerBench !== undefined ? Number(SeatsPerBench) : room.SeatsPerBench;
       room.RowLayout = newLayout;
       room.SeatsPerBench = newSpb;
-      
-      // Auto-synchronize SeatMode based on SeatsPerBench
-      room.SeatMode = newSpb === 1 ? "Single" : "Dual";
-      
+
       if (TotalCapacity !== undefined) {
         room.TotalCapacity = TotalCapacity;
       } else if (Array.isArray(newLayout) && newLayout.length > 0) {
@@ -417,10 +413,9 @@ export const updateInternalRoomLayout = async (req: Request, res: Response) => {
     const room = await InternalRoom.findByPk(id) as any;
     if (!room) return res.status(404).json({ message: "Room not found" });
 
-    const { RowLayout, SeatsPerBench, SeatMode } = req.body;
+    const { RowLayout, SeatsPerBench } = req.body;
     if (RowLayout !== undefined) room.RowLayout = RowLayout;
     if (SeatsPerBench !== undefined) room.SeatsPerBench = Number(SeatsPerBench);
-    if (SeatMode !== undefined) room.SeatMode = SeatMode;
 
     if (room.RowLayout && Array.isArray(room.RowLayout)) {
       room.TotalCapacity = room.RowLayout.reduce((a: number, b: number) => a + b, 0) * (room.SeatsPerBench || 2);
@@ -437,7 +432,7 @@ export const updateInternalRoomLayout = async (req: Request, res: Response) => {
 export const updateInternalSeatStates = async (req: Request, res: Response) => {
   try {
     const roomId = Number(req.params.id);
-    const { updates } = req.body; 
+    const { updates } = req.body;
 
     if (!Array.isArray(updates)) return res.status(400).json({ message: "updates must be an array" });
 
@@ -468,7 +463,7 @@ export const importInternalStructure = async (req: Request, res: Response) => {
   try {
     const rawData = req.body.data;
     if (!rawData) return res.status(400).json({ message: "No data provided" });
-    
+
     const stats = await InternalInfrastructureImportService.importBatch(rawData);
     res.json(stats);
   } catch (error: any) {
@@ -478,15 +473,15 @@ export const importInternalStructure = async (req: Request, res: Response) => {
 };
 
 export const deleteAllInternalStructureData = async (req: Request, res: Response) => {
-    try {
-      await sequelize.transaction(async (t) => {
-        await InternalSeat.destroy({ where: {}, transaction: t });
-        await InternalRoom.destroy({ where: {}, transaction: t });
-        await InternalFloor.destroy({ where: {}, transaction: t });
-        await InternalBlock.destroy({ where: {}, transaction: t });
-      });
-      res.json({ message: "All internal structure data deleted successfully." });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  };
+  try {
+    await sequelize.transaction(async (t) => {
+      await InternalSeat.destroy({ where: {}, transaction: t });
+      await InternalRoom.destroy({ where: {}, transaction: t });
+      await InternalFloor.destroy({ where: {}, transaction: t });
+      await InternalBlock.destroy({ where: {}, transaction: t });
+    });
+    res.json({ message: "All internal structure data deleted successfully." });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
+};

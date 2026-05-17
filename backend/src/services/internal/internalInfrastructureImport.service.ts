@@ -26,10 +26,10 @@ const getValueByPatterns = (row: any, patterns: string[]): any => {
 };
 
 export class InternalInfrastructureImportService {
-    
+
     static async importBatch(rawData: any[]) {
         const cleanData = normalizeInfrastructureData(rawData);
-        
+
         let blocksCreated = 0;
         let floorsCreated = 0;
         let roomsCreated = 0;
@@ -43,7 +43,7 @@ export class InternalInfrastructureImportService {
                 if (!rawRoomCode.trim()) continue;
 
                 const resolved = InternalInfrastructureParserService.parse(rawRoomCode);
-                
+
                 // Extract flexible properties case-insensitively from Excel row
                 const blockVal = getValueByPatterns(row, ['BlockName', 'Block', 'Building']);
                 const floorVal = getValueByPatterns(row, ['FloorNumber', 'Floor', 'Level']);
@@ -59,9 +59,9 @@ export class InternalInfrastructureImportService {
                 if (!blockId) {
                     let [block, created] = await InternalBlock.findOrCreate({
                         where: { BlockName: blockName },
-                        defaults: { 
+                        defaults: {
                             BlockName: blockName,
-                            Status: 'Active' 
+                            Status: 'Active'
                         },
                         transaction: t
                     });
@@ -83,10 +83,10 @@ export class InternalInfrastructureImportService {
                 if (!floorId) {
                     let [floor, created] = await InternalFloor.findOrCreate({
                         where: { BlockID: blockId, FloorNumber: floorNum },
-                        defaults: { 
-                            BlockID: blockId, 
+                        defaults: {
+                            BlockID: blockId,
                             FloorNumber: floorNum,
-                            Status: 'Active' 
+                            Status: 'Active'
                         },
                         transaction: t
                     });
@@ -97,7 +97,7 @@ export class InternalInfrastructureImportService {
 
                 // 3. Auto-Build Layout Structure (Classroom Architect Column/Bench Grid)
                 let rowLayout: number[] = [];
-                
+
                 // Case A: If Columns and Rows are explicitly specified
                 if (colsVal !== undefined && colsVal !== null && rowsVal !== undefined && rowsVal !== null) {
                     const colsCount = parseInt(String(colsVal).trim(), 10);
@@ -106,7 +106,7 @@ export class InternalInfrastructureImportService {
                         rowLayout = Array(colsCount).fill(rowsCount);
                     }
                 }
-                
+
                 // Case B: If specific alphabetic columns (A, B, C...) are filled
                 if (rowLayout.length === 0) {
                     const columnLabels = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T'];
@@ -122,7 +122,7 @@ export class InternalInfrastructureImportService {
                         }
                     }
                 }
-                
+
                 // Case C: Merged headers/empty column mappings from CSV
                 if (rowLayout.length === 0) {
                     let emptyIdx = 0;
@@ -158,7 +158,7 @@ export class InternalInfrastructureImportService {
                         parsedCapacity = parsed;
                     }
                 }
-                
+
                 // If layout is completely absent, auto-generate it from capacity
                 if (rowLayout.length === 0) {
                     if (parsedCapacity > 0) {
@@ -169,23 +169,22 @@ export class InternalInfrastructureImportService {
                 }
 
                 const totalBenches = rowLayout.reduce((sum, count) => sum + count, 0);
-                
-                let seatsPerBench = 2; // Always 2 physically
+
+                let seatsPerBench = 2;
                 let seatMode: "Single" | "Dual" | "Mixed" = "Dual";
 
                 if (parsedCapacity === 0) {
-                    // Default to Dual seating (alternate seating, 1 student per bench active)
-                    seatMode = "Dual";
+                    // If capacity is unspecified, default to standard Dual seating (2 seats per bench)
                     seatsPerBench = 2;
-                    parsedCapacity = totalBenches;
+                    parsedCapacity = totalBenches * 2;
+                    seatMode = "Dual";
                 } else {
-                    // User Rule: if the capacity is equal to total benches, we place 1 student per bench -> Dual Seating (alternate disabled)
-                    // Otherwise, both seats are active -> Single Seating (all enabled)
+                    // Verbatim user rule: if the bench and row (totalBenches) are equal to capacity then single seating else dual seating.
                     if (totalBenches === parsedCapacity) {
-                        seatMode = "Dual";
-                        seatsPerBench = 2;
-                    } else {
                         seatMode = "Single";
+                        seatsPerBench = 1;
+                    } else {
+                        seatMode = "Dual";
                         seatsPerBench = 2;
                     }
                 }
