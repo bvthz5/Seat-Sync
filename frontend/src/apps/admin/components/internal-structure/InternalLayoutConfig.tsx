@@ -357,8 +357,10 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
                         <CardBody className="p-5 flex flex-col gap-5">
                             <div className="space-y-5 pt-1">
                                 <div className="flex flex-col gap-2">
-                                    <label className="ilc-label">Infrastructure Block</label>
+                                    <label htmlFor="ilc-block-select" className="ilc-label">Infrastructure Block</label>
                                     <Autocomplete
+                                        id="ilc-block-select"
+                                        name="blockId"
                                         items={blocks}
                                         placeholder="Select block..."
                                         size="sm"
@@ -372,7 +374,7 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
                                             setFloors([]);
                                             setRooms([]);
                                         }}
-                                        inputProps={{ classNames: { inputWrapper: 'bg-slate-50/50 rounded-xl h-11 border-slate-200' } }}
+                                        inputProps={{ id: 'ilc-block-select', name: 'blockId', classNames: { inputWrapper: 'bg-slate-50/50 rounded-xl h-11 border-slate-200' } }}
                                         listboxProps={{ classNames: { base: "p-2 rounded-xl", list: "gap-1" } }}
                                         popoverProps={{ classNames: { content: "rounded-xl border border-slate-100 shadow-2xl bg-white/95 backdrop-blur-xl" } }}>
                                         {(b) => (
@@ -384,8 +386,10 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
                                 </div>
                                 
                                 <div className="flex flex-col gap-2">
-                                    <label className="ilc-label">Level / Floor</label>
+                                    <label htmlFor="ilc-floor-select" className="ilc-label">Level / Floor</label>
                                     <Autocomplete
+                                        id="ilc-floor-select"
+                                        name="floorId"
                                         items={floors}
                                         placeholder={!selectedBlockId ? "Select block first..." : (fetchingFloors ? "Loading..." : "Select floor...")}
                                         size="sm"
@@ -399,7 +403,7 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
                                             setSelectedRoomId('');
                                             setRooms([]);
                                         }}
-                                        inputProps={{ classNames: { inputWrapper: 'bg-slate-50/50 rounded-xl h-11 border-slate-200' } }}
+                                        inputProps={{ id: 'ilc-floor-select', name: 'floorId', classNames: { inputWrapper: 'bg-slate-50/50 rounded-xl h-11 border-slate-200' } }}
                                         listboxProps={{ classNames: { base: "p-2 rounded-xl", list: "gap-1" } }}
                                         popoverProps={{ classNames: { content: "rounded-xl border border-slate-100 shadow-2xl bg-white/90 backdrop-blur-xl" } }}>
                                         {(f) => (
@@ -409,10 +413,12 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
                                         )}
                                     </Autocomplete>
                                 </div>
-
+ 
                                 <div className="flex flex-col gap-2">
-                                    <label className="ilc-label">Specific Room</label>
+                                    <label htmlFor="ilc-room-select" className="ilc-label">Specific Room</label>
                                     <Autocomplete
+                                        id="ilc-room-select"
+                                        name="roomId"
                                         items={rooms}
                                         placeholder={!selectedFloorId ? "Select floor first..." : (fetchingRooms ? "Loading..." : "Select room...")}
                                         size="sm"
@@ -421,7 +427,7 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
                                         isLoading={fetchingRooms}
                                         selectedKey={selectedRoomId ? String(selectedRoomId) : null}
                                         onSelectionChange={(k) => setSelectedRoomId(k ? String(k) : '')}
-                                        inputProps={{ classNames: { inputWrapper: 'bg-slate-50/50 rounded-xl h-11 border-slate-200' } }}
+                                        inputProps={{ id: 'ilc-room-select', name: 'roomId', classNames: { inputWrapper: 'bg-slate-50/50 rounded-xl h-11 border-slate-200' } }}
                                         listboxProps={{ classNames: { base: "p-2 rounded-xl", list: "gap-1" } }}
                                         popoverProps={{ classNames: { content: "rounded-xl border border-slate-100 shadow-2xl bg-white/90 backdrop-blur-xl" } }}>
                                         {(r) => (
@@ -435,9 +441,9 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
                                     </Autocomplete>
                                 </div>
                             </div>
-
+ 
                             <Divider className="opacity-60" />
-
+ 
                             {selectedRoomId ? (
                                 <div className="space-y-5">
                                     {/* Column Controls */}
@@ -452,6 +458,9 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
                                                     <span className="w-6 h-6 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center text-xs font-black shadow-sm shadow-violet-50">{String.fromCharCode(65 + i)}</span>
                                                     <div className="flex-1">
                                                         <Input type="number" min={1} max={30} value={String(seatCount)}
+                                                            id={`ilc-col-input-${i}`}
+                                                            name={`ilc-col-input-${i}`}
+                                                            aria-label={`Column ${String.fromCharCode(65 + i)} capacity`}
                                                             onChange={(e) => handleSeatCountChange(i, Math.max(1, Math.min(30, Number(e.target.value) || 1)))}
                                                             classNames={{ inputWrapper: 'bg-slate-50 border-none shadow-none h-8', input: 'font-bold' }} isDisabled={readOnly} />
                                                     </div>

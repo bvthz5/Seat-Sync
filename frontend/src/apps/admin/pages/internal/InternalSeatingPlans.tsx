@@ -106,6 +106,8 @@ const InternalSeatingPlans: React.FC = () => {
     const [loadingSummary, setLoadingSummary] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
     const [isAutoRegistering, setIsAutoRegistering] = useState(false);
+    const [isClearing, setIsClearing] = useState(false);
+    const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
 
     // Detail Modal State
     const [detailHall, setDetailHall] = useState<any>(null);
@@ -249,6 +251,28 @@ const InternalSeatingPlans: React.FC = () => {
         }
     };
 
+    const handleClearClick = () => {
+        if (!selectedDate || !selectedSession) {
+            toast.error("Select slot details first (Date & Session)");
+            return;
+        }
+        setIsClearConfirmOpen(true);
+    };
+
+    const handleConfirmClear = async () => {
+        setIsClearConfirmOpen(false);
+        setIsClearing(true);
+        try {
+            const res = await InternalSeatingService.clearAllAllocations(selectedDate, selectedSession);
+            toast.success(res?.message || "All seating allocations cleared successfully!");
+            loadSummary();
+        } catch (e: any) {
+            toast.error(e.response?.data?.message || "Failed to clear seating allocations");
+        } finally {
+            setIsClearing(false);
+        }
+    };
+
     const openHallDetail = async (hall: any) => {
         setDetailLoading(true);
         setDetailHall(hall);
@@ -291,7 +315,7 @@ const InternalSeatingPlans: React.FC = () => {
 
             {/* Header */}
             <div className="pt-8 px-8 max-w-[1920px] mx-auto relative z-10">
-                <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6 pb-6 border-b border-slate-200">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 pb-6 border-b border-slate-200">
                     <div>
                         <h1 className="text-[28px] font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-slate-600 tracking-tight flex items-center gap-3">
                             <span className="w-2.5 h-8 bg-gradient-to-b from-indigo-500 to-indigo-600 rounded-full shadow-sm"></span>
@@ -301,6 +325,18 @@ const InternalSeatingPlans: React.FC = () => {
                             Configure series-specific seating layouts and automate student assignments with enterprise-grade logic.
                         </p>
                     </div>
+                    {selectedDate && (
+                        <Button 
+                            onPress={handleClearClick} 
+                            isLoading={isClearing} 
+                            variant="flat" 
+                            color="danger"
+                            startContent={<Trash2 size={16} />}
+                            className="h-11 px-6 font-bold rounded-xl border border-rose-200 text-rose-600 bg-rose-50/50 hover:bg-rose-100/60 transition-all shrink-0 shadow-sm"
+                        >
+                            Clear Seating Allocation
+                        </Button>
+                    )}
                 </div>
             </div>
 
@@ -441,13 +477,13 @@ const InternalSeatingPlans: React.FC = () => {
                                         <span className="text-[11px] font-bold text-slate-700 uppercase tracking-widest">Execute</span>
                                     </div>
                                     <div className="flex flex-col gap-2">
-                                        <Button onPress={handleGenerate} isLoading={isGenerating}
-                                            className="w-full h-11 bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-100">
-                                            Generate Seating
-                                        </Button>
                                         <Button onPress={handleAutoRegister} isLoading={isAutoRegistering} variant="flat"
-                                            className="w-full h-11 font-bold rounded-xl border border-warning/20">
+                                            className="w-full h-11 font-bold rounded-xl border border-warning/20 hover:bg-amber-50/50">
                                             Auto-Register Students
+                                        </Button>
+                                        <Button onPress={handleGenerate} isLoading={isGenerating}
+                                            className="w-full h-11 bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-100 hover:bg-indigo-700">
+                                            Generate Seating
                                         </Button>
                                     </div>
                                 </div>
@@ -495,26 +531,60 @@ const InternalSeatingPlans: React.FC = () => {
                                         })
                                         .map((h) => {
                                             const pct = h.totalSeats > 0 ? Math.round((h.filledSeats / h.totalSeats) * 100) : 0;
+                                            
+                                            // Determine theme classes based on allocation
+                                            let cardBg = "bg-white/80 border-slate-200/60 shadow-sm";
+                                            let iconBg = "bg-slate-100 border border-slate-200/50 text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600";
+                                            let titleText = "text-slate-800";
+                                            let countText = "text-slate-900 font-black";
+                                            let buttonClass = "bg-slate-100 group-hover:bg-indigo-100 text-slate-600 group-hover:text-indigo-700 font-bold";
+                                            let badgeText = "Unassigned";
+                                            let badgeClass = "bg-slate-100 text-slate-400 border-slate-200/50";
+
+                                            if (h.filledSeats > 0) {
+                                                if (h.filledSeats >= h.totalSeats) {
+                                                    // Fully allocated (Green / Emerald theme)
+                                                    cardBg = "bg-gradient-to-br from-emerald-50/40 to-emerald-50/10 border-emerald-200/80 shadow-md shadow-emerald-50/10 ring-1 ring-emerald-100/30";
+                                                    iconBg = "bg-emerald-500 text-white shadow-md shadow-emerald-500/20";
+                                                    titleText = "text-emerald-950 font-black";
+                                                    countText = "text-emerald-700 font-black";
+                                                    buttonClass = "bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/15 font-black";
+                                                    badgeText = "Fully Seated";
+                                                    badgeClass = "bg-emerald-100/80 text-emerald-700 border-emerald-200/40";
+                                                } else {
+                                                    // Partially allocated (Indigo theme)
+                                                    cardBg = "bg-gradient-to-br from-indigo-50/20 to-indigo-50/5 border-indigo-200/80 shadow-md shadow-indigo-50/10 ring-1 ring-indigo-100/30";
+                                                    iconBg = "bg-indigo-600 text-white shadow-md shadow-indigo-600/20";
+                                                    titleText = "text-indigo-950 font-black";
+                                                    countText = "text-indigo-700 font-black";
+                                                    buttonClass = "bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/15 font-black";
+                                                    badgeText = "Partially Seated";
+                                                    badgeClass = "bg-indigo-100/80 text-indigo-700 border-indigo-200/40";
+                                                }
+                                            }
+
                                             return (
                                                 <motion.div key={h.hallId} whileHover={{ y: -4 }}>
-                                                    <Card className="p-6 border border-slate-200 bg-white/80 backdrop-blur-md rounded-[20px] shadow-sm hover:shadow-xl transition-all group">
+                                                    <Card className={`p-6 border text-left backdrop-blur-md rounded-[24px] hover:shadow-xl transition-all duration-300 group ${cardBg}`}>
                                                         <div className="flex items-center gap-4 mb-5">
-                                                            <div className="w-12 h-12 rounded-[14px] bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center transition-colors group-hover:bg-indigo-600 group-hover:text-white">
+                                                            <div className={`w-12 h-12 rounded-[14px] flex items-center justify-center transition-all ${iconBg}`}>
                                                                 <Armchair size={22} />
                                                             </div>
                                                             <div>
-                                                                <h4 className="text-[17px] font-bold text-slate-800">{h.hallCode}</h4>
-                                                                <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Internal Hall</p>
+                                                                <h4 className={`text-[17px] font-bold tracking-tight transition-colors ${titleText}`}>{h.hallCode}</h4>
+                                                                <span className={`inline-flex px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider border mt-1 ${badgeClass}`}>
+                                                                    {badgeText}
+                                                                </span>
                                                             </div>
                                                         </div>
-                                                        <Progress value={pct} size="sm" color={pct >= 100 ? 'success' : pct > 0 ? 'warning' : 'default'} className="mb-4" />
+                                                        <Progress value={pct} size="sm" color={pct >= 100 ? 'success' : pct > 0 ? 'primary' : 'default'} className="mb-4" />
                                                         <div className="flex items-center justify-between">
                                                             <div>
-                                                                <span className="text-[16px] font-black text-slate-800">{h.filledSeats}</span>
-                                                                <span className="text-[11px] text-slate-400 font-bold"> / {h.totalSeats}</span>
+                                                                <span className={`text-[18px] ${countText}`}>{h.filledSeats}</span>
+                                                                <span className="text-[11px] text-slate-400 font-bold"> / {h.totalSeats} seats</span>
                                                             </div>
                                                             <Button size="sm" onPress={() => openHallDetail(h)}
-                                                                className="bg-slate-100 group-hover:bg-indigo-100 text-slate-600 group-hover:text-indigo-700 font-bold text-[10px] uppercase tracking-widest px-3 rounded-lg h-8">
+                                                                className={`text-[10px] uppercase tracking-widest px-3 rounded-xl h-8.5 transition-all ${buttonClass}`}>
                                                                 <Eye size={12} className="mr-1" /> View
                                                             </Button>
                                                         </div>
@@ -662,6 +732,44 @@ const InternalSeatingPlans: React.FC = () => {
                             <Button size="lg" onPress={() => setDetailHall(null)} className="bg-indigo-600 text-white font-black px-12 rounded-2xl shadow-xl shadow-indigo-900/20">EXIT BLUEPRINT</Button>
                         </ModalFooter>
                     </>)}
+                </ModalContent>
+            </Modal>
+
+            {/* ═══════ CLEAR ALLOCATION CONFIRMATION MODAL ═══════ */}
+            <Modal isOpen={isClearConfirmOpen} onOpenChange={setIsClearConfirmOpen} size="md" backdrop="blur"
+                classNames={{
+                    backdrop: "bg-black/50 backdrop-blur-md",
+                    base: "rounded-[24px] bg-white border border-slate-200 shadow-2xl p-2"
+                }}>
+                <ModalContent>
+                    {(onClose) => (
+                        <>
+                            <ModalHeader className="flex flex-col gap-1 text-slate-900 font-extrabold text-lg">
+                                Clear Seating Allocations
+                            </ModalHeader>
+                            <ModalBody className="py-4">
+                                <div className="flex items-start gap-4">
+                                    <div className="w-10 h-10 rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center shrink-0">
+                                        <AlertCircle className="text-rose-500" size={20} />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-sm font-bold text-slate-700">Are you absolutely sure?</p>
+                                        <p className="text-xs text-slate-500 leading-relaxed">
+                                            This will permanently clear all generated seat allocations for this session ({fmtDate(selectedDate)} - {selectedSession}). Students will be unseated, and this action cannot be undone.
+                                        </p>
+                                    </div>
+                                </div>
+                            </ModalBody>
+                            <ModalFooter className="flex gap-3 text-right justify-end">
+                                <Button variant="flat" onPress={onClose} className="font-bold rounded-xl text-slate-600">
+                                    Cancel
+                                </Button>
+                                <Button color="danger" onPress={handleConfirmClear} className="bg-rose-600 text-white font-bold rounded-xl shadow-lg shadow-rose-100">
+                                    Clear Allocation
+                                </Button>
+                            </ModalFooter>
+                        </>
+                    )}
                 </ModalContent>
             </Modal>
         </div>

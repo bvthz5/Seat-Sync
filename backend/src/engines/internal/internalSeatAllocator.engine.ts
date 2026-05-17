@@ -72,6 +72,9 @@ export class InternalSeatAllocator {
         const subjectQueues = new Map<number, any[]>();
         examIds.forEach(id => subjectQueues.set(id, []));
 
+        // Strict Session-Level Student Deduplication Set
+        const processedStudentIds = new Set<number>();
+
         if (registrations.length === 0) {
             console.log(`[InternalSeatAllocator] No explicit registrations found. Attempting multi-tier implicit discovery...`);
             
@@ -151,6 +154,9 @@ export class InternalSeatAllocator {
             examDepts.forEach(ed => deptToExam.set(ed.DepartmentID, ed.InternalExamID));
 
             for (const s of students) {
+                if (processedStudentIds.has(s.InternalStudentID)) continue;
+                processedStudentIds.add(s.InternalStudentID);
+
                 const eid = deptToExam.get(s.DepartmentID || 0);
                 if (eid && subjectQueues.has(eid)) {
                     subjectQueues.get(eid)!.push({
@@ -163,9 +169,12 @@ export class InternalSeatAllocator {
                     });
                 }
             }
-            console.log(`[InternalSeatAllocator] Implicitly matched ${students.length} students across ${subjectQueues.size} subjects`);
+            console.log(`[InternalSeatAllocator] Implicitly matched ${processedStudentIds.size} unique students across ${subjectQueues.size} subjects`);
         } else {
             for (const reg of registrations) {
+                if (processedStudentIds.has(reg.InternalStudentID)) continue;
+                processedStudentIds.add(reg.InternalStudentID);
+
                 const eid = reg.InternalExamID;
                 if (!subjectQueues.has(eid)) subjectQueues.set(eid, []);
                 subjectQueues.get(eid)!.push({
@@ -177,6 +186,7 @@ export class InternalSeatAllocator {
                     deptCode: reg.Student?.Department?.DepartmentCode || ''
                 });
             }
+            console.log(`[InternalSeatAllocator] Loaded ${processedStudentIds.size} unique registered students across ${subjectQueues.size} subjects`);
         }
 
         // Filter out empty queues and sort by reg number
@@ -286,11 +296,19 @@ export class InternalSeatAllocator {
                         student = rightPool.shift();
                     }
                 } else {
-                    // Dual-seat rooms: assign by seat position
+                    // Dual-seat rooms: assign by seat position, with double pool-fallback to prevent half-filled benches
                     if (seat.SeatNumber === 1) {
-                        if (leftPool.length > 0) student = leftPool.shift();
+                        if (leftPool.length > 0) {
+                            student = leftPool.shift();
+                        } else if (rightPool.length > 0) {
+                            student = rightPool.shift();
+                        }
                     } else if (seat.SeatNumber === 2) {
-                        if (rightPool.length > 0) student = rightPool.shift();
+                        if (rightPool.length > 0) {
+                            student = rightPool.shift();
+                        } else if (leftPool.length > 0) {
+                            student = leftPool.shift();
+                        }
                     }
                 }
 

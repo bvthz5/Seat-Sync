@@ -397,28 +397,28 @@ export const InternalRoomManager: React.FC<Props> = ({ readOnly = false }) => {
                                     /* ─ Edit Form ─ */
                                     <div className="space-y-6">
                                         <div className="flex flex-col gap-2">
-                                            <label className="font-black text-slate-700 uppercase tracking-widest text-[10px] ml-1">Room Code</label>
-                                            <Input placeholder="Enter code" value={editForm.RoomCode} onValueChange={(v) => setEditForm(f => ({ ...f, RoomCode: v }))} variant="bordered" classNames={{ inputWrapper: 'bg-slate-50/50 rounded-2xl h-12 border-slate-200' }} />
+                                            <label htmlFor="edit-room-code" className="font-black text-slate-700 uppercase tracking-widest text-[10px] ml-1">Room Code</label>
+                                            <Input id="edit-room-code" name="roomCode" placeholder="Enter code" value={editForm.RoomCode} onValueChange={(v) => setEditForm(f => ({ ...f, RoomCode: v }))} variant="bordered" classNames={{ inputWrapper: 'bg-slate-50/50 rounded-2xl h-12 border-slate-200' }} />
                                         </div>
                                         
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="flex flex-col gap-2">
-                                                <label className="font-black text-slate-700 uppercase tracking-widest text-[10px] ml-1">Room Type</label>
-                                                <Select variant="bordered" selectedKeys={[editForm.RoomType]} onSelectionChange={(k) => setEditForm(f => ({ ...f, RoomType: String(Array.from(k)[0]) }))} classNames={{ trigger: 'bg-slate-50/50 rounded-2xl h-12 border-slate-200' }}>
+                                                <label htmlFor="edit-room-type" className="font-black text-slate-700 uppercase tracking-widest text-[10px] ml-1">Room Type</label>
+                                                <Select id="edit-room-type" name="roomType" aria-label="Room Type" variant="bordered" selectedKeys={[editForm.RoomType]} onSelectionChange={(k) => setEditForm(f => ({ ...f, RoomType: String(Array.from(k)[0]) }))} classNames={{ trigger: 'bg-slate-50/50 rounded-2xl h-12 border-slate-200' }}>
                                                     {ROOM_TYPES.map(t => <SelectItem key={t.value} startContent={t.icon}>{t.value}</SelectItem>)}
                                                 </Select>
                                             </div>
                                             <div className="flex flex-col gap-2">
-                                                <label className="font-black text-slate-700 uppercase tracking-widest text-[10px] ml-1">Total Capacity</label>
-                                                <Input placeholder="0" type="number" value={editForm.TotalCapacity} onValueChange={(v) => setEditForm(f => ({ ...f, TotalCapacity: v }))} variant="bordered" classNames={{ inputWrapper: 'bg-slate-50/50 rounded-2xl h-12 border-slate-200' }} />
+                                                <label htmlFor="edit-room-capacity" className="font-black text-slate-700 uppercase tracking-widest text-[10px] ml-1">Total Capacity</label>
+                                                <Input id="edit-room-capacity" name="totalCapacity" placeholder="0" type="number" value={editForm.TotalCapacity} onValueChange={(v) => setEditForm(f => ({ ...f, TotalCapacity: v }))} variant="bordered" classNames={{ inputWrapper: 'bg-slate-50/50 rounded-2xl h-12 border-slate-200' }} />
                                             </div>
                                         </div>
-
+ 
                                         <div className="flex flex-col gap-2.5">
-                                            <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Seating Mode</label>
+                                            <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest ml-1">Seating Mode</span>
                                             <div className="grid grid-cols-2 gap-3">
                                                 {[{ v: 1, l: 'Single Seating' }, { v: 2, l: 'Dual Seating' }].map(s => (
-                                                    <button key={s.v} onClick={() => setEditForm(f => ({ ...f, SeatsPerBench: s.v, SeatMode: s.v === 2 ? 'Dual' : 'Single' }))}
+                                                    <button key={s.v} type="button" onClick={() => setEditForm(f => ({ ...f, SeatsPerBench: s.v, SeatMode: s.v === 2 ? 'Dual' : 'Single' }))}
                                                         className={`py-3 rounded-2xl text-xs font-black uppercase tracking-widest border-2 transition-all ${editForm.SeatsPerBench === s.v ? 'bg-violet-600 text-white border-violet-600 shadow-lg shadow-violet-200' : 'bg-white text-slate-500 border-slate-100 hover:border-violet-200'}`}>
                                                         {s.l}
                                                     </button>
@@ -428,7 +428,7 @@ export const InternalRoomManager: React.FC<Props> = ({ readOnly = false }) => {
                                         
                                         <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50/50 border border-slate-100">
                                             <span className="text-xs font-black text-slate-700 uppercase tracking-widest">Exam Usable</span>
-                                            <button onClick={() => setEditForm(f => ({ ...f, ExamUsable: !f.ExamUsable }))}
+                                            <button type="button" onClick={() => setEditForm(f => ({ ...f, ExamUsable: !f.ExamUsable }))}
                                                 className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${editForm.ExamUsable ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100' : 'bg-slate-200 text-slate-600'}`}>
                                                 {editForm.ExamUsable ? 'Available' : 'Disabled'}
                                             </button>
@@ -439,11 +439,11 @@ export const InternalRoomManager: React.FC<Props> = ({ readOnly = false }) => {
                                     <div className="space-y-8">
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="flex flex-col gap-2">
-                                                <label className="font-black text-slate-700 uppercase tracking-widest text-[10px] ml-1">Infrastructure Block</label>
-                                                <Autocomplete placeholder="Select block..." variant="bordered"
+                                                <label htmlFor="create-room-block" className="font-black text-slate-700 uppercase tracking-widest text-[10px] ml-1">Infrastructure Block</label>
+                                                <Autocomplete id="create-room-block" name="blockId" placeholder="Select block..." variant="bordered"
                                                     selectedKey={selBlock}
                                                     onSelectionChange={(k) => { setSelBlock(String(k || '')); fetchFloors(String(k || '')); setSelFloor(''); }}
-                                                    inputProps={{ classNames: { inputWrapper: 'bg-slate-50/50 rounded-2xl h-12 border-slate-200' } }}
+                                                    inputProps={{ id: "create-room-block", name: "blockId", classNames: { inputWrapper: 'bg-slate-50/50 rounded-2xl h-12 border-slate-200' } }}
                                                     listboxProps={{ classNames: { base: "p-2 rounded-2xl", list: "gap-1" } }}
                                                     popoverProps={{ classNames: { content: "rounded-2xl border border-slate-100 shadow-2xl bg-white/90 backdrop-blur-xl" } }}
                                                 >
@@ -451,11 +451,11 @@ export const InternalRoomManager: React.FC<Props> = ({ readOnly = false }) => {
                                                 </Autocomplete>
                                             </div>
                                             <div className="flex flex-col gap-2">
-                                                <label className="font-black text-slate-700 uppercase tracking-widest text-[10px] ml-1">Level / Floor</label>
-                                                <Autocomplete placeholder="Default: Ground" variant="bordered"
+                                                <label htmlFor="create-room-floor" className="font-black text-slate-700 uppercase tracking-widest text-[10px] ml-1">Level / Floor</label>
+                                                <Autocomplete id="create-room-floor" name="floorId" placeholder="Default: Ground" variant="bordered"
                                                     isDisabled={!selBlock} selectedKey={selFloor}
                                                     onSelectionChange={(k) => setSelFloor(String(k || ''))}
-                                                    inputProps={{ classNames: { inputWrapper: 'bg-slate-50/50 rounded-2xl h-12 border-slate-200' } }}
+                                                    inputProps={{ id: "create-room-floor", name: "floorId", classNames: { inputWrapper: 'bg-slate-50/50 rounded-2xl h-12 border-slate-200' } }}
                                                     listboxProps={{ classNames: { base: "p-2 rounded-2xl", list: "gap-1" } }}
                                                     popoverProps={{ classNames: { content: "rounded-2xl border border-slate-100 shadow-2xl bg-white/90 backdrop-blur-xl" } }}
                                                 >
@@ -463,19 +463,19 @@ export const InternalRoomManager: React.FC<Props> = ({ readOnly = false }) => {
                                                 </Autocomplete>
                                             </div>
                                         </div>
-
+ 
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="flex flex-col gap-2">
-                                                <label className="font-black text-slate-700 uppercase tracking-widest text-[10px] ml-1">Seating Type</label>
-                                                <Select variant="bordered" selectedKeys={[roomType]} onSelectionChange={(k) => setRoomType(String(Array.from(k)[0]))} classNames={{ trigger: 'bg-slate-50/50 rounded-2xl h-12 border-slate-200' }}>
+                                                <label htmlFor="create-room-type" className="font-black text-slate-700 uppercase tracking-widest text-[10px] ml-1">Seating Type</label>
+                                                <Select id="create-room-type" name="roomType" aria-label="Seating Type" variant="bordered" selectedKeys={[roomType]} onSelectionChange={(k) => setRoomType(String(Array.from(k)[0]))} classNames={{ trigger: 'bg-slate-50/50 rounded-2xl h-12 border-slate-200' }}>
                                                     {ROOM_TYPES.map(t => <SelectItem key={t.value} startContent={t.icon} className="rounded-xl font-bold text-slate-700">{t.value}</SelectItem>)}
                                                 </Select>
                                             </div>
                                             <div className="flex flex-col gap-2">
-                                                <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Bench Mode</label>
+                                                <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest ml-1">Bench Mode</span>
                                                 <div className="grid grid-cols-2 h-12 rounded-2xl overflow-hidden border-2 border-slate-50">
                                                     {[{ v: 2, l: 'Dual' }, { v: 1, l: 'Single' }].map(s => (
-                                                        <button key={s.v} onClick={() => { setSeatsPerBench(s.v); setSeatMode(s.v === 2 ? 'Dual' : 'Single'); }}
+                                                        <button key={s.v} type="button" onClick={() => { setSeatsPerBench(s.v); setSeatMode(s.v === 2 ? 'Dual' : 'Single'); }}
                                                             className={`flex items-center justify-center text-[10px] font-black uppercase tracking-widest transition-all ${seatsPerBench === s.v ? 'bg-violet-600 text-white shadow-inner' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}>
                                                             {s.l}
                                                         </button>
@@ -483,39 +483,38 @@ export const InternalRoomManager: React.FC<Props> = ({ readOnly = false }) => {
                                                 </div>
                                             </div>
                                         </div>
-
+ 
                                         <Divider className="opacity-50" />
-
                                         <Tabs selectedKey={createMode} onSelectionChange={(k) => setCreateMode(k as CreateMode)}
                                             size="sm" variant="underlined" color="secondary"
                                             classNames={{ tabList: 'gap-8', cursor: 'bg-violet-600 h-[2px]', tabContent: 'group-data-[selected=true]:text-violet-600 text-slate-400 font-black text-[10px] uppercase tracking-widest' }}>
                                             <Tab key="auto" title={<div className="flex items-center gap-2"><Hash size={14} />Sequence</div>}>
                                                 <div className="space-y-6 pt-4">
                                                     <div className="grid grid-cols-3 gap-4">
-                                                        <Input label="Prefix" labelPlacement="outside" placeholder="NB" value={prefix} onValueChange={setPrefix} variant="bordered" classNames={{ label: "font-black text-slate-700 text-[10px] uppercase", inputWrapper: 'bg-slate-50/50 rounded-2xl h-12' }} />
-                                                        <Input label="Start" labelPlacement="outside" type="number" value={startNum} onValueChange={setStartNum} variant="bordered" classNames={{ label: "font-black text-slate-700 text-[10px] uppercase", inputWrapper: 'bg-slate-50/50 rounded-2xl h-12' }} />
-                                                        <Input label="Count" labelPlacement="outside" type="number" value={count} onValueChange={setCount} variant="bordered" classNames={{ label: "font-black text-slate-700 text-[10px] uppercase", inputWrapper: 'bg-slate-50/50 rounded-2xl h-12' }} />
+                                                        <Input id="seq-prefix" name="prefix" label="Prefix" labelPlacement="outside" placeholder="NB" value={prefix} onValueChange={setPrefix} variant="bordered" classNames={{ label: "font-black text-slate-700 text-[10px] uppercase", inputWrapper: 'bg-slate-50/50 rounded-2xl h-12' }} />
+                                                        <Input id="seq-start" name="startNum" label="Start" labelPlacement="outside" type="number" value={startNum} onValueChange={setStartNum} variant="bordered" classNames={{ label: "font-black text-slate-700 text-[10px] uppercase", inputWrapper: 'bg-slate-50/50 rounded-2xl h-12' }} />
+                                                        <Input id="seq-count" name="count" label="Count" labelPlacement="outside" type="number" value={count} onValueChange={setCount} variant="bordered" classNames={{ label: "font-black text-slate-700 text-[10px] uppercase", inputWrapper: 'bg-slate-50/50 rounded-2xl h-12' }} />
                                                     </div>
-                                                    <Input label="Standard Capacity" labelPlacement="outside" type="number" value={capacity} onValueChange={setCapacity} variant="bordered" classNames={{ label: "font-black text-slate-700 text-[10px] uppercase", inputWrapper: 'bg-slate-50/50 rounded-2xl h-12' }} />
+                                                    <Input id="seq-capacity" name="capacity" label="Standard Capacity" labelPlacement="outside" type="number" value={capacity} onValueChange={setCapacity} variant="bordered" classNames={{ label: "font-black text-slate-700 text-[10px] uppercase", inputWrapper: 'bg-slate-50/50 rounded-2xl h-12' }} />
                                                 </div>
                                             </Tab>
                                             <Tab key="custom" title={<div className="flex items-center gap-2"><List size={14} />Custom List</div>}>
                                                 <div className="space-y-6 pt-4">
-                                                    <Input label="Global Prefix" labelPlacement="outside" value={prefix} onValueChange={setPrefix} variant="bordered" classNames={{ label: "font-black text-slate-700 text-[10px] uppercase", inputWrapper: 'bg-slate-50/50 rounded-2xl h-12' }} />
-                                                    <Input label="Room Numbers" labelPlacement="outside" placeholder="101, 103, 207..." value={customList} onValueChange={setCustomList} variant="bordered" classNames={{ label: "font-black text-slate-700 text-[10px] uppercase", inputWrapper: 'bg-slate-50/50 rounded-2xl h-12' }} />
-                                                    <Input label="Default Capacity" labelPlacement="outside" type="number" value={capacity} onValueChange={setCapacity} variant="bordered" classNames={{ label: "font-black text-slate-700 text-[10px] uppercase", inputWrapper: 'bg-slate-50/50 rounded-2xl h-12' }} />
+                                                    <Input id="custom-prefix" name="prefix" label="Global Prefix" labelPlacement="outside" value={prefix} onValueChange={setPrefix} variant="bordered" classNames={{ label: "font-black text-slate-700 text-[10px] uppercase", inputWrapper: 'bg-slate-50/50 rounded-2xl h-12' }} />
+                                                    <Input id="custom-rooms" name="customList" label="Room Numbers" labelPlacement="outside" placeholder="101, 103, 207..." value={customList} onValueChange={setCustomList} variant="bordered" classNames={{ label: "font-black text-slate-700 text-[10px] uppercase", inputWrapper: 'bg-slate-50/50 rounded-2xl h-12' }} />
+                                                    <Input id="custom-capacity" name="capacity" label="Default Capacity" labelPlacement="outside" type="number" value={capacity} onValueChange={setCapacity} variant="bordered" classNames={{ label: "font-black text-slate-700 text-[10px] uppercase", inputWrapper: 'bg-slate-50/50 rounded-2xl h-12' }} />
                                                 </div>
                                             </Tab>
                                             <Tab key="manual" title={<div className="flex items-center gap-2"><AlignJustify size={14} />Manual</div>}>
                                                 <div className="space-y-3 pt-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                                                     {manualRows.map((row, i) => (
                                                         <div key={i} className="grid grid-cols-2 gap-3">
-                                                            <Input placeholder={`Code ${i + 1}`} size="sm" value={row.code} onValueChange={(v) => {
+                                                            <Input id={`manual-code-${i}`} name={`manual-code-${i}`} aria-label={`Manual Room Code ${i + 1}`} placeholder={`Code ${i + 1}`} size="sm" value={row.code} onValueChange={(v) => {
                                                                 const next = [...manualRows]; next[i].code = v; setManualRows(next);
                                                             }} variant="bordered" classNames={{ inputWrapper: 'bg-slate-50/50 rounded-xl h-10' }} />
-                                                            <Input placeholder="Capacity" size="sm" type="number" value={row.capacity} onValueChange={(v) => {
+                                                            <Input id={`manual-capacity-${i}`} name={`manual-capacity-${i}`} aria-label={`Manual Room Capacity ${i + 1}`} placeholder="Capacity" size="sm" type="number" value={row.capacity} onValueChange={(v) => {
                                                                 const next = [...manualRows]; next[i].capacity = v; setManualRows(next);
-                                                            }} variant="bordered" classNames={{ inputWrapper: 'bg-slate-50/50 rounded-xl h-10' }} />
+                                                             }} variant="bordered" classNames={{ inputWrapper: 'bg-slate-50/50 rounded-xl h-10' }} />
                                                         </div>
                                                     ))}
                                                     <Button size="sm" variant="light" onPress={() => setManualRows(r => [...r, { code: '', capacity: '' }])}

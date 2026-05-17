@@ -426,8 +426,8 @@ const SeriesSelection: React.FC = () => {
                                     onValueChange={setNewSeriesName}
                                     size="lg"
                                     classNames={{
-                                        inputWrapper: "bg-slate-50 border-2 border-slate-100 hover:border-slate-200 focus-within:!border-indigo-600 focus-within:!bg-white rounded-xl shadow-inner h-14 transition-all",
-                                        input: "text-slate-900 font-bold text-base"
+                                        inputWrapper: "bg-slate-50 border border-slate-200 hover:border-slate-300 focus-within:!border-indigo-600 focus-within:!bg-white rounded-xl shadow-inner h-14 transition-all w-full flex items-center px-4",
+                                        input: "text-slate-900 font-bold text-base bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 shadow-none w-full"
                                     }}
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter' && newSeriesName) handleCreateSeries();
@@ -483,8 +483,8 @@ const SeriesSelection: React.FC = () => {
                                     onChange={(e) => setEditSeriesName(e.target.value)}
                                     placeholder="e.g., Spring 2024 Internals"
                                     classNames={{
-                                        inputWrapper: "bg-slate-50 border-2 border-slate-100 hover:border-indigo-300 focus-within:!border-indigo-600 focus-within:!bg-white rounded-xl shadow-inner h-12 transition-all",
-                                        input: "text-slate-900 font-semibold"
+                                        inputWrapper: "bg-slate-50 border border-slate-200 hover:border-indigo-300 focus-within:!border-indigo-600 focus-within:!bg-white rounded-xl shadow-inner h-12 transition-all w-full flex items-center px-4",
+                                        input: "text-slate-900 font-semibold bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 shadow-none w-full"
                                     }}
                                     disabled={isSubmitting}
                                 />
@@ -533,20 +533,48 @@ const SeriesSelection: React.FC = () => {
             </Modal>
 
             {/* Delete Series Modal */}
-            <Modal isOpen={isDeleteModalOpen} onClose={() => !isSubmitting && setIsDeleteModalOpen(false)} size="sm" backdrop="blur" classNames={{
-                backdrop: "bg-slate-900/50 backdrop-blur-sm",
-                base: "bg-white shadow-2xl rounded-3xl",
-            }}>
+            <Modal 
+                isOpen={isDeleteModalOpen} 
+                onClose={() => !isSubmitting && setIsDeleteModalOpen(false)} 
+                size="sm" 
+                backdrop="blur" 
+                hideCloseButton={true}
+                classNames={{
+                    backdrop: "bg-slate-900/40 backdrop-blur-md",
+                    base: "bg-white shadow-2xl rounded-[2.5rem] border border-slate-100 p-3",
+                }}
+            >
                 <ModalContent>
-                    <ModalBody className="py-8 px-6 text-center">
-                        <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <Trash2 size={24} />
+                    <ModalBody className="py-8 px-6 text-center space-y-6">
+                        <div className="relative">
+                            <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto shadow-inner relative z-10">
+                                <Trash2 size={24} className="animate-pulse" />
+                            </div>
+                            <div className="absolute inset-0 w-16 h-16 bg-rose-200/40 rounded-full blur-md mx-auto scale-110 -z-0" />
                         </div>
-                        <h3 className="text-xl font-bold text-slate-900 mb-2">Delete Series?</h3>
-                        <p className="text-slate-500 text-sm mb-6">Are you sure you want to delete this exam series? This action <span className="font-bold text-red-600">cannot be undone</span>.</p>
-                        <div className="flex gap-3">
-                            <Button variant="flat" onPress={() => setIsDeleteModalOpen(false)} disabled={isSubmitting} className="flex-1 font-bold bg-slate-100 text-slate-700">Cancel</Button>
-                            <Button color="danger" onPress={handleDeleteSeriesSubmit} isLoading={isSubmitting} className="flex-1 font-bold">Delete Series</Button>
+                        <div className="space-y-2">
+                            <h3 className="text-2xl font-black text-slate-900 tracking-tight">Delete Series?</h3>
+                            <p className="text-slate-500 text-xs font-semibold leading-relaxed px-4">
+                                Are you sure you want to delete this exam series? This action <span className="font-extrabold text-rose-600 underline decoration-2">cannot be undone</span>.
+                            </p>
+                        </div>
+                        <div className="flex gap-4 w-full pt-2">
+                            <Button 
+                                variant="flat" 
+                                onPress={() => setIsDeleteModalOpen(false)} 
+                                disabled={isSubmitting} 
+                                className="flex-1 font-black bg-slate-100 hover:bg-slate-200/80 text-slate-600 rounded-2xl h-12 transition-all"
+                            >
+                                Cancel
+                            </Button>
+                            <Button 
+                                color="danger" 
+                                onPress={handleDeleteSeriesSubmit} 
+                                isLoading={isSubmitting} 
+                                className="flex-1 font-black bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white rounded-2xl h-12 shadow-lg shadow-rose-500/20 active:scale-98 transition-all"
+                            >
+                                Delete Series
+                            </Button>
                         </div>
                     </ModalBody>
                 </ModalContent>
