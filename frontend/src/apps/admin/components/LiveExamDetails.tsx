@@ -1,24 +1,64 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Tabs,
     Tab,
     Input,
-    Chip,
     Avatar,
     ScrollShadow,
+    Spinner
 } from '@heroui/react';
 import { Search, User, MapPin, Activity, ShieldCheck, History, Clock } from 'lucide-react';
+import { DashboardService } from '../services/dashboardService';
 
 export const LiveExamDetails: React.FC = () => {
     const [selectedTab, setSelectedTab] = useState('overview');
     const [searchTerm, setSearchTerm] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [data, setData] = useState<any>(null);
 
-    const students = [
-        { id: '2022CS01', name: 'Arjun Das', department: 'CSE', seat: 'A-12', status: 'present' },
-        { id: '2022CS05', name: 'Meera Nair', department: 'CSE', seat: 'A-15', status: 'absent' },
-        { id: '2022CS09', name: 'Kevin Paul', department: 'CSE', seat: 'B-02', status: 'present' },
-        { id: '2022EC04', name: 'Sara Khan', department: 'ECE', seat: 'C-08', status: 'present' },
-    ];
+    useEffect(() => {
+        const fetchSessionData = async () => {
+            try {
+                const response = await DashboardService.getActiveSessionIntelligence();
+                if (response.success) {
+                    setData(response.data);
+                }
+            } catch (error) {
+                console.error("Failed to fetch session intelligence:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchSessionData();
+        const interval = setInterval(fetchSessionData, 10000); // refresh every 10s
+        return () => clearInterval(interval);
+    }, []);
+
+    if (loading && !data) {
+        return (
+            <div className="flex items-center justify-center py-20 bg-white">
+                <Spinner color="indigo" size="md" />
+            </div>
+        );
+    }
+
+    const metrics = data?.metrics || {
+        remainingTime: "01:42:15",
+        facilities: "0 Halls",
+        candidates: "0 Active",
+        presenceRate: "0%",
+        integrityHash: "SHA-256: FFFFFFFFFFFFFFFF"
+    };
+
+    const students = data?.students || [];
+    const logs = data?.logs || [];
+
+    const filteredStudents = students.filter((student: any) =>
+        student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        student.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        student.department.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     return (
         <div className="flex flex-col bg-white">
@@ -68,24 +108,24 @@ export const LiveExamDetails: React.FC = () => {
                 {selectedTab === 'overview' && (
                     <div className="space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <SessionMetric icon={<Clock />} label="Remaining" value="01:42:15" />
-                            <SessionMetric icon={<MapPin />} label="Facilities" value="06 Halls" />
-                            <SessionMetric icon={<User />} label="Candidates" value="240 Active" />
+                            <SessionMetric icon={<Clock />} label="Remaining" value={metrics.remainingTime} />
+                            <SessionMetric icon={<MapPin />} label="Facilities" value={metrics.facilities} />
+                            <SessionMetric icon={<User />} label="Candidates" value={metrics.candidates} />
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Live Presence</p>
                                 <div className="flex items-baseline gap-2">
-                                    <span className="text-2xl font-bold text-slate-800 tracking-tight">94.2%</span>
+                                    <span className="text-2xl font-bold text-slate-800 tracking-tight">{metrics.presenceRate}</span>
                                     <span className="text-[10px] font-bold text-emerald-600">+1.2%</span>
                                 </div>
                             </div>
                             <div className="p-4 rounded-xl bg-indigo-50/30 border border-indigo-100/50">
                                 <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">Security Hash</p>
                                 <div className="flex items-center gap-2">
-                                    <ShieldCheck size={16} className="text-indigo-600" />
-                                    <span className="text-xs font-bold text-slate-700">SHA-256 Verified</span>
+                                    <ShieldCheck size={16} className="text-indigo-600 shrink-0" />
+                                    <span className="text-[11px] font-bold text-slate-700 truncate">{metrics.integrityHash}</span>
                                 </div>
                             </div>
                         </div>
@@ -94,7 +134,7 @@ export const LiveExamDetails: React.FC = () => {
 
                 {selectedTab === 'students' && (
                     <div className="space-y-4">
-                        <Input id="field-6qs8519" name="field-6qs8519" aria-label="Filter by ID or Name..." placeholder="Filter by ID or Name..."
+                        <Input id="field-6qs8519" name="field-6qs8519" aria-label="Filter by ID or Name..." placeholder="Filter by ID, Name or Department..."
                             startContent={<Search size={14} className="text-slate-400" />}
                             size="sm"
                             variant="bordered"
@@ -103,40 +143,51 @@ export const LiveExamDetails: React.FC = () => {
                         />
 
                         <ScrollShadow className="max-h-[300px]">
-                            <div className="divide-y divide-slate-50">
-                                {students.map((student) => (
-                                    <div key={student.id} className="py-3 flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <Avatar
-                                                name={student.name}
-                                                size="sm"
-                                                className="rounded-lg font-bold"
-                                            />
-                                            <div>
-                                                <p className="text-xs font-bold text-slate-800 leading-tight">{student.name}</p>
-                                                <p className="text-[9px] font-medium text-slate-400 uppercase tracking-wider">{student.id} • {student.department}</p>
+                            {filteredStudents.length === 0 ? (
+                                <div className="py-10 text-center text-slate-400 text-xs font-medium">
+                                    No matching student records found.
+                                </div>
+                            ) : (
+                                <div className="divide-y divide-slate-50">
+                                    {filteredStudents.map((student: any, idx: number) => (
+                                        <div key={`${student.id}-${idx}`} className="py-3 flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <Avatar
+                                                    name={student.name}
+                                                    size="sm"
+                                                    className="rounded-lg font-bold text-[10px]"
+                                                />
+                                                <div>
+                                                    <p className="text-xs font-bold text-slate-800 leading-tight">{student.name}</p>
+                                                    <p className="text-[9px] font-medium text-slate-400 uppercase tracking-wider">{student.id} • {student.department}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-4">
+                                                <div className="text-right">
+                                                    <p className="text-[10px] font-bold text-slate-700 leading-none">{student.seat}</p>
+                                                    <p className="text-[8px] font-medium text-slate-400 uppercase tracking-widest mt-1">Seat</p>
+                                                </div>
+                                                <div className={`h-1.5 w-1.5 rounded-full ${student.status === 'present' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-4">
-                                            <div className="text-right">
-                                                <p className="text-[10px] font-bold text-slate-700 leading-none">{student.seat}</p>
-                                                <p className="text-[8px] font-medium text-slate-400 uppercase tracking-widest mt-1">Seat</p>
-                                            </div>
-                                            <div className={`h-1.5 w-1.5 rounded-full ${student.status === 'present' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
+                                    ))}
+                                </div>
+                            )}
                         </ScrollShadow>
                     </div>
                 )}
 
                 {selectedTab === 'logs' && (
                     <div className="space-y-3">
-                        <LogEntry text="Hall A attendance syncing" time="10:04" level="info" />
-                        <LogEntry text="Seat overlap warning - Hall B" time="10:15" level="warning" />
-                        <LogEntry text="Secure keys rotated" time="09:50" level="secure" />
-                        <LogEntry text="Session B initialization" time="09:30" level="info" />
+                        {logs.length === 0 ? (
+                            <div className="py-10 text-center text-slate-400 text-xs font-medium">
+                                No recent session events logged.
+                            </div>
+                        ) : (
+                            logs.map((log: any, idx: number) => (
+                                <LogEntry key={`${log.time}-${idx}`} text={log.text} time={log.time} level={log.level} />
+                            ))
+                        )}
                     </div>
                 )}
             </div>

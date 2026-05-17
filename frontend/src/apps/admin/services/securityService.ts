@@ -1,7 +1,7 @@
 
 import api from '../../../services/api';
 
-const API_URL = 'http://localhost:5000/api/security';
+const API_URL = '/security';
 
 // Interceptors handle token now
 

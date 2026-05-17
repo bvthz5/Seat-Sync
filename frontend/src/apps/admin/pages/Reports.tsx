@@ -429,8 +429,8 @@ const Reports: React.FC = () => {
                                 <div className="border border-slate-100 rounded-xl overflow-hidden">
                                     {/* TH */}
                                     <div className="grid bg-slate-50 border-b border-slate-100 px-5 py-3"
-                                        style={{ gridTemplateColumns: '0.5fr 2fr 1.4fr 0.8fr 0.9fr 1.4fr 0.8fr 0.7fr 0.7fr 0.9fr 0.5fr' }}>
-                                        {['#', 'Subject', 'Department', 'Date', 'Session', 'Hall', 'Reg.', 'Present', 'Absent', 'Status', ''].map(c => (
+                                        style={{ gridTemplateColumns: '1.2fr 2fr 1.2fr 0.8fr 0.8fr 1.2fr 0.6fr 0.8fr 0.8fr 1fr 0.4fr' }}>
+                                        {['Code', 'Subject', 'Department', 'Date', 'Session', 'Hall', 'Reg.', 'Present', 'Absent', 'Status', ''].map(c => (
                                             <span key={c} className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{c}</span>
                                         ))}
                                     </div>
@@ -442,7 +442,7 @@ const Reports: React.FC = () => {
                                     ) : pageItems.map((row, idx) => (
                                         <div key={row.id}
                                             className={`grid px-5 py-4 items-center hover:bg-slate-50/80 transition-colors ${idx < pageItems.length - 1 ? 'border-b border-slate-50' : ''}`}
-                                            style={{ gridTemplateColumns: '0.5fr 2fr 1.4fr 0.8fr 0.9fr 1.4fr 0.8fr 0.7fr 0.7fr 0.9fr 0.5fr' }}>
+                                            style={{ gridTemplateColumns: '1.2fr 2fr 1.2fr 0.8fr 0.8fr 1.2fr 0.6fr 0.8fr 0.8fr 1fr 0.4fr' }}>
                                             <span className="text-[11px] font-black text-indigo-500">{row.examCode}</span>
                                             <div>
                                                 <p className="text-sm font-bold text-slate-900 leading-snug">{row.subject}</p>

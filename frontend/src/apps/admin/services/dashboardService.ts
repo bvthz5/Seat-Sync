@@ -20,5 +20,9 @@ export const DashboardService = {
   getReports: async (seriesId: string) => {
     const res = await api.get(`/dashboard/reports`, { params: { seriesId } });
     return res.data;
+  },
+  getActiveSessionIntelligence: async () => {
+    const res = await api.get(`/dashboard/session-intelligence`);
+    return res.data;
   }
 };
