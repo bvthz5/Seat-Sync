@@ -56,7 +56,7 @@ import { SeriesService } from '../services/seriesService';
 type ExamStatus = 'Completed' | 'In Progress' | 'Scheduled' | 'Cancelled';
 
 interface SeriesOption {
-    SeriesID: number;
+    ExamSeriesID: number;
     SeriesName: string;
     StartDate?: string;
     EndDate?: string;
@@ -79,23 +79,6 @@ interface ReportRow {
     seatsAllocated: number;
     status: ExamStatus;
 }
-
-// ─── Mock Report Data per series-like sets ─────────────────────────────────────
-
-const BASE_REPORTS: ReportRow[] = [
-    { id: 1, examCode: 'CS101', subject: 'Data Structures', department: 'Computer Science', date: '2023-10-24', session: 'Morning', hall: 'Great Hall – North', invigilator: 'Dr. Jane Doe', invigilatorInitials: 'JD', registered: 160, present: 145, absent: 15, attendanceRate: 90.6, seatsAllocated: 165, status: 'Completed' },
-    { id: 2, examCode: 'MATH302', subject: 'Calculus III', department: 'Mathematics', date: '2023-10-24', session: 'Morning', hall: 'Main Lab 4', invigilator: 'Prof. Mark Smith', invigilatorInitials: 'MS', registered: 45, present: 45, absent: 0, attendanceRate: 100, seatsAllocated: 50, status: 'Completed' },
-    { id: 3, examCode: 'LIT200', subject: 'World Literature', department: 'Humanities', date: '2023-10-24', session: 'Afternoon', hall: 'Room 204B', invigilator: 'Lisa Wong', invigilatorInitials: 'LW', registered: 88, present: 71, absent: 17, attendanceRate: 80.7, seatsAllocated: 90, status: 'Completed' },
-    { id: 4, examCode: 'BIO205', subject: 'Microbiology', department: 'Life Sciences', date: '2023-10-25', session: 'Morning', hall: 'Lecture Theatre C', invigilator: 'Ahmed Khan', invigilatorInitials: 'AK', registered: 210, present: 202, absent: 8, attendanceRate: 96.2, seatsAllocated: 215, status: 'In Progress' },
-    { id: 5, examCode: 'PHY301', subject: 'Quantum Mechanics', department: 'Physics', date: '2023-10-25', session: 'Morning', hall: 'Science Block B', invigilator: 'Dr. Priya Nair', invigilatorInitials: 'PN', registered: 80, present: 78, absent: 2, attendanceRate: 97.5, seatsAllocated: 85, status: 'Completed' },
-    { id: 6, examCode: 'CHE102', subject: 'Organic Chemistry', department: 'Chemistry', date: '2023-10-25', session: 'Afternoon', hall: 'Lab Complex A', invigilator: 'Tom Bradley', invigilatorInitials: 'TB', registered: 55, present: 0, absent: 0, attendanceRate: 0, seatsAllocated: 60, status: 'Scheduled' },
-    { id: 7, examCode: 'ECO401', subject: 'Macroeconomics', department: 'Economics', date: '2023-10-26', session: 'Morning', hall: 'Room 101', invigilator: 'Sarah Johnson', invigilatorInitials: 'SJ', registered: 72, present: 61, absent: 11, attendanceRate: 84.7, seatsAllocated: 75, status: 'Completed' },
-    { id: 8, examCode: 'ENG303', subject: 'Advanced English', department: 'Humanities', date: '2023-10-26', session: 'Afternoon', hall: 'Hall B', invigilator: 'Dr. Raj Kumar', invigilatorInitials: 'RK', registered: 110, present: 98, absent: 12, attendanceRate: 89.1, seatsAllocated: 115, status: 'Completed' },
-    { id: 9, examCode: 'ME201', subject: 'Thermodynamics', department: 'Mechanical Eng.', date: '2023-10-27', session: 'Morning', hall: 'Engg. Block 1', invigilator: 'Prof. Anita Patel', invigilatorInitials: 'AP', registered: 130, present: 119, absent: 11, attendanceRate: 91.5, seatsAllocated: 135, status: 'Completed' },
-    { id: 10, examCode: 'CS305', subject: 'Operating Systems', department: 'Computer Science', date: '2023-10-28', session: 'Morning', hall: 'Great Hall – South', invigilator: 'Dr. James Lee', invigilatorInitials: 'JL', registered: 145, present: 138, absent: 7, attendanceRate: 95.2, seatsAllocated: 150, status: 'Completed' },
-    { id: 11, examCode: 'PSY101', subject: 'Intro to Psychology', department: 'Psychology', date: '2023-10-28', session: 'Afternoon', hall: 'Room 302', invigilator: 'Dr. Mei Lin', invigilatorInitials: 'ML', registered: 65, present: 58, absent: 7, attendanceRate: 89.2, seatsAllocated: 70, status: 'Completed' },
-    { id: 12, examCode: 'STAT202', subject: 'Applied Statistics', department: 'Mathematics', date: '2023-10-29', session: 'Morning', hall: 'Main Lab 2', invigilator: 'Prof. David Chen', invigilatorInitials: 'DC', registered: 95, present: 87, absent: 8, attendanceRate: 91.6, seatsAllocated: 100, status: 'Cancelled' },
-];
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -173,6 +156,9 @@ const Reports: React.FC = () => {
     const [seriesList, setSeriesList] = useState<SeriesOption[]>([]);
     const [selectedSeriesId, setSelectedSeriesId] = useState<string>('');
     const [loadingSeries, setLoadingSeries] = useState(true);
+    const [seriesReports, setSeriesReports] = useState<ReportRow[]>([]);
+    const [dashboardData, setDashboardData] = useState<any>(null);
+    const [loadingReports, setLoadingReports] = useState(false);
 
     // Fetch real series list on mount
     useEffect(() => {
@@ -182,10 +168,10 @@ const Reports: React.FC = () => {
                 const res = await SeriesService.getAll();
                 const data: SeriesOption[] = res?.data ?? res ?? [];
                 setSeriesList(data);
-                if (data.length > 0) setSelectedSeriesId(String(data[0].SeriesID));
+                if (data.length > 0) setSelectedSeriesId(String(data[0].ExamSeriesID));
             } catch {
                 // fall back to placeholder
-                setSeriesList([{ SeriesID: 0, SeriesName: 'Demo Series – Odd Sem 2023' }]);
+                setSeriesList([{ ExamSeriesID: 0, SeriesName: 'Demo Series – Odd Sem 2023' }]);
                 setSelectedSeriesId('0');
             } finally {
                 setLoadingSeries(false);
@@ -194,10 +180,31 @@ const Reports: React.FC = () => {
         load();
     }, []);
 
-    const selectedSeries = seriesList.find(s => String(s.SeriesID) === selectedSeriesId);
+    useEffect(() => {
+        const fetchReports = async () => {
+            if (!selectedSeriesId) return;
+            setLoadingReports(true);
+            try {
+                const { DashboardService } = await import('../services/dashboardService');
+                const response = await DashboardService.getReports(selectedSeriesId);
+                if (response.success && response.data) {
+                    setDashboardData(response.data);
+                    setSeriesReports(response.data.examRecords || []);
+                }
+            } catch (err) {
+                console.error("Failed to fetch reports", err);
+                setSeriesReports([]);
+                setDashboardData(null);
+            } finally {
+                setLoadingReports(false);
+            }
+        };
+        fetchReports();
+    }, [selectedSeriesId]);
 
-    // For now, all series show the same mock data (in production, refetch by seriesId)
-    const seriesReports = BASE_REPORTS;
+    const selectedSeries = seriesList.find(s => String(s.ExamSeriesID) === selectedSeriesId);
+
+    
 
     const departments = useMemo(() => [...new Set(seriesReports.map(r => r.department))].sort(), [seriesReports]);
 
@@ -217,41 +224,21 @@ const Reports: React.FC = () => {
     const pageItems = filtered.slice((cp - 1) * ROWS_PER_PAGE, cp * ROWS_PER_PAGE);
     const clearFilters = () => { setSearch(''); setDeptFilter(''); setStatusFilter(''); setSessionFilter(''); setPage(1); };
 
-    // Aggregates
-    const totalReg = seriesReports.reduce((a, r) => a + r.registered, 0);
-    const totalPres = seriesReports.reduce((a, r) => a + r.present, 0);
-    const totalSeats = seriesReports.reduce((a, r) => a + r.seatsAllocated, 0);
-    const overallRate = totalReg > 0 ? ((totalPres / totalReg) * 100).toFixed(1) : '0.0';
-    const completedCount = seriesReports.filter(r => r.status === 'Completed').length;
+    // ─── API Driven Aggregates ───
+    const summary = dashboardData?.summary || { totalExams: 0, totalStudents: 0, averageAttendance: 0, completedExams: 0, seatUtilization: 0, totalSeatsAllocated: 0, totalAbsent: 0 };
+    const analytics = dashboardData?.analytics || { departmentAttendance: [], statusDistribution: [], sessionComparison: [], highlights: { highestAttendanceExam: 'N/A', lowestAttendanceExam: 'N/A', largestHallUsed: '0', totalAbsentStudents: 0 } };
+    const seating = dashboardData?.seating || { totalSeatsAllocated: 0, averageHallFillRate: 0, halls: [] };
+    const invigilators = dashboardData?.invigilators || [];
 
-    const deptChartData = useMemo(() => {
-        const map: Record<string, { total: number; present: number }> = {};
-        seriesReports.forEach(r => {
-            if (!map[r.department]) map[r.department] = { total: 0, present: 0 };
-            map[r.department]!.total += r.registered;
-            map[r.department]!.present += r.present;
-        });
-        return Object.entries(map).map(([dept, v]) => ({
-            dept: dept.replace(/ /g, '\n').substring(0, 6),
-            rate: v.total > 0 ? parseFloat(((v.present / v.total) * 100).toFixed(1)) : 0,
-        }));
-    }, [seriesReports]);
+    const totalReg = summary.totalStudents;
+    const totalPres = summary.totalStudents - summary.totalAbsent;
+    const totalSeats = summary.totalSeatsAllocated;
+    const overallRate = summary.averageAttendance.toFixed(1);
+    const completedCount = summary.completedExams;
 
-    const statusDist = useMemo(() => {
-        const counts = { Completed: 0, 'In Progress': 0, Scheduled: 0, Cancelled: 0 };
-        seriesReports.forEach(r => { counts[r.status]++; });
-        return [
-            { name: 'Completed', value: counts['Completed'], fill: '#10b981' },
-            { name: 'In Progress', value: counts['In Progress'], fill: '#3b82f6' },
-            { name: 'Scheduled', value: counts['Scheduled'], fill: '#8b5cf6' },
-            { name: 'Cancelled', value: counts['Cancelled'], fill: '#ef4444' },
-        ].filter(d => d.value > 0);
-    }, [seriesReports]);
-
-    const sessionData = [
-        { session: 'Morning', count: seriesReports.filter(r => r.session === 'Morning').length, rate: 93.4 },
-        { session: 'Afternoon', count: seriesReports.filter(r => r.session === 'Afternoon').length, rate: 85.1 },
-    ];
+    const deptChartData = analytics.departmentAttendance;
+    const statusDist = analytics.statusDistribution.map((s: any) => ({ name: s.name, value: s.value, fill: s.name === 'Completed' ? '#10b981' : s.name === 'In Progress' ? '#3b82f6' : s.name === 'Scheduled' ? '#8b5cf6' : '#ef4444' }));
+    const sessionData = analytics.sessionComparison;
 
     const csvName = `${selectedSeries?.SeriesName.replace(/\s+/g, '-') ?? 'series'}-report.csv`;
 
@@ -294,7 +281,7 @@ const Reports: React.FC = () => {
                                     disallowEmptySelection
                                 >
                                     {seriesList.map(s => (
-                                        <SelectItem key={String(s.SeriesID)} textValue={s.SeriesName}>
+                                        <SelectItem key={String(s.ExamSeriesID)} textValue={s.SeriesName}>
                                             <div className="flex items-center gap-2">
                                                 <Calendar size={13} className="text-indigo-500" />
                                                 <span className="font-semibold text-sm">{s.SeriesName}</span>
@@ -563,10 +550,10 @@ const Reports: React.FC = () => {
                                     <h3 className="text-sm font-bold text-slate-700 mb-4">Series Highlights</h3>
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                         {[
-                                            { label: 'Highest Attendance', value: '100%', sub: 'MATH302 · Calculus III', icon: <Award size={16} className="text-emerald-600" />, bg: 'bg-emerald-50' },
-                                            { label: 'Lowest Attendance', value: '80.7%', sub: 'LIT200 · World Literature', icon: <AlertTriangle size={16} className="text-amber-600" />, bg: 'bg-amber-50' },
-                                            { label: 'Largest Hall Used', value: '215', sub: 'Lecture Theatre C', icon: <Building2 size={16} className="text-sky-600" />, bg: 'bg-sky-50' },
-                                            { label: 'Absent Students', value: String(BASE_REPORTS.reduce((a, r) => a + r.absent, 0)), sub: 'Across all exams', icon: <Users size={16} className="text-rose-500" />, bg: 'bg-rose-50' },
+                                            { label: 'Highest Attendance', value: '100%', sub: analytics.highlights.highestAttendanceExam || 'N/A', icon: <Award size={16} className="text-emerald-600" />, bg: 'bg-emerald-50' },
+                                            { label: 'Lowest Attendance', value: 'Check Records', sub: analytics.highlights.lowestAttendanceExam || 'N/A', icon: <AlertTriangle size={16} className="text-amber-600" />, bg: 'bg-amber-50' },
+                                            { label: 'Largest Hall Used', value: String(analytics.highlights.largestHallUsed || 'N/A'), sub: 'Capacity wise', icon: <Building2 size={16} className="text-sky-600" />, bg: 'bg-sky-50' },
+                                            { label: 'Absent Students', value: String(analytics.highlights.totalAbsentStudents || 0), sub: 'Across all exams', icon: <Users size={16} className="text-rose-500" />, bg: 'bg-rose-50' },
                                         ].map(c => (
                                             <div key={c.label} className="bg-slate-50 border border-slate-100 rounded-xl p-4">
                                                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${c.bg} mb-3`}>{c.icon}</div>
@@ -587,7 +574,7 @@ const Reports: React.FC = () => {
                                     {[
                                         { label: 'Total Seats Allocated', value: totalSeats.toLocaleString(), sub: 'Across all halls', icon: <MapPin size={17} className="text-amber-600" />, bg: 'bg-amber-50' },
                                         { label: 'Seat Utilization Rate', value: `${((totalPres / totalSeats) * 100).toFixed(1)}%`, sub: 'Present vs. allocated', icon: <TrendingUp size={17} className="text-indigo-600" />, bg: 'bg-indigo-50' },
-                                        { label: 'Avg. Hall Fill Rate', value: '88.3%', sub: 'Per session average', icon: <Building2 size={17} className="text-emerald-600" />, bg: 'bg-emerald-50' },
+                                        { label: 'Avg. Hall Fill Rate', value: `${seating.averageHallFillRate.toFixed(1)}%`, sub: 'Per session average', icon: <Building2 size={17} className="text-emerald-600" />, bg: 'bg-emerald-50' },
                                     ].map(c => (
                                         <div key={c.label} className="bg-slate-50 border border-slate-100 rounded-2xl p-5">
                                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${c.bg} mb-3`}>{c.icon}</div>
@@ -604,20 +591,20 @@ const Reports: React.FC = () => {
                                         style={{ gridTemplateColumns: '2fr 0.8fr 0.8fr 0.8fr 1.5fr 0.8fr' }}>
                                         {['Hall', 'Capacity', 'Registered', 'Present', 'Utilization', 'Level'].map(c => <span key={c}>{c}</span>)}
                                     </div>
-                                    {BASE_REPORTS.map((r, i, a) => {
-                                        const pct = r.seatsAllocated > 0 ? (r.present / r.seatsAllocated) * 100 : 0;
+                                    {seating.halls.map((h: any, i: number, a: any) => {
+                                        const pct = h.utilizationRate;
+                                        const level = h.utilizationLevel;
                                         const color = pct >= 80 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-400' : pct > 0 ? 'bg-rose-400' : 'bg-slate-200';
-                                        const level = pct >= 80 ? 'High' : pct >= 50 ? 'Medium' : pct > 0 ? 'Low' : 'Pending';
                                         const chipCls = pct >= 80 ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : pct >= 50 ? 'bg-amber-50 text-amber-700 border-amber-100' : pct > 0 ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-slate-50 text-slate-400 border-slate-100';
                                         return (
-                                            <div key={r.id} className={`grid px-5 py-3.5 items-center hover:bg-slate-50/70 transition-colors ${i < a.length - 1 ? 'border-b border-slate-50' : ''}`}
+                                            <div key={h.hallId} className={`grid px-5 py-3.5 items-center hover:bg-slate-50/70 transition-colors ${i < a.length - 1 ? 'border-b border-slate-50' : ''}`}
                                                 style={{ gridTemplateColumns: '2fr 0.8fr 0.8fr 0.8fr 1.5fr 0.8fr' }}>
                                                 <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
-                                                    <MapPin size={12} className="text-slate-300" />{r.hall}
+                                                    <MapPin size={12} className="text-slate-300" />{h.hallName}
                                                 </div>
-                                                <span className="text-sm text-slate-600">{r.seatsAllocated}</span>
-                                                <span className="text-sm text-slate-600">{r.registered}</span>
-                                                <span className="text-sm font-bold text-slate-800">{r.present || '—'}</span>
+                                                <span className="text-sm text-slate-600">{h.capacity}</span>
+                                                <span className="text-sm text-slate-600">{h.registered}</span>
+                                                <span className="text-sm font-bold text-slate-800">{h.present || '—'}</span>
                                                 <div className="flex items-center gap-2 pr-4">
                                                     <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
                                                         <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
@@ -649,36 +636,25 @@ const Reports: React.FC = () => {
                                         style={{ gridTemplateColumns: '2.5fr 1.5fr 0.8fr 1fr 1fr 1fr 0.8fr' }}>
                                         {['Invigilator', 'Department', 'Exams', 'Avg. Attendance', 'Students Managed', 'Absent', 'Rating'].map(c => <span key={c}>{c}</span>)}
                                     </div>
-                                    {[
-                                        { name: 'Dr. Jane Doe', initials: 'JD', dept: 'Computer Science', exams: 2, rate: 91.2, students: 305, absent: 22, rating: 4.8 },
-                                        { name: 'Prof. Mark Smith', initials: 'MS', dept: 'Mathematics', exams: 1, rate: 100, students: 45, absent: 0, rating: 5.0 },
-                                        { name: 'Lisa Wong', initials: 'LW', dept: 'Humanities', exams: 2, rate: 84.9, students: 198, absent: 29, rating: 4.2 },
-                                        { name: 'Ahmed Khan', initials: 'AK', dept: 'Life Sciences', exams: 1, rate: 96.2, students: 210, absent: 8, rating: 4.7 },
-                                        { name: 'Dr. Priya Nair', initials: 'PN', dept: 'Physics', exams: 1, rate: 97.5, students: 80, absent: 2, rating: 4.9 },
-                                        { name: 'Tom Bradley', initials: 'TB', dept: 'Chemistry', exams: 1, rate: 0, students: 55, absent: 0, rating: 3.5 },
-                                        { name: 'Sarah Johnson', initials: 'SJ', dept: 'Economics', exams: 1, rate: 84.7, students: 72, absent: 11, rating: 4.3 },
-                                        { name: 'Dr. James Lee', initials: 'JL', dept: 'Computer Science', exams: 1, rate: 95.2, students: 145, absent: 7, rating: 4.6 },
-                                        { name: 'Prof. Anita Patel', initials: 'AP', dept: 'Mechanical Eng.', exams: 1, rate: 91.5, students: 130, absent: 11, rating: 4.5 },
-                                        { name: 'Dr. Mei Lin', initials: 'ML', dept: 'Psychology', exams: 1, rate: 89.2, students: 65, absent: 7, rating: 4.4 },
-                                        { name: 'Prof. David Chen', initials: 'DC', dept: 'Mathematics', exams: 1, rate: 0, students: 95, absent: 0, rating: 3.8 },
-                                        { name: 'Dr. Raj Kumar', initials: 'RK', dept: 'Humanities', exams: 1, rate: 89.1, students: 110, absent: 12, rating: 4.3 },
-                                    ].map((inv, i, a) => (
-                                        <div key={inv.name} className={`grid px-5 py-4 items-center hover:bg-slate-50/70 transition-colors ${i < a.length - 1 ? 'border-b border-slate-50' : ''}`}
+                                    {invigilators
+                                        .sort((a: any, b: any) => b.averageAttendance - a.averageAttendance)
+                                        .map((inv: any, i, a) => (
+                                        <div key={inv.facultyId || inv.facultyName} className={`grid px-5 py-4 items-center hover:bg-slate-50/70 transition-colors ${i < a.length - 1 ? 'border-b border-slate-50' : ''}`}
                                             style={{ gridTemplateColumns: '2.5fr 1.5fr 0.8fr 1fr 1fr 1fr 0.8fr' }}>
                                             <div className="flex items-center gap-3">
                                                 <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-[11px] font-black shrink-0"
                                                     style={{ backgroundColor: AVATAR_COLORS[inv.initials] || '#6366f1' }}>
                                                     {inv.initials}
                                                 </div>
-                                                <span className="text-sm font-bold text-slate-900">{inv.name}</span>
+                                                <span className="text-sm font-bold text-slate-900">{inv.facultyName}</span>
                                             </div>
-                                            <span className="text-xs text-slate-500 font-medium">{inv.dept}</span>
-                                            <span className="text-sm font-bold text-slate-800">{inv.exams}</span>
-                                            <span className={`text-sm font-black ${inv.rate >= 90 ? 'text-emerald-600' : inv.rate >= 75 ? 'text-amber-500' : inv.rate > 0 ? 'text-rose-500' : 'text-slate-300'}`}>
-                                                {inv.rate > 0 ? `${inv.rate.toFixed(1)}%` : '—'}
+                                            <span className="text-xs text-slate-500 font-medium">{inv.department}</span>
+                                            <span className="text-sm font-bold text-slate-800">{inv.examsHandled}</span>
+                                            <span className={`text-sm font-black ${inv.averageAttendance >= 90 ? 'text-emerald-600' : inv.averageAttendance >= 75 ? 'text-amber-500' : inv.averageAttendance > 0 ? 'text-rose-500' : 'text-slate-300'}`}>
+                                                {inv.averageAttendance > 0 ? `${inv.averageAttendance.toFixed(1)}%` : '—'}
                                             </span>
-                                            <span className="text-sm font-bold text-slate-800">{inv.students}</span>
-                                            <span className={`text-sm font-bold ${inv.absent > 15 ? 'text-rose-500' : 'text-slate-600'}`}>{inv.absent > 0 ? inv.absent : '—'}</span>
+                                            <span className="text-sm font-bold text-slate-800">{inv.totalStudentsManaged}</span>
+                                            <span className={`text-sm font-bold ${inv.absentCount > 15 ? 'text-rose-500' : 'text-slate-600'}`}>{inv.absentCount > 0 ? inv.absentCount : '—'}</span>
                                             <div className="flex items-center gap-1">
                                                 <span className="text-amber-400 font-black text-sm">*</span>
                                                 <span className="text-sm font-bold text-slate-700">{inv.rating}</span>

@@ -16,5 +16,9 @@ export const DashboardService = {
   getDepartmentStats: async () => {
     const res = await api.get(`/dashboard/departments`);
     return res.data;
+  },
+  getReports: async (seriesId: string) => {
+    const res = await api.get(`/dashboard/reports`, { params: { seriesId } });
+    return res.data;
   }
 };
