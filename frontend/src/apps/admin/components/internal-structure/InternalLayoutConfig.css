@@ -61,7 +61,8 @@
 }
 
 /* ── Body: Sidebar + Classroom ── */
-.ilc-body {
+.ilc-body,
+.ilc-container {
     display: flex;
     flex-direction: column;
     gap: 2rem;
@@ -69,8 +70,10 @@
 }
 
 @media (min-width: 1280px) {
-    .ilc-body {
+    .ilc-body,
+    .ilc-container {
         flex-direction: row;
+        align-items: flex-start;
     }
 }
 
