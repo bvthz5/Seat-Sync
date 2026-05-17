@@ -47,7 +47,13 @@ const startServer = async () => {
     });
 
     // Handle server errors explicitly
-    server.on("error", (err: Error) => {
+    server.on("error", (err: NodeJS.ErrnoException) => {
+        if (err.code === "EADDRINUSE") {
+            // Port is in use — exit so tsx watch restarts the process cleanly.
+            // The dev script (kill-port 5000) will free the port on restart.
+            console.error(`[server] Port ${PORT} is already in use. Exiting for tsx to restart...`);
+            process.exit(1);
+        }
         console.error("HTTP server error:", err);
     });
 
