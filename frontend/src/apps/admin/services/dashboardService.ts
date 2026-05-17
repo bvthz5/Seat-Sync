@@ -5,8 +5,8 @@ export const DashboardService = {
     const res = await api.get(`/dashboard/summary`, { params: { seriesId } });
     return res.data;
   },
-  getRooms: async () => {
-    const res = await api.get(`/dashboard/rooms`);
+  getRooms: async (type?: 'internal' | 'endsem') => {
+    const res = await api.get(`/dashboard/rooms`, { params: { type } });
     return res.data;
   },
   getLiveExams: async () => {

@@ -53,6 +53,55 @@ export const getDashboardSummary = async (req: Request, res: Response) => {
 
 export const getLiveRoomUtilization = async (req: Request, res: Response) => {
     try {
+        const type = req.query.type as string;
+        
+        if (type === 'internal') {
+            const { InternalRoom } = await import('../models/InternalRoom.js');
+            const { InternalSeatAllocation } = await import('../models/InternalSeatAllocation.js');
+            const { InternalSeat } = await import('../models/InternalSeat.js');
+
+            const rooms = await InternalRoom.findAll({
+                attributes: ['RoomID', 'RoomCode', 'TotalCapacity'],
+                where: { Status: 'Active' },
+                raw: true
+            });
+
+            const allocations = await InternalSeatAllocation.findAll({
+                attributes: [
+                    [sequelize.col('Seat.RoomID'), 'RoomID'],
+                    [sequelize.fn('COUNT', sequelize.col('InternalStudentID')), 'allocated']
+                ],
+                include: [{
+                    model: InternalSeat,
+                    as: 'Seat',
+                    attributes: [],
+                    required: true
+                }],
+                group: [sequelize.col('Seat.RoomID')],
+                raw: true
+            }) as any[];
+
+            const allocationMap = new Map(allocations.map(a => [Number(a.RoomID), Number(a.allocated)]));
+
+            const data = rooms.map((r: any) => {
+                const allocated = allocationMap.get(Number(r.RoomID)) || 0;
+                let status = 'EMPTY';
+                if (allocated > 0) status = 'ACTIVE';
+                if (allocated >= Number(r.TotalCapacity)) status = 'FULL';
+                if (allocated > Number(r.TotalCapacity)) status = 'OVERLOADED';
+
+                return {
+                    roomName: r.RoomCode,
+                    capacity: r.TotalCapacity,
+                    allocated,
+                    status
+                };
+            });
+
+            return res.json({ success: true, data });
+        }
+
+        // End Semester Logic
         const rooms = await Room.findAll({
             attributes: ['RoomID', 'RoomCode', 'TotalCapacity'],
             where: { Status: 'Active' },
