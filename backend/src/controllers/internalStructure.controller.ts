@@ -4,6 +4,8 @@ import { InternalBlock } from "../models/InternalBlock.js";
 import { InternalFloor } from "../models/InternalFloor.js";
 import { InternalRoom } from "../models/InternalRoom.js";
 import { InternalSeat } from "../models/InternalSeat.js";
+import { InternalSeatLayout } from "../models/InternalSeatLayout.js";
+import { InternalSeatColumn } from "../models/InternalSeatColumn.js";
 import { Op } from "sequelize";
 import { InternalInfrastructureImportService } from "../services/internal/internalInfrastructureImport.service.js";
 import { InternalLayoutGeneratorService } from "../services/internal/internalLayoutGenerator.service.js";
@@ -230,9 +232,32 @@ export const createInternalRoom = async (req: Request, res: Response) => {
     const existing = await InternalRoom.findOne({ where: { RoomCode, FloorID } });
     if (existing) return res.status(400).json({ message: "Room Code must be unique in this floor" });
 
-    const spb = SeatsPerBench || 2;
-    const finalLayout: number[] = RowLayout || InternalLayoutGeneratorService.generateRowLayout(TotalCapacity || 0);
-    const calcCapacity = TotalCapacity || finalLayout.reduce((a: number, b: number) => a + b, 0) * spb;
+    let finalLayout: number[] = RowLayout || [];
+    let parsedCapacity = TotalCapacity !== undefined ? Number(TotalCapacity) : 0;
+    let resolvedSeatMode = SeatMode || 'Dual';
+
+    if (finalLayout.length > 0 && parsedCapacity > 0) {
+      const totalBenches = finalLayout.reduce((a: number, b: number) => a + b, 0);
+      if (totalBenches === parsedCapacity && !SeatMode) {
+        resolvedSeatMode = 'Single';
+      }
+    } else if (parsedCapacity > 0) {
+      if (resolvedSeatMode === 'Single') {
+        finalLayout = InternalLayoutGeneratorService.generateSingleSeatRowLayout(parsedCapacity);
+      } else {
+        finalLayout = InternalLayoutGeneratorService.generateRowLayout(parsedCapacity);
+      }
+    } else {
+      finalLayout = [5, 5, 5, 5, 5, 5];
+    }
+
+    const totalBenches = finalLayout.reduce((a: number, b: number) => a + b, 0);
+    if (totalBenches > 0 && parsedCapacity > 0 && totalBenches === parsedCapacity && !SeatMode) {
+      resolvedSeatMode = 'Single';
+    }
+
+    const spb = resolvedSeatMode === 'Single' ? 1 : 2;
+    const calcCapacity = parsedCapacity || totalBenches * spb;
 
     const room = await InternalRoom.create({
       BlockID, FloorID, RoomCode,
@@ -242,7 +267,7 @@ export const createInternalRoom = async (req: Request, res: Response) => {
       TotalCapacity: calcCapacity,
       RowLayout: finalLayout,
       SeatsPerBench: spb,
-      SeatMode: SeatMode || "Dual",
+      SeatMode: resolvedSeatMode,
       OverrideCap: OverrideCap ?? null,
     } as any);
 
@@ -272,6 +297,8 @@ export const updateInternalRoom = async (req: Request, res: Response) => {
     const RoomType = req.body.RoomType || req.body.roomType;
     const SeatMode = req.body.SeatMode || req.body.seatMode;
 
+    const previousSeatMode = room.SeatMode;
+
     if (RoomCode) room.RoomCode = RoomCode;
     if (Status) room.Status = Status;
     if (ExamUsable !== undefined) room.ExamUsable = ExamUsable;
@@ -279,17 +306,37 @@ export const updateInternalRoom = async (req: Request, res: Response) => {
     if (RoomType) room.RoomType = RoomType;
     if (SeatMode) room.SeatMode = SeatMode;
 
-    let regenerate = false;
-    if (RowLayout !== undefined || SeatsPerBench !== undefined) {
-      const newLayout = RowLayout !== undefined ? RowLayout : room.RowLayout;
-      const newSpb = SeatsPerBench !== undefined ? Number(SeatsPerBench) : room.SeatsPerBench;
-      room.RowLayout = newLayout;
-      room.SeatsPerBench = newSpb;
+    // Only auto-detect Single Seating if SeatMode was NOT explicitly provided in the request
+    if (SeatMode === undefined) {
+      const checkLayout = RowLayout !== undefined ? RowLayout : room.RowLayout;
+      const checkCapacity = TotalCapacity !== undefined ? TotalCapacity : room.TotalCapacity;
+      if (Array.isArray(checkLayout) && checkLayout.length > 0 && checkCapacity > 0) {
+        const totalBenches = checkLayout.reduce((a: number, b: number) => a + b, 0);
+        if (totalBenches === checkCapacity) {
+          room.SeatMode = 'Single';
+        }
+      }
+    }
 
+    // Sync SeatsPerBench from SeatMode
+    if (room.SeatMode === 'Single') {
+      room.SeatsPerBench = 1;
+    } else {
+      room.SeatsPerBench = 2;
+    }
+
+    let regenerate = false;
+    const seatModeChanged = room.SeatMode !== previousSeatMode;
+
+    if (RowLayout !== undefined || SeatsPerBench !== undefined || seatModeChanged) {
+      const newLayout = RowLayout !== undefined ? RowLayout : room.RowLayout;
+      room.RowLayout = newLayout;
+
+      const spb = room.SeatMode === 'Single' ? 1 : 2;
       if (TotalCapacity !== undefined) {
         room.TotalCapacity = TotalCapacity;
       } else if (Array.isArray(newLayout) && newLayout.length > 0) {
-        room.TotalCapacity = newLayout.reduce((a: number, b: number) => a + b, 0) * newSpb;
+        room.TotalCapacity = newLayout.reduce((a: number, b: number) => a + b, 0) * spb;
       }
       regenerate = true;
     } else if (TotalCapacity !== undefined) {
@@ -303,6 +350,7 @@ export const updateInternalRoom = async (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(500).json({ message: error.message });
   }
+
 };
 
 export const bulkCreateInternalRooms = async (req: Request, res: Response) => {
@@ -369,6 +417,19 @@ export const deleteInternalRoom = async (req: Request, res: Response) => {
     const id = Number(req.params.id);
     await sequelize.transaction(async (t) => {
       await InternalSeat.destroy({ where: { RoomID: id }, transaction: t });
+
+      const existingLayout = await InternalSeatLayout.findOne({
+        where: { RoomID: id },
+        transaction: t
+      });
+      if (existingLayout) {
+        await InternalSeatColumn.destroy({
+          where: { LayoutID: existingLayout.LayoutID },
+          transaction: t
+        });
+        await existingLayout.destroy({ transaction: t });
+      }
+
       await InternalRoom.destroy({ where: { RoomID: id }, transaction: t });
     });
     res.json({ message: "Room and associated seats deleted permanently" });
@@ -390,8 +451,11 @@ export const getInternalRoomLayout = async (req: Request, res: Response) => {
       order: [["RowLabel", "ASC"], ["BenchNumber", "ASC"], ["SeatNumber", "ASC"]],
     });
 
-    if (room.RowLayout && Array.isArray(room.RowLayout) && room.SeatsPerBench) {
-      const expected = room.RowLayout.reduce((sum: number, n: number) => sum + n, 0) * room.SeatsPerBench;
+    if (room.RowLayout && Array.isArray(room.RowLayout)) {
+      const totalBenches = room.RowLayout.reduce((sum: number, n: number) => sum + n, 0);
+      // Single = 1 seat per bench, Dual = 2 seats per bench
+      const seatsPerBench = room.SeatMode === 'Single' ? 1 : 2;
+      const expected = totalBenches * seatsPerBench;
       if (seats.length !== expected) {
         await InternalLayoutGeneratorService.generateSeats(room);
         seats = await InternalSeat.findAll({
@@ -413,12 +477,29 @@ export const updateInternalRoomLayout = async (req: Request, res: Response) => {
     const room = await InternalRoom.findByPk(id) as any;
     if (!room) return res.status(404).json({ message: "Room not found" });
 
-    const { RowLayout, SeatsPerBench } = req.body;
+    const { RowLayout, SeatsPerBench, SeatMode } = req.body;
     if (RowLayout !== undefined) room.RowLayout = RowLayout;
+    if (SeatMode !== undefined) room.SeatMode = SeatMode;
     if (SeatsPerBench !== undefined) room.SeatsPerBench = Number(SeatsPerBench);
 
+    // Only auto-detect Single Seating if SeatMode was NOT explicitly provided in the request
+    if (SeatMode === undefined && room.RowLayout && Array.isArray(room.RowLayout)) {
+      const totalBenches = room.RowLayout.reduce((a: number, b: number) => a + b, 0);
+      if (totalBenches === room.TotalCapacity) {
+        room.SeatMode = 'Single';
+      }
+    }
+
+    // Sync SeatsPerBench from SeatMode to keep them consistent
+    if (room.SeatMode === 'Single') {
+      room.SeatsPerBench = 1;
+    } else {
+      room.SeatsPerBench = 2;
+    }
+
     if (room.RowLayout && Array.isArray(room.RowLayout)) {
-      room.TotalCapacity = room.RowLayout.reduce((a: number, b: number) => a + b, 0) * (room.SeatsPerBench || 2);
+      const seatsPerBench = room.SeatMode === 'Single' ? 1 : 2;
+      room.TotalCapacity = room.RowLayout.reduce((a: number, b: number) => a + b, 0) * seatsPerBench;
     }
     await room.save();
     await InternalLayoutGeneratorService.generateSeats(room);
@@ -476,6 +557,8 @@ export const deleteAllInternalStructureData = async (req: Request, res: Response
   try {
     await sequelize.transaction(async (t) => {
       await InternalSeat.destroy({ where: {}, transaction: t });
+      await InternalSeatColumn.destroy({ where: {}, transaction: t });
+      await InternalSeatLayout.destroy({ where: {}, transaction: t });
       await InternalRoom.destroy({ where: {}, transaction: t });
       await InternalFloor.destroy({ where: {}, transaction: t });
       await InternalBlock.destroy({ where: {}, transaction: t });

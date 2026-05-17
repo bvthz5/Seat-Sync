@@ -272,13 +272,26 @@ export class InternalSeatAllocator {
             if (activeSeats.length === 0) continue;
 
             let hallAssigned = 0;
+            const isSingleSeatRoom = hall.SeatMode === 'Single';
 
             for (const seat of activeSeats) {
                 let student = null;
-                if (seat.SeatNumber === 1) {
-                    if (leftPool.length > 0) student = leftPool.shift();
-                } else if (seat.SeatNumber === 2) {
-                    if (rightPool.length > 0) student = rightPool.shift();
+
+                if (isSingleSeatRoom) {
+                    // Single-seat rooms: all seats are SeatNumber=1
+                    // Pull from left pool first, then right pool
+                    if (leftPool.length > 0) {
+                        student = leftPool.shift();
+                    } else if (rightPool.length > 0) {
+                        student = rightPool.shift();
+                    }
+                } else {
+                    // Dual-seat rooms: assign by seat position
+                    if (seat.SeatNumber === 1) {
+                        if (leftPool.length > 0) student = leftPool.shift();
+                    } else if (seat.SeatNumber === 2) {
+                        if (rightPool.length > 0) student = rightPool.shift();
+                    }
                 }
 
                 if (student) {

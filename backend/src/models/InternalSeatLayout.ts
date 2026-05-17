@@ -29,7 +29,7 @@ export class InternalSeatLayout extends Model<InternalSeatLayoutAttributes, Inte
 InternalSeatLayout.init(
   {
     LayoutID: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
-    RoomID: { type: DataTypes.INTEGER, allowNull: false, references: { model: "InternalRooms", key: "RoomID" } },
+    RoomID: { type: DataTypes.INTEGER, allowNull: false, unique: true, references: { model: "InternalRooms", key: "RoomID" } },
     LayoutVersion: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
     TotalCapacity: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     ActiveCapacity: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },

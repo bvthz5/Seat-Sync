@@ -137,6 +137,8 @@ import InternalBlock from './InternalBlock.js';
 import InternalFloor from './InternalFloor.js';
 import InternalRoom from './InternalRoom.js';
 import InternalSeat from './InternalSeat.js';
+import InternalSeatLayout from './InternalSeatLayout.js';
+import InternalSeatColumn from './InternalSeatColumn.js';
 import ExamSeries from './ExamSeries.js';
 
 export { 
@@ -146,7 +148,9 @@ export {
     InternalBlock, 
     InternalFloor, 
     InternalRoom, 
-    InternalSeat 
+    InternalSeat,
+    InternalSeatLayout,
+    InternalSeatColumn
 };
 
 // Internal Exam Associations
@@ -228,6 +232,13 @@ InternalRoom.belongsTo(InternalBlock, { foreignKey: 'BlockID', as: 'Block' });
 
 InternalRoom.hasMany(InternalSeat, { foreignKey: 'RoomID', onDelete: 'CASCADE' });
 InternalSeat.belongsTo(InternalRoom, { foreignKey: 'RoomID' });
+
+// Seating layout & column associations
+InternalRoom.hasOne(InternalSeatLayout, { foreignKey: 'RoomID', as: 'Layout', onDelete: 'CASCADE' });
+InternalSeatLayout.belongsTo(InternalRoom, { foreignKey: 'RoomID' });
+
+InternalSeatLayout.hasMany(InternalSeatColumn, { foreignKey: 'LayoutID', as: 'Columns', onDelete: 'CASCADE' });
+InternalSeatColumn.belongsTo(InternalSeatLayout, { foreignKey: 'LayoutID' });
 
 // Incident & Swap Associations
 import IncidentReport from "./IncidentReport.js";

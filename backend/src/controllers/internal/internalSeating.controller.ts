@@ -250,7 +250,8 @@ export const internalSeatingController = {
                 room: { ...room.toJSON(), Block: (room as any).Block, Floor: (room as any).Floor },
                 rows,
                 totalSeats: seatIds.length,
-                filledSeats: allocMap.size
+                filledSeats: allocMap.size,
+                seatMode: room.SeatMode || 'Dual'
             });
         } catch (error: any) {
             console.error('getHallLayout Error:', error);

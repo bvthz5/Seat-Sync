@@ -592,56 +592,59 @@ const InternalSeatingPlans: React.FC = () => {
                                             <AlertCircle className="text-slate-600 mb-4" size={48} />
                                             <p className="text-slate-500 font-bold">No seating layout configured for this hall</p>
                                         </div>
-                                    ) : detailHall?.layout?.rows?.map((row: any) => (
-                                        <div key={row.rowLabel} className="flex flex-col items-center gap-6 shrink-0">
-                                            <div className="px-6 py-2 bg-slate-800 border border-slate-700 rounded-2xl shadow-xl">
-                                                <span className="text-lg font-black text-white">{row.rowLabel}</span>
+                                    ) : detailHall?.layout?.rows?.map((row: any) => {
+                                        const isSingleMode = detailHall?.layout?.seatMode === 'Single' || detailHall?.layout?.room?.SeatMode === 'Single';
+                                        return (
+                                            <div key={row.rowLabel} className="flex flex-col items-center gap-6 shrink-0">
+                                                <div className="px-6 py-2 bg-slate-800 border border-slate-700 rounded-2xl shadow-xl">
+                                                    <span className="text-lg font-black text-white">{row.rowLabel}</span>
+                                                </div>
+                                                <div className="flex flex-col gap-4">
+                                                    {row.benches.map((bench: any) => (
+                                                        <div key={bench.benchNumber} className="flex gap-3 p-2 bg-slate-800/30 rounded-2xl border border-white/5 backdrop-blur-sm">
+                                                            {(isSingleMode ? [bench.left] : [bench.left, bench.right]).map((seat, idx) => {
+                                                                const isEmpty = !seat?.studentId;
+                                                                const sStyle = getSubjectStyle(seat?.subjectCode);
+                                                                
+                                                                return (
+                                                                    <Tooltip key={idx} isDisabled={isEmpty} content={
+                                                                        <div className="p-3">
+                                                                            <p className="font-black text-indigo-400 text-xs">{seat?.name}</p>
+                                                                            <p className="text-[10px] text-white opacity-80 mt-1">Reg: {seat?.registerNumber}</p>
+                                                                            <p className="text-[10px] text-white opacity-80">Dept: {seat?.deptCode}</p>
+                                                                        </div>
+                                                                    } classNames={{ content: "bg-slate-900 border border-slate-800 p-0 rounded-xl shadow-2xl" }}>
+                                                                        <div className={`w-20 h-24 rounded-xl border-2 flex flex-col items-center justify-center transition-all cursor-pointer ${isEmpty 
+                                                                            ? 'bg-slate-900/50 border-slate-800 text-slate-700' 
+                                                                            : 'shadow-lg hover:scale-110 active:scale-95'}`}
+                                                                            style={isEmpty ? {} : { 
+                                                                                backgroundColor: `${sStyle.fill}40`, 
+                                                                                borderColor: sStyle.border,
+                                                                                boxShadow: `0 0 20px ${sStyle.fill}20`
+                                                                            }}>
+                                                                            {isEmpty ? (
+                                                                                <span className="text-[10px] font-black opacity-20">{isSingleMode ? '' : (idx === 0 ? 'L' : 'R')}</span>
+                                                                            ) : (
+                                                                                    <>
+                                                                                        <span className="text-[8px] font-black mb-1 px-1.5 py-0.5 rounded bg-black/40" style={{ color: sStyle.text }}>{seat.subjectCode?.slice(0, 4)}</span>
+                                                                                        <span className="text-[10px] font-black text-white px-1 leading-tight text-center">{seat.registerNumber}</span>
+                                                                                        <div className="mt-1 w-full px-1 flex flex-col items-center">
+                                                                                            <span className="text-[7px] font-bold text-slate-400 uppercase tracking-tighter text-center leading-[1.1] line-clamp-2">
+                                                                                                {seat.name}
+                                                                                            </span>
+                                                                                        </div>
+                                                                                    </>
+                                                                            )}
+                                                                        </div>
+                                                                    </Tooltip>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
-                                            <div className="flex flex-col gap-4">
-                                                {row.benches.map((bench: any) => (
-                                                    <div key={bench.benchNumber} className="flex gap-3 p-2 bg-slate-800/30 rounded-2xl border border-white/5 backdrop-blur-sm">
-                                                        {[bench.left, bench.right].map((seat, idx) => {
-                                                            const isEmpty = !seat?.studentId;
-                                                            const sStyle = getSubjectStyle(seat?.subjectCode);
-                                                            
-                                                            return (
-                                                                <Tooltip key={idx} isDisabled={isEmpty} content={
-                                                                    <div className="p-3">
-                                                                        <p className="font-black text-indigo-400 text-xs">{seat?.name}</p>
-                                                                        <p className="text-[10px] text-white opacity-80 mt-1">Reg: {seat?.registerNumber}</p>
-                                                                        <p className="text-[10px] text-white opacity-80">Dept: {seat?.deptCode}</p>
-                                                                    </div>
-                                                                } classNames={{ content: "bg-slate-900 border border-slate-800 p-0 rounded-xl shadow-2xl" }}>
-                                                                    <div className={`w-20 h-24 rounded-xl border-2 flex flex-col items-center justify-center transition-all cursor-pointer ${isEmpty 
-                                                                        ? 'bg-slate-900/50 border-slate-800 text-slate-700' 
-                                                                        : 'shadow-lg hover:scale-110 active:scale-95'}`}
-                                                                        style={isEmpty ? {} : { 
-                                                                            backgroundColor: `${sStyle.fill}40`, 
-                                                                            borderColor: sStyle.border,
-                                                                            boxShadow: `0 0 20px ${sStyle.fill}20`
-                                                                        }}>
-                                                                        {isEmpty ? (
-                                                                            <span className="text-[10px] font-black opacity-20">{idx === 0 ? 'L' : 'R'}</span>
-                                                                        ) : (
-                                                                                <>
-                                                                                    <span className="text-[8px] font-black mb-1 px-1.5 py-0.5 rounded bg-black/40" style={{ color: sStyle.text }}>{seat.subjectCode?.slice(0, 4)}</span>
-                                                                                    <span className="text-[10px] font-black text-white px-1 leading-tight text-center">{seat.registerNumber}</span>
-                                                                                    <div className="mt-1 w-full px-1 flex flex-col items-center">
-                                                                                        <span className="text-[7px] font-bold text-slate-400 uppercase tracking-tighter text-center leading-[1.1] line-clamp-2">
-                                                                                            {seat.name}
-                                                                                        </span>
-                                                                                    </div>
-                                                                                </>
-                                                                        )}
-                                                                    </div>
-                                                                </Tooltip>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
                         </ModalBody>

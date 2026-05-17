@@ -1135,6 +1135,36 @@ async function ensureSchemaIntegrity() {
                     PRINT 'Upgraded InternalSeatSnapshots timestamps to DATETIME2';
                 END
             `, { type: QueryTypes.RAW });
+
+            await sequelize.query(`
+                IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalSeatLayouts' AND TABLE_SCHEMA = 'dbo')
+                BEGIN
+                    CREATE TABLE [dbo].[InternalSeatLayouts] (
+                        [LayoutID] INT IDENTITY(1,1) PRIMARY KEY,
+                        [RoomID] INT NOT NULL UNIQUE REFERENCES [dbo].[InternalRooms]([RoomID]),
+                        [LayoutVersion] INT NOT NULL DEFAULT 1,
+                        [TotalCapacity] INT NOT NULL DEFAULT 0,
+                        [ActiveCapacity] INT NOT NULL DEFAULT 0,
+                        [SeatingMode] NVARCHAR(20) NOT NULL DEFAULT 'Dual',
+                        [Pattern] NVARCHAR(100) NOT NULL DEFAULT 'standard',
+                        [UpdatedAt] DATETIME2 NOT NULL DEFAULT GETDATE()
+                    );
+                    PRINT 'Created InternalSeatLayouts table';
+                END
+            `, { type: QueryTypes.RAW });
+
+            await sequelize.query(`
+                IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalSeatColumns' AND TABLE_SCHEMA = 'dbo')
+                BEGIN
+                    CREATE TABLE [dbo].[InternalSeatColumns] (
+                        [ColumnID] INT IDENTITY(1,1) PRIMARY KEY,
+                        [LayoutID] INT NOT NULL REFERENCES [dbo].[InternalSeatLayouts]([LayoutID]) ON DELETE CASCADE,
+                        [ColumnLabel] NVARCHAR(2) NOT NULL,
+                        [BenchesCount] INT NOT NULL DEFAULT 0
+                    );
+                    PRINT 'Created InternalSeatColumns table';
+                END
+            `, { type: QueryTypes.RAW });
         }
 
         // --- LEGACY ZONE FEATURE CLEANUP ---

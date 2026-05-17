@@ -150,7 +150,7 @@ export class InternalInfrastructureImportService {
                     }
                 }
 
-                // 4. Capacity Verification & Auto Single/Dual Detection
+                // 4. Parse capacity from Excel
                 let parsedCapacity = 0;
                 if (capacityVal !== undefined && capacityVal !== null && String(capacityVal).trim() !== '') {
                     const parsed = parseInt(String(capacityVal).trim(), 10);
@@ -159,37 +159,118 @@ export class InternalInfrastructureImportService {
                     }
                 }
 
-                // If layout is completely absent, auto-generate it from capacity
-                if (rowLayout.length === 0) {
-                    if (parsedCapacity > 0) {
-                        rowLayout = InternalLayoutGeneratorService.generateRowLayout(parsedCapacity);
-                    } else {
-                        rowLayout = [5, 5, 5, 5, 5, 5]; // Default: 6 columns of 5 benches
-                    }
-                }
-
-                const totalBenches = rowLayout.reduce((sum, count) => sum + count, 0);
+                // 5. SINGLE/DUAL DETECTION — must happen BEFORE layout auto-generation
+                //    Rule: if totalBenches === capacity → SINGLE, else → DUAL
+                //    This detection uses the layout from Excel (Cases A/B/C above).
+                //    If no layout is in Excel, we detect from capacity alone later.
 
                 let seatsPerBench = 2;
                 let seatMode: "Single" | "Dual" | "Mixed" = "Dual";
 
-                if (parsedCapacity === 0) {
-                    // If capacity is unspecified, default to standard Dual seating (2 seats per bench)
-                    seatsPerBench = 2;
-                    parsedCapacity = totalBenches * 2;
-                    seatMode = "Dual";
-                } else {
-                    // Verbatim user rule: if the bench and row (totalBenches) are equal to capacity then single seating else dual seating.
-                    if (totalBenches === parsedCapacity) {
+                // Check explicit SeatMode from Excel column first
+                if (seatModeVal !== undefined && seatModeVal !== null) {
+                    const modeStr = String(seatModeVal).trim().toLowerCase();
+                    if (modeStr === 'single' || modeStr === '1') {
                         seatMode = "Single";
                         seatsPerBench = 1;
-                    } else {
+                    } else if (modeStr === 'dual' || modeStr === '2') {
                         seatMode = "Dual";
                         seatsPerBench = 2;
                     }
                 }
 
-                // 5. Drawing Hall Support (Rule 10)
+                // If explicit SeatMode is not provided, run schema detection and dual rules
+                if (seatModeVal === undefined || seatModeVal === null) {
+                    let colsCount = 0;
+                    let rowsCount = 0;
+                    if (colsVal !== undefined && colsVal !== null && rowsVal !== undefined && rowsVal !== null) {
+                        colsCount = parseInt(String(colsVal).trim(), 10);
+                        rowsCount = parseInt(String(rowsVal).trim(), 10);
+                    }
+                    if (isNaN(colsCount)) colsCount = 0;
+                    if (isNaN(rowsCount)) rowsCount = 0;
+
+                    let totalBenches = rowLayout.reduce((sum, count) => sum + count, 0);
+
+                    // If explicit rows and columns are provided
+                    if (colsCount > 0 && rowsCount > 0) {
+                        const singleCapacity = colsCount * rowsCount;
+                        const dualCapacity = colsCount * rowsCount * 2;
+
+                        if (parsedCapacity === singleCapacity) {
+                            seatMode = "Single";
+                            seatsPerBench = 1;
+                            console.log(`[IMPORT] ${resolved.roomName}: capacity === singleCapacity (${parsedCapacity} === ${singleCapacity}) → SINGLE`);
+                        } else if (parsedCapacity === dualCapacity) {
+                            seatMode = "Dual";
+                            seatsPerBench = 2;
+                            console.log(`[IMPORT] ${resolved.roomName}: capacity === dualCapacity (${parsedCapacity} === ${dualCapacity}) → DUAL`);
+                        } else {
+                            // Infer closest structure
+                            if (Math.abs(parsedCapacity - singleCapacity) <= Math.abs(parsedCapacity - dualCapacity)) {
+                                seatMode = "Single";
+                                seatsPerBench = 1;
+                                console.log(`[IMPORT] ${resolved.roomName}: capacity closer to singleCapacity (${parsedCapacity} closer to ${singleCapacity}) → SINGLE`);
+                            } else {
+                                seatMode = "Dual";
+                                seatsPerBench = 2;
+                                console.log(`[IMPORT] ${resolved.roomName}: capacity closer to dualCapacity (${parsedCapacity} closer to ${dualCapacity}) → DUAL`);
+                            }
+                        }
+                    } else if (totalBenches > 0) {
+                        const singleCapacity = totalBenches;
+                        const dualCapacity = totalBenches * 2;
+
+                        if (parsedCapacity === singleCapacity) {
+                            seatMode = "Single";
+                            seatsPerBench = 1;
+                            console.log(`[IMPORT] ${resolved.roomName}: capacity === singleCapacity benches (${parsedCapacity} === ${singleCapacity}) → SINGLE`);
+                        } else if (parsedCapacity === dualCapacity) {
+                            seatMode = "Dual";
+                            seatsPerBench = 2;
+                            console.log(`[IMPORT] ${resolved.roomName}: capacity === dualCapacity benches (${parsedCapacity} === ${dualCapacity}) → DUAL`);
+                        } else {
+                            // Infer closest structure
+                            if (Math.abs(parsedCapacity - singleCapacity) <= Math.abs(parsedCapacity - dualCapacity)) {
+                                seatMode = "Single";
+                                seatsPerBench = 1;
+                                console.log(`[IMPORT] ${resolved.roomName}: capacity closer to single benches (${parsedCapacity} closer to ${singleCapacity}) → SINGLE`);
+                            } else {
+                                seatMode = "Dual";
+                                seatsPerBench = 2;
+                                console.log(`[IMPORT] ${resolved.roomName}: capacity closer to dual benches (${parsedCapacity} closer to ${dualCapacity}) → DUAL`);
+                            }
+                        }
+                    }
+                }
+
+                // If layout is completely absent, auto-generate it from capacity using the detected mode
+                if (rowLayout.length === 0) {
+                    if (parsedCapacity > 0) {
+                        // Detect mode from capacity alone if layout and explicit dimensions are absent
+                        if (seatModeVal === undefined || seatModeVal === null) {
+                            // If capacity is odd, it must be single mode
+                            if (parsedCapacity % 2 !== 0) {
+                                seatMode = "Single";
+                                seatsPerBench = 1;
+                            }
+                        }
+
+                        if (seatMode === 'Single') {
+                            rowLayout = InternalLayoutGeneratorService.generateSingleSeatRowLayout(parsedCapacity);
+                        } else {
+                            rowLayout = InternalLayoutGeneratorService.generateRowLayout(parsedCapacity);
+                        }
+                    } else {
+                        rowLayout = [5, 5, 5, 5, 5, 5]; // Default: 6 columns of 5 benches
+                    }
+                }
+
+                // Enforce proper seating mode capacity strictly (no virtual/stale seats)
+                const totalBenchesCount = rowLayout.reduce((sum, count) => sum + count, 0);
+                parsedCapacity = totalBenchesCount * seatsPerBench;
+
+                // 6. Drawing Hall Support (Rule 10) — always forces Single
                 let roomType: "Classroom" | "Drawing Hall" | "Lab" | "Minor Room" | "Seminar Hall" = "Classroom";
                 if (typeVal) {
                     const typeStr = String(typeVal).toLowerCase().trim();
@@ -209,10 +290,13 @@ export class InternalInfrastructureImportService {
                 }
 
                 if (roomType === "Drawing Hall") {
-                    seatMode = "Single"; // Auto-disable dual mode for drawing hall
+                    seatMode = "Single";
+                    seatsPerBench = 1; // Sync SeatsPerBench with SeatMode
                 }
 
-                // 6. UPSERT Logic (Rule 12: No Duplicate Rooms)
+                console.log(`[IMPORT] ${resolved.roomName}: mode=${seatMode}, spb=${seatsPerBench}, cap=${parsedCapacity}, layout=[${rowLayout.join(',')}]`);
+
+                // 7. UPSERT Logic (Rule 12: No Duplicate Rooms)
                 const [room, roomCreated] = await InternalRoom.findOrCreate({
                     where: { RoomCode: resolved.roomName, FloorID: floorId },
                     defaults: {
@@ -243,7 +327,9 @@ export class InternalInfrastructureImportService {
                     await room.save({ transaction: t });
                 }
 
-                // 7. Auto Seating Generation / Classroom Architect Sync
+                // 8. Auto Seating Generation — uses SeatMode-aware generator
+                //    Single → generates 1 seat per bench (a1, a2, a3)
+                //    Dual   → generates 2 seats per bench (1L, 1R, 2L, 2R)
                 await InternalLayoutGeneratorService.generateSeats(room, t);
             }
         });
