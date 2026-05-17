@@ -354,10 +354,19 @@ const AdminLogin: React.FC = () => {
         setLoading(true);
         try {
             await login(email, password);
-            // Navigate to the "from" location
             navigate(from, { replace: true });
         } catch (error: any) {
-            setFormError("Authentication failed. Please verify your credentials.");
+            // Distinguish network/server errors from credential errors
+            const isNetworkError = !error.response || error.code === 'ERR_NETWORK' || error.code === 'ERR_CONNECTION_REFUSED';
+            if (isNetworkError) {
+                setFormError("Cannot connect to server. Please ensure the backend is running.");
+            } else if (error.response?.status === 401 || error.response?.status === 403) {
+                setFormError("Invalid email or password. Please try again.");
+            } else if (error.response?.status === 423) {
+                setFormError("Account is locked. Please contact your administrator.");
+            } else {
+                setFormError(error.response?.data?.message || "Login failed. Please try again.");
+            }
         } finally {
             setLoading(false);
         }
