@@ -1,85 +1,90 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
-import { toast } from '../utils/toast';
 
-// Create Axios instance
+// ─── Axios Instance ────────────────────────────────────────────────────────────
 const api: AxiosInstance = axios.create({
     baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api',
-    withCredentials: true, // Important for cookies (refresh token)
-    headers: {
-        // 'Content-Type': 'application/json', // Do NOT set this globally, let Axios set it automatically (especially for FormData)
-    },
+    withCredentials: true, // Required for HttpOnly refresh-token cookie
 });
 
-// Role-scoped token storage keys to prevent cross-contamination between Admin, Invigilator, and Student tabs
-const getStorageKey = () => {
+// ─── Role-scoped Session Storage Keys ─────────────────────────────────────────
+// Uses sessionStorage (NOT localStorage) so tokens are cleared on browser/tab close.
+const STORAGE_KEYS = {
+    admin:       'ss_admin_token',
+    invigilator: 'ss_invigilator_token',
+    student:     'ss_student_token',
+    fallback:    'ss_token',
+} as const;
+
+const getStorageKey = (): string => {
     const path = window.location.pathname.toLowerCase();
-    if (path.includes('/admin')) return 'seat_sync_admin_token';
-    if (path.includes('/invigilator')) return 'seat_sync_invigilator_token';
-    if (path.includes('/student')) return 'seat_sync_student_token';
-    return 'accessToken'; // Fallback
+    if (path.includes('/admin'))       return STORAGE_KEYS.admin;
+    if (path.includes('/invigilator')) return STORAGE_KEYS.invigilator;
+    if (path.includes('/student'))     return STORAGE_KEYS.student;
+    return STORAGE_KEYS.fallback;
 };
 
-// Advanced token retrieval with cross-role fallback to prevent 401s during transitions
-const getEffectiveToken = () => {
-    const primaryKey = getStorageKey();
-    const primaryToken = localStorage.getItem(primaryKey);
-    
-    if (primaryToken && primaryToken !== 'undefined' && primaryToken !== 'null') {
-        return primaryToken.trim();
-    }
-
-    // Fallback: check other known keys if on a transitionary path
-    const fallbackKeys = ['seat_sync_admin_token', 'seat_sync_invigilator_token', 'seat_sync_student_token', 'accessToken'];
-    for (const key of fallbackKeys) {
-        if (key === primaryKey) continue;
-        const fallbackToken = localStorage.getItem(key);
-        if (fallbackToken && fallbackToken !== 'undefined' && fallbackToken !== 'null') {
-            return fallbackToken.trim();
-        }
-    }
-    
+const getEffectiveToken = (): string | null => {
+    // Only read the token for the current portal — no cross-role fallback
+    // (prevents a stale student token from accidentally authenticating an admin request)
+    const key  = getStorageKey();
+    const raw  = sessionStorage.getItem(key);
+    if (raw && raw !== 'undefined' && raw !== 'null') return raw.trim();
     return null;
 };
 
 export const AccessTokenStore = {
     get token() { return getEffectiveToken(); },
+
     setToken: (t: string) => {
         const token = (t || '').trim();
-        const key = getStorageKey();
+        const key   = getStorageKey();
         if (!token || token === 'undefined' || token === 'null') {
-            localStorage.removeItem(key);
+            sessionStorage.removeItem(key);
             return;
         }
-        localStorage.setItem(key, token);
+        sessionStorage.setItem(key, token);
     },
-    clear: () => { 
-        localStorage.removeItem(getStorageKey());
-    }
+
+    /** Clears ALL portal token keys so a logout is truly clean. */
+    clear: () => {
+        Object.values(STORAGE_KEYS).forEach(k => sessionStorage.removeItem(k));
+    },
+
+    /** Returns true when there is ANY session token present (any portal). */
+    hasAnySession: (): boolean => {
+        return Object.values(STORAGE_KEYS).some(k => {
+            const v = sessionStorage.getItem(k);
+            return v && v !== 'undefined' && v !== 'null';
+        });
+    },
 };
 
-// -- Refresh Token Mechanism Variables --
+// ─── Refresh Token State ───────────────────────────────────────────────────────
 let isRefreshing = false;
-let failedQueue: Array<{
-    resolve: (token: string) => void;
-    reject: (error: any) => void;
-}> = [];
+let failedQueue: Array<{ resolve: (token: string) => void; reject: (err: any) => void }> = [];
 
-// Helper to process the queue
 const processQueue = (error: any, token: string | null = null) => {
-    failedQueue.forEach(prom => {
-        if (error) {
-            prom.reject(error);
-        } else {
-            prom.resolve(token as string);
-        }
-    });
+    failedQueue.forEach(p => error ? p.reject(error) : p.resolve(token as string));
     failedQueue = [];
 };
 
-// Request Interceptor: Attach Access Token
+// ─── Helper: portal-aware login redirect ──────────────────────────────────────
+const redirectToLogin = () => {
+    const path = window.location.pathname.toLowerCase();
+    if (path.includes('/login')) return; // already on a login page — don't loop
+    if (path.startsWith('/invigilator')) {
+        window.location.replace('/invigilator/login');
+    } else if (path.startsWith('/student')) {
+        window.location.replace('/student/login');
+    } else {
+        window.location.replace('/admin/login');
+    }
+};
+
+// ─── Request Interceptor ──────────────────────────────────────────────────────
 api.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
-        const token = (AccessTokenStore.token || '').trim();
+        const token = AccessTokenStore.token;
         if (token && config.headers) {
             config.headers.Authorization = `Bearer ${token}`;
         }
@@ -88,132 +93,73 @@ api.interceptors.request.use(
     (error: AxiosError) => Promise.reject(error)
 );
 
-// Response Interceptor #1: Handle 401 & Refresh
+// ─── Response Interceptor: 401 handling + token refresh ───────────────────────
 api.interceptors.response.use(
-    (response) => response,
+    response => response,
     async (error: AxiosError) => {
-        const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+        const original = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+        const url = original?.url ?? '';
 
-        // Handle 401 errors
-        if (error.response?.status === 401 && !originalRequest._retry) {
-            // Prevent infinite loops on login/refresh endpoints
-            if (originalRequest.url?.includes('/auth/login') || originalRequest.url?.includes('/auth/refresh')) {
+        // ── 401 Unauthorized ──
+        if (error.response?.status === 401 && !original._retry) {
+            // Don't attempt refresh on auth endpoints themselves
+            if (url.includes('/auth/login') || url.includes('/auth/refresh') || url.includes('/auth/logout')) {
                 return Promise.reject(error);
             }
 
             if (isRefreshing) {
-                // If already refreshing, queue this request
-                return new Promise(function (resolve, reject) {
-                    failedQueue.push({ resolve, reject });
-                })
-                    .then((token) => {
-                        if (originalRequest.headers) {
-                            originalRequest.headers.Authorization = `Bearer ${token}`;
-                        }
-                        return api(originalRequest);
-                    })
-                    .catch((err) => Promise.reject(err));
+                return new Promise((resolve, reject) => failedQueue.push({ resolve, reject }))
+                    .then(token => {
+                        if (original.headers) original.headers.Authorization = `Bearer ${token}`;
+                        return api(original);
+                    });
             }
 
-            originalRequest._retry = true;
+            original._retry = true;
             isRefreshing = true;
 
             try {
-                // Call refresh endpoint using raw axios instance to avoid interceptors
-                // We assume the refresh endpoint relies on the HttpOnly cookie
-                const response = await axios.post(`${api.defaults.baseURL}/auth/refresh`, {}, {
-                    withCredentials: true
-                });
+                const res = await axios.post(
+                    `${api.defaults.baseURL}/auth/refresh`,
+                    {},
+                    { withCredentials: true }
+                );
+                const newToken = ((res.data as any)?.accessToken ?? '').trim();
+                if (!newToken) throw new Error('Empty refresh token');
 
-                const rawAccessToken = (response.data as any)?.accessToken;
-                const accessToken = typeof rawAccessToken === 'string' ? rawAccessToken.trim() : '';
-                
-                if (!accessToken) {
-                    throw new Error('Refresh did not return a valid access token');
-                }
+                AccessTokenStore.setToken(newToken);
+                api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+                processQueue(null, newToken);
 
-                // Update the storage wrapper (also sanitizes values)
-                AccessTokenStore.setToken(accessToken);
-
-                // Update the Authorization header for all future requests
-                api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
-
-                // Process all queued requests with the new token
-                processQueue(null, accessToken);
-
-                // Update the header for the CURRENT request and retry it
-                if (originalRequest.headers) {
-                    originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-                }
-
-                return api(originalRequest);
-            } catch (refreshError) {
-                processQueue(refreshError, null);
-                
-                // Clear everything to force a clean logout if refresh fails
+                if (original.headers) original.headers.Authorization = `Bearer ${newToken}`;
+                return api(original);
+            } catch (refreshErr) {
+                processQueue(refreshErr, null);
                 AccessTokenStore.clear();
-                sessionStorage.removeItem('seat_sync_active');
-
-                // Redirect based on the current portal
-                if (!window.location.pathname.includes('/login')) {
-                    const currentPath = window.location.pathname.toLowerCase();
-                    if (currentPath.includes('/invigilator')) {
-                        window.location.replace('/invigilator/login');
-                    } else if (currentPath.includes('/student')) {
-                        window.location.replace('/student/login');
-                    } else {
-                        window.location.replace('/admin/login');
-                    }
-                }
-
-                return Promise.reject(refreshError);
+                redirectToLogin();
+                return Promise.reject(refreshErr);
             } finally {
                 isRefreshing = false;
             }
-        } else if (error.response?.status === 401 && originalRequest._retry) {
-            // If the retry also fails with 401, force logout (Double Fail Safety)
+        }
+
+        // ── 401 on retry → force logout ──
+        if (error.response?.status === 401 && original._retry) {
             AccessTokenStore.clear();
-            sessionStorage.removeItem('seat_sync_active');
-            if (!window.location.pathname.includes('/login')) {
-                const currentPath = window.location.pathname.toLowerCase();
-                if (currentPath.startsWith('/invigilator')) {
-                    window.location.replace('/invigilator/login');
-                } else if (currentPath.startsWith('/student')) {
-                    window.location.replace('/student/login');
-                } else {
-                    window.location.replace('/admin/login');
-                }
-            }
+            redirectToLogin();
             return Promise.reject(error);
         }
 
-        // Global Error Handling (for non-401s or unhandled errors)
-        if (error.response?.data && typeof error.response.data === 'object' && 'message' in error.response.data) {
-            // Don't toast 401s as they are handled above (or result in redirect)
-            if (error.response.status !== 401) {
-                const msg = (error.response.data as any).message;
-                // Avoid redundant toasts for common interruptions
-                if (msg !== 'No active session') {
-                    // toast.error(msg || 'An error occurred'); 
-                    // Commented out to prevent toast spam, let components handle specific errors if needed
-                    // Or enable if you prefer global error toasts
-                }
-            }
-        }
-
-        // Handle Network Errors (Connection Refused, Server Down) - User Request
+        // ── Network / Server Down (ERR_CONNECTION_REFUSED etc.) ──
+        // Only redirect if we're NOT already on a login/public page
         if (!error.response || error.code === 'ERR_NETWORK') {
-            AccessTokenStore.clear();
-            sessionStorage.removeItem('seat_sync_active');
-            if (!window.location.pathname.includes('/login')) {
-                const currentPath = window.location.pathname.toLowerCase();
-                if (currentPath.startsWith('/invigilator')) {
-                    window.location.replace('/invigilator/login');
-                } else if (currentPath.startsWith('/student')) {
-                    window.location.replace('/student/login');
-                } else {
-                    window.location.replace('/admin/login');
-                }
+            const path = window.location.pathname.toLowerCase();
+            const isPublicPage = path.includes('/login') || path === '/' ||
+                path.includes('/activate') || path.includes('/forgot') ||
+                path.includes('/reset') || path.includes('/request');
+            if (!isPublicPage) {
+                AccessTokenStore.clear();
+                redirectToLogin();
             }
         }
 

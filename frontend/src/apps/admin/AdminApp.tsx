@@ -44,7 +44,7 @@ const AdminApp: React.FC = () => {
             <Route path="forgot-password" element={<ForgotPassword />} />
             <Route path="reset-password" element={<ResetPassword />} />
 
-            <Route element={<RequireAuth />}>
+            <Route element={<RequireAuth allowedRoles={['exam_admin']} redirectTo="/admin/login" />}>
                 <Route element={<AdminLayout />}>
                     <Route index element={<Navigate to="dashboard" replace />} />
 

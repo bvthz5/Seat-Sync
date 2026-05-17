@@ -8,27 +8,37 @@ interface RequireAuthProps {
     redirectTo?: string;
 }
 
-const RequireAuth: React.FC<RequireAuthProps> = ({ allowedRoles, redirectTo = "/admin/login" }) => {
+/**
+ * Route guard that enforces authentication and optional role-based access.
+ *
+ * - If loading:          shows a centered spinner.
+ * - If not authenticated: redirects to `redirectTo` (saves current location for post-login redirect).
+ * - If authenticated but wrong role: redirects to `redirectTo`.
+ *   Exception: IsRootAdmin users are ALWAYS allowed into the admin portal regardless of role.
+ */
+const RequireAuth: React.FC<RequireAuthProps> = ({ allowedRoles, redirectTo = '/admin/login' }) => {
     const { isAuthenticated, isLoading, user } = useAuth();
     const location = useLocation();
 
     if (isLoading) {
-        // Can return a loading spinner here
-        return <div className="flex bg-gray-100 h-screen w-full items-center justify-center"><Spinner /></div>;
+        return (
+            <div className="flex bg-gray-100 h-screen w-full items-center justify-center">
+                <Spinner />
+            </div>
+        );
     }
 
     if (!isAuthenticated) {
-        // Redirect them to the /login page, but save the current location they were
-        // trying to go to when they were redirected. This allows us to send them
-        // along to that page after they login, which is a nicer user experience.
         return <Navigate to={redirectTo} state={{ from: location }} replace />;
     }
 
-    const deniedRedirect = redirectTo;
-
-    if (allowedRoles && user && !allowedRoles.includes(user.Role)) {
-        // If they are logged in but don't have the right role, send to 404/not authorized
-        return <Navigate to={deniedRedirect} replace />;
+    // Root admins bypass role restrictions on the admin portal
+    if (allowedRoles && user) {
+        const isRoot = user.IsRootAdmin === true;
+        const hasRole = allowedRoles.includes(user.Role);
+        if (!hasRole && !isRoot) {
+            return <Navigate to={redirectTo} replace />;
+        }
     }
 
     return <Outlet />;
