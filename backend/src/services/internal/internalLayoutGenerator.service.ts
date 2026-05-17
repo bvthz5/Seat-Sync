@@ -61,6 +61,7 @@ export class InternalLayoutGeneratorService {
     static async generateSeats(room: InternalRoom, transaction?: Transaction) {
         const layout = (room.RowLayout as number[]) || []; // Array of bench counts per row
         const spb = room.SeatsPerBench || 2; // Usually 2 for Internal
+        const isAlternateDual = room.SeatMode === "Dual";
         
         const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
         const seats: any[] = [];
@@ -71,12 +72,13 @@ export class InternalLayoutGeneratorService {
 
             for (let bNum = 1; bNum <= benchCount; bNum++) {
                 for (let sNum = 1; sNum <= spb; sNum++) {
+                    const isActive = !(isAlternateDual && sNum === 2);
                     seats.push({
                         RoomID: room.RoomID,
                         RowLabel: rowLabel,
                         BenchNumber: bNum,
                         SeatNumber: sNum,
-                        IsActive: true
+                        IsActive: isActive
                     });
                 }
             }

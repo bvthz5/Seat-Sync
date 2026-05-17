@@ -29,10 +29,21 @@ export class StructureImportService {
 
         const cleanName = roomName.trim();
 
-        // Extract block (first word), remove any digits to fix "EH1" -> "EH"
-        let blockCode = cleanName.split(" ")[0] || "MAIN";
-        blockCode = blockCode.replace(/\d+/g, "");
-        if (!blockCode) blockCode = "MAIN";
+        // Extract block: everything before the room number digit
+        const firstDigitIndex = cleanName.search(/\d/);
+        let blockCode = "MAIN";
+        if (firstDigitIndex > 0) {
+            let extractedBlock = cleanName.substring(0, firstDigitIndex).trim();
+            // Strip any trailing non-alphanumeric separator like '-', '_', or '/'
+            extractedBlock = extractedBlock.replace(/[\s\-_/]+$/, '').trim();
+            if (extractedBlock) {
+                blockCode = extractedBlock;
+            }
+        } else {
+            let extracted = cleanName.split(" ")[0] || "MAIN";
+            extracted = extracted.replace(/\d+/g, "");
+            if (extracted) blockCode = extracted;
+        }
 
         // Extract first number in string
         const roomNumberMatch = cleanName.match(/\d+/);
@@ -128,7 +139,7 @@ export class StructureImportService {
             let roomName = String(roomVal).trim();
             if (!roomName) continue;
 
-            let blockStr = blockColIdx !== -1 && row[blockColIdx] ? String(row[blockColIdx]).trim().toUpperCase() : undefined;
+            let blockStr = blockColIdx !== -1 && row[blockColIdx] ? String(row[blockColIdx]).trim() : undefined;
             let floorNum = floorColIdx !== -1 && row[floorColIdx] !== null && !isNaN(Number(row[floorColIdx])) ? Math.floor(Number(row[floorColIdx])) : undefined;
 
             if (seenRooms.has(roomName.toLowerCase())) {
@@ -402,7 +413,7 @@ export class StructureImportService {
         const errors: string[] = [];
 
         for (const item of data) {
-            const blockName = (item.BlockName || 'MAIN').trim().toUpperCase();
+            const blockName = (item.BlockName || 'MAIN').trim();
             const floorNum = parseInt(item.FloorNumber, 10) || 0;
             const roomCode = (item.RoomCode || '').trim();
             const totalCapacity = parseInt(item.Capacity, 10) || 0;

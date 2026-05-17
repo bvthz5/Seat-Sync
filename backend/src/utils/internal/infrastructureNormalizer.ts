@@ -5,6 +5,18 @@
  * Removes headers, empty rows, and garbage like signatures or disregard notes.
  */
 
+const getValueByPatterns = (row: any, patterns: string[]): any => {
+    if (!row) return undefined;
+    const keys = Object.keys(row);
+    for (const pattern of patterns) {
+        const matchingKey = keys.find(k => k.toLowerCase().replace(/[\s_\-]+/g, '') === pattern.toLowerCase().replace(/[\s_\-]+/g, ''));
+        if (matchingKey && row[matchingKey] !== undefined && row[matchingKey] !== null) {
+            return row[matchingKey];
+        }
+    }
+    return undefined;
+};
+
 export const normalizeInfrastructureData = (rawData: any[]): any[] => {
     if (!rawData || !Array.isArray(rawData)) return [];
 
@@ -30,11 +42,11 @@ export const normalizeInfrastructureData = (rawData: any[]): any[] => {
 
         if (garbage.some(p => rowStr.includes(p))) return false;
 
-        // Extract potential room code
-        const roomCode = String(row.RoomCode || row.roomCode || row['Room Code'] || row['ROOM CODE'] || row['Code'] || '').trim();
+        // Extract potential room code using flexible pattern matching
+        const roomCode = String(getValueByPatterns(row, ['RoomCode', 'RoomName', 'Room', 'Code']) || '').trim();
         
         // Must have a room code and it shouldn't be a generic header
-        if (!roomCode || roomCode.toLowerCase() === 'room code' || roomCode.toLowerCase() === 'code') return false;
+        if (!roomCode || roomCode.toLowerCase() === 'room code' || roomCode.toLowerCase() === 'code' || roomCode.toLowerCase() === 'room') return false;
 
         return true;
     });

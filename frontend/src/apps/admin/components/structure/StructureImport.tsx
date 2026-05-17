@@ -64,10 +64,22 @@ const processRawData = (data: any[]): CSVData[] => {
             let blockVal = blockCol ? row[blockCol] : (row['BlockName'] || row['Block']);
             let floorVal = floorCol ? row[floorCol] : (row['FloorNumber'] || row['Floor']);
 
-            // Best effort extraction from RoomName (e.g. "A 101" -> Block A, Floor 1)
+            // Best effort extraction from RoomName (e.g. "NB (Civil Minor Room) 101" -> Block: "NB (Civil Minor Room)", Floor: 1)
             if (!blockVal && roomVal && typeof roomVal === 'string') {
-                const parts = roomVal.match(/([a-zA-Z]+)/);
-                if (parts && parts[1]) blockVal = parts[1].toUpperCase();
+                const firstDigitIndex = roomVal.search(/\d/);
+                if (firstDigitIndex > 0) {
+                    let extractedBlock = roomVal.substring(0, firstDigitIndex).trim();
+                    // Strip any trailing non-alphanumeric separator like '-', '_', or '/'
+                    extractedBlock = extractedBlock.replace(/[\s\-_/]+$/, '').trim();
+                    if (extractedBlock) {
+                        blockVal = extractedBlock;
+                    }
+                } else {
+                    const parts = roomVal.match(/([a-zA-Z\s()\-_\/]+)/);
+                    if (parts && parts[1]) {
+                        blockVal = parts[1].trim();
+                    }
+                }
             }
             if (!floorVal && roomVal && typeof roomVal === 'string') {
                 const nums = roomVal.match(/(\d+)/);
@@ -76,7 +88,7 @@ const processRawData = (data: any[]): CSVData[] => {
 
             if (!roomVal && !capVal) return null;
 
-            let finalBlock = blockVal ? String(blockVal).trim().toUpperCase() : 'MAIN';
+            let finalBlock = blockVal ? String(blockVal).trim() : 'MAIN';
             let finalRoom = roomVal ? String(roomVal).trim() : 'UNKNOWN';
 
             // Clean up block name if it contains the room number (e.g., 'MTB 105' -> 'MTB')
@@ -84,7 +96,7 @@ const processRawData = (data: any[]): CSVData[] => {
             if (roomNumsMatch && roomNumsMatch[1]) {
                 const numStr = roomNumsMatch[1];
                 if (finalBlock.includes(numStr)) {
-                    finalBlock = finalBlock.replace(numStr, '').replace(/[^A-Z0-9]/g, '').trim();
+                    finalBlock = finalBlock.replace(numStr, '').trim();
                 }
             }
             if(!finalBlock) finalBlock = 'MAIN';

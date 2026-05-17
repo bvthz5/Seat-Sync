@@ -5,6 +5,9 @@ export const deleteAllStructureData = async (req: Request, res: Response) => {
             // Delete from child tables first to avoid FK constraint errors
             await SeatAllocation.destroy({ where: {}, transaction: t });
             await Seat.destroy({ where: {}, transaction: t });
+            await DutySwap.destroy({ where: {}, transaction: t });
+            await IncidentReport.destroy({ where: {}, transaction: t });
+            await InvigilatorAssignment.destroy({ where: {}, transaction: t });
             await Room.destroy({ where: {}, transaction: t });
             await Floor.destroy({ where: {}, transaction: t });
             await Block.destroy({ where: {}, transaction: t });
@@ -23,7 +26,11 @@ import { Room } from "../models/Room.js";
 import { Seat } from "../models/Seat.js";
 import { Exam } from "../models/Exam.js";
 import { SeatAllocation } from "../models/SeatAllocation.js";
+import { DutySwap } from "../models/DutySwap.js";
+import { IncidentReport } from "../models/IncidentReport.js";
+import { InvigilatorAssignment } from "../models/InvigilatorAssignment.js";
 import { Op } from "sequelize";
+
 
 // --- BLOCKS ---
 

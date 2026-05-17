@@ -233,6 +233,7 @@ export const createInternalRoom = async (req: Request, res: Response) => {
     const spb = SeatsPerBench || 2;
     const finalLayout: number[] = RowLayout || InternalLayoutGeneratorService.generateRowLayout(TotalCapacity || 0);
     const calcCapacity = TotalCapacity || finalLayout.reduce((a: number, b: number) => a + b, 0) * spb;
+    const resolvedSeatMode = SeatMode || (spb === 1 ? "Single" : "Dual");
 
     const room = await InternalRoom.create({
       BlockID, FloorID, RoomCode,
@@ -242,7 +243,7 @@ export const createInternalRoom = async (req: Request, res: Response) => {
       TotalCapacity: calcCapacity,
       RowLayout: finalLayout,
       SeatsPerBench: spb,
-      SeatMode: SeatMode || "Dual",
+      SeatMode: resolvedSeatMode,
       OverrideCap: OverrideCap ?? null,
     } as any);
 
@@ -285,6 +286,9 @@ export const updateInternalRoom = async (req: Request, res: Response) => {
       const newSpb = SeatsPerBench !== undefined ? Number(SeatsPerBench) : room.SeatsPerBench;
       room.RowLayout = newLayout;
       room.SeatsPerBench = newSpb;
+      
+      // Auto-synchronize SeatMode based on SeatsPerBench
+      room.SeatMode = newSpb === 1 ? "Single" : "Dual";
       
       if (TotalCapacity !== undefined) {
         room.TotalCapacity = TotalCapacity;
@@ -413,9 +417,10 @@ export const updateInternalRoomLayout = async (req: Request, res: Response) => {
     const room = await InternalRoom.findByPk(id) as any;
     if (!room) return res.status(404).json({ message: "Room not found" });
 
-    const { RowLayout, SeatsPerBench } = req.body;
+    const { RowLayout, SeatsPerBench, SeatMode } = req.body;
     if (RowLayout !== undefined) room.RowLayout = RowLayout;
     if (SeatsPerBench !== undefined) room.SeatsPerBench = Number(SeatsPerBench);
+    if (SeatMode !== undefined) room.SeatMode = SeatMode;
 
     if (room.RowLayout && Array.isArray(room.RowLayout)) {
       room.TotalCapacity = room.RowLayout.reduce((a: number, b: number) => a + b, 0) * (room.SeatsPerBench || 2);

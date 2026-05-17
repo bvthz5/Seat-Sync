@@ -1,11 +1,10 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
-    Card, CardBody, CardHeader, Button, Input, Autocomplete, AutocompleteItem, Divider, Chip,
-    Select, SelectItem
+    Card, CardBody, CardHeader, Button, Input, Autocomplete, AutocompleteItem, Divider, Chip
 } from '@heroui/react';
 import {
-    Building, Layers, DoorOpen, Plus, Minus, Save, RotateCcw, Layout, MonitorPlay, Armchair,
-    Info, Maximize2, Eye, MousePointerClick, Columns3
+    Plus, Minus, Save, RotateCcw, MonitorPlay, Armchair,
+    Info, Eye, MousePointerClick, Columns3, Layers
 } from 'lucide-react';
 import { internalStructureService, InternalBlock, InternalFloor, InternalRoom, InternalSeat } from '../../services/internalStructureService';
 import { toast } from '../../../../utils/toast';
@@ -22,10 +21,12 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
     const [selectedRoomId, setSelectedRoomId] = useState('');
     const [roomData, setRoomData] = useState<InternalRoom | null>(null);
     const [seats, setSeats] = useState<InternalSeat[]>([]);
-    const [disabledSeats, setDisabledSeats] = useState<Set<number>>(new Set());
-    const [initialDisabled, setInitialDisabled] = useState<Set<number>>(new Set());
+    const [customDisabledSeats, setCustomDisabledSeats] = useState<Set<number>>(new Set());
+    const [initialCustomDisabled, setInitialCustomDisabled] = useState<Set<number>>(new Set());
     const [config, setConfig] = useState({ rowLayout: [] as number[], seatsPerBench: 2 });
     const [initialConfig, setInitialConfig] = useState<typeof config | null>(null);
+    const [seatMode, setSeatMode] = useState<'Single' | 'Dual' | 'Mixed'>('Dual');
+    const [initialSeatMode, setInitialSeatMode] = useState<'Single' | 'Dual' | 'Mixed'>('Dual');
     const [loading, setLoading] = useState(false);
     const [fetchingFloors, setFetchingFloors] = useState(false);
     const [fetchingRooms, setFetchingRooms] = useState(false);
@@ -85,9 +86,25 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
             const cfg = { rowLayout: layout, seatsPerBench: spb };
             setConfig(cfg);
             setInitialConfig(cfg);
-            const disabled = new Set<number>(data.seats.filter(s => !s.IsActive).map(s => s.SeatID));
-            setDisabledSeats(disabled);
-            setInitialDisabled(new Set(disabled));
+            
+            const mode = data.room.SeatMode || 'Dual';
+            setSeatMode(mode);
+            setInitialSeatMode(mode);
+
+            const customDisabled = new Set<number>();
+            data.seats.forEach(s => {
+                if (!s.IsActive) {
+                    if (mode === 'Single') {
+                        customDisabled.add(s.SeatID);
+                    } else {
+                        if (s.SeatNumber !== 2) {
+                            customDisabled.add(s.SeatID);
+                        }
+                    }
+                }
+            });
+            setCustomDisabledSeats(customDisabled);
+            setInitialCustomDisabled(new Set(customDisabled));
         }).catch(() => toast.error('Failed to load room layout'))
           .finally(() => setLoading(false));
     }, [selectedRoomId]);
@@ -96,19 +113,22 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
         if (!initialConfig) return false;
         if (JSON.stringify(config.rowLayout) !== JSON.stringify(initialConfig.rowLayout)) return true;
         if (config.seatsPerBench !== initialConfig.seatsPerBench) return true;
-        if (disabledSeats.size !== initialDisabled.size) return true;
-        for (const id of disabledSeats) { if (!initialDisabled.has(id)) return true; }
+        if (seatMode !== initialSeatMode) return true;
+        if (customDisabledSeats.size !== initialCustomDisabled.size) return true;
+        for (const id of customDisabledSeats) { if (!initialCustomDisabled.has(id)) return true; }
         return false;
-    }, [config, initialConfig, disabledSeats, initialDisabled]);
+    }, [config, initialConfig, seatMode, initialSeatMode, customDisabledSeats, initialCustomDisabled]);
 
-    /* ── Column = old "row", Seats per column = old "benchCount * seatsPerBench" ── */
-    /* rowLayout[i] = number of benches in column i. Each bench has seatsPerBench seats stacked vertically */
+    // Live active seats recomputation (derived in real-time with zero negative guards)
     const totalActiveSeats = useMemo(() => {
-        const total = config.rowLayout.reduce((a, b) => a + b, 0) * config.seatsPerBench;
-        return total - disabledSeats.size;
-    }, [config, disabledSeats]);
+        return Math.max(0, seats.filter(s => {
+            const isAlternateDisabled = seatMode === 'Dual' && s.SeatNumber === 2;
+            const isCustomDisabled = customDisabledSeats.has(s.SeatID);
+            return !isAlternateDisabled && !isCustomDisabled;
+        }).length);
+    }, [seats, seatMode, customDisabledSeats]);
 
-    const capacityCount = config.rowLayout.reduce((a, b) => a + b, 0) * config.seatsPerBench;
+    const capacityCount = config.rowLayout.reduce((a, b) => a + b, 0) * 2; // Always 2 physically
 
     const handleAddColumn = () => {
         const last = config.rowLayout.length > 0 ? config.rowLayout[config.rowLayout.length - 1] : 4;
@@ -127,7 +147,8 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
     const handleReset = () => {
         if (initialConfig) {
             setConfig(initialConfig);
-            setDisabledSeats(new Set(initialDisabled));
+            setSeatMode(initialSeatMode);
+            setCustomDisabledSeats(new Set(initialCustomDisabled));
             toast.success('Reset to saved state');
         }
     };
@@ -138,32 +159,61 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
         try {
             await internalStructureService.updateRoomLayout(Number(selectedRoomId), {
                 RowLayout: config.rowLayout,
-                SeatsPerBench: config.seatsPerBench,
-            });
-            // Persist seat states
+                SeatsPerBench: 2, // Physical seats per bench remains immutable
+                SeatMode: seatMode,
+            } as any);
+            
+            // Persist derived seat states dynamically
             const data = await internalStructureService.getRoomLayout(Number(selectedRoomId));
             if (data.seats.length > 0) {
-                const updates = data.seats.map(s => ({ SeatID: s.SeatID, IsActive: !disabledSeats.has(s.SeatID) }));
+                const updates = data.seats.map(s => {
+                    const isAlternateDisabled = seatMode === 'Dual' && s.SeatNumber === 2;
+                    const isCustomDisabled = customDisabledSeats.has(s.SeatID);
+                    const isActive = !isAlternateDisabled && !isCustomDisabled;
+                    return { SeatID: s.SeatID, IsActive: isActive };
+                });
                 await internalStructureService.updateSeatStates(Number(selectedRoomId), updates);
             }
-            // Reload
+            
+            // Reload fresh database structures
             const fresh = await internalStructureService.getRoomLayout(Number(selectedRoomId));
             setRoomData(fresh.room);
             setSeats(fresh.seats);
+            
             const cfg = { rowLayout: Array.isArray(fresh.room.RowLayout) ? fresh.room.RowLayout : [], seatsPerBench: fresh.room.SeatsPerBench || 2 };
             setConfig(cfg);
             setInitialConfig(cfg);
-            const dis = new Set<number>(fresh.seats.filter(s => !s.IsActive).map(s => s.SeatID));
-            setDisabledSeats(dis);
-            setInitialDisabled(new Set(dis));
+            
+            const freshMode = fresh.room.SeatMode || 'Dual';
+            setSeatMode(freshMode);
+            setInitialSeatMode(freshMode);
+
+            const customDisabled = new Set<number>();
+            fresh.seats.forEach(s => {
+                if (!s.IsActive) {
+                    if (freshMode === 'Single') {
+                        customDisabled.add(s.SeatID);
+                    } else {
+                        if (s.SeatNumber !== 2) {
+                            customDisabled.add(s.SeatID);
+                        }
+                    }
+                }
+            });
+            setCustomDisabledSeats(customDisabled);
+            setInitialCustomDisabled(new Set(customDisabled));
+            
             toast.success('Layout saved successfully');
-        } catch (e: any) { toast.error(e.response?.data?.message || 'Save failed'); }
-        finally { setLoading(false); }
+        } catch (e: any) { 
+            toast.error(e.response?.data?.message || 'Save failed'); 
+        } finally { 
+            setLoading(false); 
+        }
     };
 
     const toggleSeatDisable = (seatId: number) => {
         if (readOnly || viewMode !== 'disable') return;
-        setDisabledSeats(prev => {
+        setCustomDisabledSeats(prev => {
             const next = new Set(prev);
             if (next.has(seatId)) next.delete(seatId); else next.add(seatId);
             return next;
@@ -177,10 +227,6 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
         return map;
     }, [seats]);
 
-    /* ── Build vertical columns from config ── */
-    /* Each entry in rowLayout is a column (A, B, C...) with N benches stacked vertically.
-       In Dual mode each bench has Left (seat 1) + Right (seat 2) as a paired unit.
-       In Single mode each bench has one seat. */
     interface BenchView {
         benchNum: number;
         leftKey: string;
@@ -197,7 +243,6 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
     }
 
     const visualColumns: ColumnView[] = useMemo(() => {
-        const isDual = config.seatsPerBench === 2;
         return config.rowLayout.map((benchCount, colIdx) => {
             const colLabel = String.fromCharCode(65 + colIdx);
             const benches: BenchView[] = [];
@@ -206,16 +251,11 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
                 const b = bi + 1;
                 const leftKey = `${colLabel}-${b}-1`;
                 const leftSeat = seatLookup.get(leftKey);
-                const leftLabel = isDual ? `${b}L` : `${colLabel.toLowerCase()}${b}`;
+                const leftLabel = `${b}L`;
 
-                let rightKey: string | null = null;
-                let rightSeat: InternalSeat | undefined = undefined;
-                let rightLabel: string | null = null;
-                if (isDual) {
-                    rightKey = `${colLabel}-${b}-2`;
-                    rightSeat = seatLookup.get(rightKey);
-                    rightLabel = `${b}R`;
-                }
+                const rightKey = `${colLabel}-${b}-2`;
+                const rightSeat = seatLookup.get(rightKey);
+                const rightLabel = `${b}R`;
 
                 benches.push({ benchNum: b, leftKey, rightKey, leftSeat, rightSeat, leftLabel, rightLabel });
             }
@@ -224,19 +264,23 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
     }, [config, seatLookup]);
 
     const getSeatClasses = (seat: InternalSeat | undefined): string => {
-        const isDisabled = seat ? disabledSeats.has(seat.SeatID) : false;
+        if (!seat) return 'ilc-seat ilc-seat--disabled';
+        
+        const isAlternateDisabled = seatMode === 'Dual' && seat.SeatNumber === 2;
+        const isCustomDisabled = customDisabledSeats.has(seat.SeatID);
+        const isDisabled = isAlternateDisabled || isCustomDisabled;
+
         if (isDisabled) return 'ilc-seat ilc-seat--disabled';
         if (viewMode === 'disable') return 'ilc-seat ilc-seat--editable';
         return 'ilc-seat ilc-seat--active';
     };
 
     const getBenchClasses = (bench: BenchView): string => {
-        const isDual = config.seatsPerBench === 2;
-        const leftDis = bench.leftSeat ? disabledSeats.has(bench.leftSeat.SeatID) : false;
-        const rightDis = isDual && bench.rightSeat ? disabledSeats.has(bench.rightSeat.SeatID) : false;
-        const allDisabled = isDual ? (leftDis && rightDis) : leftDis;
-        let cls = 'ilc-bench';
-        if (isDual) cls += ' ilc-bench--dual';
+        const leftDis = bench.leftSeat ? (seatMode === 'Dual' && bench.leftSeat.SeatNumber === 2) || customDisabledSeats.has(bench.leftSeat.SeatID) : false;
+        const rightDis = bench.rightSeat ? (seatMode === 'Dual' && bench.rightSeat.SeatNumber === 2) || customDisabledSeats.has(bench.rightSeat.SeatID) : false;
+        const allDisabled = leftDis && rightDis;
+        
+        let cls = 'ilc-bench ilc-bench--dual';
         if (allDisabled) cls += ' ilc-bench--all-disabled';
         if (viewMode === 'disable') cls += ' ilc-bench--edit-mode';
         return cls;
@@ -263,10 +307,11 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
                 )}
             </div>
 
-            <div className="ilc-body">
-                {/* ─ Left Sidebar ─ */}
+            {/* Stage Content */}
+            <div className="ilc-container">
+                {/* ─ Left Panel: Side Configurator ─ */}
                 <div className="ilc-sidebar">
-                    <Card className="ilc-sidebar__card">
+                    <Card className="ilc-sidebar__card border border-slate-100 shadow-sm rounded-2xl bg-white">
                         <CardHeader className="ilc-sidebar__header">
                             <div className="ilc-sidebar__header-icon"><MonitorPlay size={18} /></div>
                             <div>
@@ -368,15 +413,11 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
                                         </div>
                                         <div className="ilc-col-list">
                                             {config.rowLayout.map((seatCount, i) => (
-                                                <div key={i} className="ilc-col-item">
-                                                    <div className="ilc-col-badge">
-                                                        {String.fromCharCode(65 + i)}
-                                                    </div>
+                                                <div key={i} className="flex items-center gap-3">
+                                                    <span className="w-6 h-6 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center text-xs font-black shadow-sm shadow-violet-50">{String.fromCharCode(65 + i)}</span>
                                                     <div className="flex-1">
-                                                        <Input size="sm" type="number" min={1} value={seatCount.toString()}
-                                                            onValueChange={(v) => handleSeatCountChange(i, Number(v))}
-                                                            labelPlacement="outside"
-                                                            startContent={<span className="text-[10px] font-bold text-slate-400">Benches:</span>}
+                                                        <Input type="number" min={1} max={30} value={String(seatCount)}
+                                                            onChange={(e) => handleSeatCountChange(i, Math.max(1, Math.min(30, Number(e.target.value) || 1)))}
                                                             classNames={{ inputWrapper: 'bg-slate-50 border-none shadow-none h-8', input: 'font-bold' }} isDisabled={readOnly} />
                                                     </div>
                                                     <Button isIconOnly size="sm" variant="light" color="danger" onPress={() => handleRemoveColumn(i)} isDisabled={readOnly} className="rounded-lg"><Minus size={14} /></Button>
@@ -390,13 +431,13 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
                                     <div className="ilc-schema-box">
                                         <div className="flex justify-between items-center">
                                             <span className="ilc-label" style={{ margin: 0 }}>Seating Schema</span>
-                                            <Chip size="sm" variant="dot" color="primary" className="font-bold border-none text-[10px] uppercase">{config.seatsPerBench === 2 ? 'Dual' : 'Single'}</Chip>
+                                            <Chip size="sm" variant="dot" color="primary" className="font-bold border-none text-[10px] uppercase">{seatMode}</Chip>
                                         </div>
                                         <div className="grid grid-cols-2 gap-2">
-                                            {[{ v: 2, l: '⊡ Dual' }, { v: 1, l: '□ Single' }].map(s => (
+                                            {[{ v: 'Dual', l: '⊡ Dual' }, { v: 'Single', l: '□ Single' }].map(s => (
                                                 <button key={s.v} disabled={readOnly}
-                                                    onClick={() => setConfig(c => ({ ...c, seatsPerBench: s.v }))}
-                                                    className={`py-2 rounded-xl text-xs font-black border-2 transition-all ${config.seatsPerBench === s.v ? 'bg-violet-600 text-white border-violet-600 shadow-lg shadow-violet-100' : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300'}`}>
+                                                    onClick={() => setSeatMode(s.v as any)}
+                                                    className={`py-2 rounded-xl text-xs font-black border-2 transition-all ${seatMode === s.v ? 'bg-violet-600 text-white border-violet-600 shadow-lg shadow-violet-100' : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300'}`}>
                                                     {s.l}
                                                 </button>
                                             ))}
@@ -409,8 +450,8 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
                                             </div>
                                             <div className="flex flex-col items-end">
                                                 <span className="text-3xl font-black text-violet-700 tracking-tighter">{totalActiveSeats}</span>
-                                                {disabledSeats.size > 0 && (
-                                                    <span className="text-[10px] text-red-400 font-bold">({disabledSeats.size} disabled)</span>
+                                                {seats.length - totalActiveSeats > 0 && (
+                                                    <span className="text-[10px] text-red-400 font-bold">({seats.length - totalActiveSeats} disabled)</span>
                                                 )}
                                             </div>
                                         </div>
@@ -494,18 +535,18 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
 
                                 {/* Column Labels */}
                                 <div className="ilc-columns-wrapper">
-                                    <div className={`ilc-col-labels ${config.seatsPerBench === 2 ? 'ilc-col-labels--dual' : ''}`}>
+                                    <div className="ilc-col-labels ilc-col-labels--dual">
                                         {visualColumns.map(col => (
-                                            <div key={col.colLabel} className={`ilc-col-label ${config.seatsPerBench === 2 ? 'ilc-col-label--dual' : ''}`}>
+                                            <div key={col.colLabel} className="ilc-col-label ilc-col-label--dual">
                                                 {col.colLabel}
                                             </div>
                                         ))}
                                     </div>
 
                                     {/* Vertical Columns */}
-                                    <div className={`ilc-columns ${config.seatsPerBench === 2 ? 'ilc-columns--dual' : 'ilc-columns--single'}`}>
+                                    <div className="ilc-columns ilc-columns--dual">
                                         {visualColumns.map(col => (
-                                            <div key={col.colLabel} className={`ilc-column ${config.seatsPerBench === 2 ? 'ilc-column--dual' : 'ilc-column--single'}`}>
+                                            <div key={col.colLabel} className="ilc-column ilc-column--dual">
                                                 <div className="ilc-column__inner">
                                                     {col.benches.map(bench => (
                                                         <div key={bench.benchNum} className={getBenchClasses(bench)}>
@@ -519,8 +560,8 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
                                                                 <span className="ilc-seat__label">{bench.leftLabel}</span>
                                                             </button>
 
-                                                            {/* Bench Divider + Right Seat (Dual mode only) */}
-                                                            {config.seatsPerBench === 2 && bench.rightSeat !== undefined && (
+                                                            {/* Bench Divider + Right Seat (Always physically present) */}
+                                                            {bench.rightSeat !== undefined && (
                                                                 <>
                                                                     <div className="ilc-bench__divider" />
                                                                     <button
