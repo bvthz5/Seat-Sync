@@ -143,7 +143,14 @@ const swaggerDefinition = {
 // Options for the swagger docs
 const options = {
     swaggerDefinition,
-    apis: ["src/**/*.ts"], // Paths to files containing OpenAPI definitions
+    apis: [
+        "./src/routes/**/*.ts",
+        "./src/routes/**/*.js",
+        "./dist/routes/**/*.js",
+        "./src/app.ts",
+        "./src/app.js",
+        "./dist/app.js"
+    ], // Paths to files containing OpenAPI definitions
 };
 
 // Initialize swagger-jsdoc
