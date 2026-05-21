@@ -1,4 +1,5 @@
 import { Sequelize, QueryTypes } from "sequelize";
+import mysql2 from "mysql2";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -32,13 +33,12 @@ loadDotenvSilently();
 /* Environment variables                          */
 /* ────────────────────────────────────────────── */
 
+const DB_DIALECT = process.env.DB_DIALECT || "mysql";
 const DB_NAME = process.env.DB_NAME || "";
 const DB_USER = process.env.DB_USER || "";
 const DB_PASS = process.env.DB_PASS || "";
 const DB_HOST = process.env.DB_HOST || "127.0.0.1";
-const DB_PORT = Number(process.env.DB_PORT || 1433);
-const DB_ENCRYPT = process.env.DB_ENCRYPT === "true";
-const DB_USE_WINDOWS_AUTH = process.env.DB_USE_WINDOWS_AUTH === "true";
+const DB_PORT = Number(process.env.DB_PORT || 3306);
 const DB_FALLBACK_TO_SQLITE = process.env.DB_FALLBACK_TO_SQLITE === "true";
 
 /* ────────────────────────────────────────────── */
@@ -61,54 +61,34 @@ function createSQLite() {
 
 let sequelize: Sequelize;
 
-const hasMSSQLConfig =
+const hasMySQLConfig =
     DB_NAME.length > 0 &&
-    (DB_USE_WINDOWS_AUTH || (DB_USER.length > 0 && DB_PASS.length > 0)) &&
+    DB_USER.length > 0 &&
     DB_HOST.length > 0;
 
-console.log(`MSSQL Config Check: Host=${DB_HOST}, Port=${DB_PORT}, Encrypt=${DB_ENCRYPT}, WindowsAuth=${DB_USE_WINDOWS_AUTH}`);
+console.log(`MySQL/MariaDB Config Check: Host=${DB_HOST}, Port=${DB_PORT}, Database=${DB_NAME}, User=${DB_USER}`);
 
-if (hasMSSQLConfig) {
-    if (DB_USE_WINDOWS_AUTH) {
-        console.log("Initializing Sequelize with MSSQL Windows Authentication...");
-        sequelize = new Sequelize(DB_NAME, "", "", {
-            dialect: "mssql",
-            host: DB_HOST,
-            port: DB_PORT,
-            logging: false,
-            dialectOptions: {
-                driver: "msnodesqlv8",
-                connectionString: `Driver={ODBC Driver 17 for SQL Server};Server=${DB_HOST},${DB_PORT};Database=${DB_NAME};Trusted_Connection=yes;`,
-                options: {
-                    trustServerCertificate: true
-                }
-            },
-            pool: { max: 10, min: 0, acquire: 30000, idle: 10000 }
-        });
-    } else {
-        console.log("Initializing Sequelize with Standard MSSQL Config...");
-        sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASS, {
-            dialect: "mssql",
-            host: DB_HOST,
-            port: DB_PORT,
-            logging: false,
-            dialectOptions: {
-                options: {
-                    encrypt: DB_ENCRYPT,
-                    trustServerCertificate: true,
-                    connectTimeout: 30000
-                }
-            },
-            pool: {
-                max: 10,
-                min: 0,
-                acquire: 30000,
-                idle: 10000
-            }
-        });
-    }
+if (hasMySQLConfig) {
+    console.log("Initializing Sequelize with MySQL/MariaDB Config...");
+    sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASS, {
+        dialect: "mysql",
+        dialectModule: mysql2,
+        host: DB_HOST,
+        port: DB_PORT,
+        logging: false,
+        define: {
+            charset: "utf8mb4",
+            collate: "utf8mb4_unicode_ci"
+        },
+        pool: {
+            max: 10,
+            min: 0,
+            acquire: 30000,
+            idle: 10000
+        }
+    });
 } else {
-    console.warn("Missing MSSQL Config. Initializing SQLite DB.");
+    console.warn("Missing MySQL/MariaDB Config. Initializing SQLite DB fallback.");
     sequelize = createSQLite();
 }
 
@@ -1221,9 +1201,10 @@ export async function connectDB() {
     } catch (err: any) {
         console.error("Database Connection Failed:", err.message);
 
-        const isMSSQL = sequelize.getDialect() === 'mssql';
-        if (isMSSQL && DB_FALLBACK_TO_SQLITE) {
-            console.warn("MSSQL connection failed. Falling back to SQLite as configured...");
+        const dialect = sequelize.getDialect();
+        const shouldFallback = (dialect === 'mssql' || dialect === 'mysql') && DB_FALLBACK_TO_SQLITE;
+        if (shouldFallback) {
+            console.warn(`${dialect.toUpperCase()} connection failed. Falling back to SQLite as configured...`);
             sequelize = createSQLite();
             await sequelize.authenticate();
             console.log("Connected to SQLite fallback database.");

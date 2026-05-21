@@ -35,8 +35,8 @@
     "hpp": "^0.2.3",
     "jsonwebtoken": "^9.0.3",
     "mammoth": "^1.12.0",
-    "mssql": "^12.5.2",
     "multer": "^2.0.2",
+    "mysql2": "^3.22.3",
     "node-cron": "^4.2.1",
     "nodemailer": "^7.0.12",
     "open": "^11.0.0",
@@ -47,10 +47,9 @@
     "sqlite3": "^5.0.2",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
-    "tedious": "^19.2.0",
     "tesseract.js": "^6.0.1",
     "word-extractor": "^1.0.4",
-    "xlsx": "^0.18.5",
+    "xlsx": "^0.19.3",
     "xlsx-js-style": "^1.2.0"
   },
   "devDependencies": {

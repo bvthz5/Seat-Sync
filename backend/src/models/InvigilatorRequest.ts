@@ -80,7 +80,7 @@ InvigilatorRequest.init(
     RequestedAt: {
       type: DataTypes.DATE,
       allowNull: false,
-      defaultValue: sequelize.literal('GETDATE()'),
+      defaultValue: sequelize.literal('CURRENT_TIMESTAMP'),
     },
     ReviewedBy: {
       type: DataTypes.INTEGER,

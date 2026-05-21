@@ -43,8 +43,8 @@ InternalExamRegistration.init(
         tableName: "InternalExamRegistrations",
         timestamps: true,
         indexes: [
-            { unique: true, fields: ["InternalExamID", "InternalStudentID"] },
-            { fields: ["InternalStudentID"] },
+            { name: "idx_int_exam_reg_unique", unique: true, fields: ["InternalExamID", "InternalStudentID"] },
+            { name: "idx_int_exam_reg_student", fields: ["InternalStudentID"] },
         ],
     }
 );

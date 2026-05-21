@@ -52,8 +52,8 @@ InternalSeatAllocation.init(
         tableName: "InternalSeatAllocations",
         timestamps: false,
         indexes: [
-            { unique: true, fields: ["InternalExamID", "InternalSeatID"] },
-            { fields: ["InternalStudentID"] },
+            { name: "idx_int_seat_alloc_unique", unique: true, fields: ["InternalExamID", "InternalSeatID"] },
+            { name: "idx_int_seat_alloc_student", fields: ["InternalStudentID"] },
         ],
     }
 );

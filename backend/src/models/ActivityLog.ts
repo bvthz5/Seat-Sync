@@ -81,7 +81,7 @@ ActivityLog.init(
     Timestamp: {
       type: DataTypes.DATE,
       allowNull: false,
-      defaultValue: sequelize.literal('GETDATE()'),
+      defaultValue: sequelize.literal('CURRENT_TIMESTAMP'),
     },
     Details: {
       type: DataTypes.TEXT,

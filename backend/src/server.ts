@@ -74,8 +74,11 @@ const startServer = async () => {
                             const pids = new Set<string>();
                             for (const line of lines) {
                                 const parts = line.trim().split(/\s+/);
-                                if (parts.length >= 5 && parts[1].endsWith(`:${PORT}`)) {
-                                    pids.add(parts[4]);
+                                if (parts.length >= 5 && parts[1] && parts[1].endsWith(`:${PORT}`)) {
+                                    const pid = parts[4];
+                                    if (pid) {
+                                        pids.add(pid);
+                                    }
                                 }
                             }
                             let killedAny = false;

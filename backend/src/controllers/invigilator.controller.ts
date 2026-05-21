@@ -1480,13 +1480,10 @@ export const approveSwap = async (req: Request, res: Response) => {
                 console.warn(`[ApproveSwap] No assignment found to replace! (Exam: ${swapRaw.ExamID}, Room: ${swapRaw.RoomID}, Req: ${swapRaw.RequesterID})`);
             }
 
-            // 2. Update Swap Status using raw query for maximum reliability with SQL Server dates
-            await sequelize.query(
-                "UPDATE [DutySwaps] SET [SubstituteID] = ?, [Status] = 'APPROVED', [UpdatedAt] = GETDATE() WHERE [SwapID] = ?",
-                {
-                    replacements: [Number(substituteId), swapRaw.SwapID],
-                    transaction: t
-                }
+            // 2. Update Swap Status using standard model update for maximum cross-dialect reliability
+            await DutySwap.update(
+                { SubstituteID: Number(substituteId), Status: 'APPROVED', UpdatedAt: new Date() },
+                { where: { SwapID: swapRaw.SwapID }, transaction: t }
             );
             console.log(`[ApproveSwap] Swap status updated to APPROVED`);
         }).catch(err => {

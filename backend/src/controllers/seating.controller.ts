@@ -1196,7 +1196,16 @@ export const bulkAssign = async (req: Request, res: Response) => {
     try {
         // Defensive check: Ensure Seats table exists and has data
         try {
-            const [results] = await sequelize.query("SELECT TOP 1 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Seats'");
+            const dialect = sequelize.getDialect();
+            let queryStr = "";
+            if (dialect === "sqlite") {
+                queryStr = "SELECT 1 FROM sqlite_master WHERE type='table' AND name='Seats' LIMIT 1";
+            } else if (dialect === "mysql") {
+                queryStr = "SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Seats' LIMIT 1";
+            } else {
+                queryStr = "SELECT TOP 1 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Seats'";
+            }
+            const [results] = await sequelize.query(queryStr);
             if (!results || results.length === 0) {
                 await transaction.rollback();
                 return res.status(500).json({ message: 'Seats table does not exist. Please run migrations/seeders.' });
