@@ -494,7 +494,7 @@ export const getActiveSessionIntelligence = async (req: Request, res: Response) 
                 },
                 {
                     model: Seat,
-                    attributes: ['SeatNumber'],
+                    attributes: ['SeatIndex'],
                     include: [{
                         model: Room,
                         attributes: ['RoomCode']
@@ -516,7 +516,7 @@ export const getActiveSessionIntelligence = async (req: Request, res: Response) 
                 id: student.RegisterNumber || `REG-${student.StudentID}`,
                 name: student.FullName || 'Unknown Student',
                 department: student.Department?.DepartmentCode || 'GEN',
-                seat: `${seat.Room?.RoomCode || 'TBA'}-${seat.SeatNumber || ''}`,
+                seat: `${seat.Room?.RoomCode || 'TBA'}-${seat.SeatIndex || ''}`,
                 status: isPresent === true ? 'present' : isPresent === false ? 'absent' : 'present'
             };
         });

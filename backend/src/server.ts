@@ -38,24 +38,81 @@ const startServer = async () => {
     const httpServer = createServer(app);
     initSocket(httpServer);
 
-    // Start server (explicitly listen on all interfaces for better localhost compatibility)
-    const server = httpServer.listen(PORT, '0.0.0.0', () => {
+    let retryCount = 0;
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 1000; // 1 second
+
+    const listen = () => {
+        httpServer.listen(PORT, '0.0.0.0');
+    };
+
+    httpServer.on("listening", () => {
         console.log(`SeatSync API running at http://localhost:${PORT}`);
         console.log(`Swagger UI available at http://localhost:${PORT}/api-docs`);
-        // Automatically open Swagger UI in the default browser
-        // open(`http://localhost:${PORT}/api-docs`);
     });
 
-    // Handle server errors explicitly
-    server.on("error", (err: NodeJS.ErrnoException) => {
+    httpServer.on("error", async (err: NodeJS.ErrnoException) => {
         if (err.code === "EADDRINUSE") {
-            // Port is in use — exit so tsx watch restarts the process cleanly.
-            // The dev script (kill-port 5000) will free the port on restart.
-            console.error(`[server] Port ${PORT} is already in use. Exiting for tsx to restart...`);
-            process.exit(1);
+            if (retryCount < MAX_RETRIES) {
+                retryCount++;
+                console.warn(`[server] Port ${PORT} is in use. Retrying in ${RETRY_DELAY}ms (Attempt ${retryCount}/${MAX_RETRIES})...`);
+                setTimeout(() => {
+                    try {
+                        httpServer.close();
+                    } catch (closeErr) {}
+                    listen();
+                }, RETRY_DELAY);
+            } else {
+                console.error(`[server] Port ${PORT} is still in use after ${MAX_RETRIES} attempts.`);
+                try {
+                    console.log(`[server] Attempting to auto-release port ${PORT}...`);
+                    const { execSync } = await import("child_process");
+                    if (process.platform === "win32") {
+                        try {
+                            const output = execSync(`netstat -ano | findstr :${PORT}`).toString();
+                            const lines = output.split("\n");
+                            const pids = new Set<string>();
+                            for (const line of lines) {
+                                const parts = line.trim().split(/\s+/);
+                                if (parts.length >= 5 && parts[1].endsWith(`:${PORT}`)) {
+                                    pids.add(parts[4]);
+                                }
+                            }
+                            let killedAny = false;
+                            for (const pid of pids) {
+                                if (pid && pid !== "0" && pid !== process.pid.toString()) {
+                                    console.log(`[server] Killing process ${pid} using port ${PORT}...`);
+                                    execSync(`taskkill /F /PID ${pid}`);
+                                    killedAny = true;
+                                }
+                            }
+                            if (!killedAny) {
+                                execSync(`npx -y kill-port ${PORT}`);
+                            }
+                        } catch (e) {
+                            console.warn("[server] Win32 netstat lookup failed, falling back to kill-port...");
+                            execSync(`npx -y kill-port ${PORT}`);
+                        }
+                    } else {
+                        execSync(`npx -y kill-port ${PORT}`);
+                    }
+                    console.log(`[server] Port ${PORT} released. Retrying listen...`);
+                    retryCount = 0;
+                    setTimeout(() => {
+                        listen();
+                    }, 500);
+                } catch (killErr: any) {
+                    console.error("[server] Failed to auto-release port:", killErr.message);
+                    console.error("Exiting so tsx watch restarts the process...");
+                    process.exit(1);
+                }
+            }
+        } else {
+            console.error("HTTP server error:", err);
         }
-        console.error("HTTP server error:", err);
     });
+
+    listen();
 
     // In some execution environments the Node process may exit even though the
     // HTTP server is listening (e.g., when stdout is closed). Keep a minimal
