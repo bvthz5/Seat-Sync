@@ -78,7 +78,7 @@ export const initNotificationSocket = (userId: number, onNewNotification: (n: No
             if (payload.priority === 'CRITICAL' || payload.type === 'EMERGENCY') {
                 toast.error(`EMERGENCY: ${payload.title}`, { duration: 10000 });
             } else {
-                toast(`New Notification: ${payload.title}`, { icon: '🔔' });
+                toast(`New Notification: ${payload.title}`, { icon: '' });
             }
         });
     });

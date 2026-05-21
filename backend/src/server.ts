@@ -1,6 +1,7 @@
 import "./config/env.js";
 import app from "./app.js";
 import { connectDB } from "./config/database.js";
+import { startDependencyWatcher } from "./utils/autoDependencyInstaller.js";
 // import open from "open";
 
 const PORT = 5000;
@@ -14,6 +15,9 @@ process.on("uncaughtException", (err) => {
 });
 
 const startServer = async () => {
+    // Start background watcher for package.json changes
+    startDependencyWatcher();
+
     // Attempt to establish DB connection. In production we abort on failure.
     try {
         await connectDB();

@@ -108,7 +108,7 @@ const ForgotPassword: React.FC = () => {
                     <h1 className="text-4xl font-bold mb-4">Account Recovery</h1>
                     <p className="text-slate-400 text-lg">Lost your key? No worries. We'll verify your identity and get you back into the control center securely.</p>
                 </div>
-                <div className="relative z-10 flex gap-8 text-xs font-semibold tracking-widest text-slate-500 uppercase"><span>© 2026 SeatSync Systems</span></div>
+                <div className="relative z-10 flex gap-8 text-xs font-semibold tracking-widest text-slate-500 uppercase"><span> 2026 SeatSync Systems</span></div>
             </div>
 
             {/* Right Panel */}

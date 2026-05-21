@@ -176,7 +176,7 @@ const BulkImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
                                     <React.Fragment key={s.key}>
                                         <div className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold transition-all ${current ? 'text-blue-600' : done ? 'text-emerald-600' : 'text-slate-400'}`}>
                                             <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${current ? 'bg-blue-600 text-white' : done ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                                                {done ? '✓' : i + 1}
+                                                {done ? '' : i + 1}
                                             </div>
                                             {s.label}
                                         </div>
@@ -210,7 +210,7 @@ const BulkImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
                                         ].map(({ col, req, note }, i, arr) => (
                                             <div key={col} className={`grid grid-cols-[100px_80px_1fr] px-3 py-2.5 gap-3 items-center bg-white ${i < arr.length - 1 ? 'border-b border-slate-100' : ''}`}>
                                                 <span className="font-mono font-bold text-slate-800">{col}</span>
-                                                <span className={`font-semibold ${req ? 'text-rose-500' : 'text-slate-400'}`}>{req ? '✦ Required' : 'Optional'}</span>
+                                                <span className={`font-semibold ${req ? 'text-rose-500' : 'text-slate-400'}`}>{req ? ' Required' : 'Optional'}</span>
                                                 <span className="text-slate-500">{note}</span>
                                             </div>
                                         ))}

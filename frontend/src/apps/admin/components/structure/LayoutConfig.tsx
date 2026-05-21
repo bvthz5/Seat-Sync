@@ -543,7 +543,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
                                                 Reset
                                             </Button>
 
-                                            {/* Save: green "Saved ✓" when clean, blue "Save" when dirty */}
+                                            {/* Save: green "Saved " when clean, blue "Save" when dirty */}
                                             <Button
                                                 isLoading={loading}
                                                 isDisabled={(!isDirty && isSaved) || capacityCount === 0 || loading}
@@ -555,7 +555,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
                                                         : 'bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-default'
                                                 }`}
                                             >
-                                                {isDirty ? 'Save' : 'Saved ✓'}
+                                                {isDirty ? 'Save' : 'Saved '}
                                             </Button>
                                         </div>
                                     )}
@@ -622,7 +622,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
                                             boxShadow: '0 4px 24px rgba(0,0,0,0.45), 0 0 40px rgba(99,102,241,0.05), inset 0 1px 0 rgba(129,140,248,0.12)',
                                         }}>
                                         <div className="absolute top-0 left-6 right-6 h-px" style={{ background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.09),transparent)' }} />
-                                        <span className="text-[11px] font-black uppercase tracking-[0.4em] select-none" style={{ color: 'rgba(165,180,252,0.5)', textShadow: '0 0 20px rgba(99,102,241,0.2)' }}>✦ Front Blackboard ✦</span>
+                                        <span className="text-[11px] font-black uppercase tracking-[0.4em] select-none" style={{ color: 'rgba(165,180,252,0.5)', textShadow: '0 0 20px rgba(99,102,241,0.2)' }}> Front Blackboard </span>
                                         <div className="absolute bottom-0 left-0 right-0 h-[2.5px]" style={{ background: 'linear-gradient(90deg,transparent,rgba(99,102,241,0.5),rgba(139,92,246,0.4),transparent)' }} />
                                     </div>
                                     <div className="w-4/5 h-3 -mt-0.5" style={{ background: 'radial-gradient(ellipse,rgba(99,102,241,0.08) 0%,transparent 70%)' }} />

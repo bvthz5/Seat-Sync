@@ -321,7 +321,7 @@ const StudentRegister: React.FC = () => {
                 </div>
 
                 <div className="relative z-10 text-xs font-bold tracking-widest uppercase text-blue-200/80">
-                    © {new Date().getFullYear()} SeatSync System
+                     {new Date().getFullYear()} SeatSync System
                 </div>
             </div>
 

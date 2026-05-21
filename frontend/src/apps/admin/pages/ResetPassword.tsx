@@ -160,7 +160,7 @@ const ResetPassword: React.FC = () => {
                     <h1 className="text-4xl font-bold mb-4">Secure Access</h1>
                     <p className="text-slate-400 text-lg">Create a new strong password to protect the examination control portal.</p>
                 </div>
-                <div className="relative z-10 flex gap-8 text-xs font-semibold tracking-widest text-slate-500 uppercase"><span>© 2026 SeatSync Systems</span></div>
+                <div className="relative z-10 flex gap-8 text-xs font-semibold tracking-widest text-slate-500 uppercase"><span> 2026 SeatSync Systems</span></div>
             </div>
 
             {/* Right Panel */}

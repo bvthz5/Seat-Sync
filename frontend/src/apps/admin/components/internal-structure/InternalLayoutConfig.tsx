@@ -527,7 +527,7 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
                                             <Button isLoading={loading} isDisabled={(!isDirty) || capacityCount === 0 || loading} onPress={handleSave}
                                                 startContent={isDirty ? <Save size={16} /> : null}
                                                 className={`font-black h-11 rounded-xl transition-all ${isDirty ? 'bg-violet-600 text-white hover:bg-violet-700 shadow-xl shadow-violet-100' : 'bg-emerald-500 text-white opacity-90'}`}>
-                                                {isDirty ? 'Save' : 'Saved ✓'}
+                                                {isDirty ? 'Save' : 'Saved '}
                                             </Button>
                                         </div>
                                     )}

@@ -32,7 +32,7 @@ function decodeJwt(token: string): Record<string, any> | null {
     }
 }
 
-// ─── Portal ↔ Role mapping ─────────────────────────────────────────────────────
+// ─── Portal  Role mapping ─────────────────────────────────────────────────────
 function isRoleCompatibleWithPortal(role: string, isRoot: boolean): boolean {
     const path = window.location.pathname.toLowerCase();
     if (path.startsWith('/admin'))       return role === 'exam_admin' || isRoot;
@@ -86,7 +86,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const payload = decodeJwt(token);
                 if (!payload) throw new Error('Invalid token payload');
 
-                // Strict portal ↔ role check
+                // Strict portal  role check
                 if (!isRoleCompatibleWithPortal(payload.Role, payload.IsRootAdmin)) {
                     clearSession();
                     return;

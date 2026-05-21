@@ -61,7 +61,7 @@ const StudentLogin: React.FC = () => {
             if (data.requirePasswordChange) {
                 // Store the temporary token so the change-password page can use it
                 sessionStorage.setItem("tempAccessToken", data.tempToken);
-                toast("Please change your password to continue", { icon: '🔒' });
+                toast("Please change your password to continue", { icon: '' });
                 
                 // Navigate to the change password page with the state
                 navigate('/student/change-password', { state: { isTemporary: true } });

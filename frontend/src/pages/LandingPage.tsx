@@ -338,7 +338,7 @@ const LandingPage: React.FC = () => {
                     className="absolute bottom-10 left-0 right-0 text-center pointer-events-none"
                 >
                     <p className="text-xs font-semibold text-slate-400/80 uppercase tracking-[0.2em]">
-                        © 2026 SeatSync Systems • Secure Identity Server v2.4
+                         2026 SeatSync Systems • Secure Identity Server v2.4
                     </p>
                 </motion.div>
 

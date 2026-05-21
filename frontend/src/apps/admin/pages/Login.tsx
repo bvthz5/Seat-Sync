@@ -414,7 +414,7 @@ const AdminLogin: React.FC = () => {
                     </motion.div>
                 </div>
                 <div className="relative z-10 flex gap-8 text-xs font-semibold tracking-widest text-slate-500 uppercase">
-                    <span>© 2026 SeatSync Systems</span>
+                    <span> 2026 SeatSync Systems</span>
                     <span>v2.4.0 Stabilized</span>
                 </div>
             </div>

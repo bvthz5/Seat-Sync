@@ -133,11 +133,11 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
                             <h3 className="text-lg font-bold mb-4">Import Results</h3>
                             <div className="flex gap-4 mb-4">
                                 <div className="bg-green-50 p-4 rounded-lg flex-1">
-                                    <p className="text-sm text-green-600 font-semibold">✔ Imported</p>
+                                    <p className="text-sm text-green-600 font-semibold"> Imported</p>
                                     <p className="text-2xl font-bold text-green-700">{uploadStats.success}</p>
                                 </div>
                                 <div className="bg-red-50 p-4 rounded-lg flex-1">
-                                    <p className="text-sm text-red-600 font-semibold">✖ Failed</p>
+                                    <p className="text-sm text-red-600 font-semibold"> Failed</p>
                                     <p className="text-2xl font-bold text-red-700">{uploadStats.errors}</p>
                                 </div>
                             </div>

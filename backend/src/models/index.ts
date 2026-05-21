@@ -179,27 +179,27 @@ export {
 };
 import Semester from './Semester.js';
 
-// InternalStudent ↔ User (shared auth layer)
+// InternalStudent  User (shared auth layer)
 InternalStudent.belongsTo(User, { foreignKey: 'UserID', onDelete: 'NO ACTION' });
 User.hasOne(InternalStudent, { foreignKey: 'UserID' });
 
-// InternalStudent ↔ Department
+// InternalStudent  Department
 InternalStudent.belongsTo(Department, { foreignKey: 'DepartmentID', as: 'Department', onDelete: 'NO ACTION' });
 Department.hasMany(InternalStudent, { foreignKey: 'DepartmentID', as: 'InternalStudents', onDelete: 'NO ACTION' });
 
-// InternalStudent ↔ Program
+// InternalStudent  Program
 InternalStudent.belongsTo(Program, { foreignKey: 'ProgramID', onDelete: 'NO ACTION' });
 Program.hasMany(InternalStudent, { foreignKey: 'ProgramID', as: 'InternalStudents', onDelete: 'NO ACTION' });
 
-// InternalStudent ↔ Semester
+// InternalStudent  Semester
 InternalStudent.belongsTo(Semester, { foreignKey: 'SemesterID', onDelete: 'NO ACTION' });
 Semester.hasMany(InternalStudent, { foreignKey: 'SemesterID', as: 'InternalStudents', onDelete: 'NO ACTION' });
 
-// InternalExamRegistration ↔ InternalExam (mapping: student appears for this exam)
+// InternalExamRegistration  InternalExam (mapping: student appears for this exam)
 InternalExamRegistration.belongsTo(InternalExam, { foreignKey: 'InternalExamID', onDelete: 'CASCADE' });
 InternalExam.hasMany(InternalExamRegistration, { foreignKey: 'InternalExamID', onDelete: 'CASCADE' });
 
-// InternalExamRegistration ↔ InternalStudent
+// InternalExamRegistration  InternalStudent
 InternalExamRegistration.belongsTo(InternalStudent, { foreignKey: 'InternalStudentID', as: 'Student', onDelete: 'CASCADE' });
 InternalStudent.hasMany(InternalExamRegistration, { foreignKey: 'InternalStudentID', as: 'Registrations', onDelete: 'CASCADE' });
 

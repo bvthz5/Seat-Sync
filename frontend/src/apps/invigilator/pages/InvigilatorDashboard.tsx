@@ -94,7 +94,7 @@ export default function InvigilatorDashboard() {
     const [timeRemaining, setTimeRemaining] = useState("00:00:00");
     const [showIncidentModal, setShowIncidentModal] = useState(false);
     const [incidentText, setIncidentText] = useState("");
-    const [announcement, setAnnouncement] = useState<string | null>("🔔 BROADCAST: Please ensure all students have their ID cards visible before distributing question papers.");
+    const [announcement, setAnnouncement] = useState<string | null>(" BROADCAST: Please ensure all students have their ID cards visible before distributing question papers.");
     const [selectedDutyTab, setSelectedDutyTab] = useState<'scheduled' | 'history' | 'incidents'>('scheduled');
     const [showSwapModal, setShowSwapModal] = useState(false);
     const [swapReason, setSwapReason] = useState("");
@@ -110,7 +110,7 @@ export default function InvigilatorDashboard() {
                 type: "Malpractice",
                 description: incidentText
             });
-            toast.success("Incident reported to Exam Cell successfully.", { icon: '🚨' });
+            toast.success("Incident reported to Exam Cell successfully.", { icon: '' });
             setShowIncidentModal(false);
             setIncidentText("");
             fetchDashboardData();
