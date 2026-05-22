@@ -88,8 +88,8 @@
   <rect width="900" height="460" rx="22" class="grid-overlay" pointer-events="none"/>
 
   <!-- Ambient Halos -->
-  <circle cx="250" cy="280" r="160" fill="#3b82f6" opacity="0.04" filter="url(#glowBlue)"/>
-  <circle cx="650" cy="280" r="160" fill="#db2777" opacity="0.04" filter="url(#glowPink)"/>
+  <circle cx="170" cy="280" r="160" fill="#3b82f6" opacity="0.04" filter="url(#glowBlue)"/>
+  <circle cx="730" cy="280" r="160" fill="#db2777" opacity="0.04" filter="url(#glowPink)"/>
   <circle cx="450" cy="120" r="100" fill="#818cf8" opacity="0.04" filter="url(#softGlow)"/>
 
   <!-- ═══════════════════════════════════════════════════════
@@ -120,38 +120,38 @@
        ROUTING PATH LINES
   ═══════════════════════════════════════════════════════ -->
   <!-- → MySQL  -->
-  <path d="M 323 142 L 240 142 L 240 220" fill="none" class="path-mysql"    stroke-width="2.2"/>
+  <path d="M 323 142 L 160 142 L 160 220" fill="none" class="path-mysql"    stroke-width="2.2"/>
   <!-- → SQLite -->
-  <path d="M 577 142 L 660 142 L 660 220" fill="none" class="path-fallback" stroke-width="2.2"/>
+  <path d="M 577 142 L 740 142 L 740 220" fill="none" class="path-fallback" stroke-width="2.2"/>
   <!-- Error redirect route (MySQL fail → SQLite) -->
-  <path d="M 240 330 C 240 390, 660 390, 660 330" fill="none" class="path-error" stroke-width="1.6" opacity="0.55"/>
+  <path d="M 160 330 C 160 390, 740 390, 740 330" fill="none" class="path-error" stroke-width="1.6" opacity="0.55"/>
 
   <!-- Animated traveling particles: MySQL route -->
   <circle r="5.5" fill="#3b82f6" filter="url(#glowBlue)">
-    <animateMotion dur="2.6s" repeatCount="indefinite" path="M 323 142 L 240 142 L 240 220"/>
+    <animateMotion dur="2.6s" repeatCount="indefinite" path="M 323 142 L 160 142 L 160 220"/>
   </circle>
   <circle r="4" fill="#60a5fa" filter="url(#glowBlue)">
-    <animateMotion dur="2.6s" repeatCount="indefinite" path="M 323 142 L 240 142 L 240 220" begin="1.3s"/>
+    <animateMotion dur="2.6s" repeatCount="indefinite" path="M 323 142 L 160 142 L 160 220" begin="1.3s"/>
   </circle>
 
   <!-- Animated traveling particles: SQLite route -->
   <circle r="5.5" fill="#db2777" filter="url(#glowPink)">
-    <animateMotion dur="3.0s" repeatCount="indefinite" path="M 577 142 L 660 142 L 660 220"/>
+    <animateMotion dur="3.0s" repeatCount="indefinite" path="M 577 142 L 740 142 L 740 220"/>
   </circle>
   <circle r="4" fill="#f472b6" filter="url(#glowPink)">
-    <animateMotion dur="3.0s" repeatCount="indefinite" path="M 577 142 L 660 142 L 660 220" begin="1.5s"/>
+    <animateMotion dur="3.0s" repeatCount="indefinite" path="M 577 142 L 740 142 L 740 220" begin="1.5s"/>
   </circle>
 
   <!-- Animated error reroute particle -->
   <circle r="4.5" fill="#f43f5e">
     <animate attributeName="opacity" values="0;1;1;0" dur="4s" repeatCount="indefinite"/>
-    <animateMotion dur="4s" repeatCount="indefinite" path="M 240 330 C 240 390, 660 390, 660 330" begin="0s"/>
+    <animateMotion dur="4s" repeatCount="indefinite" path="M 160 330 C 160 390, 740 390, 740 330" begin="0s"/>
   </circle>
 
   <!-- ═══════════════════════════════════════════════════════
        MYSQL NODE  (Left)
   ═══════════════════════════════════════════════════════ -->
-  <g transform="translate(100, 220)">
+  <g transform="translate(20, 220)">
     <g class="card-float">
       <rect width="280" height="140" rx="18" fill="rgba(9,12,28,0.92)" stroke="url(#blueGrad)" stroke-width="1.8"/>
       <!-- Top bar -->
@@ -176,7 +176,7 @@
   <!-- ═══════════════════════════════════════════════════════
        SQLITE FALLBACK NODE  (Right)
   ═══════════════════════════════════════════════════════ -->
-  <g transform="translate(520, 220)">
+  <g transform="translate(600, 220)">
     <g class="card-float" style="animation-delay:3s">
       <rect width="280" height="140" rx="18" fill="rgba(9,12,28,0.92)" stroke="url(#pinkGrad)" stroke-width="1.8"/>
       <rect x="0" y="0" width="280" height="5" rx="3" fill="url(#pinkGrad)" opacity="0.7"/>
