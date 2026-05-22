@@ -1,244 +1,596 @@
-# 🏛️ SEAT-SYNC — Smart Academic Seating & Exam Integrity Ecosystem
+<div align="center">
 
-> [!IMPORTANT]
-> **Seat-Sync** is an enterprise-grade academic seating scheduler designed to eliminate exam collusion, optimize campus hall capacity, and dispatch instant real-time student seat placement notifications.
-> The architecture maintains a strict, mathematically verifiable separation between **University End-Semester** and **Internal Series (Midterm)** exam modules.
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- ANIMATED HEADER BANNER -->
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+
+<img src="./seating_animation.svg" width="100%" alt="Seat-Sync Live Engine — Anti-Collusion Dual-Pool Interleaving Matchmaking" />
+
+<br/>
+
+# SEAT-SYNC
+
+### Smart Academic Seating & Examination Integrity Management System
+
+<p>
+  <img src="https://img.shields.io/badge/Version-2.0.0-818cf8?style=for-the-badge&logo=semver&logoColor=white" alt="Version" />
+  <img src="https://img.shields.io/badge/Status-Production%20Ready-10b981?style=for-the-badge&logo=checkmarx&logoColor=white" alt="Status" />
+  <img src="https://img.shields.io/badge/License-MIT-ec4899?style=for-the-badge&logo=opensourceinitiative&logoColor=white" alt="License" />
+  <img src="https://img.shields.io/badge/Platform-Web%20%2B%20API-f59e0b?style=for-the-badge&logo=webcomponents.org&logoColor=white" alt="Platform" />
+</p>
+
+<p>
+  <img src="https://img.shields.io/badge/Frontend-React%2019%20%26%20TypeScript-61dafb?style=for-the-badge&logo=react&logoColor=black" alt="React 19" />
+  <img src="https://img.shields.io/badge/Backend-Express%205%20%26%20Node.js-818cf8?style=for-the-badge&logo=express&logoColor=white" alt="Express 5" />
+  <img src="https://img.shields.io/badge/ORM-Sequelize%20v6-38bdf8?style=for-the-badge&logo=sequelize&logoColor=white" alt="Sequelize" />
+  <img src="https://img.shields.io/badge/Realtime-Socket.io-ec4899?style=for-the-badge&logo=socket.io&logoColor=white" alt="Socket.io" />
+  <img src="https://img.shields.io/badge/Database-MySQL%20%26%20SQLite-f59e0b?style=for-the-badge&logo=mysql&logoColor=white" alt="MySQL & SQLite" />
+</p>
+
+<br/>
+
+**[ [System Overview](#-system-overview) • [Problem Statement](#-problem-statement--existing-system) • [Proposed Solution](#-proposed-solution--seat-sync-system) • [Architecture](#-system-architecture) • [Tech Stack](#-technology-stack) • [Database](#-database-architecture) • [Setup Guide](#-installation--setup-guide) ]**
+
+</div>
+
+---
+
+<br/>
+
+## 📋 Table of Contents
+
+| # | Section | Description |
+|:---:|:---|:---|
+| 01 | [System Overview](#-system-overview) | What Seat-Sync is and its core purpose |
+| 02 | [Problem Statement — Existing System](#-problem-statement--existing-system) | Limitations of current manual seating processes |
+| 03 | [Proposed Solution — Seat-Sync System](#-proposed-solution--seat-sync-system) | How Seat-Sync solves those problems |
+| 04 | [Core Features](#-core-features) | Full feature breakdown |
+| 05 | [System Architecture](#-system-architecture) | Architecture diagram and module layout |
+| 06 | [Technology Stack](#-technology-stack) | All libraries, frameworks, and tools used |
+| 07 | [Database Architecture](#-database-architecture) | MySQL & SQLite fallback engine |
+| 08 | [Interactive Visualizer](#-interactive-seating-engine-visualizer) | Animated algorithm storyboard |
+| 09 | [Installation & Setup Guide](#-installation--setup-guide) | Step-by-step local setup |
+| 10 | [Project Structure](#-project-structure) | Directory and file layout |
+
+<br/>
+
+---
+
+<br/>
+
+## 🏛️ System Overview
 
 <div align="center">
-  <p align="center">
-    <img src="https://img.shields.io/badge/Frontend-React%2019%20%26%20TypeScript-61daf4?style=for-the-badge&logo=react&logoColor=black" alt="React 19" />
-    <img src="https://img.shields.io/badge/Backend-Express%205%20%26%20TypeScript-818cf8?style=for-the-badge&logo=express&logoColor=white" alt="Express 5" />
-    <img src="https://img.shields.io/badge/ORM-Sequelize%20v6-38bdf8?style=for-the-badge&logo=sequelize&logoColor=white" alt="Sequelize ORM" />
-    <img src="https://img.shields.io/badge/Realtime-Socket.io%20WebSockets-ec4899?style=for-the-badge&logo=socket.io&logoColor=white" alt="Socket.io" />
-  </p>
-  
-  <p align="center">
-    <a href="#-interactive-matchmaking-visual-map"><strong>Explore Seating Map</strong></a> • 
-    <a href="#-immersive-storytelling-storyboard"><strong>Watch the Animated Story</strong></a> • 
-    <a href="#-database-multi-dialect-resilience"><strong>Database Resiliency Specs</strong></a> • 
-    <a href="#-system-core-architecture"><strong>Architecture Details</strong></a>
-  </p>
+
+> **Seat-Sync** is an enterprise-grade, web-based **Academic Seating and Examination Integrity Management System** designed to fully automate the process of generating, distributing, and managing exam hall seating plans for educational institutions.
+
 </div>
 
+Seat-Sync serves as a unified platform for **three distinct user roles** — Administrators, Invigilators, and Students — providing each role with a dedicated portal tailored to their responsibilities. The system enforces a strict, mathematically-verified anti-cheating seating protocol that guarantees no two students from the same department sit adjacent to each other on any shared bench.
+
+The platform supports two independent examination modules:
+
+| Module | Scope | Description |
+|:---|:---|:---|
+| **University End-Semester Module** | Campus-wide | Handles large-scale end-of-semester seating across multiple halls simultaneously |
+| **Internal Series Module** | Department-level | Manages internal midterm and series examination seating with subject interleaving |
+
+<br/>
+
 ---
 
-## ⚡ Technical Quick Navigation Console
+<br/>
+
+## ⚠️ Problem Statement — Existing System
+
+### What is the Existing System?
+
+The existing system in most educational institutions relies on a **fully manual, spreadsheet-based approach** to exam hall seating. Administrative staff use Microsoft Excel or Google Sheets to manually type student names, assign roll numbers to room slots, and print physical notice boards for seat display.
+
+### Limitations of the Existing System
+
+The current manual process suffers from the following critical problems:
+
+<br/>
+
 ```
- ┌────────────────────────────────────────────────────────────────────────────┐
- │  📖 Roster Split Engine    |  🎨 Interactive Visualizer  |  🛠️ Tech Stack   │
- │  🗄️ Database Auto-Fallback  |  🚀 Local Setup Console     |  📐 Algorithms   │
- └────────────────────────────────────────────────────────────────────────────┘
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │                   EXISTING SYSTEM — CRITICAL LIMITATIONS                    │
+  ├─────────────────────────────────────────────────────────────────────────────┤
+  │                                                                             │
+  │  01.  No Anti-Cheating Enforcement   →  Students of the same department   │
+  │       are frequently seated adjacent to one another, enabling exam fraud.  │
+  │                                                                             │
+  │  02.  High Administrative Overhead   →  Generating seating for 1,000+     │
+  │       students takes hours of manual Excel formatting and error checking.  │
+  │                                                                             │
+  │  03.  No Real-Time Notification      →  Students must physically visit     │
+  │       campus bulletin boards to locate their seat numbers.                 │
+  │                                                                             │
+  │  04.  Error-Prone and Inconsistent   →  Manual data entry leads to        │
+  │       duplicate seat assignments, missing entries, and hall overflows.     │
+  │                                                                             │
+  │  05.  No Database Integration        →  Excel files have no referential   │
+  │       integrity; audit trails and historical records are lost easily.      │
+  │                                                                             │
+  │  06.  No Digital Portal for Students →  Students have no centralized      │
+  │       dashboard to view their seat, exam schedule, or hall details.        │
+  │                                                                             │
+  └─────────────────────────────────────────────────────────────────────────────┘
 ```
-* **Immersive Animated Storyboard**: [visual_storyteller.html](file:///C:/Users/binil/OneDrive/Desktop/Seat-Sync/visual_storyteller.html) *(Double click to run locally!)*
-* **Algorithmic & Mathematical Specification**: [seating_visualization.md](file:///C:/Users/binil/OneDrive/Desktop/Seat-Sync/seating_visualization.md) *(LaTeX formulas and soft-diff mechanisms)*
+
+<br/>
 
 ---
 
-## 🎨 Interactive Matchmaking Visual Map
+<br/>
 
-The matching sequence and real-time synchronization between pools and physical seats is illustrated in the live animated vector diagram below. Opening this repository in any rich markdown viewer renders dynamic flowing animations:
+## ✅ Proposed Solution — Seat-Sync System
 
-<div align="center" style="margin: 24px 0; border-radius: 20px; overflow: hidden; box-shadow: 0 15px 45px rgba(12, 17, 36, 0.6); border: 2px solid rgba(255,255,255,0.06);">
-  <img src="./seating_animation.svg" width="100%" alt="Seat-Sync Realtime Seating Matchmaking Flow" />
+### What is the Proposed System?
+
+**Seat-Sync** is a proposed **automated, algorithm-driven examination seating management platform** that replaces the manual Excel-based approach with an intelligent, web-accessible system backed by a structured relational database, a REST API server, and real-time WebSocket notifications.
+
+### How Seat-Sync Solves Every Problem
+
+| # | Existing Problem | Seat-Sync Solution |
+|:---:|:---|:---|
+| 01 | Students from the same department sit together | **Dual-Pool Interleaving Algorithm** guarantees every bench-pair has students from different departments |
+| 02 | Hours of manual Excel work per exam | **One-click automated generation** completes full hall allocation in under **800 milliseconds** |
+| 03 | Students queue at physical notice boards | **Real-time Socket.io push notifications** deliver seat details directly to student dashboards |
+| 04 | Duplicate and missing seat assignments | **Sequelize ORM with referential integrity** ensures every seat is uniquely assigned and validated |
+| 05 | No audit trail or historical records | **Persistent relational database** maintains full allocation history, invigilator logs, and audit records |
+| 06 | No student self-service portal | **Dedicated Student Portal** shows personalized seat, hall, room, and exam schedule information |
+
+<br/>
+
+> [!NOTE]
+> The proposed system maintains a strict **mathematical anti-collusion constraint**: for any bench pair in any row, `Department(Seat_Left) ≠ Department(Seat_Right)` — enforced programmatically for every seat generated.
+
+<br/>
+
+---
+
+<br/>
+
+## 🎯 Core Features
+
+<br/>
+
+```
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │                        SEAT-SYNC — FEATURE MATRIX                          │
+  ├──────────────────────────────────┬──────────────────────────────────────────┤
+  │  ADMINISTRATOR PORTAL            │  STUDENT & INVIGILATOR PORTALS          │
+  ├──────────────────────────────────┼──────────────────────────────────────────┤
+  │  ✔  Room & Hall Configuration    │  ✔  Real-time Seat Notification         │
+  │  ✔  Roster Upload (Excel / DOCX) │  ✔  Personalized Seat Dashboard        │
+  │  ✔  One-Click Seat Generation    │  ✔  Invigilator Room Assignment View    │
+  │  ✔  Anti-Collusion Enforcement   │  ✔  Exam Schedule Display              │
+  │  ✔  PDF Seating Chart Export     │  ✔  Mobile-Responsive Interface        │
+  │  ✔  Invigilator Assignment       │  ✔  Socket.io Live Updates             │
+  │  ✔  Analytics Dashboard          │  ✔  Secure JWT Authentication          │
+  │  ✔  MySQL ↔ SQLite Auto-Fallback │  ✔  Swagger API Documentation          │
+  └──────────────────────────────────┴──────────────────────────────────────────┘
+```
+
+<br/>
+
+---
+
+<br/>
+
+## 🗂️ System Architecture
+
+<br/>
+
+```
+  ┌─────────────────────────────────────────────────────────────────────────────────┐
+  │                          SEAT-SYNC SYSTEM ECOSYSTEM                            │
+  └─────────────────────────────────────┬───────────────────────────────────────────┘
+                                        │
+              ┌─────────────────────────┼──────────────────────────┐
+              ▼                         ▼                          ▼
+  ┌─────────────────────┐   ┌─────────────────────┐   ┌─────────────────────┐
+  │   STUDENT PORTAL    │   │   ADMIN CONSOLE     │   │  INVIGILATOR PANEL  │
+  │  (React 19 + Vite)  │   │  (React 19 + Vite)  │   │  (React 19 + Vite)  │
+  └──────────┬──────────┘   └──────────┬──────────┘   └──────────┬──────────┘
+             │                         │                          │
+             └─────────────────────────┼──────────────────────────┘
+                                       │  HTTP REST + WebSocket (Socket.io)
+                                       ▼
+                        ┌──────────────────────────────┐
+                        │   BACKEND SERVER (Express 5)  │
+                        │   Node.js + TypeScript + TSX  │
+                        ├──────────────────────────────┤
+                        │  • REST API Endpoints         │
+                        │  • JWT Authentication         │
+                        │  • Socket.io WebSocket Layer  │
+                        │  • Seat Allocation Engine     │
+                        │  • Document Parser Pipeline   │
+                        │  • Swagger API Documentation  │
+                        └───────────────┬──────────────┘
+                                        │
+                        ┌───────────────┴──────────────┐
+                        │   SEQUELIZE ORM v6 LAYER      │
+                        │   Multi-Dialect Adapter       │
+                        └────────┬─────────────┬────────┘
+                                 │             │
+                   ┌─────────────┘             └─────────────┐
+                   ▼                                         ▼
+      ┌────────────────────────┐             ┌────────────────────────┐
+      │   MySQL / MariaDB      │             │   SQLite Auto-Fallback  │
+      │   Production Cluster   │             │   Local Dev Sandbox     │
+      │   Port: 3306           │             │   database.sqlite       │
+      └────────────────────────┘             └────────────────────────┘
+```
+
+<br/>
+
+### Module-Level Breakdown
+
+```
+  SEAT ALLOCATION MODULES
+  ─────────────────────────────────────────────────────────────────────
+  ┌────────────────────────────────────┐  ┌─────────────────────────────────┐
+  │  University End-Semester Module    │  │   Internal Series Module        │
+  ├────────────────────────────────────┤  ├─────────────────────────────────┤
+  │  • Physical Row-Bench Diff Engine  │  │  • Dual-Pool Balancing System   │
+  │  • Roster Sequence Mapper          │  │  • Subject Interleaving Logic   │
+  │  • Active/Inactive Seat Preserve   │  │  • Alphanumeric Continuity Sort │
+  │  • Hall Capacity Equation Solver   │  │  • Column-Continuous Assignment │
+  └────────────────────────────────────┘  └─────────────────────────────────┘
+```
+
+<br/>
+
+---
+
+<br/>
+
+## 🛠️ Technology Stack
+
+<br/>
+
+### Client-Side (Frontend)
+
+| Technology | Version | Purpose |
+|:---|:---:|:---|
+| **React** | `19.x` | Core UI framework with server component support |
+| **TypeScript** | `5.x` | Type-safe application logic |
+| **Vite** | `5.x` | Ultra-fast development build pipeline |
+| **HeroUI** | Latest | Accessible, animated UI component system |
+| **Redux Toolkit** | `2.x` | Centralized global state management |
+| **Framer Motion** | `11.x` | Declarative page and component animations |
+| **Lottie React** | Latest | High-fidelity vector animation rendering |
+| **Recharts** | `2.x` | Analytics charts and dashboard visualizations |
+| **jsPDF + AutoTable** | Latest | PDF seating chart generation and export |
+| **Vanta.js** | Latest | Interactive WebGL canvas backgrounds |
+
+<br/>
+
+### Server-Side (Backend)
+
+| Technology | Version | Purpose |
+|:---|:---:|:---|
+| **Node.js** | `18.x+` | JavaScript server runtime environment |
+| **Express** | `5.x` | HTTP server framework and REST API routing |
+| **TypeScript** | `5.x` | Type-safe backend development |
+| **Sequelize ORM** | `6.x` | Multi-dialect relational database abstraction layer |
+| **MySQL2** | Latest | Primary production database driver |
+| **SQLite3** | Latest | Local development auto-fallback database driver |
+| **Socket.io** | `4.x` | Bidirectional real-time WebSocket communication |
+| **JWT (jsonwebtoken)** | Latest | Secure stateless user session authentication |
+| **Swagger UI Express** | Latest | Interactive REST API documentation at `/api-docs` |
+| **xlsx** | Latest | Excel (.xlsx) roster file parsing and ingestion |
+| **mammoth** | Latest | Microsoft Word (.docx) document text extraction |
+| **pdf-parse** | Latest | PDF document data extraction |
+| **tesseract.js** | Latest | OCR-based image and scanned document text extraction |
+| **bcryptjs** | Latest | Secure password hashing and verification |
+| **multer** | Latest | Multipart form file upload handler |
+
+<br/>
+
+---
+
+<br/>
+
+## 🗄️ Database Architecture
+
+<br/>
+
+<div align="center">
+
+<img src="./database_sync_animation.svg" width="100%" alt="Seat-Sync Dynamic Database Multi-Dialect Routing — MySQL Primary with SQLite Auto-Fallback" />
+
 </div>
 
----
+<br/>
 
-## 📖 The Story of Seat-Sync: Resolving the Exam Crisis 🤖
+Seat-Sync uses **Sequelize ORM** with a custom multi-dialect routing layer that automatically selects the appropriate database engine based on the server's environment configuration.
 
-Here is how **Seat-Sync** transforms chaotic campus halls into streamlined, cheating-proof academic hubs:
+<br/>
 
-```
-  TRADITIONAL CRISIS (CHAOTIC)                  SEAT-SYNC HARMONY (SECURED)
- ┌───────────────────────────────────┐        ┌───────────────────────────────────┐
- │ • Alice struggles with manual Excels│        │ • 800ms generation execution      │
- │ • Crowds gather at bulletin boards│ ───►   │ • Dual Left/Right Pool balancing  │
- │ • Classmates sit side-by-side     │        │ • Vertical Column-Continuous flow │
- │ • Administrative stress & mistakes│        │ • Direct real-time WebSockets SMS │
- └───────────────────────────────────┘        └───────────────────────────────────┘
-```
+### Database Comparison
 
-### 🌪️ The Traditional Crisis
-Meet **Admin Alice** 👔. Every mid-semester series, Alice spent sleepless nights manually formatting Excel columns to generate exam hall lists. Inevitably, classmates from the same department sat directly next to each other, inviting exam dishonesty.
+| Parameter | 🐬 MySQL / MariaDB | 🗃️ SQLite |
+|:---|:---|:---|
+| **Role** | Primary production database | Auto-fallback for local development |
+| **Connection** | TCP/IP at `host:3306` | Local file — `database.sqlite` |
+| **Setup Required** | Yes — MySQL server must be installed | No — auto-created on first server boot |
+| **Character Set** | `utf8mb4_unicode_ci` | Default binary encoding |
+| **Connection Pooling** | `max: 10`, idle: `10s`, acquire: `30s` | Direct file transaction lock |
+| **Best For** | Staging, production, multi-user environments | Local development, CI/CD testing |
 
-Meanwhile, **Student Sam** 🎓 arrived at the college only to find a crowd of 300 students pushing against a physical bulletin board trying to find their designated seats. 
+<br/>
 
-### ⚡ The Seat-Sync Harmony!
-Alice logs into the **Seat-Sync Console**, uploads the student rosters, selects the active exam rooms, and clicks **Generate Seating**. 
-
-In less than **800 milliseconds**, our matchmaking bot **"Seaty"** 🤖:
-1. **Calculates** physical room capacities and bench boundaries.
-2. **Groups** candidates by their specific subject codes.
-3. **Splits** the roster into balanced **Left & Right Pools** (interleaving departments horizontally).
-4. **Routes** them **Column-Continuously** (vertically) down the aisles.
-
-Immediately, **Student Sam** receives a real-time **Socket.io notification** on his portal dashboard:
-> 🔔 *"Hi Sam! Your exam CST301 is in Block A, Room 102, Seat A-3-1."*
-
----
-
-## 🎮 Playable Animated Cartoon Storyboard
-
-We have built a gorgeous, self-contained **Interactive Cartoon Storyteller**! It guides you step-by-step through the seating algorithm with playful animations and a live visual simulator.
-
-👉 **To watch the seating magic in action:**
-1. Open the file [visual_storyteller.html](file:///C:/Users/binil/OneDrive/Desktop/Seat-Sync/visual_storyteller.html) in any modern web browser.
-2. Reconfigure the room bench capacity and modes dynamically.
-3. Click **"Run Matchmaking Step"** to watch candidates fly into desks in real time with high-fidelity canvas physics, particle bursts, and dynamically synthesized audio cues!
-4. Adjust synthesizer waveforms (Sine 🌊, Triangle 📐, Square ⬜, Sawtooth 📈) and volumes directly on the deck!
-5. Read the deep mathematical constraints behind this in our [Seating Algorithms Reference Guide](file:///C:/Users/binil/OneDrive/Desktop/Seat-Sync/seating_visualization.md).
-
----
-
-## 🗄️ Database Multi-Dialect Resilience (SQLite & MySQL)
-
-Seat-Sync incorporates a dynamic database virtualization layer managed by Sequelize ORM, ensuring an automated zero-config local developer sandbox that scales seamlessly into an enterprise production cluster:
-
-<div align="center" style="margin: 24px 0; border-radius: 20px; overflow: hidden; box-shadow: 0 15px 45px rgba(12, 17, 36, 0.6); border: 2px solid rgba(255,255,255,0.06);">
-  <img src="./database_sync_animation.svg" width="100%" alt="Seat-Sync Dynamic Database Fallback System Map" />
-</div>
-
-### Dynamic DB Comparison Grid
-
-| Parameter | 🐬 MySQL / MariaDB (Primary Cluster) | 🗃️ SQLite (Dynamic Auto-Fallback) |
-| :--- | :--- | :--- |
-| **Operational Scope** | High-throughput Production & Staging nodes | Zero-Configuration Sandbox & Local Development |
-| **Storage Medium** | Dedicated relational server (Port `3306`) | Native file database (`backend/database.sqlite`) |
-| **Collation Integrity** | Full `utf8mb4_unicode_ci` Unicode enforcement | Standard binary SQLite storage definitions |
-| **Link Pooling** | Enforced pooling (`max: 10`, idle timeout `10s`) | Direct file transaction locks |
-| **Recovery Strategy** | Active health pings on initialization | Instantly mounts if host server port is blocked |
-
-### 🔄 The Automated Connection Fallback Sequence
-1. **Bootstrap Scan**: Upon booting, the server parses environment configuration boundaries.
-2. **Cluster Connection**: If MySQL configurations (`DB_NAME`, `DB_USER`, `DB_HOST`) are set in `.env`, the Sequelize ORM establishes an active pool connecting to the primary MySQL server.
-3. **Exception Trapping & Redirection**: If connection parameters fail, timeout, or the MySQL port is blocked, the custom adapter catches the error and logs a friendly system warnings:
-   `[Sequelize] Connection to MySQL failed. Initiating database fallback routing...`
-4. **SQLite Disk Mounting**: The driver automatically mounts a local file-based database store `database.sqlite` within the root directory and executes standard schema audits, ensuring that developers are immediately up and running without installing databases.
-
----
-
-## 🏛️ System Core Architecture & Tech Stack
+### Automated Fallback Lifecycle
 
 ```
-  ┌────────────────────────────────────────────────────────────────────────┐
-  │                             SEAT-SYNC ECOSYSTEM                        │
-  └────────────────────────────────────┬────────────────────────────────────┘
-                                       │
-            ┌──────────────────────────┴──────────────────────────┐
-            ▼                                                     ▼
-  ┌──────────────────────────────────┐                 ┌──────────────────────────────────┐
-  │         FRONTEND (CLIENT)        │                 │         BACKEND (SERVER)         │
-  ├──────────────────────────────────┤                 ├──────────────────────────────────┤
-  │ • React 19 & TypeScript          │                 │ • Express 5 (REST APIs)          │
-  │ • Vite Dev Pipeline              │                 │ • TSX Watch (Hot Compiles)       │
-  │ • HeroUI & TailwindCSS           │ ◀── Socket.io ─►│ • Sequelize ORM                  │
-  │ • Redux Toolkit (State Slices)   │     Real-Time   │ • SQLite & MySQL Multi-dialects  │
-  │ • Framer Motion & Lottie         │                 │ • Swagger JS-Doc (/api-docs)     │
-  └──────────────────────────────────┘                 └──────────────────────────────────┘
+  SERVER BOOT
+      │
+      ▼
+  Load .env variables (loadDotenvSilently)
+      │
+      ├─── DB_NAME + DB_USER + DB_HOST present?
+      │         │
+      │         ├── YES → Connect to MySQL cluster at DB_HOST:DB_PORT
+      │         │              │
+      │         │              ├── SUCCESS  → sync({ alter: true })  →  ONLINE ✅ MySQL
+      │         │              │
+      │         │              └── FAIL     → Log warning + trigger fallback ──┐
+      │         │                                                               │
+      │         └── NO  ────────────────────────────────────────────────────────┤
+      │                                                                         │
+      └─────────────────────────────────────────────────────────────────────────┘
+                                                                                │
+                                                                                ▼
+                                                              Mount SQLite: database.sqlite
+                                                              sync({ alter: true })
+                                                              ONLINE ✅ SQLite (Fallback)
 ```
 
-<details>
-<summary><b>📐 Expand Tech Stack Components Spec</b></summary>
+<br/>
 
-### 💻 Client-Side Tech Stack
-* **Core Framework**: React 19 & TypeScript.
-* **Build Pipeline**: Vite.
-* **Component UI System**: **HeroUI** (accessible, animated utility structures).
-* **State Management**: Redux Toolkit (`@reduxjs/toolkit`).
-* **Animations & Effects**: `framer-motion`, `lottie-react`, and `vanta` (interactive backdrops).
-* **Charts & Analytics**: `recharts` for administrative dashboard analytics.
-* **PDF Exporters**: `jspdf` & `jspdf-autotable` for generating invigilator seating charts.
+### Environment Configuration
 
-### ⚙️ Server-Side Tech Stack
-* **Runtime & Framework**: Node.js & Express 5 (TypeScript native compilation).
-* **Database & ORM**: **Sequelize** database mapper supporting dynamic MySQL and SQLite dialects.
-* **Real-time Engine**: **Socket.io** (real-time notification delivery to active portal sessions).
-* **Document Parsers**: `xlsx` (Excel imports), `mammoth` (DOCX extraction), `pdf-parse` (PDF processing), and `tesseract.js` (OCR extraction).
-* **Documentation**: **Swagger** (`swagger-ui-express` & `swagger-jsdoc`) automatically exposing APIs under `/api-docs`.
-</details>
+**For Local Development (SQLite — Zero Config):**
+
+```env
+PORT=5000
+NODE_ENV=development
+JWT_SECRET=your_jwt_secret_key_here
+DB_FALLBACK_TO_SQLITE=true
+```
+
+**For Production / Staging (MySQL):**
+
+```env
+PORT=5000
+NODE_ENV=production
+JWT_SECRET=your_jwt_secret_key_here
+DB_DIALECT=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_NAME=seatsyncdb
+DB_USER=root
+DB_PASS=your_database_password
+DB_FALLBACK_TO_SQLITE=true
+```
+
+> [!TIP]
+> Setting `DB_FALLBACK_TO_SQLITE=true` alongside MySQL credentials enables **graceful degradation** — the server will automatically fall back to SQLite if MySQL is unreachable, making it ideal for hybrid developer environments.
+
+<br/>
 
 ---
 
-## 🚀 Step-by-Step Local Setup Guide
+<br/>
 
-Follow these steps to spin up the Seat-Sync project locally.
+## 🎮 Interactive Seating Engine Visualizer
+
+The seating algorithm is brought to life in a self-contained, fully offline **Interactive Visual Storyteller** — a browser-based cartoon-style simulation of the entire matchmaking process.
+
+<br/>
+
+```
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │            SEAT-SYNC INTERACTIVE VISUAL STORYTELLER                     │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │                                                                         │
+  │   File  →  visual_storyteller.html   (open in any browser, offline)    │
+  │                                                                         │
+  ├──────────────────────────────────┬──────────────────────────────────────┤
+  │  FEATURE                         │  DESCRIPTION                        │
+  ├──────────────────────────────────┼──────────────────────────────────────┤
+  │  🎓 Dual Pool Visualizer         │  Watch CS & ME students split into  │
+  │                                  │  Left/Right queues in real-time     │
+  │  🪑 Step-by-Step Allocator       │  Place students column-by-column    │
+  │                                  │  with Bezier particle trajectories  │
+  │  🛡️  Anti-Collision Laser Shield  │  Filled bench pairs activate a     │
+  │                                  │  neon shield showing zero-collision │
+  │  🎛️  Web Audio Synthesizer       │  Customizable waveform sound cues   │
+  │                                  │  (Sine, Triangle, Square, Sawtooth) │
+  │  🗄️  DB Fallback Simulator       │  Toggle MySQL Healthy / MySQL       │
+  │                                  │  Refused → watch SQLite activate   │
+  │  📊 Live Telemetry Dashboard     │  Real-time pool counters, balance   │
+  │                                  │  score, and allocation speed metric │
+  └──────────────────────────────────┴──────────────────────────────────────┘
+```
+
+**To launch:**
+> Double-click `visual_storyteller.html` — works completely offline with no internet or CDN dependency.
+
+<br/>
+
+---
+
+<br/>
+
+## 🚀 Installation & Setup Guide
 
 ### Prerequisites
-* **Node.js** (v18.x or above)
-* **npm** (v9.x or above)
 
-### 📂 Phase 1: Backend Installation & Setup
+Ensure the following are installed on your machine before proceeding:
 
-1. **Navigate to the Backend Directory**:
-   ```bash
-   cd backend
-   ```
+| Requirement | Minimum Version | Purpose |
+|:---|:---:|:---|
+| **Node.js** | `18.x` or above | JavaScript server runtime |
+| **npm** | `9.x` or above | Package manager |
+| **MySQL** *(optional)* | `8.x` or above | Primary database *(SQLite fallback available)* |
 
-2. **Install Node Dependencies**:
-   ```bash
-   npm install
-   ```
+<br/>
 
-3. **Configure Environment Variables**:
-   Create a `.env` file in the `backend` folder (or duplicate [.env.example](file:///C:/Users/binil/OneDrive/Desktop/Seat-Sync/backend/.env.example)):
-   
-   * **For SQLite (Quick Start)**:
-     ```env
-     PORT=5000
-     NODE_ENV=development
-     JWT_SECRET=supersecretkey_change_me
-     DB_FALLBACK_TO_SQLITE=true
-     ```
-   * **For MySQL (Production Grade)**:
-     ```env
-     PORT=5000
-     NODE_ENV=development
-     JWT_SECRET=supersecretkey_change_me
-     DB_DIALECT=mysql
-     DB_HOST=127.0.0.1
-     DB_PORT=3306
-     DB_NAME=seatsyncdb
-     DB_USER=root
-     DB_PASS=your_password
-     DB_FALLBACK_TO_SQLITE=true
-     ```
+### Phase 1 — Backend Setup
 
-4. **Boot the Backend Server**:
-   ```bash
-   npm run dev
-   ```
-   * The backend will spin up at **`http://localhost:5000`**.
-   * Explore the interactive API documentation at **`http://localhost:5000/api-docs`**.
+**Step 1.** Navigate to the backend directory:
+```bash
+cd backend
+```
+
+**Step 2.** Install all server dependencies:
+```bash
+npm install
+```
+
+**Step 3.** Create the environment configuration file.
+Create a new file named `.env` inside the `backend/` folder:
+
+```env
+# ─── Quick Start (SQLite — No Database Required) ───────────────────────────
+PORT=5000
+NODE_ENV=development
+JWT_SECRET=supersecretkey_change_in_production
+DB_FALLBACK_TO_SQLITE=true
+
+
+# ─── Production Grade (MySQL — Uncomment and fill below) ───────────────────
+# DB_DIALECT=mysql
+# DB_HOST=127.0.0.1
+# DB_PORT=3306
+# DB_NAME=seatsyncdb
+# DB_USER=root
+# DB_PASS=your_password_here
+# DB_FALLBACK_TO_SQLITE=true
+```
+
+**Step 4.** Start the backend development server:
+```bash
+npm run dev
+```
+
+| Endpoint | URL |
+|:---|:---|
+| **API Server** | `http://localhost:5000` |
+| **Swagger API Docs** | `http://localhost:5000/api-docs` |
+
+<br/>
+
+### Phase 2 — Frontend Setup
+
+**Step 1.** Navigate to the frontend directory:
+```bash
+cd ../frontend
+```
+
+**Step 2.** Install all client dependencies:
+```bash
+npm install
+```
+
+**Step 3.** Create the frontend environment file:
+```env
+VITE_API_URL=http://localhost:5000/api
+```
+
+**Step 4.** Start the Vite development server:
+```bash
+npm run dev
+```
+
+| Portal | URL |
+|:---|:---|
+| **Application** | `http://localhost:5173` |
+
+<br/>
 
 ---
 
-### 🎨 Phase 2: Frontend Installation & Setup
+<br/>
 
-1. **Navigate to the Frontend Directory**:
-   ```bash
-   cd ../frontend
-   ```
+## 📁 Project Structure
 
-2. **Install Node Dependencies**:
-   ```bash
-   npm install
-   ```
+```
+  Seat-Sync/
+  ├── backend/                         ← Node.js + Express 5 Server
+  │   ├── src/
+  │   │   ├── config/
+  │   │   │   └── database.ts          ← Sequelize multi-dialect ORM initializer
+  │   │   ├── controllers/             ← Request handler logic per module
+  │   │   ├── models/                  ← Sequelize table models and associations
+  │   │   ├── routes/                  ← Express API route definitions
+  │   │   ├── middleware/              ← JWT authentication, upload handlers
+  │   │   └── utils/                   ← Allocation engine, document parsers
+  │   ├── .env                         ← Environment configuration (gitignored)
+  │   ├── database.sqlite              ← Auto-created SQLite fallback database
+  │   └── package.json
+  │
+  ├── frontend/                        ← React 19 + Vite Client Application
+  │   ├── src/
+  │   │   ├── pages/                   ← Admin, Student, Invigilator page views
+  │   │   ├── components/              ← Reusable HeroUI + custom components
+  │   │   ├── store/                   ← Redux state slices and selectors
+  │   │   ├── hooks/                   ← Custom React hooks
+  │   │   └── api/                     ← Axios API service layer
+  │   ├── .env                         ← Frontend environment variables
+  │   └── package.json
+  │
+  ├── README.md                        ← Project documentation (this file)
+  ├── seating_visualization.md         ← Mathematical algorithm specification
+  ├── seating_animation.svg            ← SMIL animated seating engine diagram
+  ├── database_sync_animation.svg      ← SMIL animated DB fallback diagram
+  └── visual_storyteller.html          ← Interactive offline browser visualizer
+```
 
-3. **Configure Environment**:
-   Create a `.env` file in the `frontend` folder:
-   ```env
-   VITE_API_URL=http://localhost:5000/api
-   ```
-
-4. **Boot the Vite Hot-Reload Client**:
-   ```bash
-   npm run dev
-   ```
-   * The frontend will spin up and be accessible at **`http://localhost:5173`**.
+<br/>
 
 ---
 
-<div align="center" style="margin-top: 50px;">
-  <p>Developed with ❤️ for perfect exam integrity and smooth campus experiences.</p>
-  <b>Seat-Sync — Arranging Success, Bench by Bench.</b>
+<br/>
+
+## 📐 Algorithm Reference
+
+For the complete mathematical specification of the seating algorithm — including formal LaTeX equations, the dual-pool splitting protocol, anti-collusion constraint proofs, and the soft-diff database lifecycle — refer to the dedicated technical document:
+
+> 📄 **[seating_visualization.md](./seating_visualization.md)** — Seating Algorithms & Mathematical Specification
+
+<br/>
+
+---
+
+<br/>
+
+<div align="center">
+
+<img src="./database_sync_animation.svg" width="80%" alt="Seat-Sync Database Resilience Routing" />
+
+<br/>
+<br/>
+
+---
+
+*Developed with precision for perfect examination integrity and seamless campus experiences.*
+
+**Seat-Sync — Arranging Success, Bench by Bench.**
+
+<br/>
+
+<img src="https://img.shields.io/badge/React-19.x-61dafb?style=flat-square&logo=react&logoColor=black" alt="React" />
+<img src="https://img.shields.io/badge/Express-5.x-818cf8?style=flat-square&logo=express&logoColor=white" alt="Express" />
+<img src="https://img.shields.io/badge/Sequelize-v6-38bdf8?style=flat-square&logo=sequelize&logoColor=white" alt="Sequelize" />
+<img src="https://img.shields.io/badge/Socket.io-4.x-ec4899?style=flat-square&logo=socket.io&logoColor=white" alt="Socket.io" />
+<img src="https://img.shields.io/badge/MySQL-8.x-f59e0b?style=flat-square&logo=mysql&logoColor=white" alt="MySQL" />
+<img src="https://img.shields.io/badge/SQLite-3.x-10b981?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite" />
+<img src="https://img.shields.io/badge/TypeScript-5.x-3178c6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
+
 </div>
