@@ -89,12 +89,7 @@ export const getAllStudents = async (req: Request, res: Response) => {
             raw: false
         });
 
-        // Debug log for semester filtering
-        if (semesterId) {
-            console.log(`[Backend] Semester Filter Applied: ${semesterId}`);
-            console.log(`[Backend] WHERE clause:`, JSON.stringify(studentWhere, null, 2));
-            console.log(`[Backend] Results: ${count} students found`);
-        }
+
 
         // Calculate Stats (Parallel for performance)
         const commonInclude = search ? [{ model: User, attributes: [], required: true }] : [];
@@ -292,7 +287,6 @@ export const importStudents = async (req: Request, res: Response) => {
             if (rowStr.includes('name') && (rowStr.includes('batch') || rowStr.includes('reg') || rowStr.includes('sl no'))) {
                 currentHeaders = row.map(h => String(h || '').trim());
                 isCollecting = true;
-                console.log("Detected Header:", currentHeaders);
                 continue;
             }
 
@@ -1161,7 +1155,7 @@ export const deleteAllStudents = async (req: Request, res: Response) => {
                 try {
                     await sequelize.query(`DELETE FROM \`${table}\``, { transaction: t });
                 } catch (tableErr: any) {
-                    console.log(`[DeleteAll] Skipping ${table}: ${tableErr.message}`);
+                    console.error(`[DeleteAll] Skipping ${table}: ${tableErr.message}`);
                 }
             }
             // Now safe to delete all students
@@ -1390,8 +1384,7 @@ export const resetStudentPassword = async (req: Request, res: Response) => {
 
         await t.commit();
 
-        // Log the password reset action
-        console.log(`[PasswordReset] Student ${student.RegisterNumber} (${user.Email}) password reset by admin`);
+
 
         res.json({
             message: "Password reset successfully",

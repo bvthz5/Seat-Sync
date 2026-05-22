@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, ModalContent, ModalHeader, ModalBody, Button, Input, Select, SelectItem } from "@heroui/react";
 import { ExamService } from '../../services/examService';
+import { SubjectService } from '../../services/subjectService';
 import { academicService } from '../../services/academicService';
 import { toast } from 'react-hot-toast';
-import { Pencil } from 'lucide-react';
+import { Pencil, Search } from 'lucide-react';
 
 interface EditExamModalProps {
     isOpen: boolean;
@@ -15,6 +16,9 @@ interface EditExamModalProps {
 const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps) => {
     const [loading, setLoading] = useState(false);
     const [departments, setDepartments] = useState<any[]>([]);
+    const [subjectSearch, setSubjectSearch] = useState('');
+    const [subjects, setSubjects] = useState<any[]>([]);
+    const [filteredSubjects, setFilteredSubjects] = useState<any[]>([]);
 
     const [formData, setFormData] = useState({
         ExamName: '',
@@ -32,11 +36,45 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
                 ExamDate: exam.ExamDate ? exam.ExamDate.split('T')[0] : '',
                 Session: exam.Session,
                 Duration: String(exam.Duration),
-                SubjectID: String(exam.SubjectID),
+                SubjectID: exam.SubjectID ? String(exam.SubjectID) : '',
                 DepartmentID: String(exam?.Subject?.Department?.DepartmentID || '')
             });
+            if (exam.Subject) {
+                setSubjectSearch(`${exam.Subject.SubjectCode} - ${exam.Subject.SubjectName}`);
+            } else {
+                setSubjectSearch('');
+            }
         }
     }, [isOpen, exam]);
+
+    // Resolve SubjectID and DepartmentID for internal exams once subjects and departments are loaded
+    useEffect(() => {
+        if (isOpen && exam && subjects.length > 0 && !formData.SubjectID) {
+            const matchedSubject = subjects.find(s => s.SubjectCode === exam.Subject?.SubjectCode);
+            if (matchedSubject) {
+                setFormData(prev => ({
+                    ...prev,
+                    SubjectID: String(matchedSubject.SubjectID)
+                }));
+            }
+        }
+    }, [isOpen, exam, subjects, formData.SubjectID]);
+
+    useEffect(() => {
+        if (isOpen && exam && departments.length > 0 && !formData.DepartmentID) {
+            const deptCode = exam.Subject?.Department?.DepartmentCode;
+            if (deptCode) {
+                const firstDeptCode = deptCode.split(',')[0].trim();
+                const matchedDept = departments.find(d => d.DepartmentCode === firstDeptCode);
+                if (matchedDept) {
+                    setFormData(prev => ({
+                        ...prev,
+                        DepartmentID: String(matchedDept.DepartmentID)
+                    }));
+                }
+            }
+        }
+    }, [isOpen, exam, departments, formData.DepartmentID]);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -52,6 +90,12 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
             } catch {
                 setDepartments([]);
             }
+            try {
+                const data = await SubjectService.getAll();
+                setSubjects(data);
+            } catch (error) {
+                console.error("Failed to load subjects", error);
+            }
         })();
     }, [isOpen]);
 
@@ -59,9 +103,50 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
+    const handleSearchChange = (val: string) => {
+        setSubjectSearch(val);
+        if (subjects.length > 0) {
+            if (val) {
+                setFilteredSubjects(subjects.filter(s =>
+                    s.SubjectName.toLowerCase().includes(val.toLowerCase()) ||
+                    s.SubjectCode.toLowerCase().includes(val.toLowerCase())
+                ));
+            } else {
+                setFilteredSubjects(subjects.slice(0, 20));
+            }
+        } else {
+            setFilteredSubjects([]);
+        }
+    };
+
+    const handleFocus = () => {
+        if (subjects.length > 0) {
+            if (!subjectSearch) {
+                setFilteredSubjects(subjects.slice(0, 20));
+            } else {
+                const searchVal = subjectSearch.includes(' - ') ? subjectSearch.split(' - ')[0] : subjectSearch;
+                setFilteredSubjects(subjects.filter(s =>
+                    s.SubjectName.toLowerCase().includes(searchVal.toLowerCase()) ||
+                    s.SubjectCode.toLowerCase().includes(searchVal.toLowerCase())
+                ).slice(0, 20));
+            }
+        }
+    };
+
+    const selectSubject = (sub: any) => {
+        setFormData(prev => ({
+            ...prev,
+            SubjectID: sub.SubjectID.toString(),
+            DepartmentID: sub.DepartmentID ? sub.DepartmentID.toString() : prev.DepartmentID,
+            ExamName: sub.SubjectName
+        }));
+        setSubjectSearch(`${sub.SubjectCode} - ${sub.SubjectName}`);
+        setFilteredSubjects([]);
+    };
+
     const handleSubmit = async () => {
-        if (!formData.ExamName || !formData.ExamDate || !formData.Duration) {
-            toast.error("Please fill in all required fields");
+        if (!formData.ExamDate || !formData.Duration || !formData.SubjectID) {
+            toast.error("Please fill in all required fields (Subject, Date, and Duration)");
             return;
         }
 
@@ -116,15 +201,49 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
 
                         <div className="space-y-6 w-full">
 
-                            {/* Subject (Read-only) */}
-                            <div>
-                                <span className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Subject</span>
-                                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                                    <p className="text-sm font-semibold text-gray-800">
-                                        {exam?.Subject?.SubjectName || 'Unknown Subject'}
-                                    </p>
-                                    <p className="text-xs text-blue-500 mt-0.5">{exam?.Subject?.SubjectCode || 'N/A'}</p>
-                                </div>
+                            {/* Subject (Searchable) */}
+                            <div className="relative">
+                                <span className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Subject Name or Code</span>
+                                <Input
+                                    id="edit-subject-search"
+                                    name="subjectSearch"
+                                    autoComplete="off"
+                                    aria-label="Subject"
+                                    placeholder="e.g. CS101 - Intro to Comp Sci"
+                                    value={subjectSearch}
+                                    onValueChange={handleSearchChange}
+                                    onFocus={(e: any) => {
+                                        e.target.select();
+                                        handleFocus();
+                                    }}
+                                    onBlur={() => {
+                                        setTimeout(() => {
+                                            setFilteredSubjects([]);
+                                        }, 250);
+                                    }}
+                                    size="lg"
+                                    variant="flat"
+                                    radius="sm"
+                                    endContent={<Search className="text-gray-400" size={20} />}
+                                    classNames={{
+                                        inputWrapper: "!bg-gray-50 !border-none !shadow-none hover:!bg-gray-100 group-data-[focus=true]:!bg-white group-data-[focus=true]:!shadow-sm !ring-transparent group-data-[focus=true]:!ring-gray-200",
+                                        input: "font-medium text-gray-800 !border-0 !outline-none placeholder:text-gray-400"
+                                    }}
+                                />
+                                {filteredSubjects.length > 0 && (
+                                    <div className="absolute z-50 w-full bg-white border border-gray-100 rounded-lg shadow-xl mt-1 max-h-48 overflow-y-auto">
+                                        {filteredSubjects.map(sub => (
+                                            <div
+                                                key={sub.SubjectID}
+                                                className="px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-gray-50 last:border-0"
+                                                onClick={() => selectSubject(sub)}
+                                            >
+                                                <p className="text-sm font-medium text-gray-800">{sub.SubjectName}</p>
+                                                <p className="text-xs text-blue-500">{sub.SubjectCode}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             <div>
@@ -197,7 +316,10 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
                                 <div>
                                     <span className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-3">Session</span>
                                     <div className="flex gap-6 h-[48px] items-center">
-                                        <div className="flex items-center gap-2 cursor-pointer group">
+                                        <div 
+                                            className="flex items-center gap-2 cursor-pointer group"
+                                            onClick={() => handleChange('Session', 'FN')}
+                                        >
                                             <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${formData.Session === 'FN' ? 'border-blue-600 bg-white' : 'border-gray-300 bg-white group-hover:border-gray-400'}`}>
                                                 {formData.Session === 'FN' && <div className="w-2.5 h-2.5 bg-blue-600 rounded-full" />}
                                             </div>
@@ -208,7 +330,10 @@ const EditExamModal = ({ isOpen, onClose, onSuccess, exam }: EditExamModalProps)
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center gap-2 cursor-pointer group">
+                                        <div 
+                                            className="flex items-center gap-2 cursor-pointer group"
+                                            onClick={() => handleChange('Session', 'AN')}
+                                        >
                                             <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${formData.Session === 'AN' ? 'border-blue-600 bg-white' : 'border-gray-300 bg-white group-hover:border-gray-400'}`}>
                                                 {formData.Session === 'AN' && <div className="w-2.5 h-2.5 bg-blue-600 rounded-full" />}
                                             </div>

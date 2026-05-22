@@ -447,7 +447,7 @@ export const getExamDepartments = async (req: Request, res: Response) => {
                 d.DepartmentID,
                 d.DepartmentName,
                 d.DepartmentCode,
-                ISNULL(dt.deptCount, 0) AS studentCount
+                COALESCE(dt.deptCount, 0) AS studentCount
             FROM DayDepartments sd
             INNER JOIN Departments d ON d.DepartmentID = sd.DepartmentID
             LEFT JOIN DepartmentTotals dt ON dt.DepartmentID = sd.DepartmentID
@@ -1131,7 +1131,7 @@ const fetchEndSemStudentsBySubject = async (
         StudentID: number; ExamID: number; IsEligible: number;
     }>(`
         SELECT er.StudentID, er.ExamID,
-               CAST(ISNULL(er.IsEligible, 1) AS BIT) AS IsEligible
+               COALESCE(er.IsEligible, 1) AS IsEligible
         FROM   ExamRegistrations er
         WHERE  er.ExamID IN (${examIdsList.join(',')})
     `, {
@@ -2610,11 +2610,11 @@ export const searchStudent = async (req: Request, res: Response) => {
 
         // Find matching students by RegisterNumber or FullName
         const matchedStudents = await sequelize.query<{ StudentID: number; RegisterNumber: string; FullName: string }>(
-            `SELECT s.StudentID, s.RegisterNumber, ISNULL(u.FullName, s.RegisterNumber) AS FullName
+            `SELECT s.StudentID, s.RegisterNumber, COALESCE(u.FullName, s.RegisterNumber) AS FullName
              FROM Students s
              LEFT JOIN Users u ON s.UserID = u.UserID
-             WHERE s.RegisterNumber LIKE N'%${safeTerm}%'
-                OR ISNULL(u.FullName, '') LIKE N'%${safeTerm}%'`,
+             WHERE s.RegisterNumber LIKE '%${safeTerm}%'
+                OR COALESCE(u.FullName, '') LIKE '%${safeTerm}%'`,
             { type: QueryTypes.SELECT }
         );
 

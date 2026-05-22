@@ -77,13 +77,31 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
 
     const handleSearchChange = (val: string) => {
         setSubjectSearch(val);
-        if (val && subjects.length > 0) {
-            setFilteredSubjects(subjects.filter(s =>
-                s.SubjectName.toLowerCase().includes(val.toLowerCase()) ||
-                s.SubjectCode.toLowerCase().includes(val.toLowerCase())
-            ));
+        if (subjects.length > 0) {
+            if (val) {
+                setFilteredSubjects(subjects.filter(s =>
+                    s.SubjectName.toLowerCase().includes(val.toLowerCase()) ||
+                    s.SubjectCode.toLowerCase().includes(val.toLowerCase())
+                ));
+            } else {
+                setFilteredSubjects(subjects.slice(0, 20));
+            }
         } else {
             setFilteredSubjects([]);
+        }
+    };
+
+    const handleFocus = () => {
+        if (subjects.length > 0) {
+            if (!subjectSearch) {
+                setFilteredSubjects(subjects.slice(0, 20));
+            } else {
+                const searchVal = subjectSearch.includes(' - ') ? subjectSearch.split(' - ')[0] : subjectSearch;
+                setFilteredSubjects(subjects.filter(s =>
+                    s.SubjectName.toLowerCase().includes(searchVal.toLowerCase()) ||
+                    s.SubjectCode.toLowerCase().includes(searchVal.toLowerCase())
+                ).slice(0, 20));
+            }
         }
     };
 
@@ -175,6 +193,15 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
                                         placeholder="e.g. CS101 - Intro to Comp Sci"
                                         value={subjectSearch}
                                         onValueChange={handleSearchChange}
+                                        onFocus={(e: any) => {
+                                            e.target.select();
+                                            handleFocus();
+                                        }}
+                                        onBlur={() => {
+                                            setTimeout(() => {
+                                                setFilteredSubjects([]);
+                                            }, 250);
+                                        }}
                                         size="lg"
                                         variant="flat"
                                         radius="sm"
@@ -295,7 +322,10 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
                                     <div>
                                         <span className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-3">Session</span>
                                         <div className="flex gap-6 h-[48px] items-center">
-                                            <div className="flex items-center gap-2 cursor-pointer group">
+                                            <div 
+                                                className="flex items-center gap-2 cursor-pointer group"
+                                                onClick={() => handleSelectChange('Session', 'FN')}
+                                            >
                                                 <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${formData.Session === 'FN' ? 'border-blue-600 bg-white' : 'border-gray-300 bg-white group-hover:border-gray-400'}`}>
                                                     {formData.Session === 'FN' && <div className="w-2.5 h-2.5 bg-blue-600 rounded-full" />}
                                                 </div>
@@ -306,7 +336,10 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
                                                 </div>
                                             </div>
 
-                                            <div className="flex items-center gap-2 cursor-pointer group">
+                                            <div 
+                                                className="flex items-center gap-2 cursor-pointer group"
+                                                onClick={() => handleSelectChange('Session', 'AN')}
+                                            >
                                                 <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${formData.Session === 'AN' ? 'border-blue-600 bg-white' : 'border-gray-300 bg-white group-hover:border-gray-400'}`}>
                                                     {formData.Session === 'AN' && <div className="w-2.5 h-2.5 bg-blue-600 rounded-full" />}
                                                 </div>

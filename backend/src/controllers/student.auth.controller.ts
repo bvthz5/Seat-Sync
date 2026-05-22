@@ -62,7 +62,6 @@ export class StudentAuthController {
           include: [{ model: Student, as: 'Student' }]
         });
         studentDoc = (user as any)?.Student;
-        console.log(`[LoginTrace] Email lookup result: ${user ? 'User Found' : 'User NOT Found'}`);
       } else {
         studentDoc = await Student.findOne({
           where: { RegisterNumber: normalizedIdentifier },
@@ -71,14 +70,9 @@ export class StudentAuthController {
         if (studentDoc) {
           user = (studentDoc as any).User;
         }
-        console.log(`[LoginTrace] RegisterNumber lookup result: ${studentDoc ? 'Student Found' : 'Student NOT Found'}`);
-        if (studentDoc && !user) {
-          console.warn(`[LoginTrace] Student record found for ${normalizedIdentifier} but User association is missing or inactive!`);
-        }
       }
 
       if (!user) {
-        console.warn(`[LoginTrace] Authentication failed: User not found or inactive for identifier: ${normalizedIdentifier}`);
         res.status(401).json({ error: "Invalid credentials or account inactive" });
         return;
       }
@@ -129,8 +123,6 @@ export class StudentAuthController {
         return;
       }
 
-      console.log(`[LoginTrace] Password verified successfully for user: ${user.Email}`);
-
       // Reset failed attempts on successful login
       if (user.FailedLoginAttempts > 0 || user.AccountLockedUntil) {
         await User.update({
@@ -141,7 +133,6 @@ export class StudentAuthController {
 
       // Check if password change is required
       if (user.IsPasswordChanged === false) {
-        console.log("[LoginTrace] Password change required. Generating temp token for user:", user.UserID);
         // Generate a restricted temporary token with full payload required by middleware
         const tempToken = jwt.sign(
           {
@@ -387,8 +378,7 @@ export class StudentAuthController {
       // const resetLink = `http://localhost:5173/student/reset-password?token=${resetToken}`;
       // await emailService.sendPasswordResetEmail(email, resetLink);
 
-      console.log(`[StudentAuth] Reset token generated: ${resetToken}`); // For testing!
-      res.json({ message: "If an account exists, a reset link has been sent.", debugToken: resetToken });
+      res.json({ message: "If an account exists, a reset link has been sent." });
     } catch (error: any) {
       console.error("Forgot password error:", error.message);
       res.status(500).json({ error: "Failed to process request" });
@@ -452,38 +442,27 @@ export class StudentAuthController {
       const newPassword = (req.body.newPassword || '');
       const UserID = req.user?.UserID;
 
-      console.log(`[ChangePassword] Attempt for UserID: ${UserID}`);
-
       if (!UserID) {
-        console.warn("[ChangePassword] No UserID found in request user object");
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
 
       if (!currentPassword || !newPassword) {
-        console.warn("[ChangePassword] Missing passwords in request body");
         res.status(400).json({ error: "Current and new passwords are required" });
         return;
       }
 
       if (newPassword.length < 8) {
-        console.warn("[ChangePassword] New password too short:", newPassword.length);
         res.status(400).json({ error: "New password must be at least 8 characters" });
         return;
       }
 
       const user = await User.findByPk(UserID);
       if (!user) {
-        console.error(`[ChangePassword] User not found for ID: ${UserID}`);
+        console.error("Change password failed: User not found");
         res.status(404).json({ error: "User not found" });
         return;
       }
-
-      console.log(`[ChangePassword] Session User:`, JSON.stringify(req.user));
-      console.log(`[ChangePassword] DB User: ID=${user.UserID}, Email=${user.Email}, Role=${user.Role}`);
-
-      const currentPassHex = Buffer.from(currentPassword).toString('hex');
-      console.log(`[ChangePassword] Received Current Password Hex: ${currentPassHex}`);
 
       let isMatch = await bcrypt.compare(currentPassword, user.PasswordHash);
 
@@ -501,8 +480,6 @@ export class StudentAuthController {
         res.status(400).json({ error: "Incorrect current password" });
         return;
       }
-
-      console.log("[ChangePassword] Password verified. Proceeding to update.");
 
       // Hash and update
       const hashed = await bcrypt.hash(newPassword, 10);

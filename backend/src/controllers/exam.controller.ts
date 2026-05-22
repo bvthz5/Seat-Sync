@@ -848,9 +848,110 @@ export class ExamController {
             const { id } = req.params;
             const updates = { ...req.body };
 
-            const exam = await Exam.findByPk(id as string);
+            let exam = await Exam.findByPk(id as string);
             if (!exam) {
-                return res.status(404).json({ message: 'Exam not found' });
+                // If not found in standard Exams, try InternalExams fallback
+                const internalExam = await InternalExam.findByPk(id as string);
+                if (!internalExam) {
+                    return res.status(404).json({ message: 'Exam not found' });
+                }
+
+                // Update internal exam fields
+                const { SubjectID, ExamDate, Session, Duration, DepartmentID } = updates;
+
+                const internalUpdates: any = {};
+                if (ExamDate !== undefined) internalUpdates.ExamDate = ExamDate;
+                if (Session !== undefined) internalUpdates.Session = Session;
+                if (Duration !== undefined) internalUpdates.Duration = Number(Duration);
+
+                // If SubjectID is supplied, find the Subject and sync SubjectCode & SubjectName
+                if (SubjectID !== undefined && SubjectID !== null && String(SubjectID).trim() !== '') {
+                    const subject = await Subject.findByPk(Number(SubjectID));
+                    if (!subject) {
+                        return res.status(404).json({ message: 'Subject not found' });
+                    }
+                    internalUpdates.SubjectCode = subject.SubjectCode;
+                    internalUpdates.SubjectName = subject.SubjectName;
+                }
+
+                await internalExam.update(internalUpdates);
+
+                // Sync DepartmentID in InternalExamDepartments mapping
+                if (DepartmentID !== undefined && DepartmentID !== null && String(DepartmentID).trim() !== '') {
+                    const departmentId = Number(DepartmentID);
+                    const department = await Department.findByPk(departmentId);
+                    if (!department) {
+                        return res.status(404).json({ message: 'Department not found' });
+                    }
+
+                    // Delete existing department mappings for this internal exam
+                    await sequelize.query('DELETE FROM InternalExamDepartments WHERE InternalExamID = :id', {
+                        replacements: { id: internalExam.InternalExamID },
+                        type: QueryTypes.DELETE
+                    });
+
+                    // Add the new department mapping
+                    await sequelize.query(
+                        'INSERT INTO InternalExamDepartments (InternalExamID, DepartmentID, createdAt, updatedAt) VALUES (:examId, :deptId, NOW(), NOW())',
+                        {
+                            replacements: { examId: internalExam.InternalExamID, deptId: departmentId },
+                            type: QueryTypes.INSERT
+                        }
+                    );
+                }
+
+                // Query the updated record to format it compatibly with standard Exam object for frontend
+                const updatedInternalExam = await InternalExam.findByPk(id as string, {
+                    include: [{
+                        model: InternalExamDepartment,
+                        include: [{ model: Department, attributes: ['DepartmentName', 'DepartmentCode'] }]
+                    }]
+                });
+
+                if (!updatedInternalExam) {
+                    return res.status(404).json({ message: 'Error retrieving updated internal exam' });
+                }
+
+                const data = updatedInternalExam.toJSON() as any;
+                const depts = data.InternalExamDepartments || [];
+                const deptName = depts.length > 0 ? depts.map((d: any) => d.Department?.DepartmentCode).join(', ') : 'ALL_BRANCHES';
+                const fullDeptName = depts.length > 0 ? depts.map((d: any) => d.Department?.DepartmentName).join(', ') : 'All Branches';
+
+                const now = new Date();
+                const examDate = new Date(data.ExamDate);
+                const startHour = data.Session === 'FN' ? 10 : 14;
+                const examStart = new Date(examDate);
+                examStart.setHours(startHour, 0, 0, 0);
+                const examEnd = new Date(examStart.getTime() + (data.Duration || 150) * 60 * 1000);
+
+                let calcStatus = 'Scheduled';
+                if (now >= examEnd) calcStatus = 'Completed';
+                else if (now >= examStart && now < examEnd) calcStatus = 'In Progress';
+
+                return res.json({
+                    ExamID: data.InternalExamID,
+                    ExamName: data.SubjectName,
+                    ExamDate: data.ExamDate,
+                    Session: data.Session,
+                    Duration: data.Duration || 150,
+                    Status: calcStatus,
+                    Subject: {
+                        SubjectName: data.SubjectName,
+                        SubjectCode: data.SubjectCode,
+                        Department: {
+                            DepartmentName: fullDeptName,
+                            DepartmentCode: deptName
+                        }
+                    },
+                    Enrollment: 0,
+                    AuditStatus: 'Clean'
+                });
+            }
+
+            // Otherwise, handle standard Exam update logic
+            let finalSubjectId = exam.SubjectID;
+            if (updates.SubjectID !== undefined && updates.SubjectID !== null && String(updates.SubjectID).trim() !== '') {
+                finalSubjectId = Number(updates.SubjectID);
             }
 
             const departmentIdRaw = updates.DepartmentID;
@@ -867,7 +968,7 @@ export class ExamController {
                     return res.status(404).json({ message: 'Department not found' });
                 }
 
-                const currentSubject = await Subject.findByPk(exam.SubjectID);
+                const currentSubject = await Subject.findByPk(finalSubjectId);
                 if (!currentSubject) {
                     return res.status(404).json({ message: 'Current subject not found for exam' });
                 }
@@ -880,7 +981,8 @@ export class ExamController {
                     defaults: {
                         SubjectCode: currentSubject.SubjectCode,
                         SubjectName: currentSubject.SubjectName,
-                        DepartmentID: departmentId
+                        DepartmentID: departmentId,
+                        SemesterID: currentSubject.SemesterID
                     }
                 });
 
@@ -888,7 +990,22 @@ export class ExamController {
             }
 
             await exam.update(updates);
-            res.json(exam);
+
+            const updatedExam = await Exam.findByPk(exam.ExamID, {
+                include: [
+                    {
+                        model: Subject,
+                        include: [
+                            {
+                                model: Department,
+                                attributes: ['DepartmentID', 'DepartmentName', 'DepartmentCode']
+                            }
+                        ]
+                    }
+                ]
+            });
+
+            res.json(updatedExam);
         } catch (error: any) {
             res.status(500).json({ message: 'Error updating exam', error: error.message });
         }
