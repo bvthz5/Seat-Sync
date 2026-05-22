@@ -46,7 +46,7 @@ const DB_FALLBACK_TO_SQLITE = process.env.DB_FALLBACK_TO_SQLITE === "true";
 /* ────────────────────────────────────────────── */
 
 function createSQLite() {
-    console.warn("Using SQLite fallback (MSSQL not available or connection failed)");
+    console.warn("Using SQLite fallback (MySQL/MariaDB not available or connection failed)");
     const dbPath = path.resolve(process.cwd(), "database.sqlite");
     return new Sequelize({
         dialect: "sqlite",
