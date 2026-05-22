@@ -49,7 +49,7 @@
     "swagger-ui-express": "^5.0.1",
     "tesseract.js": "^6.0.1",
     "word-extractor": "^1.0.4",
-    "xlsx": "^0.19.3",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-latest/xlsx-latest.tgz",
     "xlsx-js-style": "^1.2.0"
   },
   "devDependencies": {

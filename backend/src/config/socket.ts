@@ -13,6 +13,10 @@ const allowedOrigins = new Set([
 
 export const initSocket = (httpServer: HTTPServer) => {
     io = new SocketIOServer(httpServer, {
+        pingTimeout: 60000,   // Wait up to 60s for pings (default is 20s)
+        pingInterval: 20000,  // Send keep-alive pings every 20s (default is 25s)
+        connectTimeout: 45000,
+        allowEIO3: true,
         cors: {
             origin: (origin, callback) => {
                 if (!origin) return callback(null, true);
@@ -29,7 +33,8 @@ export const initSocket = (httpServer: HTTPServer) => {
             },
             credentials: true,
             methods: ["GET", "POST"],
-        }
+        },
+        transports: ["websocket", "polling"] // Enforce websocket support explicitly
     });
 
     io.on("connection", (socket) => {

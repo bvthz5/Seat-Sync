@@ -1159,7 +1159,7 @@ export const deleteAllStudents = async (req: Request, res: Response) => {
             const dependentTables = ['SeatAllocations', 'StudentSubjects', 'ExamRegistrations', 'Attendance'];
             for (const table of dependentTables) {
                 try {
-                    await sequelize.query(`DELETE FROM [${table}]`, { transaction: t });
+                    await sequelize.query(`DELETE FROM \`${table}\``, { transaction: t });
                 } catch (tableErr: any) {
                     console.log(`[DeleteAll] Skipping ${table}: ${tableErr.message}`);
                 }

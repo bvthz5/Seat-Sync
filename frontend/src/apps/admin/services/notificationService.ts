@@ -32,15 +32,58 @@ export interface NotificationStats {
 // --- Socket Service ---
 let socket: Socket | null = null;
 const SOCKET_URL = 'http://localhost:5000'; // Adjust for production
+const listeners = new Set<(n: Notification) => void>();
 
-export const initNotificationSocket = (userId: number, onNewNotification: (n: Notification) => void) => {
-    if (socket) return socket;
+// Helper to ensure socket is connected proactively
+const ensureConnected = () => {
+    if (socket && socket.disconnected && socket.active !== false) {
+        console.log('Proactively reconnecting socket due to network or visibility event...');
+        socket.connect();
+    }
+};
+
+// Bind browser and system visibility/online state events for high connection resilience
+if (typeof window !== 'undefined') {
+    window.addEventListener('online', ensureConnected);
+    window.addEventListener('focus', ensureConnected);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            ensureConnected();
+        }
+    });
+    // Set a periodic health check to auto-recover from system sleep
+    setInterval(ensureConnected, 15000);
+}
+
+export const unsubscribeFromNotifications = (callback: (n: Notification) => void) => {
+    listeners.delete(callback);
+};
+
+export const destroyNotificationSocket = () => {
+    if (socket) {
+        socket.disconnect();
+        socket = null;
+        listeners.clear();
+        console.log('Notification Socket Destroyed');
+    }
+};
+
+export const initNotificationSocket = (userId: number, onNewNotification?: (n: Notification) => void) => {
+    if (onNewNotification) {
+        listeners.add(onNewNotification);
+    }
+
+    if (socket) {
+        ensureConnected();
+        return socket;
+    }
 
     socket = io(SOCKET_URL, {
         reconnection: true,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
-        reconnectionAttempts: 5
+        reconnectionAttempts: Infinity,
+        transports: ["websocket", "polling"]
     });
 
     socket.on('connect', () => {
@@ -65,7 +108,14 @@ export const initNotificationSocket = (userId: number, onNewNotification: (n: No
                 status: 'Delivered'
             };
 
-            onNewNotification(notification);
+            // Notify all registered listeners
+            listeners.forEach((callback) => {
+                try {
+                    callback(notification);
+                } catch (err) {
+                    console.error('Error in notification listener:', err);
+                }
+            });
         };
 
         // Use Promise for non-blocking deferred execution
