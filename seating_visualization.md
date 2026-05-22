@@ -17,11 +17,11 @@
 
 ## ⚡ Technical Quick Console
 
-```
- ╔════════════════════════════════════════════════════════════════════════════╗
- ║  📐 Space Capacity Eq   ║  🌊 Pool Splitting Logic   ║  🗄️ DB Resilience  ║
- ║  🛡️ Anti-Collusion Guard ║  🔄 Soft-Diff Lifecycle    ║  🧮 Seat Matrix    ║
- ╚════════════════════════════════════════════════════════════════════════════╝
+```text
+ ╔═════════════════════════════════════════════════════════════════════════════╗
+ ║  📐 Space Capacity Eq    ║  🌊 Pool Splitting Logic   ║  🗄️ DB Resilience   ║
+ ║  🛡️ Anti-Collusion Guard ║  🔄 Soft-Diff Lifecycle    ║  🧮 Seat Matrix     ║
+ ╚═════════════════════════════════════════════════════════════════════════════╝
 ```
 
 | Document Section | Description | Jump To |
@@ -50,12 +50,12 @@ The matching sequence and real-time synchronization between queues and physical 
 
 Seat-Sync enforces rigid architectural separation between the **University End-Semester** and **Internal Series** exam modules:
 
-```
+```text
                             ┌─────────────────────────────────┐
                             │      SEAT-SYNC ENGINE CORE      │
                             └────────────────┬────────────────┘
                                              │
-                       ┌──────────────────────┴──────────────────────┐
+                       ┌─────────────────────┴───────────────────────┐
                        ▼                                             ▼
          ┌───────────────────────────┐                 ┌───────────────────────────┐
          │  University End-Semester  │                 │    Internal Ecosystem     │
@@ -98,7 +98,7 @@ $$\text{Capacity} = (6 \times 2) + (6 \times 2) + (6 \times 2) = 36 \text{ seats
 
 Instead of running a destructive `DELETE FROM Seats`, Seat-Sync maps incoming grid adjustments against active records in three transaction-safe steps:
 
-```
+```text
                    ┌──────────────────────────────────────────┐
                    │        ADMIN SAVES ROOM LAYOUT           │
                    └─────────────────┬────────────────────────┘

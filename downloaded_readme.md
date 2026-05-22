@@ -93,30 +93,30 @@ The current manual process suffers from the following critical problems:
 
 <br/>
 
-```text
-  ┌───────────────────────────────────────────────────────────────────────────────┐
-  │                    EXISTING SYSTEM — CRITICAL LIMITATIONS                     │
-  ├───────────────────────────────────────────────────────────────────────────────┤
-  │                                                                               │
-  │  01.  No Anti-Cheating Enforcement   →  Students of the same department       │
-  │       are frequently seated adjacent to one another, enabling exam fraud.     │
-  │                                                                               │
-  │  02.  High Administrative Overhead   →  Generating seating for 1,000+         │
-  │       students takes hours of manual Excel formatting and error checking.     │
-  │                                                                               │
-  │  03.  No Real-Time Notification      →  Students must physically visit        │
-  │       campus bulletin boards to locate their seat numbers.                    │
-  │                                                                               │
-  │  04.  Error-Prone and Inconsistent   →  Manual data entry leads to            │
-  │       duplicate seat assignments, missing entries, and hall overflows.        │
-  │                                                                               │
-  │  05.  No Database Integration        →  Excel files have no referential       │
-  │       integrity; audit trails and historical records are lost easily.         │
-  │                                                                               │
-  │  06.  No Digital Portal for Students →  Students have no centralized          │
-  │       dashboard to view their seat, exam schedule, or hall details.           │
-  │                                                                               │
-  └───────────────────────────────────────────────────────────────────────────────┘
+```
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │                   EXISTING SYSTEM — CRITICAL LIMITATIONS                    │
+  ├─────────────────────────────────────────────────────────────────────────────┤
+  │                                                                             │
+  │  01.  No Anti-Cheating Enforcement   →  Students of the same department   │
+  │       are frequently seated adjacent to one another, enabling exam fraud.  │
+  │                                                                             │
+  │  02.  High Administrative Overhead   →  Generating seating for 1,000+     │
+  │       students takes hours of manual Excel formatting and error checking.  │
+  │                                                                             │
+  │  03.  No Real-Time Notification      →  Students must physically visit     │
+  │       campus bulletin boards to locate their seat numbers.                 │
+  │                                                                             │
+  │  04.  Error-Prone and Inconsistent   →  Manual data entry leads to        │
+  │       duplicate seat assignments, missing entries, and hall overflows.     │
+  │                                                                             │
+  │  05.  No Database Integration        →  Excel files have no referential   │
+  │       integrity; audit trails and historical records are lost easily.      │
+  │                                                                             │
+  │  06.  No Digital Portal for Students →  Students have no centralized      │
+  │       dashboard to view their seat, exam schedule, or hall details.        │
+  │                                                                             │
+  └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 <br/>
@@ -157,21 +157,21 @@ The current manual process suffers from the following critical problems:
 
 <br/>
 
-```text
-  ┌───────────────────────────────────────────────────────────────────────────────┐
-  │                         SEAT-SYNC — FEATURE MATRIX                            │
-  ├────────────────────────────────────┬──────────────────────────────────────────┤
-  │  ADMINISTRATOR PORTAL              │  STUDENT & INVIGILATOR PORTALS           │
-  ├────────────────────────────────────┼──────────────────────────────────────────┤
-  │  ✔  Room & Hall Configuration      │  ✔  Real-time Seat Notification          │
-  │  ✔  Roster Upload (Excel / DOCX)   │  ✔  Personalized Seat Dashboard          │
-  │  ✔  One-Click Seat Generation      │  ✔  Invigilator Room Assignment View     │
-  │  ✔  Anti-Collusion Enforcement     │  ✔  Exam Schedule Display                │
-  │  ✔  PDF Seating Chart Export       │  ✔  Mobile-Responsive Interface          │
-  │  ✔  Invigilator Assignment         │  ✔  Socket.io Live Updates               │
-  │  ✔  Analytics Dashboard            │  ✔  Secure JWT Authentication            │
-  │  ✔  MySQL ↔ SQLite Auto-Fallback   │  ✔  Swagger API Documentation            │
-  └────────────────────────────────────┴──────────────────────────────────────────┘
+```
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │                        SEAT-SYNC — FEATURE MATRIX                          │
+  ├──────────────────────────────────┬──────────────────────────────────────────┤
+  │  ADMINISTRATOR PORTAL            │  STUDENT & INVIGILATOR PORTALS          │
+  ├──────────────────────────────────┼──────────────────────────────────────────┤
+  │  ✔  Room & Hall Configuration    │  ✔  Real-time Seat Notification         │
+  │  ✔  Roster Upload (Excel / DOCX) │  ✔  Personalized Seat Dashboard        │
+  │  ✔  One-Click Seat Generation    │  ✔  Invigilator Room Assignment View    │
+  │  ✔  Anti-Collusion Enforcement   │  ✔  Exam Schedule Display              │
+  │  ✔  PDF Seating Chart Export     │  ✔  Mobile-Responsive Interface        │
+  │  ✔  Invigilator Assignment       │  ✔  Socket.io Live Updates             │
+  │  ✔  Analytics Dashboard          │  ✔  Secure JWT Authentication          │
+  │  ✔  MySQL ↔ SQLite Auto-Fallback │  ✔  Swagger API Documentation          │
+  └──────────────────────────────────┴──────────────────────────────────────────┘
 ```
 
 <br/>
@@ -184,62 +184,62 @@ The current manual process suffers from the following critical problems:
 
 <br/>
 
-```text
+```
   ┌─────────────────────────────────────────────────────────────────────────────────┐
-  │                           SEAT-SYNC SYSTEM ECOSYSTEM                            │
-  └──────────────────────────────────────┬──────────────────────────────────────────┘
-                                         │
-               ┌─────────────────────────┼──────────────────────────┐
-               ▼                         ▼                          ▼
-   ┌─────────────────────┐   ┌─────────────────────┐   ┌─────────────────────┐
-   │   STUDENT PORTAL    │   │   ADMIN CONSOLE     │   │  INVIGILATOR PANEL  │
-   │  (React 19 + Vite)  │   │  (React 19 + Vite)  │   │  (React 19 + Vite)  │
-   └──────────┬──────────┘   └──────────┬──────────┘   └──────────┬──────────┘
-              │                         │                          │
-              └─────────────────────────┼──────────────────────────┘
-                                        │  HTTP REST + WebSocket (Socket.io)
-                                        ▼
-                         ┌──────────────────────────────┐
-                         │   BACKEND SERVER (Express 5) │
-                         │   Node.js + TypeScript + TSX │
-                         ├──────────────────────────────┤
-                         │  • REST API Endpoints        │
-                         │  • JWT Authentication        │
-                         │  • Socket.io WebSocket Layer │
-                         │  • Seat Allocation Engine    │
-                         │  • Document Parser Pipeline  │
-                         │  • Swagger API Documentation │
-                         └───────────────┬──────────────┘
-                                         │
-                         ┌───────────────┴──────────────┐
-                         │   SEQUELIZE ORM v6 LAYER     │
-                         │   Multi-Dialect Adapter      │
-                         └────────┬─────────────┬───────┘
-                                  │             │
-                    ┌─────────────┘             └─────────────┐
-                    ▼                                         ▼
-       ┌────────────────────────┐             ┌────────────────────────┐
-       │   MySQL / MariaDB      │             │   SQLite Auto-Fallback │
-       │   Production Cluster   │             │   Local Dev Sandbox    │
-       │   Port: 3306           │             │   database.sqlite      │
-       └────────────────────────┘             └────────────────────────┘
+  │                          SEAT-SYNC SYSTEM ECOSYSTEM                            │
+  └─────────────────────────────────────┬───────────────────────────────────────────┘
+                                        │
+              ┌─────────────────────────┼──────────────────────────┐
+              ▼                         ▼                          ▼
+  ┌─────────────────────┐   ┌─────────────────────┐   ┌─────────────────────┐
+  │   STUDENT PORTAL    │   │   ADMIN CONSOLE     │   │  INVIGILATOR PANEL  │
+  │  (React 19 + Vite)  │   │  (React 19 + Vite)  │   │  (React 19 + Vite)  │
+  └──────────┬──────────┘   └──────────┬──────────┘   └──────────┬──────────┘
+             │                         │                          │
+             └─────────────────────────┼──────────────────────────┘
+                                       │  HTTP REST + WebSocket (Socket.io)
+                                       ▼
+                        ┌──────────────────────────────┐
+                        │   BACKEND SERVER (Express 5)  │
+                        │   Node.js + TypeScript + TSX  │
+                        ├──────────────────────────────┤
+                        │  • REST API Endpoints         │
+                        │  • JWT Authentication         │
+                        │  • Socket.io WebSocket Layer  │
+                        │  • Seat Allocation Engine     │
+                        │  • Document Parser Pipeline   │
+                        │  • Swagger API Documentation  │
+                        └───────────────┬──────────────┘
+                                        │
+                        ┌───────────────┴──────────────┐
+                        │   SEQUELIZE ORM v6 LAYER      │
+                        │   Multi-Dialect Adapter       │
+                        └────────┬─────────────┬────────┘
+                                 │             │
+                   ┌─────────────┘             └─────────────┐
+                   ▼                                         ▼
+      ┌────────────────────────┐             ┌────────────────────────┐
+      │   MySQL / MariaDB      │             │   SQLite Auto-Fallback  │
+      │   Production Cluster   │             │   Local Dev Sandbox     │
+      │   Port: 3306           │             │   database.sqlite       │
+      └────────────────────────┘             └────────────────────────┘
 ```
 
 <br/>
 
 ### Module-Level Breakdown
 
-```text
-  ┌───────────────────────────────────────────────────────────────────────┐
-  │                       SEAT ALLOCATION MODULES                         │
-  ├───────────────────────────────────┬───────────────────────────────────┤
-  │  University End-Semester Module   │      Internal Series Module       │
-  ├───────────────────────────────────┼───────────────────────────────────┤
-  │  • Physical Row-Bench Diff Engine │  • Dual-Pool Balancing System     │
-  │  • Roster Sequence Mapper         │  • Subject Interleaving Logic     │
-  │  • Active/Inactive Seat Preserve  │  • Alphanumeric Continuity Sort   │
-  │  • Hall Capacity Equation Solver  │  • Column-Continuous Assignment   │
-  └───────────────────────────────────┴───────────────────────────────────┘
+```
+  SEAT ALLOCATION MODULES
+  ─────────────────────────────────────────────────────────────────────
+  ┌────────────────────────────────────┐  ┌─────────────────────────────────┐
+  │  University End-Semester Module    │  │   Internal Series Module        │
+  ├────────────────────────────────────┤  ├─────────────────────────────────┤
+  │  • Physical Row-Bench Diff Engine  │  │  • Dual-Pool Balancing System   │
+  │  • Roster Sequence Mapper          │  │  • Subject Interleaving Logic   │
+  │  • Active/Inactive Seat Preserve   │  │  • Alphanumeric Continuity Sort │
+  │  • Hall Capacity Equation Solver   │  │  • Column-Continuous Assignment │
+  └────────────────────────────────────┘  └─────────────────────────────────┘
 ```
 
 <br/>
@@ -326,28 +326,28 @@ Seat-Sync uses **Sequelize ORM** with a custom multi-dialect routing layer that 
 
 ### Automated Fallback Lifecycle
 
-```text
-      SERVER BOOT
-           │
-           ▼
+```
+  SERVER BOOT
+      │
+      ▼
   Load .env variables (loadDotenvSilently)
-           │
-           ├─── DB_NAME + DB_USER + DB_HOST present?
-           │         │
-           │         ├── YES → Connect to MySQL cluster at DB_HOST:DB_PORT
-           │         │              │
-           │         │              ├── SUCCESS  → sync({ alter: true })  →  ONLINE ✅ MySQL
-           │         │              │
-           │         │              └── FAIL     → Log warning + trigger fallback ──┐
-           │         │                                                              │
-           │         └── NO  ───────────────────────────────────────────────────────┤
-           │                                                                        │
-           └────────────────────────────────────────────────────────────────────────┘
-                                                                                    │
-                                                                                    ▼
-                                                                  Mount SQLite: database.sqlite
-                                                                  sync({ alter: true })
-                                                                  ONLINE ✅ SQLite (Fallback)
+      │
+      ├─── DB_NAME + DB_USER + DB_HOST present?
+      │         │
+      │         ├── YES → Connect to MySQL cluster at DB_HOST:DB_PORT
+      │         │              │
+      │         │              ├── SUCCESS  → sync({ alter: true })  →  ONLINE ✅ MySQL
+      │         │              │
+      │         │              └── FAIL     → Log warning + trigger fallback ──┐
+      │         │                                                               │
+      │         └── NO  ────────────────────────────────────────────────────────┤
+      │                                                                         │
+      └─────────────────────────────────────────────────────────────────────────┘
+                                                                                │
+                                                                                ▼
+                                                              Mount SQLite: database.sqlite
+                                                              sync({ alter: true })
+                                                              ONLINE ✅ SQLite (Fallback)
 ```
 
 <br/>
@@ -393,29 +393,29 @@ The seating algorithm is brought to life in a self-contained, fully offline **In
 
 <br/>
 
-```text
-  ┌───────────────────────────────────────────────────────────────────────────┐
-  │               SEAT-SYNC INTERACTIVE VISUAL STORYTELLER                    │
-  ├───────────────────────────────────────────────────────────────────────────┤
-  │                                                                           │
-  │   File  →  visual_storyteller.html   (open in any browser, offline)       │
-  │                                                                           │
-  ├───────────────────────────────────┬───────────────────────────────────────┤
-  │  FEATURE                          │  DESCRIPTION                          │
-  ├───────────────────────────────────┼───────────────────────────────────────┤
-  │  🎓 Dual Pool Visualizer          │  Watch CS & ME students split into    │
-  │                                   │  Left/Right queues in real-time       │
-  │  🪑 Step-by-Step Allocator        │  Place students column-by-column      │
-  │                                   │  with Bezier particle trajectories    │
-  │  🛡️  Anti-Collision Laser Shield   │  Filled bench pairs activate a       │
-  │                                   │  neon shield showing zero-collision   │
-  │  🎛️  Web Audio Synthesizer        │  Customizable waveform sound cues     │
-  │                                   │  (Sine, Triangle, Square, Sawtooth)   │
-  │  🗄️  DB Fallback Simulator        │  Toggle MySQL Healthy / MySQL         │
-  │                                   │  Refused → watch SQLite activate      │
-  │  📊 Live Telemetry Dashboard      │  Real-time pool counters, balance     │
-  │                                   │  score, and allocation speed metric   │
-  └───────────────────────────────────┴───────────────────────────────────────┘
+```
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │            SEAT-SYNC INTERACTIVE VISUAL STORYTELLER                     │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │                                                                         │
+  │   File  →  visual_storyteller.html   (open in any browser, offline)    │
+  │                                                                         │
+  ├──────────────────────────────────┬──────────────────────────────────────┤
+  │  FEATURE                         │  DESCRIPTION                        │
+  ├──────────────────────────────────┼──────────────────────────────────────┤
+  │  🎓 Dual Pool Visualizer         │  Watch CS & ME students split into  │
+  │                                  │  Left/Right queues in real-time     │
+  │  🪑 Step-by-Step Allocator       │  Place students column-by-column    │
+  │                                  │  with Bezier particle trajectories  │
+  │  🛡️  Anti-Collision Laser Shield  │  Filled bench pairs activate a     │
+  │                                  │  neon shield showing zero-collision │
+  │  🎛️  Web Audio Synthesizer       │  Customizable waveform sound cues   │
+  │                                  │  (Sine, Triangle, Square, Sawtooth) │
+  │  🗄️  DB Fallback Simulator       │  Toggle MySQL Healthy / MySQL       │
+  │                                  │  Refused → watch SQLite activate   │
+  │  📊 Live Telemetry Dashboard     │  Real-time pool counters, balance   │
+  │                                  │  score, and allocation speed metric │
+  └──────────────────────────────────┴──────────────────────────────────────┘
 ```
 
 **To launch:**
@@ -520,7 +520,7 @@ npm run dev
 
 ## 📁 Project Structure
 
-```text
+```
   Seat-Sync/
   ├── backend/                         ← Node.js + Express 5 Server
   │   ├── src/
