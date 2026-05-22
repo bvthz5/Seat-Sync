@@ -103,15 +103,17 @@
   <!-- ═══════════════════════════════════════════════════════
        INITIALIZER CARD  (Center Top)
   ═══════════════════════════════════════════════════════ -->
-  <g transform="translate(323, 100)" class="node-pulsing">
-    <rect width="254" height="84" rx="16" fill="rgba(8,10,28,0.92)" stroke="rgba(255,255,255,0.10)" stroke-width="1.5"/>
-    <!-- Top gradient bar -->
-    <rect x="0" y="0" width="254" height="5" rx="3" fill="url(#headerGrad)"/>
-    <!-- Status dot -->
-    <circle cx="22" cy="34" r="5.5" fill="#34d399" filter="url(#glowEmerald)" class="glow-pulsing"/>
-    <text x="38" y="37" class="t-tag"  fill="#94a3b8">DATABASE  BOOT  CHECK</text>
-    <text x="18" y="60" class="t-bold" fill="#f8fafc">database.ts  ORM  Core</text>
-    <text x="18" y="74" class="t-mono">Sequelize v6  ·  MySQL2  driver  ·  SQLite3</text>
+  <g transform="translate(323, 100)">
+    <g class="node-pulsing">
+      <rect width="254" height="84" rx="16" fill="rgba(8,10,28,0.92)" stroke="rgba(255,255,255,0.10)" stroke-width="1.5"/>
+      <!-- Top gradient bar -->
+      <rect x="0" y="0" width="254" height="5" rx="3" fill="url(#headerGrad)"/>
+      <!-- Status dot -->
+      <circle cx="22" cy="34" r="5.5" fill="#34d399" filter="url(#glowEmerald)" class="glow-pulsing"/>
+      <text x="38" y="37" class="t-tag"  fill="#94a3b8">DATABASE  BOOT  CHECK</text>
+      <text x="18" y="60" class="t-bold" fill="#f8fafc">database.ts  ORM  Core</text>
+      <text x="18" y="74" class="t-mono">Sequelize v6  ·  MySQL2  driver  ·  SQLite3</text>
+    </g>
   </g>
 
   <!-- ═══════════════════════════════════════════════════════
@@ -149,43 +151,47 @@
   <!-- ═══════════════════════════════════════════════════════
        MYSQL NODE  (Left)
   ═══════════════════════════════════════════════════════ -->
-  <g transform="translate(100, 220)" class="card-float">
-    <rect width="280" height="140" rx="18" fill="rgba(9,12,28,0.92)" stroke="url(#blueGrad)" stroke-width="1.8"/>
-    <!-- Top bar -->
-    <rect x="0" y="0" width="280" height="5" rx="3" fill="url(#blueGrad)" opacity="0.7"/>
-    <!-- Banner row -->
-    <rect x="12" y="14" width="256" height="26" rx="10" fill="rgba(59,130,246,0.12)"/>
-    <circle cx="28" cy="27" r="5" fill="#60a5fa" class="glow-pulsing"/>
-    <text x="42" y="31" class="t-tag" fill="#93c5fd">🐬  MYSQL  DIALECT  (PRIMARY)</text>
-    <!-- Card content -->
-    <text x="18" y="64" class="t-bold">Production / Staging</text>
-    <text x="18" y="82" class="t-sub">• DB_NAME, DB_USER, DB_HOST (env)</text>
-    <text x="18" y="97" class="t-sub">• Pool: max 10 · idle 10s · acquire 30s</text>
-    <text x="18" y="112" class="t-sub">• Collation: utf8mb4_unicode_ci</text>
-    <!-- Status indicator -->
-    <rect x="12" y="122" width="256" height="4" rx="2" fill="rgba(255,255,255,0.05)"/>
-    <rect x="12" y="122" width="200" height="4" rx="2" fill="url(#blueGrad)">
-      <animate attributeName="width" values="100;220;100" dur="5s" repeatCount="indefinite"/>
-    </rect>
+  <g transform="translate(100, 220)">
+    <g class="card-float">
+      <rect width="280" height="140" rx="18" fill="rgba(9,12,28,0.92)" stroke="url(#blueGrad)" stroke-width="1.8"/>
+      <!-- Top bar -->
+      <rect x="0" y="0" width="280" height="5" rx="3" fill="url(#blueGrad)" opacity="0.7"/>
+      <!-- Banner row -->
+      <rect x="12" y="14" width="256" height="26" rx="10" fill="rgba(59,130,246,0.12)"/>
+      <circle cx="28" cy="27" r="5" fill="#60a5fa" class="glow-pulsing"/>
+      <text x="42" y="31" class="t-tag" fill="#93c5fd">🐬  MYSQL  DIALECT  (PRIMARY)</text>
+      <!-- Card content -->
+      <text x="18" y="64" class="t-bold">Production / Staging</text>
+      <text x="18" y="82" class="t-sub">• DB_NAME, DB_USER, DB_HOST (env)</text>
+      <text x="18" y="97" class="t-sub">• Pool: max 10 · idle 10s · acquire 30s</text>
+      <text x="18" y="112" class="t-sub">• Collation: utf8mb4_unicode_ci</text>
+      <!-- Status indicator -->
+      <rect x="12" y="122" width="256" height="4" rx="2" fill="rgba(255,255,255,0.05)"/>
+      <rect x="12" y="122" width="200" height="4" rx="2" fill="url(#blueGrad)">
+        <animate attributeName="width" values="100;220;100" dur="5s" repeatCount="indefinite"/>
+      </rect>
+    </g>
   </g>
 
   <!-- ═══════════════════════════════════════════════════════
        SQLITE FALLBACK NODE  (Right)
   ═══════════════════════════════════════════════════════ -->
-  <g transform="translate(520, 220)" class="card-float" style="animation-delay:3s">
-    <rect width="280" height="140" rx="18" fill="rgba(9,12,28,0.92)" stroke="url(#pinkGrad)" stroke-width="1.8"/>
-    <rect x="0" y="0" width="280" height="5" rx="3" fill="url(#pinkGrad)" opacity="0.7"/>
-    <rect x="12" y="14" width="256" height="26" rx="10" fill="rgba(219,39,119,0.12)"/>
-    <circle cx="28" cy="27" r="5" fill="#f472b6" class="glow-pulsing"/>
-    <text x="42" y="31" class="t-tag" fill="#fbcfe8">🗃️  SQLITE  AUTO-FALLBACK</text>
-    <text x="18" y="64" class="t-bold">Zero-Config Local Dev</text>
-    <text x="18" y="82" class="t-sub">• Trigger: missing / refused MySQL conn</text>
-    <text x="18" y="97" class="t-sub">• Storage: backend/database.sqlite</text>
-    <text x="18" y="112" class="t-sub">• Auto-creates file on first boot</text>
-    <rect x="12" y="122" width="256" height="4" rx="2" fill="rgba(255,255,255,0.05)"/>
-    <rect x="12" y="122" width="160" height="4" rx="2" fill="url(#pinkGrad)">
-      <animate attributeName="width" values="60;200;60" dur="5.5s" repeatCount="indefinite"/>
-    </rect>
+  <g transform="translate(520, 220)">
+    <g class="card-float" style="animation-delay:3s">
+      <rect width="280" height="140" rx="18" fill="rgba(9,12,28,0.92)" stroke="url(#pinkGrad)" stroke-width="1.8"/>
+      <rect x="0" y="0" width="280" height="5" rx="3" fill="url(#pinkGrad)" opacity="0.7"/>
+      <rect x="12" y="14" width="256" height="26" rx="10" fill="rgba(219,39,119,0.12)"/>
+      <circle cx="28" cy="27" r="5" fill="#f472b6" class="glow-pulsing"/>
+      <text x="42" y="31" class="t-tag" fill="#fbcfe8">🗃️  SQLITE  AUTO-FALLBACK</text>
+      <text x="18" y="64" class="t-bold">Zero-Config Local Dev</text>
+      <text x="18" y="82" class="t-sub">• Trigger: missing / refused MySQL conn</text>
+      <text x="18" y="97" class="t-sub">• Storage: backend/database.sqlite</text>
+      <text x="18" y="112" class="t-sub">• Auto-creates file on first boot</text>
+      <rect x="12" y="122" width="256" height="4" rx="2" fill="rgba(255,255,255,0.05)"/>
+      <rect x="12" y="122" width="160" height="4" rx="2" fill="url(#pinkGrad)">
+        <animate attributeName="width" values="60;200;60" dur="5.5s" repeatCount="indefinite"/>
+      </rect>
+    </g>
   </g>
 
   <!-- ═══════════════════════════════════════════════════════
@@ -212,9 +218,11 @@
   <!-- ═══════════════════════════════════════════════════════
        STATUS BADGE  (Bottom Center)
   ═══════════════════════════════════════════════════════ -->
-  <g transform="translate(328, 425)" class="badge-pop">
-    <rect width="244" height="24" rx="12" fill="rgba(16,185,129,0.09)" stroke="#34d399" stroke-width="1.4" filter="url(#glowEmerald)"/>
-    <circle cx="18" cy="12" r="4" fill="#34d399" class="glow-pulsing"/>
-    <text x="32" y="16" font-family="Space Grotesk" font-weight="700" font-size="10" fill="#34d399" letter-spacing="1.6">ROUTING  SANITY  CHECK:  PASS ✓</text>
+  <g transform="translate(328, 425)">
+    <g class="badge-pop">
+      <rect width="244" height="24" rx="12" fill="rgba(16,185,129,0.09)" stroke="#34d399" stroke-width="1.4" filter="url(#glowEmerald)"/>
+      <circle cx="18" cy="12" r="4" fill="#34d399" class="glow-pulsing"/>
+      <text x="32" y="16" font-family="Space Grotesk" font-weight="700" font-size="10" fill="#34d399" letter-spacing="1.6">ROUTING  SANITY  CHECK:  PASS ✓</text>
+    </g>
   </g>
 </svg>
