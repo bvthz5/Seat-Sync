@@ -1,5 +1,4 @@
 import "./config/env.js";
-import app from "./app.js";
 import { connectDB } from "./config/database.js";
 import { startDependencyWatcher } from "./utils/autoDependencyInstaller.js";
 // import open from "open";
@@ -34,6 +33,8 @@ const startServer = async () => {
         }
         console.warn("Continuing to start the HTTP server in degraded mode.");
     }
+
+    const { default: app } = await import("./app.js");
 
     // Create HTTP server explicitly to attach Socket.IO
     const { createServer } = await import("http");

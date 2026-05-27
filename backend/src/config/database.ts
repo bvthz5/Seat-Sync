@@ -39,21 +39,6 @@ const DB_USER = process.env.DB_USER || "";
 const DB_PASS = process.env.DB_PASS || "";
 const DB_HOST = process.env.DB_HOST || "127.0.0.1";
 const DB_PORT = Number(process.env.DB_PORT || 3306);
-const DB_FALLBACK_TO_SQLITE = process.env.DB_FALLBACK_TO_SQLITE === "true";
-
-/* ────────────────────────────────────────────── */
-/* SQLite Config                                  */
-/* ────────────────────────────────────────────── */
-
-function createSQLite() {
-    console.warn("Using SQLite fallback (MySQL/MariaDB not available or connection failed)");
-    const dbPath = path.resolve(process.cwd(), "database.sqlite");
-    return new Sequelize({
-        dialect: "sqlite",
-        storage: dbPath,
-        logging: false
-    });
-}
 
 /* ────────────────────────────────────────────── */
 /* Initialize Sequelize                           */
@@ -68,29 +53,28 @@ const hasMySQLConfig =
 
 console.log(`MySQL/MariaDB Config Check: Host=${DB_HOST}, Port=${DB_PORT}, Database=${DB_NAME}, User=${DB_USER}`);
 
-if (hasMySQLConfig) {
-    console.log("Initializing Sequelize with MySQL/MariaDB Config...");
-    sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASS, {
-        dialect: "mysql",
-        dialectModule: mysql2,
-        host: DB_HOST,
-        port: DB_PORT,
-        logging: false,
-        define: {
-            charset: "utf8mb4",
-            collate: "utf8mb4_unicode_ci"
-        },
-        pool: {
-            max: 10,
-            min: 0,
-            acquire: 30000,
-            idle: 10000
-        }
-    });
-} else {
-    console.warn("Missing MySQL/MariaDB Config. Initializing SQLite DB fallback.");
-    sequelize = createSQLite();
+if (!hasMySQLConfig) {
+    throw new Error("Missing MySQL/MariaDB Config. Database name, user, and host are required.");
 }
+
+console.log("Initializing Sequelize with MySQL/MariaDB Config...");
+sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASS, {
+    dialect: "mysql",
+    dialectModule: mysql2,
+    host: DB_HOST,
+    port: DB_PORT,
+    logging: false,
+    define: {
+        charset: "utf8mb4",
+        collate: "utf8mb4_unicode_ci"
+    },
+    pool: {
+        max: 10,
+        min: 0,
+        acquire: 30000,
+        idle: 10000
+    }
+});
 
 export { sequelize };
 
@@ -1200,17 +1184,7 @@ export async function connectDB() {
         console.log(`Connection Connected: ${sequelize.getDialect()} `);
     } catch (err: any) {
         console.error("Database Connection Failed:", err.message);
-
-        const dialect = sequelize.getDialect();
-        const shouldFallback = (dialect === 'mssql' || dialect === 'mysql') && DB_FALLBACK_TO_SQLITE;
-        if (shouldFallback) {
-            console.warn(`${dialect.toUpperCase()} connection failed. Falling back to SQLite as configured...`);
-            sequelize = createSQLite();
-            await sequelize.authenticate();
-            console.log("Connected to SQLite fallback database.");
-        } else {
-            throw err;
-        }
+        throw err;
     }
 
     try {

@@ -57,6 +57,19 @@ body::before {
   pointer-events: none;
 }
 
+.dark body {
+  background-color: #070B13;
+}
+
+.dark body::before {
+  background-color: #070B13;
+  background-image: 
+    radial-gradient(at 0% 0%, hsla(231, 99%, 67%, 0.05) 0, transparent 50%), 
+    radial-gradient(at 100% 0%, hsla(262, 83%, 58%, 0.05) 0, transparent 50%), 
+    radial-gradient(at 100% 100%, hsla(231, 99%, 67%, 0.05) 0, transparent 50%), 
+    radial-gradient(at 0% 100%, hsla(262, 83%, 58%, 0.05) 0, transparent 50%);
+}
+
 @keyframes mesh {
   0% {
     background-position: 0% 0%;

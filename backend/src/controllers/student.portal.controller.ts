@@ -28,7 +28,7 @@ import { notificationService } from "../services/notification.service.js";
 
 const FN_START_TIME = "09:30";
 const AN_START_TIME = "13:30";
-const SEATING_VISIBLE_MINUTES = 45;
+const SEATING_VISIBLE_MINUTES = 60;
 const ACADEMIC_YEAR_START_MONTH_INDEX = 5;
 
 const formatDate = (date: string | Date) => {
@@ -55,8 +55,10 @@ const getExamTimes = (date: string | Date, session: string) => {
     return { start, startTimeStr };
 };
 
-const getExamStatus = (examDate: string | Date, session: string, durationMin: number, now: Date) => {
+const getExamStatus = (examDate: string | Date, session: string, duration: number, now: Date) => {
     const { start } = getExamTimes(examDate, session);
+    // If duration is missing or very small (e.g., 3 hours), normalize to minutes, defaulting to 180 mins (3 hours)
+    const durationMin = duration ? (duration <= 5 ? duration * 60 : duration) : 180;
     const end = new Date(start.getTime() + durationMin * 60000);
     if (now < start) return "UPCOMING";
     if (now >= start && now < end) return "LIVE";
@@ -164,6 +166,35 @@ const getEffectiveSemesterNumber = (student: any, maxSem: number, recordedSem: n
     const monthDiff = (now.getFullYear() - baseline.getFullYear()) * 12 + (now.getMonth() - baseline.getMonth());
     const timelineSem = Math.max(0, Math.floor(monthDiff / 6)) + 1;
     return Math.min(Math.max(recordedSem ?? 1, timelineSem), maxSem || 8);
+};
+
+const parseFloorLabel = (floorName: string, floorNum: number, roomCode: string) => {
+    if (floorName && floorName.trim() !== "") return floorName;
+    if (typeof floorNum === 'number') {
+        if (floorNum === 0) return "Ground Floor";
+        const suffix = floorNum === 1 ? 'st' : floorNum === 2 ? 'nd' : floorNum === 3 ? 'rd' : 'th';
+        return `${floorNum}${suffix} Floor`;
+    }
+    // Attempt to infer from room code
+    if (roomCode) {
+        // e.g., MTB-207, Room 207, 207 -> starts with optional letters, then a digit
+        const match = roomCode.match(/(?:^|\D)(\d)\d{2}(?:\D|$)/);
+        if (match) {
+            const digit = parseInt(match[1]);
+            if (digit === 0) return "Ground Floor";
+            const suffix = digit === 1 ? 'st' : digit === 2 ? 'nd' : digit === 3 ? 'rd' : 'th';
+            return `${digit}${suffix} Floor`;
+        }
+        // Fallback simple extract first digit if it has numbers
+        const firstDigitMatch = roomCode.match(/\d/);
+        if (firstDigitMatch) {
+            const digit = parseInt(firstDigitMatch[0]);
+            if (digit === 0) return "Ground Floor";
+            const suffix = digit === 1 ? 'st' : digit === 2 ? 'nd' : digit === 3 ? 'rd' : 'th';
+            return `${digit}${suffix} Floor`;
+        }
+    }
+    return "Ground Floor";
 };
 
 const loadStudent = async (userId: number) => {
@@ -343,13 +374,15 @@ export const getStudentDashboard = async (req: Request, res: Response) => {
                 if (assignment) {
                     const seat = (assignment as any).InternalSeat;
                     const room = seat?.InternalRoom;
-                    const floorNum = room?.InternalFloor?.FloorNumber;
-                    let floorLabel = room?.InternalFloor?.FloorName || (typeof floorNum === 'number' ? (floorNum === 0 ? "Ground Floor" : `${floorNum}th Floor`) : "Ground Floor");
+                    const roomCode = room?.RoomCode || room?.RoomName || "";
+                    let floorLabel = parseFloorLabel(room?.InternalFloor?.FloorName, room?.InternalFloor?.FloorNumber, roomCode);
                     seating = { 
                         examId: targetExam.examId, 
                         isInternal: true,
-                        seatNumber: seat?.SeatIndex, 
-                        roomCode: room?.RoomCode || room?.RoomName, 
+                        seatNumber: seat?.SeatNumber, 
+                        rowLabel: seat?.RowLabel,
+                        benchNumber: seat?.BenchNumber,
+                        roomCode: roomCode, 
                         blockName: room?.InternalBlock?.BlockName, 
                         floorName: floorLabel 
                     };
@@ -359,9 +392,9 @@ export const getStudentDashboard = async (req: Request, res: Response) => {
                 if (assignment) {
                     const seat = (assignment as any).Seat;
                     const room = seat?.Room;
-                    const floorNum = room?.Floor?.FloorNumber;
-                    let floorLabel = room?.Floor?.FloorName || (typeof floorNum === 'number' ? (floorNum === 0 ? "Ground Floor" : `${floorNum}th Floor`) : "Ground Floor");
-                    seating = { examId: targetExam.examId, isInternal: false, seatNumber: seat?.SeatIndex, benchNumber: seat?.BenchIndex, rowLabel: seat?.RowIndex, roomCode: room?.RoomCode || room?.RoomName, capacity: room?.TotalCapacity || room?.Capacity, blockName: room?.Block?.BlockName, floorName: floorLabel, roomType: room?.RoomType, benchMode: room?.BenchMode };
+                    const roomCode = room?.RoomCode || room?.RoomName || "";
+                    let floorLabel = parseFloorLabel(room?.Floor?.FloorName, room?.Floor?.FloorNumber, roomCode);
+                    seating = { examId: targetExam.examId, isInternal: false, seatNumber: seat?.SeatIndex, benchNumber: seat?.BenchIndex, rowLabel: seat?.RowIndex, roomCode: roomCode, capacity: room?.TotalCapacity || room?.Capacity, blockName: room?.Block?.BlockName, floorName: floorLabel, roomType: room?.RoomType, benchMode: room?.BenchMode };
                 }
             }
         }
@@ -485,7 +518,7 @@ export const getStudentSeating = async (req: Request, res: Response) => {
             }
         }
 
-        if (!targetExam) return res.status(404).json({ message: "No exam found" });
+        if (!targetExam) return res.json({ success: false, message: "No exams found. Seating assignments are currently unavailable." });
         const mappedInfo = isInternal ? mapInternalExam(targetExam, now) : mapExam(targetExam, now);
         
         if (!mappedInfo.isSeatingVisible) {
@@ -507,17 +540,21 @@ export const getStudentSeating = async (req: Request, res: Response) => {
             });
             const roomLayout = layout.map((item: any) => ({ 
                 studentId: item.InternalStudentID, 
-                seatNumber: item.InternalSeat?.SeatIndex, 
+                seatNumber: item.InternalSeat?.SeatNumber, 
+                rowLabel: item.InternalSeat?.RowLabel,
+                benchNumber: item.InternalSeat?.BenchNumber,
                 isMe: item.InternalStudentID === internalStudent?.InternalStudentID 
             }));
             
             res.json({ success: true, data: { 
                 exam: mappedInfo, 
                 assignment: { 
-                    seatNumber: seat.SeatIndex, 
+                    seatNumber: seat.SeatNumber, 
+                    rowLabel: seat.RowLabel,
+                    benchNumber: seat.BenchNumber,
                     roomCode: room.RoomCode || room.RoomName, 
                     blockName: room.InternalBlock?.BlockName, 
-                    floorName: room.InternalFloor?.FloorName || "Ground Floor" 
+                    floorName: parseFloorLabel(room.InternalFloor?.FloorName, room.InternalFloor?.FloorNumber, room.RoomCode || room.RoomName || "")
                 }, 
                 layout: roomLayout 
             }});
@@ -528,7 +565,7 @@ export const getStudentSeating = async (req: Request, res: Response) => {
             const room = seat?.Room;
             const layout = await SeatAllocation.findAll({ where: { ExamID: targetExam.ExamID }, include: [{ model: Seat, required: true, where: { RoomID: seat.RoomID } }, { model: Student, include: [{ model: User, attributes: ["FullName"] }] }] });
             const roomLayout = layout.map((item: any) => ({ studentId: item.StudentID, seatNumber: item.Seat?.SeatIndex, rowLabel: item.Seat?.RowIndex, benchNumber: item.Seat?.BenchIndex, isMe: item.StudentID === student?.StudentID }));
-            res.json({ success: true, data: { exam: mappedInfo, assignment: { seatNumber: seat.SeatIndex, benchNumber: seat.BenchIndex, rowLabel: seat.RowIndex, roomCode: room.RoomCode || room.RoomName, blockName: room.Block?.BlockName, floorName: room.Floor?.FloorName || "Ground Floor", roomType: room.RoomType, capacity: room.TotalCapacity || room.Capacity }, layout: roomLayout } });
+            res.json({ success: true, data: { exam: mappedInfo, assignment: { seatNumber: seat.SeatIndex, benchNumber: seat.BenchIndex, rowLabel: seat.RowIndex, roomCode: room.RoomCode || room.RoomName, blockName: room.Block?.BlockName, floorName: parseFloorLabel(room.Floor?.FloorName, room.Floor?.FloorNumber, room.RoomCode || room.RoomName || ""), roomType: room.RoomType, capacity: room.TotalCapacity || room.Capacity }, layout: roomLayout } });
         }
     } catch (error) {
         console.error("Seating error:", error);
@@ -549,7 +586,7 @@ export const getSeatLayout = async (req: Request, res: Response) => {
             const assignment = await InternalSeatAllocation.findOne({ where: { InternalExamID: examId, InternalStudentID: internalStudent.InternalStudentID }, include: [{ model: InternalSeat }] });
             if (!assignment || !(assignment as any).InternalSeat) return res.status(404).json({ message: "No seating" });
             const layout = await InternalSeatAllocation.findAll({ where: { InternalExamID: examId }, include: [{ model: InternalSeat, required: true, where: { InternalRoomID: (assignment as any).InternalSeat.InternalRoomID } }] });
-            res.json({ success: true, data: layout.map((item: any) => ({ studentId: item.InternalStudentID, seatNumber: item.InternalSeat?.SeatIndex, isMe: item.InternalStudentID === internalStudent.InternalStudentID })) });
+            res.json({ success: true, data: layout.map((item: any) => ({ studentId: item.InternalStudentID, seatNumber: item.InternalSeat?.SeatNumber, rowLabel: item.InternalSeat?.RowLabel, benchNumber: item.InternalSeat?.BenchNumber, isMe: item.InternalStudentID === internalStudent.InternalStudentID })) });
         } else {
             const student = await loadStudent(userId);
             if (!student) return res.status(404).json({ message: "Student not found" });

@@ -51,7 +51,7 @@ export const studentPortalApi = {
     async getSeating(examId?: string | number, isInternal?: boolean): Promise<any> {
         const url = examId ? `/student/seating/${examId}` : '/student/seating';
         const response = await api.get(url, { params: { isInternal } });
-        return response.data.data;
+        return response.data;
     },
 
     async getSeatLayout(examId: string | number, isInternal?: boolean): Promise<any[]> {

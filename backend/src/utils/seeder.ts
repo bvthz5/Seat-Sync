@@ -1,11 +1,16 @@
 import { User } from "../models/User.js";
 import { AuthService } from "../services/auth.service.js";
 
-const DEFAULT_ADMIN_EMAIL = "root.seatsync@gmail.com";
-const DEFAULT_ADMIN_PASSWORD = "Admin@123";
+const DEFAULT_ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+const DEFAULT_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 export async function seedExamsAdmin() {
     try {
+        if (!DEFAULT_ADMIN_EMAIL || !DEFAULT_ADMIN_PASSWORD) {
+            console.error("[Seeder] ADMIN_EMAIL or ADMIN_PASSWORD is not set in environment variables. Skipping admin seeder.");
+            return;
+        }
+
         // Check if admin already exists
         const existingAdmin = await User.findOne({
             where: {
@@ -14,7 +19,7 @@ export async function seedExamsAdmin() {
         });
 
         if (existingAdmin) {
-            console.log(`[Seeder] Admin user ${DEFAULT_ADMIN_EMAIL} already exists. Resetting lockout and syncing credentials.`);
+            console.log(`[Seeder] Admin user already exists. Resetting lockout and syncing credentials.`);
 
             const passwordHash = await AuthService.hashPassword(DEFAULT_ADMIN_PASSWORD);
 
@@ -30,7 +35,7 @@ export async function seedExamsAdmin() {
             return;
         }
 
-        console.log(`[Seeder] Creating root admin user: ${DEFAULT_ADMIN_EMAIL}...`);
+        console.log(`[Seeder] Creating root admin user...`);
 
         // Hash password
         const passwordHash = await AuthService.hashPassword(DEFAULT_ADMIN_PASSWORD);
