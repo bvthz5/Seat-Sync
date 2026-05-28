@@ -18,6 +18,7 @@ router.post('/auto-register', internalSeatingController.autoRegisterStudents);
 router.post('/save', internalSeatingController.saveAllocation);
 router.post('/slot', internalSeatingController.quickAddSlot);
 router.get('/exams/:examId/students', internalSeatingController.getExamStudents);
+router.get('/registered-students', internalSeatingController.getRegisteredStudents);
 router.delete('/allocations/all', internalSeatingController.clearAllAllocations);
 router.delete('/allocation/:examDate/:session/:hallId', internalSeatingController.clearAllocation);
 

@@ -26,6 +26,12 @@ export const InternalSeatingService = {
         return r.data;
     },
 
+    /** Get all registered students for a slot (total eligible) */
+    getRegisteredStudents: async (examDate: string, session: string, seriesId: number) => {
+        const r = await api.get(`${PREFIX}/registered-students`, { params: { examDate, session, seriesId } });
+        return r.data;
+    },
+
     /** Get hall layout with current allocations */
     getHallLayout: async (hallId: number, examDate: string, session: string, seriesId: number) => {
         const r = await api.get(`${PREFIX}/halls/${hallId}/layout`, { params: { examDate, session, seriesId } });

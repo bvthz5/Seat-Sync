@@ -1,7 +1,6 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import StudentLogin from './pages/StudentLogin';
-import StudentRegister from './pages/StudentRegister';
 import StudentForgotPassword from './pages/StudentForgotPassword';
 import StudentResetPassword from './pages/StudentResetPassword';
 import StudentChangePassword from './pages/StudentChangePassword';
@@ -20,11 +19,10 @@ const StudentApp: React.FC = () => {
   return (
     <StudentThemeProvider>
       <Routes>
-        <Route index element={<Navigate to="login" replace />} />
+        <Route index element={<Navigate to="/student/login" replace />} />
 
         {/* Auth Routes */}
         <Route path="login" element={<StudentLogin />} />
-        <Route path="register" element={<StudentRegister />} />
         <Route path="forgot-password" element={<StudentForgotPassword />} />
         <Route path="reset-password" element={<StudentResetPassword />} />
         <Route path="change-password" element={<StudentChangePassword />} />
@@ -44,7 +42,7 @@ const StudentApp: React.FC = () => {
         </Route>
 
         {/* Default route */}
-        <Route path="*" element={<Navigate to="login" replace />} />
+        <Route path="*" element={<Navigate to="/student/login" replace />} />
       </Routes>
     </StudentThemeProvider>
   );

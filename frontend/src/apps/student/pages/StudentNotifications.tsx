@@ -73,7 +73,7 @@ const StudentNotifications: React.FC = () => {
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className={`w-full sm:w-60 pl-11 pr-4 py-3 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 transition-all font-semibold shadow-sm text-sm ${
                                 isDark 
-                                    ? 'bg-[#0C1220] border-slate-800 text-slate-200' 
+                                    ? 'bg-slate-900/80 border-slate-800 shadow-inner text-slate-200 focus:bg-slate-900' 
                                     : 'bg-white border-slate-200 text-slate-800 shadow-sm'
                             }`}
                         />

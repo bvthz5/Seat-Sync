@@ -325,12 +325,12 @@ const StudentDashboard: React.FC = () => {
                     </div>
 
                     <div className={`rounded-3xl border overflow-hidden shadow-xl transition-colors duration-500 ${
-                        isDark ? 'bg-[#0C1220]/80 border-slate-800/85' : 'bg-white border-slate-200'
+                        isDark ? 'bg-[#131B2F]/90 border-slate-800/70 shadow-[0_8px_30px_rgb(0,0,0,0.5)]' : 'bg-white border-slate-200'
                     }`}>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead>
-                                    <tr className={`border-b transition-colors duration-500 ${isDark ? 'bg-slate-900/40 border-slate-800/85' : 'bg-slate-50 border-slate-100'}`}>
+                                    <tr className={`border-b transition-colors duration-500 ${isDark ? 'bg-slate-900/60 border-slate-800/60' : 'bg-slate-50 border-slate-100'}`}>
                                         <th className="px-6 py-4.5 text-[9px] font-black uppercase tracking-wider text-slate-500">Subject</th>
                                         <th className="px-6 py-4.5 text-[9px] font-black uppercase tracking-wider text-slate-500">Chronology</th>
                                         <th className="px-6 py-4.5 text-[9px] font-black uppercase tracking-wider text-slate-500 text-center">Status</th>

@@ -322,12 +322,6 @@ const StudentLogin: React.FC = () => {
                         <p className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">
                             Protected by SeatSync Identity Server
                         </p>
-                        <p className="text-sm text-slate-500 font-medium">
-                            Don't have an account?{' '}
-                            <Link to="/student/register" className="font-bold text-[#0f172a] hover:text-blue-600 transition-colors">
-                                Register now
-                            </Link>
-                        </p>
                     </div>
                 </div>
             </div>

@@ -258,7 +258,7 @@ const StudentProfile: React.FC = () => {
             <div className="grid lg:grid-cols-2 gap-8">
                 {/* Personal Information */}
                 <section className={`rounded-3xl border overflow-hidden flex flex-col shadow-xl backdrop-blur-xl transition-colors duration-500 ${
-                    isDark ? 'bg-[#0C1220]/80 border-slate-800/85' : 'bg-white border-slate-200'
+                    isDark ? 'bg-[#131B2F]/90 border-slate-800/70 shadow-[0_8px_30px_rgb(0,0,0,0.5)]' : 'bg-white border-slate-200'
                 }`}>
                     <div className={`px-6 py-4.5 border-b flex items-center gap-3 transition-colors duration-500 ${
                         isDark ? 'bg-slate-900/40 border-slate-800' : 'bg-slate-50 border-slate-100'
@@ -323,7 +323,7 @@ const StudentProfile: React.FC = () => {
 
                 {/* Academic Records */}
                 <section className={`rounded-3xl border overflow-hidden flex flex-col shadow-xl backdrop-blur-xl transition-colors duration-500 ${
-                    isDark ? 'bg-[#0C1220]/80 border-slate-800/85' : 'bg-white border-slate-200'
+                    isDark ? 'bg-[#131B2F]/90 border-slate-800/70 shadow-[0_8px_30px_rgb(0,0,0,0.5)]' : 'bg-white border-slate-200'
                 }`}>
                     <div className={`px-6 py-4.5 border-b flex items-center justify-between transition-colors duration-500 ${
                         isDark ? 'bg-slate-900/40 border-slate-800' : 'bg-slate-50 border-slate-100'

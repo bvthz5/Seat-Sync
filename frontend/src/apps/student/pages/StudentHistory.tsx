@@ -68,7 +68,7 @@ const StudentHistory: React.FC = () => {
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className={`w-full md:w-64 pl-11 pr-4 py-3 border rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 transition-all font-semibold shadow-sm text-sm ${
                                 isDark 
-                                    ? 'bg-[#0C1220] border-slate-800 text-slate-200' 
+                                    ? 'bg-slate-900/80 border-slate-800 shadow-inner text-slate-200 focus:bg-slate-900' 
                                     : 'bg-white border-slate-200 text-slate-800 shadow-sm'
                             }`}
                         />
@@ -90,12 +90,12 @@ const StudentHistory: React.FC = () => {
 
             {/* Desktop Table View */}
             <div className={`rounded-3xl border overflow-hidden shadow-2xl backdrop-blur-xl transition-colors duration-500 ${
-                isDark ? 'bg-[#0C1220]/80 border-slate-800/85' : 'bg-white border-slate-200'
+                isDark ? 'bg-[#131B2F]/90 border-slate-800/70 shadow-[0_8px_30px_rgb(0,0,0,0.5)]' : 'bg-white border-slate-200'
             }`}>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
-                            <tr className={`border-b transition-colors duration-500 ${isDark ? 'bg-slate-900/40 border-slate-800/85' : 'bg-slate-50 border-slate-100'}`}>
+                            <tr className={`border-b transition-colors duration-500 ${isDark ? 'bg-slate-900/60 border-slate-800/60' : 'bg-slate-50 border-slate-100'}`}>
                                 <th className="px-8 py-4.5 text-[9px] font-black uppercase tracking-wider text-slate-500">Exam Details</th>
                                 <th className="px-8 py-4.5 text-[9px] font-black uppercase tracking-wider text-slate-500">Date & Session</th>
                                 <th className="px-8 py-4.5 text-[9px] font-black uppercase tracking-wider text-slate-500">Status</th>
@@ -106,7 +106,7 @@ const StudentHistory: React.FC = () => {
                         <tbody className={`divide-y transition-colors duration-500 ${isDark ? 'divide-slate-800/40' : 'divide-slate-100'}`}>
                             {filteredHistory.length > 0 ? (
                                 filteredHistory.map((exam, i) => (
-                                    <tr key={exam.examId} className={`group transition-colors ${isDark ? 'hover:bg-slate-900/10' : 'hover:bg-slate-50'}`}>
+                                    <tr key={exam.examId} className={`group transition-colors ${isDark ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'}`}>
                                         <td className="px-8 py-5">
                                             <div className="flex items-center gap-2">
                                                 <p className={`font-extrabold text-sm group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{exam.subject}</p>

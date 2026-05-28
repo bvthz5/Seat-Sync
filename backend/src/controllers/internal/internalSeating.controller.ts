@@ -12,7 +12,8 @@ import {
     InternalBlock,
     InternalFloor,
     InternalExamRegistration,
-    InternalExamDepartment
+    InternalExamDepartment,
+    Subject
 } from '../../models/index.js';
 import { InternalSeatAllocator } from '../../engines/internal/internalSeatAllocator.engine.js';
 
@@ -531,6 +532,156 @@ export const internalSeatingController = {
             });
             return res.json({ students: registrations.map(r => r.Student) });
         } catch (error: any) {
+            return res.status(500).json({ message: error.message });
+        }
+    },
+
+    /** Get all registered students for a specific date, session, and series */
+    getRegisteredStudents: async (req: Request, res: Response) => {
+        try {
+            let { examDate, session, seriesId } = req.query as any;
+
+            if (!examDate || examDate === 'undefined' || !session || session === 'undefined' || !seriesId || seriesId === 'undefined') {
+                return res.json([]);
+            }
+
+            // Clean date if it contains session suffix
+            if (typeof examDate === 'string' && examDate.includes('-') && examDate.split('-').length > 3) {
+                examDate = examDate.split('-').slice(0, 3).join('-');
+            }
+
+            // 1. Fetch exams for this slot
+            const exams = await InternalExam.findAll({
+                where: {
+                    ExamDate: examDate,
+                    InternalExamSeriesID: Number(seriesId),
+                    [Op.and]: [where(fn('UPPER', col('Session')), (session as string).toUpperCase())]
+                },
+                attributes: ['InternalExamID', 'SubjectCode', 'SubjectName']
+            });
+
+            if (exams.length === 0) return res.json([]);
+
+            const examIds = exams.map(e => e.InternalExamID);
+
+            // 2. Fetch all explicit registrations for these exams
+            let registrations = await InternalExamRegistration.findAll({
+                where: { InternalExamID: { [Op.in]: examIds } },
+                include: [
+                    {
+                        model: InternalStudent,
+                        as: 'Student',
+                        include: [{ model: Department, as: 'Department' }]
+                    },
+                    {
+                        model: InternalExam,
+                        attributes: ['SubjectCode', 'SubjectName']
+                    }
+                ]
+            });
+
+            // 2b. Implicit Discovery (Same as Engine) if explicit is empty
+            const virtualRegistrations: any[] = [];
+            if (registrations.length === 0) {
+                
+                let examDepts = await InternalExamDepartment.findAll({
+                    where: { InternalExamID: { [Op.in]: examIds } }
+                });
+
+                if (examDepts.length === 0) {
+                    const subjectCodes = [...new Set(exams.map(e => e.SubjectCode))];
+                    const subjects = await Subject.findAll({
+                        where: {
+                            [Op.or]: subjectCodes.map(code => 
+                                where(fn('UPPER', col('SubjectCode')), code.toUpperCase())
+                            )
+                        }
+                    });
+                    if (subjects.length > 0) {
+                        const codeToDept = new Map<string, number>();
+                        subjects.forEach((s: any) => codeToDept.set(s.SubjectCode.toUpperCase(), s.DepartmentID));
+                        for (const exam of exams) {
+                            const deptId = codeToDept.get(exam.SubjectCode.toUpperCase());
+                            if (deptId) examDepts.push({ InternalExamID: exam.InternalExamID, DepartmentID: deptId } as any);
+                        }
+                    }
+                }
+
+                if (examDepts.length === 0) {
+                    const allDepts = await Department.findAll({ attributes: ['DepartmentID', 'DepartmentCode'] });
+                    for (const exam of exams) {
+                        const code = exam.SubjectCode.toUpperCase();
+                        const matchedDept = allDepts
+                            .filter((d: any) => d.DepartmentCode && code.startsWith(d.DepartmentCode.toUpperCase()))
+                            .sort((a: any, b: any) => b.DepartmentCode.length - a.DepartmentCode.length)[0];
+                        if (matchedDept) {
+                            examDepts.push({ InternalExamID: exam.InternalExamID, DepartmentID: (matchedDept as any).DepartmentID } as any);
+                        }
+                    }
+                }
+
+                const deptIds = [...new Set(examDepts.map((d: any) => Number(d.DepartmentID)))] as number[];
+                if (deptIds.length > 0) {
+                    const students = await InternalStudent.findAll({
+                        where: { DepartmentID: { [Op.in]: deptIds }, Status: 'ACTIVE' },
+                        include: [{ model: Department, as: 'Department' }]
+                    });
+
+                    const deptToExam = new Map<number, any>();
+                    examDepts.forEach((ed: any) => deptToExam.set(ed.DepartmentID, exams.find(e => e.InternalExamID === ed.InternalExamID)));
+
+                    const processedStudentIds = new Set<number>();
+                    for (const s of students) {
+                        if (processedStudentIds.has(s.InternalStudentID)) continue;
+                        processedStudentIds.add(s.InternalStudentID);
+                        
+                        const exam = deptToExam.get(s.DepartmentID || 0);
+                        if (exam) {
+                            virtualRegistrations.push({
+                                InternalExamID: exam.InternalExamID,
+                                InternalStudentID: s.InternalStudentID,
+                                Student: s,
+                                Exam: exam,
+                                isVirtual: true
+                            });
+                        }
+                    }
+                }
+            }
+
+            // 3. Find which students are seated
+            const allocations = await InternalSeatAllocation.findAll({
+                where: { InternalExamID: { [Op.in]: examIds } },
+                attributes: ['InternalStudentID', 'InternalSeatID']
+            });
+
+            const seatedStudentIds = new Set(allocations.map(a => a.InternalStudentID));
+
+            // 4. Map the response
+            const finalRegs = registrations.length > 0 ? registrations : virtualRegistrations;
+            
+            // Deduplicate to show only unique students per session (matches allocation engine)
+            const uniqueStudentIds = new Set<number>();
+            const deduplicatedRegs: any[] = [];
+            for (const reg of finalRegs) {
+                if (uniqueStudentIds.has(reg.InternalStudentID)) continue;
+                uniqueStudentIds.add(reg.InternalStudentID);
+                deduplicatedRegs.push(reg);
+            }
+
+            const result = deduplicatedRegs.map(reg => {
+                const regJSON = reg.isVirtual ? reg : reg.toJSON();
+                // Ensure Exam object works both for alias and direct
+                if (!regJSON.Exam && regJSON.InternalExam) {
+                    regJSON.Exam = regJSON.InternalExam;
+                }
+                regJSON.isSeated = seatedStudentIds.has(reg.InternalStudentID);
+                return regJSON;
+            });
+
+            return res.json(result);
+        } catch (error: any) {
+            console.error('getRegisteredStudents Error:', error);
             return res.status(500).json({ message: error.message });
         }
     },

@@ -180,7 +180,7 @@ const parseFloorLabel = (floorName: string, floorNum: number, roomCode: string) 
         // e.g., MTB-207, Room 207, 207 -> starts with optional letters, then a digit
         const match = roomCode.match(/(?:^|\D)(\d)\d{2}(?:\D|$)/);
         if (match) {
-            const digit = parseInt(match[1]);
+            const digit = parseInt(match[1] as string);
             if (digit === 0) return "Ground Floor";
             const suffix = digit === 1 ? 'st' : digit === 2 ? 'nd' : digit === 3 ? 'rd' : 'th';
             return `${digit}${suffix} Floor`;
@@ -384,7 +384,9 @@ export const getStudentDashboard = async (req: Request, res: Response) => {
                         benchNumber: seat?.BenchNumber,
                         roomCode: roomCode, 
                         blockName: room?.InternalBlock?.BlockName, 
-                        floorName: floorLabel 
+                        floorName: floorLabel,
+                        rowLayout: room?.RowLayout,
+                        seatsPerBench: room?.SeatsPerBench
                     };
                 }
             } else {
@@ -394,7 +396,7 @@ export const getStudentDashboard = async (req: Request, res: Response) => {
                     const room = seat?.Room;
                     const roomCode = room?.RoomCode || room?.RoomName || "";
                     let floorLabel = parseFloorLabel(room?.Floor?.FloorName, room?.Floor?.FloorNumber, roomCode);
-                    seating = { examId: targetExam.examId, isInternal: false, seatNumber: seat?.SeatIndex, benchNumber: seat?.BenchIndex, rowLabel: seat?.RowIndex, roomCode: roomCode, capacity: room?.TotalCapacity || room?.Capacity, blockName: room?.Block?.BlockName, floorName: floorLabel, roomType: room?.RoomType, benchMode: room?.BenchMode };
+                    seating = { examId: targetExam.examId, isInternal: false, seatNumber: seat?.SeatIndex, benchNumber: seat?.BenchIndex, rowLabel: seat?.RowIndex, roomCode: roomCode, capacity: room?.TotalCapacity || room?.Capacity, blockName: room?.Block?.BlockName, floorName: floorLabel, roomType: room?.RoomType, benchMode: room?.BenchMode, rowLayout: room?.RowLayout, seatsPerBench: room?.SeatsPerBench };
                 }
             }
         }
@@ -554,7 +556,9 @@ export const getStudentSeating = async (req: Request, res: Response) => {
                     benchNumber: seat.BenchNumber,
                     roomCode: room.RoomCode || room.RoomName, 
                     blockName: room.InternalBlock?.BlockName, 
-                    floorName: parseFloorLabel(room.InternalFloor?.FloorName, room.InternalFloor?.FloorNumber, room.RoomCode || room.RoomName || "")
+                    floorName: parseFloorLabel(room.InternalFloor?.FloorName, room.InternalFloor?.FloorNumber, room.RoomCode || room.RoomName || ""),
+                    rowLayout: room.RowLayout,
+                    seatsPerBench: room.SeatsPerBench
                 }, 
                 layout: roomLayout 
             }});
@@ -565,7 +569,7 @@ export const getStudentSeating = async (req: Request, res: Response) => {
             const room = seat?.Room;
             const layout = await SeatAllocation.findAll({ where: { ExamID: targetExam.ExamID }, include: [{ model: Seat, required: true, where: { RoomID: seat.RoomID } }, { model: Student, include: [{ model: User, attributes: ["FullName"] }] }] });
             const roomLayout = layout.map((item: any) => ({ studentId: item.StudentID, seatNumber: item.Seat?.SeatIndex, rowLabel: item.Seat?.RowIndex, benchNumber: item.Seat?.BenchIndex, isMe: item.StudentID === student?.StudentID }));
-            res.json({ success: true, data: { exam: mappedInfo, assignment: { seatNumber: seat.SeatIndex, benchNumber: seat.BenchIndex, rowLabel: seat.RowIndex, roomCode: room.RoomCode || room.RoomName, blockName: room.Block?.BlockName, floorName: parseFloorLabel(room.Floor?.FloorName, room.Floor?.FloorNumber, room.RoomCode || room.RoomName || ""), roomType: room.RoomType, capacity: room.TotalCapacity || room.Capacity }, layout: roomLayout } });
+            res.json({ success: true, data: { exam: mappedInfo, assignment: { seatNumber: seat.SeatIndex, benchNumber: seat.BenchIndex, rowLabel: seat.RowIndex, roomCode: room.RoomCode || room.RoomName, blockName: room.Block?.BlockName, floorName: parseFloorLabel(room.Floor?.FloorName, room.Floor?.FloorNumber, room.RoomCode || room.RoomName || ""), roomType: room.RoomType, capacity: room.TotalCapacity || room.Capacity, rowLayout: room.RowLayout, seatsPerBench: room.SeatsPerBench }, layout: roomLayout } });
         }
     } catch (error) {
         console.error("Seating error:", error);

@@ -63,7 +63,7 @@ const StudentSettings: React.FC = () => {
                 <div className="space-y-6">
                     {/* Visual Configuration */}
                     <section className={`rounded-3xl border p-6 sm:p-8 shadow-xl backdrop-blur-xl space-y-6 transition-colors duration-500 ${
-                        isDark ? 'bg-[#0C1220]/80 border-slate-800/85' : 'bg-white border-slate-200'
+                        isDark ? 'bg-[#131B2F]/90 border-slate-800/70 shadow-[0_8px_30px_rgb(0,0,0,0.5)]' : 'bg-white border-slate-200'
                     }`}>
                         <div className={`flex items-center gap-3 border-b pb-4 ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
                             <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
@@ -96,7 +96,7 @@ const StudentSettings: React.FC = () => {
 
                     {/* Bulletins Configuration */}
                     <section className={`rounded-3xl border p-6 sm:p-8 shadow-xl backdrop-blur-xl space-y-6 transition-colors duration-500 ${
-                        isDark ? 'bg-[#0C1220]/80 border-slate-800/85' : 'bg-white border-slate-200'
+                        isDark ? 'bg-[#131B2F]/90 border-slate-800/70 shadow-[0_8px_30px_rgb(0,0,0,0.5)]' : 'bg-white border-slate-200'
                     }`}>
                         <div className={`flex items-center gap-3 border-b pb-4 ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
                             <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
@@ -129,7 +129,7 @@ const StudentSettings: React.FC = () => {
 
                     {/* Security Info */}
                     <section className={`rounded-3xl border p-6 sm:p-8 shadow-xl backdrop-blur-xl space-y-6 transition-colors duration-500 ${
-                        isDark ? 'bg-[#0C1220]/80 border-slate-800/85' : 'bg-white border-slate-200'
+                        isDark ? 'bg-[#131B2F]/90 border-slate-800/70 shadow-[0_8px_30px_rgb(0,0,0,0.5)]' : 'bg-white border-slate-200'
                     }`}>
                         <div className={`flex items-center gap-3 border-b pb-4 ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
                             <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${

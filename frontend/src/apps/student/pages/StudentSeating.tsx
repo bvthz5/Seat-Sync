@@ -69,7 +69,7 @@ const StudentSeating: React.FC = () => {
         return (
             <div className="flex-1 flex items-center justify-center min-h-[70vh] p-6">
                 <div className={`max-w-lg w-full rounded-3xl border p-12 text-center shadow-2xl backdrop-blur-xl transition-all duration-500 relative overflow-hidden ${
-                    isDark ? 'bg-[#0C1220]/90 border-slate-800/80' : 'bg-white/90 border-slate-200'
+                    isDark ? 'bg-[#131B2F]/95 border-slate-800/70 shadow-[0_8px_30px_rgb(0,0,0,0.6)]' : 'bg-white/90 border-slate-200'
                 }`}>
                     <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-rose-500 to-transparent opacity-50" />
                     <div className="absolute -top-24 -right-24 w-48 h-48 bg-rose-500/10 rounded-full blur-[60px] pointer-events-none" />
@@ -131,7 +131,7 @@ const StudentSeating: React.FC = () => {
 
             {error ? (
                 <div className={`rounded-3xl border p-10 text-center shadow-xl backdrop-blur-xl transition-colors duration-500 ${
-                    isDark ? 'bg-[#0C1220]/80 border-slate-800/85' : 'bg-white border-slate-200'
+                    isDark ? 'bg-[#131B2F]/90 border-slate-800/70 shadow-[0_8px_30px_rgb(0,0,0,0.5)]' : 'bg-white border-slate-200'
                 }`}>
                     <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-5 border ${
                         isDark ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-600 border-amber-200'
@@ -151,7 +151,7 @@ const StudentSeating: React.FC = () => {
                     {/* LEFT Column: Exam Location Details */}
                     <div className="space-y-6">
                         <section className={`rounded-3xl border p-8 space-y-8 shadow-xl backdrop-blur-xl transition-colors duration-500 ${
-                            isDark ? 'bg-[#0C1220]/80 border-slate-800/85' : 'bg-white border-slate-200'
+                            isDark ? 'bg-[#131B2F]/90 border-slate-800/70 shadow-[0_8px_30px_rgb(0,0,0,0.5)]' : 'bg-white border-slate-200'
                         }`}>
                             <div>
                                 <h3 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.25em] mb-5">Exam Metadata</h3>
@@ -197,7 +197,7 @@ const StudentSeating: React.FC = () => {
 
                         {/* Top Down Visualization Map */}
                         <section className={`rounded-3xl border p-6 sm:p-8 shadow-xl backdrop-blur-xl relative overflow-hidden transition-colors duration-500 ${
-                            isDark ? 'bg-[#0C1220]/80 border-slate-800/85' : 'bg-white border-slate-200'
+                            isDark ? 'bg-[#131B2F]/90 border-slate-800/70 shadow-[0_8px_30px_rgb(0,0,0,0.5)]' : 'bg-white border-slate-200'
                         }`}>
                             <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/5 rounded-full blur-[60px] pointer-events-none" />
                             
@@ -228,8 +228,8 @@ const StudentSeating: React.FC = () => {
                             <div className={`rounded-2xl border p-6 sm:p-10 shadow-inner flex items-center justify-center overflow-x-auto w-full transition-colors duration-500 ${
                                 isDark ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-50 border-slate-200'
                             }`}>
-                                <div className="min-w-[480px] w-full flex justify-center">
-                                    <SeatingVisualization layout={layout} mySeat={assignment} />
+                                <div className="min-w-fit w-full flex justify-center">
+                                    <SeatingVisualization layout={layout} mySeat={assignment} isDark={isDark} />
                                 </div>
                             </div>
 
@@ -237,7 +237,6 @@ const StudentSeating: React.FC = () => {
                             <div className="mt-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 px-2">
                                 <div className="flex flex-wrap items-center gap-6">
                                     <LegendItem color="bg-cyan-500 shadow-[0_0_12px_rgba(6,182,212,0.5)]" label="Active Seat" />
-                                    <LegendItem color={isDark ? 'bg-slate-800' : 'bg-slate-200'} label="Reserved Seat" />
                                     <LegendItem color={`bg-transparent border border-dashed ${isDark ? 'border-slate-800' : 'border-slate-300'}`} label="Vacant Slot" />
                                 </div>
                                 <div className={`px-3 py-1 border rounded-lg shrink-0 transition-colors duration-500 ${
@@ -270,17 +269,16 @@ const StudentSeating: React.FC = () => {
                         </button>
                     </div>
                     
-                    <div className={`flex-1 rounded-3xl border shadow-inner flex items-center justify-center overflow-auto p-10 transition-colors duration-500 ${
+                    <div className={`flex-1 rounded-3xl border shadow-inner flex items-center justify-center overflow-auto p-4 sm:p-10 transition-colors duration-500 ${
                         isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'
                     }`}>
-                        <div className="min-w-fit flex justify-center scale-[1.2] origin-center">
-                            <SeatingVisualization layout={layout} mySeat={assignment} />
+                        <div className="min-w-fit w-full flex items-center justify-center h-full">
+                            <SeatingVisualization layout={layout} mySeat={assignment} isDark={isDark} />
                         </div>
                     </div>
                     
                     <div className="mt-8 flex justify-center gap-8">
                         <LegendItem color="bg-cyan-500 shadow-[0_0_12px_rgba(6,182,212,0.5)]" label="Active Seat" />
-                        <LegendItem color={isDark ? 'bg-slate-800' : 'bg-slate-200'} label="Reserved Seat" />
                         <LegendItem color={`bg-transparent border border-dashed ${isDark ? 'border-slate-800' : 'border-slate-300'}`} label="Vacant Slot" />
                     </div>
                 </div>
