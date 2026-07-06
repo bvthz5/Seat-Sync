@@ -101,7 +101,7 @@ const ForgotPassword: React.FC = () => {
     return (
         <div className="w-full min-h-screen flex text-slate-800 bg-white overflow-hidden">
             {/* Left Panel */}
-            <div className="hidden lg:flex w-1/2 bg-slate-900 relative flex-col justify-between p-16 text-white h-screen overflow-hidden">
+            <div className="hidden lg:flex w-1/2 bg-slate-900 relative flex-col justify-between p-16 text-white min-h-screen overflow-hidden">
                 <div className="absolute inset-0 opacity-50"><canvas className="w-full h-full" /></div>
                 <div className="relative z-10 flex items-center gap-3"><SeatSyncLogo /><span className="text-xl font-bold tracking-wide">SeatSync</span></div>
                 <div className="relative z-10 max-w-lg w-full">
@@ -112,7 +112,7 @@ const ForgotPassword: React.FC = () => {
             </div>
 
             {/* Right Panel */}
-            <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white h-screen relative">
+            <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white min-h-screen relative py-12">
                 <RevealBackground />
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="w-full max-w-[480px] flex flex-col gap-8 relative z-10">
                     <div className="text-center">

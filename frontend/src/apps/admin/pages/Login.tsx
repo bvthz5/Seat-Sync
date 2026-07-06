@@ -393,7 +393,7 @@ const AdminLogin: React.FC = () => {
         <div className="w-full min-h-screen flex text-slate-800 bg-white overflow-hidden">
 
             {/* --- LEFT PANEL (Updated with Animation & New Text) --- */}
-            <div className="hidden lg:flex w-1/2 bg-slate-900 relative flex-col justify-between p-16 text-white h-screen overflow-hidden">
+            <div className="hidden lg:flex w-1/2 bg-slate-900 relative flex-col justify-between p-16 text-white min-h-screen overflow-hidden">
                 <NeuralNetworkBackground />
                 <div className="relative z-10 flex items-center gap-3">
                     <SeatSyncLogo />
@@ -420,7 +420,7 @@ const AdminLogin: React.FC = () => {
             </div>
 
             {/* --- RIGHT PANEL (Rebuilt Perfectly) --- */}
-            <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white h-screen overflow-y-auto relative">
+            <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white min-h-screen relative py-12">
                 <RevealBackground />
                 <motion.div
                     variants={containerVariants}

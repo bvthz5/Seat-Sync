@@ -391,9 +391,9 @@ export default function AttendanceConsole() {
                 </div>
             </header>
 
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex flex-col lg:flex-row overflow-auto lg:overflow-hidden">
                 {/* 2. LEFT PANEL: Controls & List View */}
-                <aside className="w-[340px] xl:w-[400px] bg-white border-r border-slate-200 flex flex-col shrink-0 z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
+                <aside className="w-full lg:w-[340px] xl:w-[400px] bg-white border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col shrink-0 z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
 
                     {/* Action Panel */}
                     <div className="p-5 border-b border-slate-100 bg-slate-50/50 space-y-3">
@@ -542,7 +542,7 @@ export default function AttendanceConsole() {
                 </aside>
 
                 {/* 3. RIGHT PANEL: Visual Seating Grid Map */}
-                <main className="flex-1 bg-slate-100 overflow-hidden flex flex-col relative inner-shadow-left">
+                <main className="flex-1 bg-slate-100 overflow-auto lg:overflow-hidden flex flex-col relative inner-shadow-left">
                     {/* Visual Grid Header */}
                     <div className="flex items-center justify-between p-6 border-b border-slate-200/80 bg-slate-50 shrink-0">
                         <div>

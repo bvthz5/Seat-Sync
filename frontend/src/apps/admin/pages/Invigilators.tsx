@@ -490,8 +490,8 @@ const Invigilators: React.FC = () => {
 
             {/* ── Page Header ───────────────────────────────── */}
             <div className="bg-white border-b border-slate-200/70 sticky top-0 z-30">
-                <div className="max-w-[1400px] mx-auto px-8 py-5">
-                    <div className="flex items-center justify-between gap-6">
+                <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-5">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 lg:gap-6">
                         <div className="flex items-center gap-4">
                             <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center shadow-lg shadow-slate-900/20">
                                 <Users size={18} className="text-white" />
@@ -504,7 +504,7 @@ const Invigilators: React.FC = () => {
                                 <p className="text-xs text-slate-400 mt-0.5">Staff Directory · Exam Duty Management</p>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2.5 shrink-0">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 shrink-0">
                             <button onClick={onReqOpen}
                                 className="relative h-10 px-5 rounded-[14px] border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 text-[13px] font-bold flex items-center gap-2.5 transition-all shadow-sm group">
                                 <Activity size={16} className="text-rose-500 transition-transform group-hover:scale-110" />
@@ -531,7 +531,7 @@ const Invigilators: React.FC = () => {
                                     </span>
                                 )}
                             </button>
-                            <div className="w-px h-6 bg-slate-200 mx-1" />
+                            <div className="hidden sm:block w-px h-6 bg-slate-200 mx-1" />
                             <button onClick={onBulkOpen}
                                 className="h-10 px-4 rounded-[14px] border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 text-[13px] font-bold flex items-center gap-2 transition-all shadow-sm">
                                 <Upload size={15} /> Import
@@ -554,10 +554,10 @@ const Invigilators: React.FC = () => {
                 </div>
             </div>
 
-            <div className="max-w-[1400px] mx-auto px-8 py-7 flex flex-col gap-6">
+            <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-6">
 
                 {/* ── KPI Row ─────────────────────────────────── */}
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <KpiCard loading={isLoading} label="Total Registered" value={stats.total} icon={<Briefcase size={19} className="text-slate-600" />} accent="bg-slate-100" delta="All time" />
                     <KpiCard loading={isLoading} label="Active & Eligible" value={stats.eligible} icon={<ShieldCheck size={19} className="text-emerald-600" />} accent="bg-emerald-50" />
                     <KpiCard loading={isLoading} label="On Leave / Flagged" value={stats.flagged} icon={<Clock size={19} className="text-amber-500" />} accent="bg-amber-50" />
@@ -565,8 +565,8 @@ const Invigilators: React.FC = () => {
                 </div>
 
                 {/* ── Search + Filter ──────────────────────────── */}
-                <div className="bg-white border border-slate-200/70 rounded-2xl px-5 py-3 flex items-center gap-4 shadow-sm">
-                    <div className="flex-1 flex items-center gap-2.5 min-w-0">
+                <div className="bg-white border border-slate-200/70 rounded-2xl px-5 py-3 flex flex-col md:flex-row md:items-center gap-4 shadow-sm">
+                    <div className="flex-1 flex items-center gap-2.5 min-w-0 w-full">
                         <Search size={15} className="text-slate-400 shrink-0" />
                         <input
                             id="searchQuery" name="searchQuery" autoComplete="off"
@@ -581,8 +581,8 @@ const Invigilators: React.FC = () => {
                             </button>
                         )}
                     </div>
-                    <div className="w-px h-5 bg-slate-200 shrink-0" />
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="hidden md:block w-px h-5 bg-slate-200 shrink-0" />
+                    <div className="flex items-center gap-2 shrink-0 justify-between md:justify-start w-full md:w-auto">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Dept</span>
                         <div className="relative">
                             <select id="deptFilter" name="deptFilter"
@@ -594,8 +594,8 @@ const Invigilators: React.FC = () => {
                             <ChevronDown size={11} className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                         </div>
                     </div>
-                    <div className="w-px h-5 bg-slate-200 shrink-0" />
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="hidden md:block w-px h-5 bg-slate-200 shrink-0" />
+                    <div className="flex items-center gap-2 shrink-0 justify-between md:justify-start w-full md:w-auto">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</span>
                         <div className="relative">
                             <select id="statusFilter" name="statusFilter"
@@ -611,20 +611,22 @@ const Invigilators: React.FC = () => {
                     </div>
                     {hasFilters && (
                         <>
-                            <div className="w-px h-5 bg-slate-200 shrink-0" />
+                            <div className="hidden md:block w-px h-5 bg-slate-200 shrink-0" />
                             <button onClick={() => { setSearchQuery(''); setSelectedDept(''); setSelectedStatus(''); setPage(1); }}
                                 className="text-xs font-bold text-slate-400 hover:text-rose-500 transition-colors flex items-center gap-1 shrink-0">
                                 <X size={11} /> Clear
                             </button>
                         </>
                     )}
-                    <span className="ml-auto text-xs text-slate-400 font-semibold shrink-0 bg-slate-50 px-2.5 py-1 rounded-lg">
+                    <span className="md:ml-auto text-xs text-slate-400 font-semibold shrink-0 bg-slate-50 px-2.5 py-1 rounded-lg self-start md:self-auto">
                         {filtered.length} records
                     </span>
                 </div>
 
                 {/* ── Table ───────────────────────────────────── */}
                 <div className="bg-white border border-slate-200/70 rounded-2xl overflow-hidden shadow-sm">
+                    <div className="overflow-x-auto">
+                        <div className="min-w-[1000px]">
 
                     {/* Table head */}
                     <div className="grid items-center px-6 py-3.5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white"
@@ -764,6 +766,8 @@ const Invigilators: React.FC = () => {
                             );
                         })
                     )}
+                        </div>
+                    </div>
 
                     {/* Footer */}
                     <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/40">

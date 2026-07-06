@@ -189,7 +189,7 @@ const StudentSeating: React.FC = () => {
                     {/* RIGHT Column: Visual Layout & Seat details */}
                     <div className="space-y-6">
                         {/* Highlights Row Cards */}
-                        <section className="grid grid-cols-3 gap-4 sm:gap-6">
+                        <section className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
                             <SeatCard label="SEAT NUMBER" value={assignment?.seatNumber || '-'} highlight isDark={isDark} />
                             <SeatCard label="ROW" value={assignment?.rowLabel || '-'} isDark={isDark} />
                             <SeatCard label="BENCH" value={assignment?.benchNumber || '-'} isDark={isDark} />

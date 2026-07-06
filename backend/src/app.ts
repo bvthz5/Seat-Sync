@@ -67,7 +67,14 @@ app.use(cors({
 
 // --- Security Middleware: Helmet ---
 app.use(helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" } // Allow cross-origin resources
+    crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow cross-origin resources
+    contentSecurityPolicy: {
+        directives: {
+            ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+            "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+            "img-src": ["'self'", "data:", "validator.swagger.io"]
+        },
+    }
 }));
 
 // Accept JSON body & Cookies early

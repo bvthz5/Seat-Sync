@@ -46,35 +46,44 @@ const DB_PORT = Number(process.env.DB_PORT || 3306);
 
 let sequelize: Sequelize;
 
-const hasMySQLConfig =
-    DB_NAME.length > 0 &&
-    DB_USER.length > 0 &&
-    DB_HOST.length > 0;
+if (DB_DIALECT === "sqlite") {
+    console.log("Initializing Sequelize with SQLite Config...");
+    sequelize = new Sequelize({
+        dialect: "sqlite",
+        storage: path.resolve(process.cwd(), "database.sqlite"),
+        logging: false,
+    });
+} else {
+    const hasMySQLConfig =
+        DB_NAME.length > 0 &&
+        DB_USER.length > 0 &&
+        DB_HOST.length > 0;
 
-console.log(`MySQL/MariaDB Config Check: Host=${DB_HOST}, Port=${DB_PORT}, Database=${DB_NAME}, User=${DB_USER}`);
+    console.log(`MySQL/MariaDB Config Check: Host=${DB_HOST}, Port=${DB_PORT}, Database=${DB_NAME}, User=${DB_USER}`);
 
-if (!hasMySQLConfig) {
-    throw new Error("Missing MySQL/MariaDB Config. Database name, user, and host are required.");
-}
-
-console.log("Initializing Sequelize with MySQL/MariaDB Config...");
-sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASS, {
-    dialect: "mysql",
-    dialectModule: mysql2,
-    host: DB_HOST,
-    port: DB_PORT,
-    logging: false,
-    define: {
-        charset: "utf8mb4",
-        collate: "utf8mb4_unicode_ci"
-    },
-    pool: {
-        max: 10,
-        min: 0,
-        acquire: 30000,
-        idle: 10000
+    if (!hasMySQLConfig) {
+        throw new Error("Missing MySQL/MariaDB Config. Database name, user, and host are required.");
     }
-});
+
+    console.log("Initializing Sequelize with MySQL/MariaDB Config...");
+    sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASS, {
+        dialect: "mysql",
+        dialectModule: mysql2,
+        host: DB_HOST,
+        port: DB_PORT,
+        logging: false,
+        define: {
+            charset: "utf8mb4",
+            collate: "utf8mb4_unicode_ci"
+        },
+        pool: {
+            max: 10,
+            min: 0,
+            acquire: 30000,
+            idle: 10000
+        }
+    });
+}
 
 export { sequelize };
 

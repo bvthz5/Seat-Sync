@@ -304,7 +304,7 @@ const InvigilatorLogin = () => {
         <div className="w-full min-h-screen flex text-slate-800 bg-white overflow-hidden font-sans">
 
             {/* LEFT PANEL - Branding */}
-            <div className="hidden lg:flex w-1/2 bg-[#1E1B4B] relative flex-col justify-between p-12 text-white h-screen overflow-hidden">
+            <div className="hidden lg:flex w-1/2 bg-[#1E1B4B] relative flex-col justify-between p-12 text-white min-h-screen overflow-hidden">
                 {/* Background Pattern */}
                 <div className="absolute inset-0 z-0 opacity-20" style={{ backgroundImage: 'radial-gradient(#6366f1 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
                 <NeuralNetworkBackground />

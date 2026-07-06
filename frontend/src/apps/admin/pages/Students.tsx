@@ -515,7 +515,7 @@ const Students: React.FC = () => {
                     </h1>
                     <p className="text-slate-500 font-medium text-xs mt-0.5">End-Semester Examination Management Portal</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                     <Button 
                         color="danger" 
                         variant="shadow" 

@@ -96,7 +96,7 @@ const Security: React.FC = () => {
                         <BreadcrumbItem>Security</BreadcrumbItem>
                         <BreadcrumbItem>Dashboard</BreadcrumbItem>
                     </Breadcrumbs>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                         <h1 className="text-4xl font-extrabold tracking-tight text-black leading-tight">
                             Security Command Center
                         </h1>

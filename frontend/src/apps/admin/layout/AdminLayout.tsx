@@ -21,6 +21,7 @@ const AdminLayout: React.FC = () => {
     const [isCollegeStructureModalOpen, setIsCollegeStructureModalOpen] = useState(false);
     const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
     const navigate = useNavigate();
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
 
     const fetchCounts = async () => {
         try {
@@ -41,6 +42,21 @@ const AdminLayout: React.FC = () => {
             return () => clearInterval(interval);
         }
     }, [user, notificationOpen]);
+
+    React.useEffect(() => {
+        const handleResize = () => {
+            const mobile = window.innerWidth < 1024;
+            setIsMobile(mobile);
+            if (mobile) {
+                setSidebarOpen(false);
+            } else {
+                setSidebarOpen(true);
+            }
+        };
+        handleResize();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     return (
         <div className="flex h-screen w-full bg-[#f8fafc] overflow-hidden font-sans selection:bg-indigo-100">
@@ -153,12 +169,22 @@ const AdminLayout: React.FC = () => {
                 </div>
             </div>
 
+            {isMobile && sidebarOpen && (
+                <div
+                    onClick={() => setSidebarOpen(false)}
+                    className="fixed inset-0 bg-black/40 backdrop-blur-sm z-30 transition-opacity duration-300"
+                />
+            )}
+
             <div
-                className="fixed left-0 top-16 bottom-0 z-40 transition-all duration-500 ease-in-out overflow-hidden glass-sidebar"
-                style={{ width: sidebarOpen ? '260px' : '88px' }}
+                className="fixed left-0 top-16 bottom-0 z-40 transition-all duration-500 ease-in-out overflow-hidden glass-sidebar shadow-xl lg:shadow-none"
+                style={{
+                    width: isMobile ? '260px' : (sidebarOpen ? '260px' : '88px'),
+                    transform: isMobile ? (sidebarOpen ? 'translateX(0)' : 'translateX(-100%)') : 'none'
+                }}
             >
                 <Sidebar 
-                    isOpen={sidebarOpen} 
+                    isOpen={isMobile ? true : sidebarOpen} 
                     onSeatingClick={() => setIsSeatingModalOpen(true)} 
                     onCollegeStructureClick={() => setIsCollegeStructureModalOpen(true)}
                     onStudentsClick={() => setIsStudentModalOpen(true)}
@@ -168,9 +194,9 @@ const AdminLayout: React.FC = () => {
             {/* Main Content Area */}
             <div
                 className="flex-1 flex flex-col h-full relative z-0 min-w-0 pt-16 transition-all duration-500"
-                style={{ marginLeft: sidebarOpen ? '260px' : '88px' }}
+                style={{ marginLeft: isMobile ? '0px' : (sidebarOpen ? '260px' : '88px') }}
             >
-                <main className="flex-1 overflow-auto p-8 bg-[#f8fafc]">
+                <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8 bg-[#f8fafc]">
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}

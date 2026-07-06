@@ -294,7 +294,7 @@ const InvigilatorAssign: React.FC = () => {
                             <Users2 size={28} className="drop-shadow-lg transform group-hover:scale-110 transition-transform duration-300" />
                         </div>
                         <div className="space-y-1.5">
-                            <div className="flex items-center gap-3">
+                            <div className="flex flex-wrap items-center gap-3">
                                 <h1 className="text-3xl font-black tracking-tight text-slate-900">
                                     Invigilator <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600">Distribution Console</span>
                                 </h1>
@@ -327,7 +327,7 @@ const InvigilatorAssign: React.FC = () => {
                 </div>
             </div>
 
-            <main className="max-w-[1400px] mx-auto px-8 py-10 relative z-10">
+            <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 relative z-10">
                 <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
                     {/* Sidebar Configuration */}
                     <aside className="xl:col-span-3 space-y-6">
