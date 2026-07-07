@@ -66,8 +66,9 @@ const CustomInput = ({
                 {isPassword && (
                     <button
                         type="button"
+                        aria-label={isVisible ? "Hide password" : "Show password"}
                         onClick={() => setIsVisible(!isVisible)}
-                        className="px-4 h-full flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors focus:outline-none"
+                        className="px-4 h-full flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
                     >
                         {isVisible ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
                     </button>
@@ -372,7 +373,7 @@ const InvigilatorLogin = () => {
                             </span>
                             Faculty Portal
                         </div>
-                        <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Invigilator Sign In</h2>
+                        <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Invigilator Sign In</h1>
                         <p className="text-slate-400 text-sm font-medium">Enter your credentials to manage exam sessions</p>
                     </motion.div>
 

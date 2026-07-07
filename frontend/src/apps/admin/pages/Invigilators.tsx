@@ -506,7 +506,7 @@ const Invigilators: React.FC = () => {
                         </div>
                         <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 shrink-0">
                             <button onClick={onReqOpen}
-                                className="relative h-10 px-5 rounded-[14px] border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 text-[13px] font-bold flex items-center gap-2.5 transition-all shadow-sm group">
+                                className="btn-secondary group">
                                 <Activity size={16} className="text-rose-500 transition-transform group-hover:scale-110" />
                                 Review Requests
                                 {pendingRequestsCount > 0 && (
@@ -519,7 +519,7 @@ const Invigilators: React.FC = () => {
                                 )}
                             </button>
                             <button onClick={onSwapOpen}
-                                className="relative h-10 px-5 rounded-[14px] border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 text-[13px] font-bold flex items-center gap-2.5 transition-all shadow-sm group">
+                                className="btn-secondary group">
                                 <RefreshCcw size={16} className="text-indigo-500 transition-transform group-hover:rotate-180 duration-500" />
                                 Swap Requests
                                 {pendingSwapsCount > 0 && (
@@ -533,20 +533,20 @@ const Invigilators: React.FC = () => {
                             </button>
                             <div className="hidden sm:block w-px h-6 bg-slate-200 mx-1" />
                             <button onClick={onBulkOpen}
-                                className="h-10 px-4 rounded-[14px] border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 text-[13px] font-bold flex items-center gap-2 transition-all shadow-sm">
+                                className="btn-secondary">
                                 <Upload size={15} /> Import
                             </button>
                             <button
                                 onClick={() => setIsDeleteAllOpen(true)}
-                                className="h-10 px-4 rounded-[14px] border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 hover:border-rose-300 text-[13px] font-bold flex items-center gap-2 transition-all shadow-sm group">
+                                className="btn-secondary !text-rose-600 !border-rose-200 hover:!bg-rose-50 group">
                                 <Trash2 size={15} className="transition-transform group-hover:rotate-12" /> Delete All
                             </button>
                             <button onClick={exportCSV}
-                                className="h-10 px-4 rounded-[14px] border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 text-[13px] font-bold flex items-center gap-2 transition-all shadow-sm">
+                                className="btn-secondary">
                                 <FileText size={15} /> Export
                             </button>
                             <button onClick={onAddOpen}
-                                className="h-10 px-6 rounded-[14px] bg-[#0F172A] hover:bg-slate-800 text-white text-[13px] font-black flex items-center gap-2.5 transition-all shadow-xl shadow-slate-900/10">
+                                className="btn-primary">
                                 <UserPlus size={16} /> Add Invigilator
                             </button>
                         </div>

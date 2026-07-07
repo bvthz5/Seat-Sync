@@ -24,7 +24,10 @@ export const initSocket = (httpServer: HTTPServer) => {
                 if (
                     allowedOrigins.has(origin) ||
                     origin.startsWith("http://localhost:") ||
-                    origin.startsWith("http://127.0.0.1:")
+                    origin.startsWith("http://127.0.0.1:") ||
+                    origin.includes("serveousercontent.com") ||
+                    origin.includes("serveo.net") ||
+                    origin.includes("localtunnel.me")
                 ) {
                     return callback(null, true);
                 }

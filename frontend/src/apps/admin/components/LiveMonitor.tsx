@@ -46,10 +46,10 @@ export const LiveMonitor: React.FC = () => {
                     <table className="w-full text-left border-collapse table-fixed">
                         <thead>
                             <tr>
-                                <th className="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[30%]">Facility Information</th>
-                                <th className="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[20%]">Current Status</th>
-                                <th className="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center w-[15%]">Load Factor</th>
-                                <th className="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest w-[25%]">Utilization Index</th>
+                                <th className="px-6 py-3 text-[10px] font-black text-slate-600 uppercase tracking-widest w-[30%]">Facility Information</th>
+                                <th className="px-6 py-3 text-[10px] font-black text-slate-600 uppercase tracking-widest w-[20%]">Current Status</th>
+                                <th className="px-6 py-3 text-[10px] font-black text-slate-600 uppercase tracking-widest text-center w-[15%]">Load Factor</th>
+                                <th className="px-6 py-3 text-[10px] font-black text-slate-600 uppercase tracking-widest w-[25%]">Utilization Index</th>
                                 <th className="px-6 py-3 w-[10%]"></th>
                             </tr>
                         </thead>
@@ -112,8 +112,11 @@ export const LiveMonitor: React.FC = () => {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-right w-[10%]">
-                                        <button className="p-1 px-2 text-slate-400 hover:text-indigo-600 transition-colors">
-                                            <ChevronRight size={18} />
+                                        <button
+                                            aria-label={`View details for ${room.roomName}`}
+                                            className="p-1 px-2 text-slate-400 hover:text-indigo-600 transition-colors"
+                                        >
+                                            <ChevronRight size={18} aria-hidden="true" />
                                         </button>
                                     </td>
                                 </tr>

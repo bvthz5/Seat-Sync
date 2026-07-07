@@ -1,4 +1,6 @@
 import "./config/env.js";
+import { Logger } from "./utils/logger.js";
+Logger.overrideConsole();
 import { connectDB } from "./config/database.js";
 import { startDependencyWatcher } from "./utils/autoDependencyInstaller.js";
 // import open from "open";
@@ -22,9 +24,12 @@ const startServer = async () => {
         await connectDB();
         console.log("Connected to database");
 
-        // Auto-seed admin user
-        const { seedExamsAdmin } = await import("./utils/seeder.js");
+        // Auto-seed admin user and test users
+        const { seedExamsAdmin, seedTestUsers } = await import("./utils/seeder.js");
         await seedExamsAdmin();
+        if (process.env.NODE_ENV !== "production") {
+            await seedTestUsers();
+        }
     } catch (error) {
         console.error("Database connection failed:", error);
         if (process.env.NODE_ENV === "production") {

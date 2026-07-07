@@ -46,7 +46,8 @@ const StudentLogin: React.FC = () => {
 
         setIsLoading(true);
         try {
-            const response = await fetch('http://localhost:5000/api/auth/student/login', {
+            const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+            const response = await fetch(`${apiBase}/auth/student/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ identifier: trimmedIdentifier, password }),
@@ -211,7 +212,7 @@ const StudentLogin: React.FC = () => {
                             <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
                             <span className="text-[10px] font-bold tracking-widest text-blue-700 uppercase">Student Portal</span>
                         </div>
-                        <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">Student Sign In</h2>
+                        <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">Student Sign In</h1>
                         <p className="text-sm text-slate-500 font-medium">Enter your credentials to access your dashboard</p>
                     </div>
 
@@ -280,8 +281,9 @@ const StudentLogin: React.FC = () => {
                                     />
                                     <button
                                         type="button"
+                                        aria-label={showPassword ? "Hide password" : "Show password"}
                                         onClick={() => setShowPassword(!showPassword)}
-                                        className="absolute right-4 text-slate-400 hover:text-slate-600 focus:outline-none transition-colors"
+                                        className="absolute right-4 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:rounded transition-colors"
                                     >
                                         {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                     </button>

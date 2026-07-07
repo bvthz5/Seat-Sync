@@ -39,12 +39,12 @@ export const QuickActions: React.FC = () => (
                 <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold leading-none">{label}</p>
                     <p className={`text-[10px] mt-0.5 leading-none ${
-                        variant === 'primary' ? 'text-indigo-200' :
-                        variant === 'danger' ? 'text-red-400' : 'text-slate-400'
+                        variant === 'primary' ? 'text-white/80' :
+                        variant === 'danger' ? 'text-red-500' : 'text-slate-500'
                     }`}>{desc}</p>
                 </div>
-                <ChevronRight size={13} className={`shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ${
-                    variant === 'primary' ? 'text-indigo-200' : 'text-slate-400'
+                <ChevronRight size={13} aria-hidden="true" className={`shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ${
+                    variant === 'primary' ? 'text-white/70' : 'text-slate-400'
                 }`} />
             </button>
         ))}

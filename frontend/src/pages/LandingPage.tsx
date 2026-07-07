@@ -166,9 +166,9 @@ const TiltCard: React.FC<RoleCardProps> = ({ title, description, icon, path, gra
 
                         {/* Text Content */}
                         <div className="mt-8">
-                            <h3 className="text-2xl font-bold text-slate-900 mb-3 tracking-tight group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-indigo-600 group-hover:to-purple-600 transition-all duration-300">
+                            <h2 className="text-2xl font-bold text-slate-900 mb-3 tracking-tight group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-indigo-600 group-hover:to-purple-600 transition-all duration-300">
                                 {title}
-                            </h3>
+                            </h2>
                             <p className="text-slate-500 font-medium leading-relaxed group-hover:text-slate-600 transition-colors">
                                 {description}
                             </p>
@@ -247,7 +247,7 @@ const LandingPage: React.FC = () => {
     const backgroundSpotlight = useMotionTemplate`radial-gradient(800px circle at ${mouseX}px ${mouseY}px, rgba(99, 102, 241, 0.05), transparent 80%)`;
 
     return (
-        <div className="relative min-h-screen w-full overflow-hidden font-sans text-slate-900 bg-[#f8f9fa] selection:bg-indigo-500/20 selection:text-indigo-900 cursor-auto lg:cursor-none">
+        <div role="main" className="relative min-h-screen w-full overflow-hidden font-sans text-slate-900 bg-[#f8f9fa] selection:bg-indigo-500/20 selection:text-indigo-900 cursor-auto lg:cursor-none">
             <CustomCursor />
             <MeshBackground />
 
@@ -338,7 +338,7 @@ const LandingPage: React.FC = () => {
                     className="absolute bottom-10 left-0 right-0 text-center pointer-events-none"
                 >
                     <p className="text-xs font-semibold text-slate-400/80 uppercase tracking-[0.2em]">
-                         2026 SeatSync Systems • Secure Identity Server v2.4
+                         {new Date().getFullYear()} SeatSync Systems • Secure Identity Server v2.4
                     </p>
                 </motion.div>
 

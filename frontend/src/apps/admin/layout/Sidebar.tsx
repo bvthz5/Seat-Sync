@@ -89,13 +89,14 @@ const Sidebar: React.FC<{
                                                 }
                                             }}
                                             title={!isOpen ? child.label : undefined}
+                                            aria-label={child.label}
                                             className={({ isActive }) => getLinkClass(isActive || isChildActiveCS, true)}
                                         >
                                             {({ isActive }) => {
                                                 const effectivelyActive = isActive || isChildActiveCS;
                                                 return (
                                                     <>
-                                                        <span className={effectivelyActive ? 'text-white' : 'text-slate-400 group-hover:text-indigo-600 transition-colors'}>{child.icon}</span>
+                                                        <span aria-hidden="true" className={effectivelyActive ? 'text-white' : 'text-slate-400 group-hover:text-indigo-600 transition-colors'}>{child.icon}</span>
                                                         {isOpen && <span className="truncate">{child.label}</span>}
                                                         {effectivelyActive && isOpen && (
                                                             <div className="absolute right-4 w-1.5 h-1.5 rounded-full bg-white/40 animate-pulse" />
@@ -140,13 +141,14 @@ const Sidebar: React.FC<{
                     }
                 }}
                 title={!isOpen ? item.label : undefined}
+                aria-label={item.label}
                 className={({ isActive }) => getLinkClass(isActive || isActiveStudents || isActiveSeating || isActiveCollegeStructure)}
             >
                 {({ isActive }) => {
                     const effectivelyActive = isActive || isActiveStudents || isActiveSeating || isActiveCollegeStructure;
                     return (
                         <>
-                            <span className={effectivelyActive ? 'text-white' : 'text-slate-400 group-hover:text-indigo-600 transition-colors'}>{item.icon}</span>
+                            <span aria-hidden="true" className={effectivelyActive ? 'text-white' : 'text-slate-400 group-hover:text-indigo-600 transition-colors'}>{item.icon}</span>
                             {isOpen && <span className="truncate">{item.label}</span>}
                             {effectivelyActive && isOpen && (
                                 <div className="absolute right-4 w-1.5 h-1.5 rounded-full bg-white/40 animate-pulse" />
@@ -162,23 +164,6 @@ const Sidebar: React.FC<{
         <aside className={`h-full bg-white/80 backdrop-blur-xl border-r border-slate-200/50 flex flex-col overflow-hidden transition-all duration-500 ease-in-out ${
             isOpen ? 'w-[260px]' : 'w-[88px]'
         }`}>
-            {/* Logo / Brand Header */}
-            <div className={`flex items-center h-16 shrink-0 transition-all duration-500 ${
-                isOpen ? 'px-6 gap-4 justify-start' : 'justify-center px-0'
-            }`}>
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shrink-0 shadow-lg shadow-indigo-100">
-                    <GraduationCap size={20} className="text-white" />
-                </div>
-                {isOpen && (
-                    <div className="flex flex-col">
-                        <span className="font-black text-lg text-slate-900 tracking-tight whitespace-nowrap leading-none">
-                            Seat<span className="text-indigo-600">Sync</span>
-                        </span>
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Admin Panel</span>
-                    </div>
-                )}
-            </div>
-
             {/* Navigation */}
             <nav className="flex-1 py-6 flex flex-col gap-1 overflow-y-auto overflow-x-hidden
                 scrollbar-none">
@@ -206,10 +191,11 @@ const Sidebar: React.FC<{
                             </div>
                             <button
                                 onClick={() => logout()}
+                                aria-label="Sign out"
                                 className="opacity-0 group-hover:opacity-100 transition-all duration-300 p-2 rounded-xl hover:bg-red-50 text-slate-400 hover:text-red-500 hover:scale-110"
                                 title="Sign out"
                             >
-                                <LogOut size={16} />
+                                <LogOut size={16} aria-hidden="true" />
                             </button>
                         </>
                     )}
@@ -221,4 +207,3 @@ const Sidebar: React.FC<{
 };
 
 export default Sidebar;
-

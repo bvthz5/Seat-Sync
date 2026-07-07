@@ -39,8 +39,11 @@ import unifiedAcademicRoutes from "./routes/unified_academic.routes.js";
 import seriesRoutes from "./routes/series.routes.js";
 import internalSeatingRoutes from "./routes/internal/internalSeating.routes.js";
 import internalReportsRoutes from "./routes/internal/internalReports.routes.js";
+import { httpLogger } from "./middlewares/httpLogger.middleware.js";
 
 const app = express();
+
+app.use(httpLogger);
 
 
 // --- CORS Configuration ---
@@ -53,7 +56,10 @@ app.use(cors({
         if (
             origin.startsWith('http://localhost') ||
             origin.startsWith('http://127.0.0.1') ||
-            origin.startsWith('http://[::1]')
+            origin.startsWith('http://[::1]') ||
+            origin.includes('serveousercontent.com') ||
+            origin.includes('serveo.net') ||
+            origin.includes('localtunnel.me')
         ) {
             return callback(null, true);
         }

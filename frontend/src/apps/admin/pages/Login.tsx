@@ -65,7 +65,7 @@ const CustomInput = ({
             </div>
             <div className={`
                 relative flex items-center w-full h-14 rounded-xl overflow-hidden bg-slate-50 border-none transition-all duration-300
-                ${error ? 'bg-red-50' : 'hover:bg-slate-100 focus-within:!bg-white focus-within:shadow-xl focus-within:shadow-blue-100'}
+                ${error ? 'bg-red-50' : 'hover:bg-slate-100 focus-within:!bg-white focus-within:shadow-xl focus-within:ring-2 focus-within:ring-indigo-500 focus-within:ring-offset-2'}
             `}>
                 {/* Icon Column - Completely separated */}
                 <div className={`
@@ -94,8 +94,9 @@ const CustomInput = ({
                 {isPassword && (
                     <button
                         type="button"
+                        aria-label={isVisible ? "Hide password" : "Show password"}
                         onClick={() => setIsVisible(!isVisible)}
-                        className="px-4 h-full flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors focus:outline-none"
+                        className="px-4 h-full flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
                     >
                         {isVisible ? <EyeIcon /> : <EyeOffIcon />}
                     </button>
@@ -434,7 +435,7 @@ const AdminLogin: React.FC = () => {
                             <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
                             Examination Control Portal
                         </div>
-                        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Admin Authentication</h2>
+                        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Admin Authentication</h1>
                     </motion.div>
 
                     {/* Global Error */}
