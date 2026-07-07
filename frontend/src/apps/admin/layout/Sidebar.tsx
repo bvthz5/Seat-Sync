@@ -26,9 +26,8 @@ const Sidebar: React.FC<{
 
     const getLinkClass = (isActive: boolean, isChild: boolean = false) =>
         [
-            'relative flex items-center gap-3 rounded-[14px] transition-all duration-300 group select-none',
-            isChild ? 'px-4 py-2 mx-3 text-[13px]' : 'px-4 py-2.5 mx-3 text-sm',
-            !isOpen ? 'justify-center mx-3' : '',
+            'relative flex items-center gap-3 rounded-[14px] transition-all duration-300 group select-none overflow-hidden',
+            isChild ? 'px-4 py-2 mx-4 text-[13px]' : 'px-4 py-2.5 mx-4 text-sm',
             isActive
                 ? 'bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-100'
                 : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 font-semibold',
@@ -38,7 +37,7 @@ const Sidebar: React.FC<{
         if (item.requiresRoot && !user?.IsRootAdmin) return null;
 
         if (item.children) {
-            const isExpanded = openSections[item.label] && isOpen;
+            const isExpanded = openSections[item.label];
 
             return (
                 <div key={item.label} className="mt-6 first:mt-2">
@@ -46,7 +45,7 @@ const Sidebar: React.FC<{
                     <button
                         onClick={() => isOpen && toggleSection(item.label)}
                         className={`w-full flex items-center px-6 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-indigo-500 transition-colors ${
-                            isOpen ? 'justify-between' : 'justify-center'
+                            isOpen ? 'justify-between' : ''
                         }`}
                     >
                         {isOpen ? (
@@ -60,7 +59,7 @@ const Sidebar: React.FC<{
                                 </motion.span>
                             </>
                         ) : (
-                            <span className="opacity-70" title={item.label}>{item.icon}</span>
+                            <span className="opacity-70 ml-2" title={item.label}>{item.icon}</span>
                         )}
                     </button>
 
@@ -96,10 +95,10 @@ const Sidebar: React.FC<{
                                                 const effectivelyActive = isActive || isChildActiveCS;
                                                 return (
                                                     <>
-                                                        <span aria-hidden="true" className={effectivelyActive ? 'text-white' : 'text-slate-400 group-hover:text-indigo-600 transition-colors'}>{child.icon}</span>
-                                                        {isOpen && <span className="truncate">{child.label}</span>}
-                                                        {effectivelyActive && isOpen && (
-                                                            <div className="absolute right-4 w-1.5 h-1.5 rounded-full bg-white/40 animate-pulse" />
+                                                        <span aria-hidden="true" className={`shrink-0 ${effectivelyActive ? 'text-white' : 'text-slate-400 group-hover:text-indigo-600 transition-colors'}`}>{child.icon}</span>
+                                                        <span className={`truncate transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'}`}>{child.label}</span>
+                                                        {effectivelyActive && (
+                                                            <div className={`absolute right-4 w-1.5 h-1.5 rounded-full bg-white/40 animate-pulse transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'}`} />
                                                         )}
                                                     </>
                                                 );
@@ -148,10 +147,10 @@ const Sidebar: React.FC<{
                     const effectivelyActive = isActive || isActiveStudents || isActiveSeating || isActiveCollegeStructure;
                     return (
                         <>
-                            <span aria-hidden="true" className={effectivelyActive ? 'text-white' : 'text-slate-400 group-hover:text-indigo-600 transition-colors'}>{item.icon}</span>
-                            {isOpen && <span className="truncate">{item.label}</span>}
-                            {effectivelyActive && isOpen && (
-                                <div className="absolute right-4 w-1.5 h-1.5 rounded-full bg-white/40 animate-pulse" />
+                            <span aria-hidden="true" className={`shrink-0 ${effectivelyActive ? 'text-white' : 'text-slate-400 group-hover:text-indigo-600 transition-colors'}`}>{item.icon}</span>
+                            <span className={`truncate transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'}`}>{item.label}</span>
+                            {effectivelyActive && (
+                                <div className={`absolute right-4 w-1.5 h-1.5 rounded-full bg-white/40 animate-pulse transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'}`} />
                             )}
                         </>
                     );
@@ -173,31 +172,27 @@ const Sidebar: React.FC<{
             </nav>
 
             {/* Footer - User Profile */}
-            <div className="p-4 bg-slate-50/50 border-t border-slate-100">
-                <div className={`flex items-center gap-3 p-3 rounded-2xl hover:bg-white hover:shadow-premium transition-all duration-300 group cursor-default ${
-                    !isOpen ? 'justify-center' : ''
-                }`}>
+            <div className={`transition-all duration-300 ${isOpen ? 'p-4' : 'p-3'} bg-slate-50/50 border-t border-slate-100`}>
+                <div className={`flex items-center gap-3 rounded-2xl hover:bg-white hover:shadow-premium transition-all duration-300 group cursor-default overflow-hidden ${isOpen ? 'p-3' : 'p-2 justify-center'}`}>
                     <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-white text-xs font-black shadow-md shrink-0"
-                        title={!isOpen ? (user?.Email?.split('@')[0] || 'Admin') : undefined}>
-                        {user?.Email?.[0].toUpperCase() || 'A'}
+                        title={!isOpen ? (user?.FullName || user?.Email) : undefined}>
+                        {user?.FullName ? user.FullName.substring(0, 1).toUpperCase() : (user?.Email ? user.Email.substring(0, 1).toUpperCase() : 'A')}
+                    </div>
+                    <div className={`flex-1 min-w-0 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 hidden'}`}>
+                        <p className="text-[13px] font-bold text-slate-900 truncate leading-none">{user?.Email?.split('@')[0]}</p>
+                        <p className="text-[10px] text-indigo-500 mt-1.5 leading-none uppercase tracking-widest font-black">
+                            {user?.IsRootAdmin ? 'Super' : 'Admin'}
+                        </p>
                     </div>
                     {isOpen && (
-                        <>
-                            <div className="flex-1 min-w-0">
-                                <p className="text-[13px] font-bold text-slate-900 truncate leading-none">{user?.Email?.split('@')[0]}</p>
-                                <p className="text-[10px] text-indigo-500 mt-1.5 leading-none uppercase tracking-widest font-black">
-                                    {user?.IsRootAdmin ? 'Super' : 'Admin'}
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => logout()}
-                                aria-label="Sign out"
-                                className="opacity-0 group-hover:opacity-100 transition-all duration-300 p-2 rounded-xl hover:bg-red-50 text-slate-400 hover:text-red-500 hover:scale-110"
-                                title="Sign out"
-                            >
-                                <LogOut size={16} aria-hidden="true" />
-                            </button>
-                        </>
+                        <button
+                            onClick={() => logout()}
+                            aria-label="Sign out"
+                            className="opacity-0 group-hover:opacity-100 transition-all duration-300 p-2 rounded-xl hover:bg-red-50 text-slate-400 hover:text-red-500 hover:scale-110"
+                            title="Sign out"
+                        >
+                            <LogOut size={16} aria-hidden="true" />
+                        </button>
                     )}
                 </div>
             </div>

@@ -45,7 +45,7 @@ const AdminLayout: React.FC = () => {
 
     React.useEffect(() => {
         const handleResize = () => {
-            const mobile = window.innerWidth < 1024;
+            const mobile = window.matchMedia('(max-width: 1023px)').matches;
             setIsMobile(mobile);
             if (mobile) {
                 setSidebarOpen(false);
@@ -169,19 +169,19 @@ const AdminLayout: React.FC = () => {
                 </div>
             </header>
 
-            {/* Mobile Sidebar Overlay */}
-            {isMobile && sidebarOpen && (
-                <div
-                    onClick={() => setSidebarOpen(false)}
-                    className="fixed inset-0 bg-black/40 backdrop-blur-sm z-30 transition-opacity duration-300"
-                />
-            )}
-
             {/* Sidebar & Main Layout Wrapper */}
-            <div className="flex w-full h-[calc(100vh-64px)] mt-16 overflow-hidden">
+            <div className="flex w-full h-[calc(100vh-64px)] mt-16 overflow-hidden relative">
+                {/* Mobile Sidebar Overlay */}
+                {isMobile && sidebarOpen && (
+                    <div
+                        onClick={() => setSidebarOpen(false)}
+                        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm z-[40] transition-opacity duration-300"
+                    />
+                )}
+
                 {/* Sidebar */}
                 <aside
-                    className="flex-shrink-0 z-40 transition-all duration-300 ease-in-out overflow-hidden glass-sidebar shadow-xl lg:shadow-none"
+                    className="flex-shrink-0 z-[45] transition-all duration-300 ease-in-out overflow-hidden glass-sidebar shadow-2xl lg:shadow-none"
                     style={{
                         width: isMobile ? '260px' : (sidebarOpen ? '260px' : '88px'),
                         position: isMobile ? 'fixed' : 'relative',
@@ -203,7 +203,7 @@ const AdminLayout: React.FC = () => {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3, ease: "easeOut" }}
-                        className="w-full max-w-[1600px] mx-auto p-4 sm:p-6 lg:p-8"
+                        className={`w-full h-full ${isMobile && sidebarOpen ? 'pl-[260px]' : ''} transition-all duration-300`}
                     >
                         <Outlet />
                     </motion.div>

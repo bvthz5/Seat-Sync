@@ -77,7 +77,7 @@ const CopyBtn: React.FC<{ text: string }> = ({ text }) => {
         setTimeout(() => setCopied(false), 1500);
     };
     return (
-        <button onClick={copy} title="Copy" className="ml-1 text-slate-300 hover:text-slate-600 transition-colors">
+        <button onClick={copy} title="Copy" aria-label="Copy to clipboard" className="ml-1 text-slate-400 hover:text-slate-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded">
             {copied ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
         </button>
     );
@@ -93,7 +93,7 @@ const KpiCard: React.FC<KpiProps> = ({ label, value, icon, accent, delta, loadin
             {icon}
         </div>
         <div className="relative">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">{label}</p>
             <p className="text-2xl font-bold text-slate-900">{loading ? <span className="text-slate-200 animate-pulse">—</span> : value}</p>
             {delta && <p className="text-[11px] text-emerald-600 font-semibold mt-0.5">{delta}</p>}
         </div>
@@ -159,20 +159,26 @@ const ActionMenu: React.FC<{ menuId: string; items: ActionMenuItem[] }> = ({ men
     return (
         <>
             <button ref={btnRef} onClick={openMenu}
-                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${open ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${open ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
                     }`}
                 title="Actions"
+                aria-label="Open Actions"
+                aria-haspopup="menu"
+                aria-expanded={open}
+                aria-controls={`menu-${menuId}`}
             >
                 <MoreVertical size={15} />
             </button>
             {open && createPortal(
                 <div onClick={e => e.stopPropagation()}
+                    id={`menu-${menuId}`}
+                    role="menu"
                     style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 999999, width: 240, animation: 'amFadeScale .14s cubic-bezier(.16,1,.3,1)' }}
                     className="bg-white rounded-2xl shadow-2xl border border-slate-100/80 py-1.5 overflow-hidden"
                 >
                     <style>{`@keyframes amFadeScale{from{opacity:0;transform:scale(.94) translateY(-4px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
                     {items.map((item, i) => (
-                        <button key={item.key} onClick={() => { item.onClick(); closeMenu(); }}
+                        <button key={item.key} role="menuitem" onClick={() => { item.onClick(); closeMenu(); }}
                             className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-left transition-all group/item ${item.danger ? 'hover:bg-rose-50 text-rose-600'
                                     : item.warning ? 'hover:bg-amber-50 text-amber-700'
                                         : 'hover:bg-slate-50 text-slate-700'
@@ -222,7 +228,7 @@ const ProfileDrawer: React.FC<{
             {/* Backdrop */}
             <div onClick={onClose} className={`fixed inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity duration-300 ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} style={{ zIndex: 99990 }} />
             {/* Drawer */}
-            <div className={`fixed top-0 right-0 h-full w-[520px] bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-out ${open ? 'translate-x-0' : 'translate-x-full'}`}
+            <div className={`fixed top-0 right-0 h-full w-[100vw] sm:w-[520px] bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-out ${open ? 'translate-x-0' : 'translate-x-full'}`}
                 style={{ zIndex: 99991 }}>
                 {/* Drawer Header — gradient banner */}
                 <div className="relative shrink-0 overflow-hidden"
@@ -232,8 +238,8 @@ const ProfileDrawer: React.FC<{
                         style={{ backgroundImage: 'radial-gradient(circle at 20% 80%, rgba(99,102,241,0.35) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(6,182,212,0.25) 0%, transparent 45%)' }} />
                     {/* Close button */}
                     <div className="absolute top-4 right-4 z-10">
-                        <button onClick={onClose}
-                            className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 hover:text-white transition-all">
+                        <button onClick={onClose} aria-label="Close Profile"
+                            className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 hover:text-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">
                             <X size={15} />
                         </button>
                     </div>
@@ -506,7 +512,7 @@ const Invigilators: React.FC = () => {
                         </div>
                         <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 shrink-0">
                             <button onClick={onReqOpen}
-                                className="btn-secondary group">
+                                className="btn-secondary !text-sm !px-4 !py-2 group">
                                 <Activity size={16} className="text-rose-500 transition-transform group-hover:scale-110" />
                                 Review Requests
                                 {pendingRequestsCount > 0 && (
@@ -519,7 +525,7 @@ const Invigilators: React.FC = () => {
                                 )}
                             </button>
                             <button onClick={onSwapOpen}
-                                className="btn-secondary group">
+                                className="btn-secondary !text-sm !px-4 !py-2 group">
                                 <RefreshCcw size={16} className="text-indigo-500 transition-transform group-hover:rotate-180 duration-500" />
                                 Swap Requests
                                 {pendingSwapsCount > 0 && (
@@ -533,20 +539,20 @@ const Invigilators: React.FC = () => {
                             </button>
                             <div className="hidden sm:block w-px h-6 bg-slate-200 mx-1" />
                             <button onClick={onBulkOpen}
-                                className="btn-secondary">
+                                className="btn-secondary !text-sm !px-4 !py-2">
                                 <Upload size={15} /> Import
                             </button>
                             <button
                                 onClick={() => setIsDeleteAllOpen(true)}
-                                className="btn-secondary !text-rose-600 !border-rose-200 hover:!bg-rose-50 group">
+                                className="btn-secondary !text-sm !px-4 !py-2 !text-rose-600 !border-rose-200 hover:!bg-rose-50 group">
                                 <Trash2 size={15} className="transition-transform group-hover:rotate-12" /> Delete All
                             </button>
                             <button onClick={exportCSV}
-                                className="btn-secondary">
+                                className="btn-secondary !text-sm !px-4 !py-2">
                                 <FileText size={15} /> Export
                             </button>
                             <button onClick={onAddOpen}
-                                className="btn-primary">
+                                className="btn-primary !text-sm !px-4 !py-2">
                                 <UserPlus size={16} /> Add Invigilator
                             </button>
                         </div>
@@ -567,7 +573,8 @@ const Invigilators: React.FC = () => {
                 {/* ── Search + Filter ──────────────────────────── */}
                 <div className="bg-white border border-slate-200/70 rounded-2xl px-5 py-3 flex flex-col md:flex-row md:items-center gap-4 shadow-sm">
                     <div className="flex-1 flex items-center gap-2.5 min-w-0 w-full">
-                        <Search size={15} className="text-slate-400 shrink-0" />
+                        <Search size={15} className="text-slate-400 shrink-0" aria-hidden="true" />
+                        <label htmlFor="searchQuery" className="sr-only">Search invigilators</label>
                         <input
                             id="searchQuery" name="searchQuery" autoComplete="off"
                             className="flex-1 text-sm text-slate-800 placeholder-slate-400 bg-transparent outline-none min-w-0"
@@ -576,7 +583,7 @@ const Invigilators: React.FC = () => {
                             onChange={e => { setSearchQuery(e.target.value); setPage(1); }}
                         />
                         {searchQuery && (
-                            <button onClick={() => { setSearchQuery(''); setPage(1); }} className="text-slate-300 hover:text-slate-600 shrink-0 transition-colors">
+                            <button onClick={() => { setSearchQuery(''); setPage(1); }} className="text-slate-400 hover:text-slate-700 shrink-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded p-0.5" aria-label="Clear search">
                                 <X size={14} />
                             </button>
                         )}
@@ -585,8 +592,9 @@ const Invigilators: React.FC = () => {
                     <div className="flex items-center gap-2 shrink-0 justify-between md:justify-start w-full md:w-auto">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Dept</span>
                         <div className="relative">
+                            <label htmlFor="deptFilter" className="sr-only">Filter by department</label>
                             <select id="deptFilter" name="deptFilter"
-                                className="text-sm font-semibold text-slate-700 bg-transparent outline-none appearance-none pr-5 cursor-pointer"
+                                className="text-sm font-semibold text-slate-700 bg-transparent outline-none appearance-none pr-5 cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
                                 value={selectedDept} onChange={e => { setSelectedDept(e.target.value); setPage(1); }}>
                                 <option value="">All</option>
                                 {uniqueDepts.map(d => <option key={d} value={d}>{d}</option>)}
@@ -598,8 +606,9 @@ const Invigilators: React.FC = () => {
                     <div className="flex items-center gap-2 shrink-0 justify-between md:justify-start w-full md:w-auto">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</span>
                         <div className="relative">
+                            <label htmlFor="statusFilter" className="sr-only">Filter by status</label>
                             <select id="statusFilter" name="statusFilter"
-                                className="text-sm font-semibold text-slate-700 bg-transparent outline-none appearance-none pr-5 cursor-pointer"
+                                className="text-sm font-semibold text-slate-700 bg-transparent outline-none appearance-none pr-5 cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
                                 value={selectedStatus} onChange={e => { setSelectedStatus(e.target.value); setPage(1); }}>
                                 <option value="">All</option>
                                 <option value="active">Active</option>
@@ -625,12 +634,11 @@ const Invigilators: React.FC = () => {
 
                 {/* ── Table ───────────────────────────────────── */}
                 <div className="bg-white border border-slate-200/70 rounded-2xl overflow-hidden shadow-sm">
-                    <div className="overflow-x-auto">
-                        <div className="min-w-[1000px]">
+                    <div className="w-full">
+                        <div className="w-full">
 
                     {/* Table head */}
-                    <div className="grid items-center px-6 py-3.5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white"
-                        style={{ gridTemplateColumns: '2.2fr 0.9fr 1fr 1.8fr 0.9fr 1.1fr 56px' }}>
+                    <div className="hidden invigilator-grid px-6 py-3.5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
                         {['Invigilator', 'Staff ID', 'Department', 'Contact', 'Duty Load', 'Status', ''].map((h, i) => (
                             <span key={i} className="text-[10px] font-black text-slate-400 uppercase tracking-[0.1em]">{h}</span>
                         ))}
@@ -666,53 +674,90 @@ const Invigilators: React.FC = () => {
 
                             return (
                                 <div key={inv.InvigilatorID}
-                                    className={`grid items-center px-6 py-4 transition-all duration-150 hover:bg-slate-50/70 cursor-pointer group ${!isLast ? 'border-b border-slate-100' : ''}`}
-                                    style={{ gridTemplateColumns: '2.2fr 0.9fr 1fr 1.8fr 0.9fr 1.1fr 56px' }}
+                                    className={`flex flex-col invigilator-grid px-4 lg:px-6 py-4 gap-4 lg:gap-0 transition-all duration-150 hover:bg-slate-50/70 cursor-pointer group focus-visible:outline-none focus-visible:bg-slate-50 ${!isLast ? 'border-b border-slate-100' : ''}`}
                                     onClick={() => openProfile(inv)}
+                                    role="button"
+                                    tabIndex={0}
+                                    onKeyDown={(e) => e.key === 'Enter' && openProfile(inv)}
+                                    aria-label={`View profile of ${inv.Name}`}
                                 >
-                                    {/* Invigilator */}
-                                    <div className="flex items-center gap-3.5 min-w-0">
-                                        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${grad} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm group-hover:shadow-md transition-shadow`}>
-                                            {ini}
+                                    {/* Top Row for Mobile: Avatar/Name and Actions */}
+                                    <div className="flex items-center justify-between w-full lg:w-auto">
+                                        {/* Invigilator */}
+                                        <div className="flex items-center gap-3.5 min-w-0 w-full">
+                                            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${grad} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm group-hover:shadow-md transition-shadow`} aria-hidden="true">
+                                                {ini}
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-[13px] font-bold text-slate-900 truncate group-hover:text-slate-700 transition-colors">{inv.Name}</p>
+                                                <p className="text-[11px] text-slate-500 truncate mt-0.5">{inv.Designation || 'Faculty'}</p>
+                                            </div>
                                         </div>
-                                        <div className="min-w-0">
-                                            <p className="text-[13px] font-bold text-slate-900 truncate group-hover:text-slate-700 transition-colors">{inv.Name}</p>
-                                            <p className="text-[11px] text-slate-400 truncate mt-0.5">{inv.Designation || 'Faculty'}</p>
+                                        {/* Action menu on mobile */}
+                                        <div className="lg:hidden flex justify-center" onClick={e => e.stopPropagation()}>
+                                            <ActionMenu menuId={`inv-mob-${inv.InvigilatorID}`} items={[
+                                                {
+                                                    key: 'view', label: 'View Profile', description: 'Full details & history', icon: <Eye size={14} />,
+                                                    onClick: () => openProfile(inv)
+                                                },
+                                                {
+                                                    key: 'toggle', label: inv.isEligible ? 'Mark Ineligible' : 'Mark Eligible',
+                                                    description: inv.isEligible ? 'Disable duty access' : 'Enable duty access',
+                                                    icon: inv.isEligible ? <UserMinus size={14} /> : <CheckCircle2 size={14} />,
+                                                    warning: inv.isEligible,
+                                                    onClick: () => handleToggleEligibility(inv.InvigilatorID)
+                                                },
+                                                {
+                                                    key: 'flag', label: inv.isFlagged ? 'Remove Leave Flag' : 'Flag for Leave',
+                                                    description: inv.isFlagged ? 'Remove leave status' : 'Put on leave',
+                                                    icon: <Flag size={14} />, warning: !inv.isFlagged,
+                                                    onClick: () => handleToggleFlag(inv.InvigilatorID)
+                                                },
+                                                {
+                                                    key: 'delete', label: 'Remove Account', description: 'Permanently remove',
+                                                    icon: <Trash2 size={14} />, danger: true,
+                                                    onClick: () => { setSelected(inv); onOpenDelete(); }
+                                                },
+                                            ]} />
                                         </div>
                                     </div>
 
                                     {/* Staff ID */}
-                                    <div onClick={e => e.stopPropagation()}>
-                                        <span className="font-mono text-[11px] text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg flex items-center gap-1 w-fit">
+                                    <div onClick={e => e.stopPropagation()} className="flex items-center justify-between w-full lg:w-auto lg:block">
+                                        <span className="lg:hidden text-[10px] font-bold text-slate-400 uppercase tracking-widest">Staff ID</span>
+                                        <span className="font-mono text-[11px] text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg flex items-center gap-1 w-fit focus-within:ring-2 focus-within:ring-slate-300">
                                             {staffId(inv.InvigilatorID)}
                                             <CopyBtn text={staffId(inv.InvigilatorID)} />
                                         </span>
                                     </div>
 
                                     {/* Department */}
-                                    <div>
+                                    <div className="flex items-center justify-between w-full lg:w-auto lg:block">
+                                        <span className="lg:hidden text-[10px] font-bold text-slate-400 uppercase tracking-widest">Department</span>
                                         <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg">
-                                            <Building2 size={10} className="text-slate-400" />
+                                            <Building2 size={10} className="text-slate-400" aria-hidden="true" />
                                             {inv.Department || '—'}
                                         </span>
                                     </div>
 
                                     {/* Contact */}
-                                    <div className="min-w-0" onClick={e => e.stopPropagation()}>
-                                        <a href={`mailto:${mockEmail(inv.Name)}`} className="flex items-center gap-1 text-[11px] text-slate-600 hover:text-blue-600 transition-colors font-medium truncate">
-                                            <Mail size={10} className="text-slate-300 shrink-0" />
+                                    <div className="flex items-center justify-between w-full lg:w-auto lg:block min-w-0" onClick={e => e.stopPropagation()}>
+                                        <span className="lg:hidden text-[10px] font-bold text-slate-400 uppercase tracking-widest">Contact</span>
+                                        <a href={`mailto:${mockEmail(inv.Name)}`} className="flex items-center gap-1 text-[11px] text-slate-600 hover:text-blue-600 transition-colors font-medium truncate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded p-0.5">
+                                            <Mail size={10} className="text-slate-300 shrink-0" aria-hidden="true" />
                                             {mockEmail(inv.Name)}
                                         </a>
                                     </div>
 
                                     {/* Duty Load */}
-                                    <div className="pr-3">
-                                        <div className="flex flex-col gap-1.5">
+                                    <div className="flex items-center justify-between w-full lg:w-auto lg:block pr-0 lg:pr-3">
+                                        <span className="lg:hidden text-[10px] font-bold text-slate-400 uppercase tracking-widest">Duty Load</span>
+                                        <div className="flex flex-col gap-1.5 w-[120px] lg:w-auto">
                                             <div className="flex items-center justify-between">
                                                 <span className="text-[11px] font-bold text-slate-700">{inv.totalExams ?? 0}</span>
                                                 <span className="text-[9px] font-semibold text-slate-300">/ 10</span>
                                             </div>
-                                            <div className="h-1 w-full max-w-[80px] bg-slate-100 rounded-full overflow-hidden">
+                                            <div className="h-1 w-full max-w-[80px] bg-slate-100 rounded-full overflow-hidden" role="progressbar" aria-valuenow={inv.totalExams ?? 0} aria-valuemin={0} aria-valuemax={10}>
                                                 <div
                                                     className="h-full rounded-full transition-all duration-700"
                                                     style={{
@@ -722,12 +767,13 @@ const Invigilators: React.FC = () => {
                                                     }}
                                                 />
                                             </div>
-                                            <span className="text-[9px] text-slate-300 font-medium leading-none">duties assigned</span>
+                                            <span className="hidden lg:block text-[9px] text-slate-300 font-medium leading-none">duties assigned</span>
                                         </div>
                                     </div>
 
                                     {/* Status */}
-                                    <div>
+                                    <div className="flex items-center justify-between w-full lg:w-auto lg:block">
+                                        <span className="lg:hidden text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</span>
                                         <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-full border"
                                             style={{ background: cfg.bg, color: cfg.text, borderColor: cfg.border }}>
                                             <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: cfg.dot }} />
@@ -735,9 +781,9 @@ const Invigilators: React.FC = () => {
                                         </span>
                                     </div>
 
-                                    {/* Action menu */}
-                                    <div className="flex justify-center" onClick={e => e.stopPropagation()}>
-                                        <ActionMenu menuId={`inv-${inv.InvigilatorID}`} items={[
+                                    {/* Action menu on desktop */}
+                                    <div className="hidden lg:flex justify-center" onClick={e => e.stopPropagation()}>
+                                        <ActionMenu menuId={`inv-desk-${inv.InvigilatorID}`} items={[
                                             {
                                                 key: 'view', label: 'View Profile', description: 'Full details & history', icon: <Eye size={14} />,
                                                 onClick: () => openProfile(inv)
