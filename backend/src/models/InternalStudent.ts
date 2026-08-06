@@ -10,10 +10,16 @@ interface InternalStudentAttributes {
     InternalStudentID: number;
     UserID: number | null;
     RegisterNumber: string;
+    RollNumber: number | null;
     FullName: string;
     DepartmentID: number | null;
     ProgramID: number | null;
     SemesterID: number | null;
+    Batch: string | null;
+    BatchStart: number | null;
+    BatchEnd: number | null;
+    Division: string | null;
+    Semester: string | null;
     BatchYear: number | null;
     AcademicYear: string | null;
     Status: string;
@@ -24,7 +30,7 @@ interface InternalStudentAttributes {
 
 interface InternalStudentCreationAttributes
     extends Optional<InternalStudentAttributes,
-        "InternalStudentID" | "UserID" | "Source" | "Status" | "DepartmentID" | "ProgramID" | "SemesterID" | "BatchYear" | "AcademicYear"
+        "InternalStudentID" | "UserID" | "RollNumber" | "Batch" | "BatchStart" | "BatchEnd" | "Division" | "Semester" | "Source" | "Status" | "DepartmentID" | "ProgramID" | "SemesterID" | "BatchYear" | "AcademicYear"
     > {}
 
 export class InternalStudent extends Model<InternalStudentAttributes, InternalStudentCreationAttributes>
@@ -32,10 +38,16 @@ export class InternalStudent extends Model<InternalStudentAttributes, InternalSt
     declare InternalStudentID: number;
     declare UserID: number | null;
     declare RegisterNumber: string;
+    declare RollNumber: number | null;
     declare FullName: string;
     declare DepartmentID: number | null;
     declare ProgramID: number | null;
     declare SemesterID: number | null;
+    declare Batch: string | null;
+    declare BatchStart: number | null;
+    declare BatchEnd: number | null;
+    declare Division: string | null;
+    declare Semester: string | null;
     declare BatchYear: number | null;
     declare AcademicYear: string | null;
     declare Status: string;
@@ -46,7 +58,7 @@ export class InternalStudent extends Model<InternalStudentAttributes, InternalSt
     // Associations
     declare Department?: any;
     declare Program?: any;
-    declare Semester?: any;
+    declare SemesterModel?: any;
     declare User?: any;
 }
 
@@ -65,6 +77,10 @@ InternalStudent.init(
         RegisterNumber: {
             type: DataTypes.STRING(50),
             allowNull: false,
+        },
+        RollNumber: {
+            type: DataTypes.INTEGER,
+            allowNull: true,
         },
         FullName: {
             type: DataTypes.STRING(150),
@@ -85,6 +101,27 @@ InternalStudent.init(
             type: DataTypes.INTEGER,
             allowNull: true,
             references: { model: "Semesters", key: "SemesterID" },
+        },
+        Batch: {
+            type: DataTypes.STRING(100),
+            allowNull: true,
+        },
+        BatchStart: {
+            type: DataTypes.INTEGER,
+            allowNull: true,
+        },
+        BatchEnd: {
+            type: DataTypes.INTEGER,
+            allowNull: true,
+        },
+        Division: {
+            type: DataTypes.STRING(10),
+            allowNull: true,
+            defaultValue: "A",
+        },
+        Semester: {
+            type: DataTypes.STRING(20),
+            allowNull: true,
         },
         BatchYear: {
             type: DataTypes.INTEGER,
@@ -123,6 +160,7 @@ InternalStudent.init(
             { fields: ["RegisterNumber"] },
             { fields: ["DepartmentID"] },
             { fields: ["BatchYear"] },
+            { fields: ["Batch", "Division", "Semester", "RollNumber"] },
         ],
     }
 );

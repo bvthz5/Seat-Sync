@@ -14,6 +14,8 @@ import {
     createInternalStudent,
     exportInternalStudentCredentials,
     syncInternalSemesters,
+    autoMapStudentsForInternalExam,
+    bulkAutoMapStudentsForSeries,
 } from '../controllers/internalStudent.controller.js';
 
 const router = Router();
@@ -35,6 +37,8 @@ router.post('/students/import', upload.single('file'), importInternalStudents);
 // ── Exam Detail + Mapped Students ──
 router.get('/exams/:examId/detail', getInternalExamDetail);
 router.get('/exams/:examId/students', getStudentsForInternalExam);
+router.post('/exams/:examId/students/auto-map', autoMapStudentsForInternalExam);
+router.post('/series/:seriesId/auto-map-all', bulkAutoMapStudentsForSeries);
 router.delete('/exams/:examId/students/:studentId', removeStudentFromInternalExam);
 router.delete('/exams/:examId/students', clearStudentsFromInternalExam);
 

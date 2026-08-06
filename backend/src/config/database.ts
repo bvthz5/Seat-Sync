@@ -94,7 +94,7 @@ export { sequelize };
 async function ensureSchemaIntegrity() {
     try {
         const dialect = sequelize.getDialect();
-        if (dialect !== 'mssql') return;
+        if (dialect === 'mssql') {
 
         console.log("Checking schema integrity...");
 
@@ -1030,26 +1030,81 @@ async function ensureSchemaIntegrity() {
             END
         `, { type: QueryTypes.RAW });
 
+        } // end if (dialect === 'mssql')
     } catch (error) {
         console.warn("Schema integrity check warning (non-fatal):", error);
     }
 
-    // ── Internal Students Table Schema Check ──
+    // ── Internal Students / Exam Schema Migrations ──
     try {
         const dialect = sequelize.getDialect();
+
+        // ─── SQLite Column Migrations ───
+        if (dialect === 'sqlite') {
+            try {
+                // InternalStudents — add new class-based fields
+                const tableInfo: any[] = await sequelize.query("PRAGMA table_info('InternalStudents')", { type: QueryTypes.SELECT });
+                const existingCols = new Set(tableInfo.map(c => c.name));
+
+                const internalStudentCols = [
+                    { name: 'RollNumber', type: 'INTEGER' },
+                    { name: 'Batch', type: 'VARCHAR(100)' },
+                    { name: 'BatchStart', type: 'INTEGER' },
+                    { name: 'BatchEnd', type: 'INTEGER' },
+                    { name: 'Division', type: 'VARCHAR(10) DEFAULT "A"' },
+                    { name: 'Semester', type: 'VARCHAR(20)' },
+                ];
+
+                for (const col of internalStudentCols) {
+                    if (!existingCols.has(col.name)) {
+                        try {
+                            await sequelize.query(`ALTER TABLE InternalStudents ADD COLUMN ${col.name} ${col.type}`, { type: QueryTypes.RAW });
+                            console.log(`[SQLite Migration] Added column ${col.name} to InternalStudents`);
+                        } catch (e: any) {
+                            console.warn(`[SQLite Migration] Add column ${col.name} warning:`, e.message);
+                        }
+                    }
+                }
+
+                // InternalExamDepartments — add Division
+                const deptTableInfo: any[] = await sequelize.query("PRAGMA table_info('InternalExamDepartments')", { type: QueryTypes.SELECT });
+                const deptCols = new Set(deptTableInfo.map(c => c.name));
+                if (!deptCols.has('Division')) {
+                    try {
+                        await sequelize.query(`ALTER TABLE InternalExamDepartments ADD COLUMN Division VARCHAR(10) DEFAULT "ALL"`, { type: QueryTypes.RAW });
+                        console.log(`[SQLite Migration] Added column Division to InternalExamDepartments`);
+                    } catch (_) {}
+                }
+
+                // InternalExamRegistrations — add RegistrationMethod
+                const regTableInfo: any[] = await sequelize.query("PRAGMA table_info('InternalExamRegistrations')", { type: QueryTypes.SELECT });
+                const regCols = new Set(regTableInfo.map(c => c.name));
+                if (!regCols.has('RegistrationMethod')) {
+                    try {
+                        await sequelize.query(`ALTER TABLE InternalExamRegistrations ADD COLUMN RegistrationMethod VARCHAR(20) DEFAULT "AUTO"`, { type: QueryTypes.RAW });
+                        console.log(`[SQLite Migration] Added column RegistrationMethod to InternalExamRegistrations`);
+                    } catch (_) {}
+                }
+            } catch (sqErr: any) {
+                console.warn("[SQLite Migration] Schema check warning:", sqErr.message);
+            }
+        }
+
+        // ─── MSSQL Column Migrations ───
         if (dialect === 'mssql') {
-            const columns = [
-                { name: 'internalStudentUUID', type: 'UNIQUEIDENTIFIER DEFAULT NEWID()' },
-                { name: 'classRollNumber', type: 'NVARCHAR(50) NULL' },
-                { name: 'gender', type: 'NVARCHAR(10) NULL' },
-                { name: 'section', type: 'NVARCHAR(10) NULL' },
-                { name: 'currentAcademicYear', type: 'NVARCHAR(20) NULL' },
-                { name: 'sourceFile', type: 'NVARCHAR(255) NULL' },
+            // InternalStudents — add missing columns (matches InternalStudent.ts model)
+            const internalStudentCols = [
                 { name: 'Source', type: 'NVARCHAR(30) NOT NULL DEFAULT \'Imported\' WITH VALUES' },
-                { name: 'Status', type: 'NVARCHAR(20) NOT NULL DEFAULT \'ACTIVE\' WITH VALUES' }
+                { name: 'Status', type: 'NVARCHAR(20) NOT NULL DEFAULT \'ACTIVE\' WITH VALUES' },
+                { name: 'RollNumber', type: 'INT NULL' },
+                { name: 'Batch', type: 'NVARCHAR(100) NULL' },
+                { name: 'BatchStart', type: 'INT NULL' },
+                { name: 'BatchEnd', type: 'INT NULL' },
+                { name: 'Division', type: 'NVARCHAR(10) NULL DEFAULT \'A\'' },
+                { name: 'Semester', type: 'NVARCHAR(20) NULL' },
             ];
 
-            for (const col of columns) {
+            for (const col of internalStudentCols) {
                 await sequelize.query(`
                     IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalStudents' AND TABLE_SCHEMA = 'dbo')
                     BEGIN
@@ -1062,7 +1117,31 @@ async function ensureSchemaIntegrity() {
                 `, { type: QueryTypes.RAW });
             }
 
-            // Internal Seating System Columns
+            // InternalExamDepartments — add Division
+            await sequelize.query(`
+                IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalExamDepartments' AND TABLE_SCHEMA = 'dbo')
+                BEGIN
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[InternalExamDepartments]') AND name = 'Division')
+                    BEGIN
+                        ALTER TABLE [dbo].[InternalExamDepartments] ADD [Division] NVARCHAR(10) NULL DEFAULT 'ALL';
+                        PRINT 'Added Division to InternalExamDepartments';
+                    END
+                END
+            `, { type: QueryTypes.RAW });
+
+            // InternalExamRegistrations — add RegistrationMethod
+            await sequelize.query(`
+                IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalExamRegistrations' AND TABLE_SCHEMA = 'dbo')
+                BEGIN
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[InternalExamRegistrations]') AND name = 'RegistrationMethod')
+                    BEGIN
+                        ALTER TABLE [dbo].[InternalExamRegistrations] ADD [RegistrationMethod] NVARCHAR(20) NOT NULL DEFAULT 'AUTO' WITH VALUES;
+                        PRINT 'Added RegistrationMethod to InternalExamRegistrations';
+                    END
+                END
+            `, { type: QueryTypes.RAW });
+
+            // Internal Seating System — SnapshotID on InternalSeatAllocations
             await sequelize.query(`
                 IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalSeatAllocations' AND TABLE_SCHEMA = 'dbo')
                 BEGIN
@@ -1074,6 +1153,7 @@ async function ensureSchemaIntegrity() {
                 END
             `, { type: QueryTypes.RAW });
 
+            // InternalSeatSnapshots table
             await sequelize.query(`
                 IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalSeatSnapshots' AND TABLE_SCHEMA = 'dbo')
                 BEGIN
@@ -1109,6 +1189,7 @@ async function ensureSchemaIntegrity() {
                 END
             `, { type: QueryTypes.RAW });
 
+            // InternalSeatLayouts table
             await sequelize.query(`
                 IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalSeatLayouts' AND TABLE_SCHEMA = 'dbo')
                 BEGIN
@@ -1126,6 +1207,7 @@ async function ensureSchemaIntegrity() {
                 END
             `, { type: QueryTypes.RAW });
 
+            // InternalSeatColumns table
             await sequelize.query(`
                 IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalSeatColumns' AND TABLE_SCHEMA = 'dbo')
                 BEGIN
@@ -1138,21 +1220,17 @@ async function ensureSchemaIntegrity() {
                     PRINT 'Created InternalSeatColumns table';
                 END
             `, { type: QueryTypes.RAW });
-        }
 
-        // --- LEGACY ZONE FEATURE CLEANUP ---
-        if (dialect === 'mssql') {
+            // ─── LEGACY ZONE FEATURE CLEANUP ───
             await sequelize.query(`
                 IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'ZoneID')
                 BEGIN
-                    -- Drop index if exists
                     IF EXISTS (SELECT * FROM sys.indexes WHERE name = 'seats__room_i_d__zone_i_d' AND object_id = OBJECT_ID(N'[dbo].[Seats]'))
                     BEGIN
                         DROP INDEX [seats__room_i_d__zone_i_d] ON [dbo].[Seats];
                         PRINT 'Dropped index seats__room_i_d__zone_i_d';
                     END
 
-                    -- Drop foreign key from Seats to Zones if it exists
                     DECLARE @FKName nvarchar(200);
                     SELECT @FKName = f.name
                     FROM sys.foreign_keys f
@@ -1161,7 +1239,6 @@ async function ensureSchemaIntegrity() {
                     IF @FKName IS NOT NULL
                         EXEC('ALTER TABLE [dbo].[Seats] DROP CONSTRAINT ' + @FKName);
 
-                    -- Drop default constraint if exists
                     DECLARE @ConstraintName nvarchar(200);
                     SELECT @ConstraintName = d.name
                     FROM sys.default_constraints d
@@ -1183,7 +1260,7 @@ async function ensureSchemaIntegrity() {
             `, { type: QueryTypes.RAW });
         }
     } catch (error) {
-        console.warn("InternalStudents schema check warning:", error);
+        console.warn("Internal exam schema migration warning:", error);
     }
 }
 

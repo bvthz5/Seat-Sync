@@ -6,7 +6,11 @@ import ProgramDepartment from '../models/ProgramDepartment.js';
 export interface NormalizedAcademicInfo {
   programCode: string;
   batchYear: number | null;
+  batchEndYear: number | null;
+  batchName: string | null;
+  division: string | null;
   semester: number | null;
+  semesterName: string | null;
 }
 
 export const PROGRAM_DEPARTMENT_MAP: Record<string, string> = {
@@ -52,32 +56,56 @@ export const getDepartmentCodeFromProgram = (programCode: string): string => {
 export const parseBatchString = (batchText: unknown): NormalizedAcademicInfo => {
     const text = String(batchText || '').trim();
     if (!text) {
-        return { programCode: 'UNKNOWN', batchYear: null, semester: null };
+        return { programCode: 'UNKNOWN', batchYear: null, batchEndYear: null, batchName: null, division: null, semester: null, semesterName: null };
     }
 
     // 1. Remove "Batch :" prefix if exists
     const cleanText = text.replace(/^Batch\s*:\s*/i, '').trim();
 
     // 2. Extract first word -> Program
-    // Sometimes it's INT_MCA, CSE, etc.
     const programMatch = cleanText.split(/\s+/)[0];
     let programCode = programMatch ? normalizeProgram(programMatch) : 'UNKNOWN';
 
-    // 3. Extract 4-digit year -> BatchYear
+    // 3. Extract Batch Years (e.g. 2023-2027)
     let batchYear: number | null = null;
-    const yearMatch = cleanText.match(/(20\d{2})/);
-    if (yearMatch && yearMatch[1]) {
-        batchYear = parseInt(yearMatch[1], 10);
+    let batchEndYear: number | null = null;
+    const rangeMatch = cleanText.match(/(20\d{2})\s*[-–]\s*(20\d{2})/);
+    if (rangeMatch && rangeMatch[1] && rangeMatch[2]) {
+        batchYear = parseInt(rangeMatch[1], 10);
+        batchEndYear = parseInt(rangeMatch[2], 10);
+    } else {
+        const yearMatch = cleanText.match(/(20\d{2})/);
+        if (yearMatch && yearMatch[1]) {
+            batchYear = parseInt(yearMatch[1], 10);
+        }
     }
 
-    // 4. Extract (S1) -> Semester
+    const batchName = programCode !== 'UNKNOWN' && batchYear
+        ? `${programCode} ${batchYear}${batchEndYear ? '-' + batchEndYear : ''}`
+        : null;
+
+    // 4. Extract Division (e.g. "A", "B", "C" in "CSE 2023-2027 A (S3)")
+    let division: string | null = null;
+    const divMatch = cleanText.match(/\b([A-Z])\b(?=\s*\([S\d\s]+\)|\s*$)/i) || cleanText.match(/(?:DIV|DIVISION|SEC|SECTION)\s*([A-Z])/i);
+    if (divMatch && divMatch[1] && divMatch[1].length === 1 && !['S', 'V', 'T'].includes(divMatch[1].toUpperCase())) {
+        division = divMatch[1].toUpperCase();
+    }
+
+    // 5. Extract Semester (e.g. S3, S7, Sem 3, (S3), S-3)
     let semester: number | null = null;
-    const semMatch = cleanText.match(/S(\d+)/i);
+    const semMatch = 
+        cleanText.match(/\(S\s*[-_]?\s*(\d+)\)/i) ||
+        cleanText.match(/\bS\s*[-_]?\s*(\d+)\b/i) ||
+        cleanText.match(/Sem(?:ester)?\s*[-_]?\s*(\d+)/i) ||
+        cleanText.match(/S(\d+)/i);
+        
     if (semMatch && semMatch[1]) {
         semester = parseInt(semMatch[1], 10);
     }
 
-    return { programCode, batchYear, semester };
+    const semesterName = semester ? `S${semester}` : null;
+
+    return { programCode, batchYear, batchEndYear, batchName, division, semester, semesterName };
 };
 
 

@@ -33,12 +33,16 @@ export interface MappedStudent {
     registrationId: number;
     internalStudentId: number;
     registerNumber: string;
+    rollNumber?: number | null;
+    division?: string | null;
+    batch?: string | null;
     fullName: string;
     department: string;
     departmentCode: string;
     program: string;
-    semester: number;
+    semester: number | string;
     batchYear: number;
+    registrationMethod?: string;
 }
 
 export const InternalStudentService = {
@@ -76,6 +80,18 @@ export const InternalStudentService = {
     // Clear all student mappings from an exam
     clearStudentsFromExam: async (examId: number) => {
         const response = await api.delete(`/internal/exams/${examId}/students`);
+        return response.data;
+    },
+
+    // Auto map existing matching students in system database to an exam
+    autoMapStudents: async (examId: number): Promise<{ success: boolean; message: string; mappedCount: number }> => {
+        const response = await api.post(`/internal/exams/${examId}/students/auto-map`);
+        return response.data;
+    },
+
+    // Bulk auto map existing matching students for all exams in an exam series
+    bulkAutoMapSeries: async (seriesId: number): Promise<{ success: boolean; message: string; totalMapped: number; totalMatched: number; examsProcessed: number }> => {
+        const response = await api.post(`/internal/series/${seriesId}/auto-map-all`);
         return response.data;
     },
 

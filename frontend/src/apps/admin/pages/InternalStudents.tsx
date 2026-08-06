@@ -190,21 +190,28 @@ const InternalStudents: React.FC = () => {
     };
 
     const viewStudent = (student: any) => {
+        const semNum = student.SemesterModel?.SemesterNumber 
+            || (typeof student.Semester === 'object' ? student.Semester?.SemesterNumber : null)
+            || (typeof student.Semester === 'string' ? parseInt(student.Semester.replace(/[^0-9]/g, ''), 10) : null)
+            || (typeof student.Semester === 'number' ? student.Semester : null);
+
         const transformed: any = {
             StudentID: student.InternalStudentID,
             RegisterNumber: student.RegisterNumber,
-            BatchYear: student.BatchYear,
+            RollNumber: student.RollNumber,
+            Division: student.Division,
+            BatchYear: student.BatchYear || student.BatchStart,
             User: {
                 FullName: student.FullName,
                 Email: student.User?.Email || 'N/A',
-                isActive: true,
+                isActive: student.Status === 'ACTIVE',
             },
             Department: student.Department,
             Program: student.Program,
-            Semester: student.Semester,
-            CalculatedSemester: student.Semester?.SemesterNumber,
+            Semester: { SemesterNumber: semNum },
+            CalculatedSemester: semNum,
             MaxSemesters: student.Program?.TotalSemesters || 8,
-            Status: 'Active'
+            Status: student.Status === 'ACTIVE' ? 'Active' : student.Status
         };
         setDrawerStudent(transformed);
         setIsQuickViewOpen(true);
@@ -298,85 +305,97 @@ const InternalStudents: React.FC = () => {
                 {/* Graduated Card */}
                 <div className="bg-gradient-to-br from-violet-600 to-purple-700 p-5 rounded-2xl shadow-lg shadow-purple-100 flex flex-col justify-between relative overflow-hidden group hover:scale-[1.02] transition-all">
                     <div className="relative z-10">
-                        <p className="text-violet-50 text-[0.65rem] font-bold uppercase tracking-widest mb-1">Graduated</p>
-                        <h3 className="text-3xl font-black text-white">{stats.graduated || 0}</h3>
+                        <p className="text-purple-100 text-[0.65rem] font-bold uppercase tracking-widest mb-1">Graduated</p>
+                        <h3 className="text-3xl font-black text-white">{stats.graduated}</h3>
                     </div>
                     <GraduationCap className="absolute -right-2 -bottom-2 text-white/10 group-hover:scale-110 transition-transform duration-500" size={80}/>
                 </div>
 
-                {/* Inactive Card */}
-                <div className="bg-gradient-to-br from-orange-500 to-amber-600 p-5 rounded-2xl shadow-lg shadow-orange-100 flex flex-col justify-between relative overflow-hidden group hover:scale-[1.02] transition-all">
+                {/* Dropped Card */}
+                <div className="bg-gradient-to-br from-rose-600 to-pink-700 p-5 rounded-2xl shadow-lg shadow-pink-100 flex flex-col justify-between relative overflow-hidden group hover:scale-[1.02] transition-all">
                     <div className="relative z-10">
-                        <p className="text-orange-50 text-[0.65rem] font-bold uppercase tracking-widest mb-1">Inactive / Dropped</p>
-                        <h3 className="text-3xl font-black text-white">{(stats.inactive || 0) + (stats.dropped || 0)}</h3>
+                        <p className="text-rose-100 text-[0.65rem] font-bold uppercase tracking-widest mb-1">Dropped Out</p>
+                        <h3 className="text-3xl font-black text-white">{stats.dropped}</h3>
                     </div>
                     <AlertTriangle className="absolute -right-2 -bottom-2 text-white/10 group-hover:scale-110 transition-transform duration-500" size={80}/>
                 </div>
 
-                {/* Admin Added Card */}
-                <div className="bg-gradient-to-br from-indigo-500 to-blue-600 p-5 rounded-2xl shadow-lg shadow-indigo-100 flex flex-col justify-between relative overflow-hidden group hover:scale-[1.02] transition-all">
+                {/* Total Departments Card */}
+                <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-5 rounded-2xl shadow-lg shadow-orange-100 flex flex-col justify-between relative overflow-hidden group hover:scale-[1.02] transition-all">
                     <div className="relative z-10">
-                        <p className="text-indigo-50 text-[0.65rem] font-bold uppercase tracking-widest mb-1">Admin Added</p>
-                        <h3 className="text-3xl font-black text-white">{stats.adminAdded}</h3>
+                        <p className="text-amber-100 text-[0.65rem] font-bold uppercase tracking-widest mb-1">Departments</p>
+                        <h3 className="text-3xl font-black text-white">{filterOptions.departments.length}</h3>
                     </div>
-                    <ShieldCheck className="absolute -right-2 -bottom-2 text-white/10 group-hover:scale-110 transition-transform duration-500" size={80}/>
+                    <Building2 className="absolute -right-2 -bottom-2 text-white/10 group-hover:scale-110 transition-transform duration-500" size={80}/>
                 </div>
             </div>
 
-            <div className="bg-white p-4 rounded-2xl border border-slate-200/60 shadow-sm space-y-4">
-                <div className="flex flex-col md:flex-row gap-4">
-                    <div className="flex-1">
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xl shadow-slate-100/50 overflow-hidden">
+                <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row gap-3 items-center justify-between bg-slate-50/50">
+                    <div className="relative w-full sm:w-80">
                         <Input
-                            placeholder="Search by name or register number..."
-                            startContent={<Search size={18} className="text-slate-400" />}
+                            placeholder="Search by name, reg no..."
                             value={searchQuery}
                             onValueChange={setSearchQuery}
-                            classNames={{ inputWrapper: "bg-slate-50 border border-slate-200 rounded-xl h-11" }}
+                            startContent={<Search size={16} className="text-slate-400" />}
                             isClearable
                             onClear={() => setSearchQuery("")}
+                            classNames={{
+                                inputWrapper: "bg-white border border-slate-200 shadow-sm rounded-xl hover:border-slate-300 focus-within:border-blue-600"
+                            }}
                         />
                     </div>
-                    <div className="flex gap-3">
-                        <Select 
-                            placeholder="Department" 
-                            className="w-48"
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <Select
+                            placeholder="All Departments"
                             selectedKeys={filters.dept ? [filters.dept] : []}
                             onSelectionChange={handleSelectChange('dept')}
-                            classNames={{ trigger: "bg-slate-50 rounded-xl" }}
+                            className="w-full sm:w-48"
+                            classNames={{
+                                trigger: "bg-white border border-slate-200 shadow-sm rounded-xl h-10"
+                            }}
                         >
-                            {(filterOptions.departments || []).map((d: any) => (
-                                <SelectItem key={d.DepartmentID.toString()} textValue={d.DepartmentCode}>{d.DepartmentCode}</SelectItem>
+                            {filterOptions.departments.map(d => (
+                                <SelectItem key={d.DepartmentID} value={d.DepartmentID}>
+                                    {d.DepartmentCode}
+                                </SelectItem>
                             ))}
                         </Select>
-                        <Select 
-                            placeholder="Batch" 
-                            className="w-32"
+
+                        <Select
+                            placeholder="All Batches"
                             selectedKeys={filters.batch ? [filters.batch] : []}
                             onSelectionChange={handleSelectChange('batch')}
-                            classNames={{ trigger: "bg-slate-50 rounded-xl" }}
+                            className="w-full sm:w-36"
+                            classNames={{
+                                trigger: "bg-white border border-slate-200 shadow-sm rounded-xl h-10"
+                            }}
                         >
-                            {(filterOptions.batchYears || []).map((year: number) => (
-                                <SelectItem key={year.toString()} textValue={year.toString()}>{year}</SelectItem>
+                            {filterOptions.batchYears.map(year => (
+                                <SelectItem key={year} value={year}>
+                                    {year}
+                                </SelectItem>
                             ))}
                         </Select>
-                        {(filters.dept || filters.batch) && (
-                            <Button isIconOnly variant="flat" onPress={() => setFilters({ dept: "", batch: "" })}>
-                                <X size={18}/>
+
+                        {(searchQuery || filters.dept || filters.batch) && (
+                            <Button 
+                                isIconOnly variant="flat" color="danger" size="sm" 
+                                onPress={() => { setSearchQuery(""); setFilters({ dept: "", batch: "" }); }}
+                                className="rounded-xl"
+                            >
+                                <X size={16} />
                             </Button>
                         )}
                     </div>
                 </div>
-            </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden mt-6 overflow-x-auto">
                 <Table 
                     aria-label="Internal Students Table"
-                    shadow="none"
-                    layout="fixed"
+                    removeWrapper
                     classNames={{
-                        base: "min-w-[1100px]",
-                        th: "bg-slate-50 text-slate-500 font-bold text-[0.7rem] uppercase tracking-widest h-14 border-b border-slate-200 text-center first:text-left last:text-right",
-                        td: "py-4 px-6 border-b border-slate-100",
+                        th: "bg-slate-50 text-slate-600 font-bold text-xs border-b border-slate-200 py-3.5",
+                        td: "py-3 border-b border-slate-100/80"
                     }}
                     bottomContent={
                         totalPages > 1 && (
@@ -434,7 +453,16 @@ const InternalStudents: React.FC = () => {
                         {students.map((student, i) => (
                             <TableRow key={student.InternalStudentID}>
                                 <TableCell className="text-slate-400 font-medium">{(page - 1) * 10 + i + 1}</TableCell>
-                                <TableCell className="font-bold text-indigo-700">{student.RegisterNumber}</TableCell>
+                                <TableCell>
+                                    <div className="font-bold text-indigo-700">{student.RegisterNumber}</div>
+                                     {(student.RollNumber || student.Division) && (
+                                         <div className="text-[0.75rem] text-slate-500 font-semibold mt-0.5">
+                                             {student.RollNumber ? <>Roll No: <span className="text-slate-900 font-extrabold">{student.RollNumber}</span></> : null}
+                                             {student.RollNumber && student.Division ? ' • ' : null}
+                                             {student.Division ? <>Div <span className="text-slate-900 font-extrabold">{student.Division}</span></> : null}
+                                         </div>
+                                     )}
+                                </TableCell>
                                 <TableCell className="font-semibold text-slate-900">{student.FullName || 'N/A'}</TableCell>
                                 <TableCell className="text-center">
                                     <Chip size="sm" variant="flat" className="bg-indigo-50 text-indigo-700 font-bold border-indigo-100 mx-auto">
@@ -442,7 +470,11 @@ const InternalStudents: React.FC = () => {
                                     </Chip>
                                 </TableCell>
                                 <TableCell className="text-slate-600 text-xs text-center">{student.Program?.ProgramName || '-'}</TableCell>
-                                <TableCell className="text-slate-700 font-bold text-center">S{student.Semester?.SemesterNumber || '-'}</TableCell>
+                                <TableCell className="text-slate-700 font-bold text-center">
+                                    {student.SemesterModel?.SemesterNumber 
+                                        ? `S${student.SemesterModel.SemesterNumber}` 
+                                        : (student.Semester ? (String(student.Semester).toUpperCase().startsWith('S') ? String(student.Semester).toUpperCase() : `S${student.Semester}`) : '-')}
+                                </TableCell>
                                 <TableCell className="text-center font-bold text-slate-500">{student.BatchYear || '-'}</TableCell>
                                 <TableCell className="text-center">
                                     <div className={`

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { InternalExam, InternalExamSeries, InternalExamDepartment, Department, AcademicYear } from '../models/index.js';
+import { autoMapStudentsForExamCore } from './internalStudent.controller.js';
 import { Op } from 'sequelize';
 import * as XLSX from 'xlsx';
 import { PDFParse } from 'pdf-parse';
@@ -183,7 +184,7 @@ export class InternalExamController {
                 }
             }
 
-            const finalSemester = sheetSemester || headerSemester || 'S?';
+            const finalSemester = sheetSemester || headerSemester || null;
 
             // Fallback if no clean header found
             if (tableStartIndex === -1 && rawData.length > 0) {
@@ -279,7 +280,7 @@ export class InternalExamController {
         let currentDate: string | null = null;
         let currentTime: string | null = null;
         let currentSlot: string | null = null;
-        let currentSemester: string = 'S?';
+        let currentSemester: string | null = null;
 
         for (const line of lines) {
             const semMatch = InternalExamController.extractSemester(line);
@@ -391,7 +392,7 @@ export class InternalExamController {
                     const dateRaw = row._inheritedDate;
                     const timeRaw = row._inheritedTime;
                     const slotRaw = row._inheritedSlot;
-                    const semesterRaw = row._semester || 'S?';
+                    const semesterRaw = row._semester || null;
                     const branchesRaw = row.Branch;
                     const courseRaw = row.Course;
 
@@ -501,6 +502,13 @@ export class InternalExamController {
                                 DepartmentID: deptId
                             }
                         });
+                    }
+
+                    // Auto register eligible students matching exam semester and departments
+                    try {
+                        await autoMapStudentsForExamCore(exam.InternalExamID);
+                    } catch (amErr) {
+                        console.warn(`[AutoMap Warning] Exam ${exam.InternalExamID} auto-map skipped:`, amErr);
                     }
 
                 } catch (err: any) {

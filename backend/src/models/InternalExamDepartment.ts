@@ -5,6 +5,7 @@ export class InternalExamDepartment extends Model {
     declare public InternalExamDepartmentID: number;
     declare public InternalExamID: number;
     declare public DepartmentID: number;
+    declare public Division: string | null;
 }
 
 InternalExamDepartment.init({
@@ -20,6 +21,11 @@ InternalExamDepartment.init({
     DepartmentID: {
         type: DataTypes.INTEGER,
         allowNull: false,
+    },
+    Division: {
+        type: DataTypes.STRING(10),
+        allowNull: true,
+        defaultValue: 'ALL',
     }
 }, {
     sequelize,

@@ -228,6 +228,8 @@ export const internalSeatingController = {
                     seatNumber: seat.SeatNumber,
                     studentId: alloc?.InternalStudentID || null,
                     registerNumber: alloc?.Student?.RegisterNumber || null,
+                    rollNumber: alloc?.Student?.RollNumber ?? null,
+                    division: alloc?.Student?.Division || null,
                     name: alloc?.Student?.FullName || null,
                     deptCode: alloc?.Student?.Department?.DepartmentCode || null,
                     subjectCode: alloc ? examMap.get(alloc.InternalExamID)?.subjectCode || null : null,

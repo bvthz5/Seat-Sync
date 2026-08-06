@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Card, CardBody, Button } from "@heroui/react";
-import { BookOpen, Plus, Clock, FileText, AlertCircle, ArrowLeft, CheckCircle, CalendarDays, Upload, Pencil, Trash2, Users } from "lucide-react";
+import { BookOpen, Plus, Clock, FileText, AlertCircle, ArrowLeft, CheckCircle, CalendarDays, Upload, Pencil, Trash2, Users, UserCheck } from "lucide-react";
 import { toast } from 'react-hot-toast';
 import { ExamService } from '../services/examService';
 import { SeriesService } from '../services/seriesService';
+import { InternalStudentService } from '../services/internalStudentService';
 import { AccessTokenStore } from '../../../services/api';
 import CreateExamModal from '../components/exams/CreateExamModal';
 import ExamImportModal from '../components/exams/ExamImportModal';
@@ -103,6 +104,7 @@ const ExamSeriesList: React.FC = () => {
     const { seriesId } = useParams<{ seriesId: string }>();
     const [exams, setExams] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isBulkMapping, setIsBulkMapping] = useState(false);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -191,6 +193,26 @@ const ExamSeriesList: React.FC = () => {
         }
     };
 
+    const handleBulkAutoMap = async () => {
+        if (!seriesId) return;
+        setIsBulkMapping(true);
+        const tid = toast.loading('Bulk registering students across all subjects...');
+        try {
+            const result = await InternalStudentService.bulkAutoMapSeries(parseInt(seriesId));
+            if (result.success) {
+                toast.success(result.message, { id: tid, duration: 4000 });
+                fetchExams();
+            } else {
+                toast.error(result.message || 'Bulk auto registration failed', { id: tid });
+            }
+        } catch (error: any) {
+            console.error('Bulk Auto Register Error:', error);
+            toast.error(error.response?.data?.message || 'Failed to bulk auto register students', { id: tid });
+        } finally {
+            setIsBulkMapping(false);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-[#f8fafc] relative overflow-hidden font-sans pb-20">
             {/* Dynamic Background Effects */}
@@ -269,6 +291,14 @@ const ExamSeriesList: React.FC = () => {
                             startContent={<Upload size={16} />}
                         >
                             Import Timetable
+                        </Button>
+                        <Button
+                            onPress={handleBulkAutoMap}
+                            isLoading={isBulkMapping}
+                            className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold shadow-md shadow-emerald-500/20 hover:scale-[1.02] active:scale-98 transition-all px-5 rounded-2xl h-12 w-full sm:w-auto"
+                            startContent={<UserCheck size={17} />}
+                        >
+                            Bulk Auto Register
                         </Button>
                         {examType !== 'Internal' && (
                             <Button

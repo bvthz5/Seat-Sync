@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardBody, Button, Input, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Chip, Tooltip } from '@heroui/react';
 import { ArrowLeft, Upload, Users, Trash2, Search, BookOpen, Clock, CalendarDays, Building2, GraduationCap, FileSpreadsheet, CheckCircle, AlertTriangle, X, Download, RefreshCcw } from 'lucide-react';
@@ -74,6 +74,26 @@ const InternalExamDetailPage: React.FC = () => {
         }
     };
 
+    const [isAutoMapping, setIsAutoMapping] = useState(false);
+
+    const handleAutoMap = async () => {
+        if (!examId) return;
+        setIsAutoMapping(true);
+        try {
+            const result = await InternalStudentService.autoMapStudents(parseInt(examId));
+            if (result.success) {
+                toast.success(result.message);
+                await Promise.all([loadExamDetail(), loadStudents()]);
+            } else {
+                toast.error(result.message || 'Auto mapping failed');
+            }
+        } catch (error: any) {
+            toast.error(error.response?.data?.message || 'Failed to auto map students');
+        } finally {
+            setIsAutoMapping(false);
+        }
+    };
+
     // Remove single student
     const handleRemoveStudent = async (studentId: number, regNo: string) => {
         if (!examId) return;
@@ -104,17 +124,35 @@ const InternalExamDetailPage: React.FC = () => {
         }
     };
 
-    // Filter students
-    const filteredStudents = students.filter(s => {
-        if (!searchQuery) return true;
-        const q = searchQuery.toLowerCase();
-        return (
-            s.registerNumber?.toLowerCase().includes(q) ||
-            s.fullName?.toLowerCase().includes(q) ||
-            s.department?.toLowerCase().includes(q) ||
-            s.departmentCode?.toLowerCase().includes(q)
-        );
-    });
+    // Filter & Sort students Batch-wise (Department -> Division -> Roll Number 1..N -> Register Number)
+    const filteredStudents = useMemo(() => {
+        const result = students.filter(s => {
+            if (!searchQuery) return true;
+            const q = searchQuery.toLowerCase();
+            return (
+                s.registerNumber?.toLowerCase().includes(q) ||
+                s.fullName?.toLowerCase().includes(q) ||
+                s.department?.toLowerCase().includes(q) ||
+                s.departmentCode?.toLowerCase().includes(q)
+            );
+        });
+
+        return result.sort((a, b) => {
+            const deptA = String(a.departmentCode || a.department || '').toUpperCase().trim();
+            const deptB = String(b.departmentCode || b.department || '').toUpperCase().trim();
+            if (deptA !== deptB) return deptA.localeCompare(deptB);
+
+            const divA = String(a.division || 'A').toUpperCase().trim();
+            const divB = String(b.division || 'A').toUpperCase().trim();
+            if (divA !== divB) return divA.localeCompare(divB);
+
+            const rollA = (a.rollNumber !== null && a.rollNumber !== undefined) ? Number(a.rollNumber) : 999999;
+            const rollB = (b.rollNumber !== null && b.rollNumber !== undefined) ? Number(b.rollNumber) : 999999;
+            if (rollA !== rollB) return rollA - rollB;
+
+            return String(a.registerNumber || '').localeCompare(String(b.registerNumber || ''));
+        });
+    }, [students, searchQuery]);
 
     const formatDate = (dateStr: string) => {
         if (!dateStr) return '-';
@@ -158,6 +196,14 @@ const InternalExamDetailPage: React.FC = () => {
                         </div>
                     </div>
                     <div className="flex items-center gap-3">
+                        <Button
+                            className="bg-emerald-600 text-white font-bold shadow-sm hover:bg-emerald-700 rounded-xl h-11 px-5"
+                            startContent={<RefreshCcw size={16} />}
+                            isLoading={isAutoMapping}
+                            onPress={handleAutoMap}
+                        >
+                            Auto Register Students
+                        </Button>
                         <Button
                             className="bg-indigo-600 text-white font-bold shadow-sm hover:bg-indigo-700 rounded-xl h-11 px-5"
                             startContent={<Upload size={16} />}
@@ -316,12 +362,13 @@ const InternalExamDetailPage: React.FC = () => {
                                     <thead>
                                         <tr className="bg-slate-50/80 border-b border-slate-200/60">
                                             <th className="text-left px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">#</th>
-                                            <th className="text-left px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Register No</th>
+                                            <th className="text-left px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Register No / Roll</th>
                                             <th className="text-left px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Name</th>
                                             <th className="text-left px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Department</th>
                                             <th className="text-left px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Program</th>
                                             <th className="text-left px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Sem</th>
                                             <th className="text-left px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Batch</th>
+                                            <th className="text-center px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Method</th>
                                             <th className="text-center px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Action</th>
                                         </tr>
                                     </thead>
@@ -329,14 +376,28 @@ const InternalExamDetailPage: React.FC = () => {
                                         {filteredStudents.map((s, i) => (
                                             <tr key={s.internalStudentId} className="border-b border-slate-100/80 hover:bg-indigo-50/30 transition-colors">
                                                 <td className="px-5 py-3 text-slate-400 font-medium">{i + 1}</td>
-                                                <td className="px-5 py-3 font-bold text-indigo-700">{s.registerNumber}</td>
+                                                <td className="px-5 py-3 font-bold text-indigo-700">
+                                                    <div>{s.registerNumber}</div>
+                                                    {(s.rollNumber || s.division) && (
+                                                        <div className="text-[0.75rem] text-slate-500 font-medium">
+                                                            {s.rollNumber ? <>Roll No: <span className="text-slate-900 font-bold">{s.rollNumber}</span></> : null}
+                                                            {s.rollNumber && s.division ? ' • ' : null}
+                                                            {s.division ? <>Div <span className="text-slate-900 font-bold">{s.division}</span></> : null}
+                                                        </div>
+                                                    )}
+                                                </td>
                                                 <td className="px-5 py-3 font-semibold text-slate-900">{s.fullName}</td>
                                                 <td className="px-5 py-3">
                                                     <Chip size="sm" className="bg-slate-100 text-slate-700 font-bold">{s.departmentCode || '-'}</Chip>
                                                 </td>
                                                 <td className="px-5 py-3 text-slate-600">{s.program || '-'}</td>
                                                 <td className="px-5 py-3 text-slate-600 font-medium">{s.semester || '-'}</td>
-                                                <td className="px-5 py-3 text-slate-600">{s.batchYear || '-'}</td>
+                                                <td className="px-5 py-3 text-slate-600">{s.batch || s.batchYear || '-'}</td>
+                                                <td className="px-5 py-3 text-center">
+                                                    <Chip size="sm" variant="flat" color={s.registrationMethod === 'EXCEL' ? 'success' : 'primary'} className="font-extrabold text-[0.65rem]">
+                                                        {s.registrationMethod || 'AUTO'}
+                                                    </Chip>
+                                                </td>
                                                 <td className="px-5 py-3 text-center">
                                                     <Tooltip content="Remove from this exam">
                                                         <Button

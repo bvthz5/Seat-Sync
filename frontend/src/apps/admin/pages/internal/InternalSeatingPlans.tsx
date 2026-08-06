@@ -1054,9 +1054,15 @@ const InternalSeatingPlans: React.FC = () => {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                                     {[...hallSummary]
                                         .sort((a, b) => {
-                                            if ((b.filledSeats > 0 ? 1 : 0) - (a.filledSeats > 0 ? 1 : 0) !== 0)
-                                                return (b.filledSeats > 0 ? 1 : 0) - (a.filledSeats > 0 ? 1 : 0);
-                                            return a.hallCode.localeCompare(b.hallCode);
+                                            const getRank = (h: any) => {
+                                                if (h.filledSeats >= h.totalSeats && h.filledSeats > 0) return 0; // Fully Seated
+                                                if (h.filledSeats > 0 && h.filledSeats < h.totalSeats) return 1;   // Partial
+                                                return 2;                                                         // Unassigned
+                                            };
+                                            const rankA = getRank(a);
+                                            const rankB = getRank(b);
+                                            if (rankA !== rankB) return rankA - rankB;
+                                            return (a.hallCode || '').localeCompare(b.hallCode || '', undefined, { numeric: true, sensitivity: 'base' });
                                         })
                                         .map((h) => {
                                             const pct = h.totalSeats > 0 ? Math.round((h.filledSeats / h.totalSeats) * 100) : 0;
@@ -1431,12 +1437,15 @@ const InternalSeatingPlans: React.FC = () => {
                                                                                 <p className="font-black text-white text-[13px] mb-1 leading-tight">{seat?.name}</p>
                                                                                 <div className="space-y-1 mt-2">
                                                                                     <p className="text-[10px] text-slate-300"><span className="text-slate-500 font-bold">Reg No :</span> {seat?.registerNumber}</p>
-                                                                                    <p className="text-[10px] text-slate-300"><span className="text-slate-500 font-bold">Dept    :</span> {seat?.deptCode}</p>
+                                                                                    {(seat?.rollNumber !== null && seat?.rollNumber !== undefined) && (
+                                                                                        <p className="text-[10px] text-slate-300"><span className="text-slate-500 font-bold">Roll No:</span> {seat?.rollNumber}</p>
+                                                                                    )}
+                                                                                    <p className="text-[10px] text-slate-300"><span className="text-slate-500 font-bold">Dept    :</span> {seat?.deptCode}{seat?.division ? ` (Div ${seat.division})` : ''}</p>
                                                                                     <p className="text-[10px] text-slate-300"><span className="text-slate-500 font-bold">Subject :</span> {seat?.subjectCode}</p>
                                                                                 </div>
                                                                                 <div className="mt-2 pt-2 border-t border-slate-700 flex items-center gap-1.5">
                                                                                     <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: dStyle.dot }} />
-                                                                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{seat?.deptCode}</span>
+                                                                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{seat?.deptCode}{seat?.division ? ` - ${seat.division}` : ''}</span>
                                                                                 </div>
                                                                             </div>
                                                                         }
@@ -1469,9 +1478,11 @@ const InternalSeatingPlans: React.FC = () => {
                                                                                     >
                                                                                         {seat.deptCode}
                                                                                     </span>
-                                                                                    {/* Register number */}
-                                                                                    <span className="text-[9px] font-black text-white leading-tight text-center px-0.5 break-all">
-                                                                                        {seat.registerNumber}
+                                                                                    {/* Roll Number or Register Number */}
+                                                                                    <span className="text-[11px] font-black text-white leading-tight text-center px-0.5 break-all">
+                                                                                        {seat.rollNumber !== null && seat.rollNumber !== undefined && String(seat.rollNumber).trim() !== ''
+                                                                                            ? seat.rollNumber
+                                                                                            : seat.registerNumber}
                                                                                     </span>
                                                                                     {/* Student name */}
                                                                                     <span className="text-[7px] font-semibold mt-1 leading-[1.2] text-center px-0.5 line-clamp-2" style={{ color: dStyle.text }}>

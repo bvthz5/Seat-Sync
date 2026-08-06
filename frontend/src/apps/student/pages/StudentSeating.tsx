@@ -12,6 +12,8 @@ import {
     ArrowLeft,
     Maximize,
     Minimize,
+    GraduationCap,
+    UserCheck,
 } from 'lucide-react';
 import { studentPortalApi } from '../services/studentPortal';
 import SeatingVisualization from '../components/SeatingVisualization';
@@ -169,6 +171,16 @@ const StudentSeating: React.FC = () => {
                                     <InfoItem icon={MapPin} label="Examination Hall" value={assignment?.roomCode || 'Allocating...'} color="text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 border-indigo-500/20" isDark={isDark} />
                                 </div>
                             </div>
+
+                            {(assignment?.rollNumber !== undefined || assignment?.division || assignment?.batch) && (
+                                <div className={`pt-6 border-t ${isDark ? 'border-slate-800/50' : 'border-slate-100'}`}>
+                                    <h3 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.25em] mb-5">Class Profile</h3>
+                                    <div className="space-y-5">
+                                        <InfoItem icon={GraduationCap} label="Batch & Division" value={`${assignment?.batch || 'Default'} • Div ${assignment?.division || 'A'}`} isDark={isDark} />
+                                        <InfoItem icon={UserCheck} label="Class Roll Number" value={assignment?.rollNumber ? `Roll #${assignment.rollNumber}` : 'N/A'} isDark={isDark} />
+                                    </div>
+                                </div>
+                            )}
 
                             <div className={`pt-6 border-t ${isDark ? 'border-slate-800/50' : 'border-slate-100'}`}>
                                 <div className={`rounded-2xl p-4 flex gap-4 border transition-colors duration-500 ${

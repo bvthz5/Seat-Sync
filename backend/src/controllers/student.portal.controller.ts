@@ -98,10 +98,13 @@ const getProfilePayload = (student: any) => ({
     name: student.User?.FullName ?? student.User?.Email ?? "Student",
     email: student.User?.Email ?? null,
     registerNumber: student.RegisterNumber,
+    rollNumber: student.RollNumber ?? null,
+    division: student.Division ?? null,
+    batch: student.Batch ?? null,
     department: student.Department?.DepartmentName ?? null,
     departmentCode: student.Department?.DepartmentCode ?? null,
     program: student.Program?.ProgramName ?? null,
-    semester: student.Semester?.SemesterNumber ?? student.Semester?.SemesterName ?? null,
+    semester: student.Semester?.SemesterNumber ?? student.Semester?.SemesterName ?? student.Semester ?? null,
     batchYear: student.BatchYear,
 });
 
@@ -338,7 +341,7 @@ export const getStudentDashboard = async (req: Request, res: Response) => {
         const recordedSem = student ? parseSemesterNumber(student.Semester) : null;
         const effectiveSemNum = student ? getEffectiveSemesterNumber(student, maxSem, recordedSem) : 1;
         const effectiveSem = programSemesters.find(r => parseSemesterNumber(r) === effectiveSemNum);
-        const semesterValue = student ? ((effectiveSem as any)?.SemesterNumber ?? (effectiveSem as any)?.SemesterName ?? effectiveSemNum) : (internalStudent?.Semester?.SemesterNumber || 1);
+        const semesterValue = student ? ((effectiveSem as any)?.SemesterNumber ?? (effectiveSem as any)?.SemesterName ?? effectiveSemNum) : ((internalStudent as any)?.SemesterModel?.SemesterNumber || internalStudent?.Semester || 1);
         
         const now = new Date();
         
@@ -558,7 +561,10 @@ export const getStudentSeating = async (req: Request, res: Response) => {
                     blockName: room.InternalBlock?.BlockName, 
                     floorName: parseFloorLabel(room.InternalFloor?.FloorName, room.InternalFloor?.FloorNumber, room.RoomCode || room.RoomName || ""),
                     rowLayout: room.RowLayout,
-                    seatsPerBench: room.SeatsPerBench
+                    seatsPerBench: room.SeatsPerBench,
+                    rollNumber: internalStudent?.RollNumber ?? null,
+                    division: internalStudent?.Division ?? 'A',
+                    batch: internalStudent?.Batch ?? null
                 }, 
                 layout: roomLayout 
             }});

@@ -192,7 +192,7 @@ InternalStudent.belongsTo(Program, { foreignKey: 'ProgramID', onDelete: 'NO ACTI
 Program.hasMany(InternalStudent, { foreignKey: 'ProgramID', as: 'InternalStudents', onDelete: 'NO ACTION' });
 
 // InternalStudent  Semester
-InternalStudent.belongsTo(Semester, { foreignKey: 'SemesterID', onDelete: 'NO ACTION' });
+InternalStudent.belongsTo(Semester, { foreignKey: 'SemesterID', as: 'SemesterModel', onDelete: 'NO ACTION' });
 Semester.hasMany(InternalStudent, { foreignKey: 'SemesterID', as: 'InternalStudents', onDelete: 'NO ACTION' });
 
 // InternalExamRegistration  InternalExam (mapping: student appears for this exam)
