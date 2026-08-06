@@ -96,7 +96,7 @@ export const InternalStudentService = {
     },
 
     // List all internal students
-    getAllStudents: async (params?: { page?: number; limit?: number; search?: string; dept?: number; batch?: number; examId?: number }) => {
+    getAllStudents: async (params?: { page?: number; limit?: number; search?: string; dept?: number; batch?: number; sem?: number | string; examId?: number }) => {
         const response = await api.get('/internal/students', { params });
         return response.data;
     },

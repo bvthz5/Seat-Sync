@@ -9,6 +9,7 @@ import {
     clearStudentsFromInternalExam,
     getInternalExamDetail,
     deleteInternalStudent,
+    updateInternalStudent,
     deleteAllInternalStudents,
     getInternalStudentStats,
     createInternalStudent,
@@ -24,6 +25,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 // ── Internal Student CRUD ──
 router.get('/students', getAllInternalStudents);
 router.post('/students', createInternalStudent);
+router.put('/students/:id', updateInternalStudent);
 router.get('/students/stats', getInternalStudentStats);
 router.get('/students/filter-options', getInternalFilterOptions);
 router.get('/students/export-credentials', exportInternalStudentCredentials);

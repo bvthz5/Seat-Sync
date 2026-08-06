@@ -941,7 +941,17 @@ const Students: React.FC = () => {
                                                 <Pencil size={16} />
                                             </Button>
                                         </Tooltip>
-                                        <Dropdown placement="bottom-end">
+                                        <Dropdown 
+                                            placement="bottom-end"
+                                            classNames={{
+                                                content: "!bg-white border border-slate-200/90 shadow-2xl rounded-2xl p-1.5 min-w-[190px] z-[9999] opacity-100"
+                                            }}
+                                            popoverProps={{
+                                                classNames: {
+                                                    content: "!bg-white border border-slate-200/90 shadow-2xl rounded-2xl p-1.5 z-[9999] opacity-100 min-w-[190px]"
+                                                }
+                                            }}
+                                        >
                                             <DropdownTrigger>
                                                 <Button isIconOnly size="sm" variant="light" className="text-slate-400 hover:text-slate-700">
                                                     <MoreVertical size={18} />
@@ -949,7 +959,7 @@ const Students: React.FC = () => {
                                             </DropdownTrigger>
                                             <DropdownMenu 
                                                 aria-label="Student Actions" 
-                                                className="bg-white min-w-[200px] border border-slate-100 shadow-xl rounded-xl p-1"
+                                                className="bg-white min-w-[190px] border-none p-1"
                                             >
                                                 <DropdownItem key="edit" textValue="Edit Profile" className="md:hidden hover:bg-slate-50 py-2" startContent={<Pencil size={15} className="mr-2 text-slate-500" />} onPress={() => handleEdit(item)}>
                                                     <span className="text-slate-700 font-medium">Edit Profile</span>

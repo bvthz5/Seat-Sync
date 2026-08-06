@@ -27,16 +27,36 @@ export const getAllInternalStudents = async (req: Request, res: Response) => {
         const search = (req.query.search as string || '').trim();
         const deptId = req.query.dept ? parseInt(req.query.dept as string) : null;
         const batchYear = req.query.batch ? parseInt(req.query.batch as string) : null;
+        const semParam = req.query.sem ? String(req.query.sem).trim() : (req.query.semester ? String(req.query.semester).trim() : null);
         const examId = req.query.examId ? parseInt(req.query.examId as string) : null;
 
         const where: any = {};
         if (deptId) where.DepartmentID = deptId;
         if (batchYear) where.BatchYear = batchYear;
+        if (semParam) {
+            const semNum = parseInt(semParam.replace(/[^0-9]/g, ''), 10);
+            if (!isNaN(semNum)) {
+                where[Op.or] = [
+                    { Semester: `S${semNum}` },
+                    { Semester: `${semNum}` },
+                    sequelize.where(sequelize.col('SemesterModel.SemesterNumber'), semNum)
+                ];
+            }
+        }
         if (search) {
-            where[Op.or] = [
+            const searchConditions = [
                 { RegisterNumber: { [Op.like]: `%${search}%` } },
                 { FullName: { [Op.like]: `%${search}%` } },
             ];
+            if (where[Op.or]) {
+                where[Op.and] = [
+                    { [Op.or]: where[Op.or] },
+                    { [Op.or]: searchConditions }
+                ];
+                delete where[Op.or];
+            } else {
+                where[Op.or] = searchConditions;
+            }
         }
 
         // If examId filter is provided, only return students mapped to that exam
@@ -659,6 +679,59 @@ export const deleteInternalStudent = async (req: Request, res: Response) => {
         res.json({ message: 'Internal student deleted' });
     } catch (error: any) {
         console.error('Delete Internal Student Error:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+/* ════════════════════════════════════════════════════════════════
+ *  PUT /api/internal/students/:id
+ *  Update an internal student record
+ * ════════════════════════════════════════════════════════════════ */
+export const updateInternalStudent = async (req: Request, res: Response) => {
+    const t = await sequelize.transaction();
+    try {
+        const id = parseInt(req.params.id as string);
+        const { RegisterNumber, FullName, Email, DepartmentID, ProgramID, Semester, RollNumber, Division, BatchYear, Status } = req.body;
+
+        const student = await InternalStudent.findByPk(id, { transaction: t });
+        if (!student) {
+            await t.rollback();
+            return res.status(404).json({ message: 'Internal student not found' });
+        }
+
+        if (student.UserID) {
+            const user = await User.findByPk(student.UserID, { transaction: t });
+            if (user) {
+                await user.update({
+                    Email: Email || user.Email,
+                    FullName: FullName || user.FullName
+                }, { transaction: t });
+            }
+        }
+
+        let semVal = Semester;
+        if (semVal !== undefined && semVal !== null && semVal !== '') {
+            const numSem = String(semVal).replace(/^S/i, '');
+            semVal = `S${numSem}`;
+        }
+
+        await student.update({
+            RegisterNumber: RegisterNumber ? RegisterNumber.toUpperCase() : student.RegisterNumber,
+            FullName: FullName || student.FullName,
+            DepartmentID: DepartmentID !== undefined ? (DepartmentID ? Number(DepartmentID) : null) : student.DepartmentID,
+            ProgramID: ProgramID !== undefined ? (ProgramID ? Number(ProgramID) : null) : student.ProgramID,
+            Semester: semVal !== undefined ? semVal : student.Semester,
+            RollNumber: RollNumber !== undefined ? (RollNumber !== null && RollNumber !== '' && !isNaN(Number(RollNumber)) ? Number(RollNumber) : null) : student.RollNumber,
+            Division: Division !== undefined ? Division : student.Division,
+            BatchYear: BatchYear !== undefined ? (BatchYear ? Number(BatchYear) : null) : student.BatchYear,
+            Status: Status || student.Status
+        }, { transaction: t });
+
+        await t.commit();
+        res.json({ message: 'Internal student updated successfully', student });
+    } catch (error: any) {
+        await t.rollback();
+        console.error('Update Internal Student Error:', error);
         res.status(500).json({ message: error.message });
     }
 };

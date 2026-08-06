@@ -91,8 +91,8 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
             newErrors.RegisterNumber = "Register Number must be at least 4 characters";
         } else if (formData.RegisterNumber.trim().length > 50) {
             newErrors.RegisterNumber = "Register Number must not exceed 50 characters";
-        } else if (!/^[A-Z0-9\-_]+$/i.test(formData.RegisterNumber.trim())) {
-            newErrors.RegisterNumber = "Register Number can only contain letters, numbers, hyphens, and underscores";
+        } else if (!/^[A-Z0-9\-_&/.]+/i.test(formData.RegisterNumber.trim())) {
+            newErrors.RegisterNumber = "Register Number contains invalid characters";
         }
 
         // Validate Batch Year

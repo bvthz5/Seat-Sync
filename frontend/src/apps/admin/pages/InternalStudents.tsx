@@ -9,7 +9,7 @@ import {
     Search, FileSpreadsheet, Pencil, Trash2, AlertTriangle, 
     GraduationCap, BookOpen, FileDown, Users, 
     MoreVertical, CheckCircle2, ShieldCheck, Mail, Phone,
-    Eye, X, Plus, UserCircle, Key, KeyRound, Building2, RefreshCcw, RefreshCw, AlertCircle
+    Eye, X, Plus, UserCircle, Key, KeyRound, Building2, RefreshCcw, RefreshCw, AlertCircle, ChevronDown
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { InternalStudentService } from '../services/internalStudentService';
@@ -29,7 +29,7 @@ const InternalStudents: React.FC = () => {
     
     const [searchQuery, setSearchQuery] = useState("");
     const debouncedSearch = useDebounce(searchQuery, 500);
-    const [filters, setFilters] = useState({ dept: "", batch: "" });
+    const [filters, setFilters] = useState({ dept: "", batch: "", sem: "" });
     
     const [filterOptions, setFilterOptions] = useState<{ departments: any[], batchYears: number[] }>({
         departments: [],
@@ -73,7 +73,8 @@ const InternalStudents: React.FC = () => {
                 limit: 10,
                 search: debouncedSearch,
                 dept: filters.dept ? parseInt(filters.dept) : undefined,
-                batch: filters.batch ? parseInt(filters.batch) : undefined
+                batch: filters.batch ? parseInt(filters.batch) : undefined,
+                sem: filters.sem ? filters.sem : undefined
             });
             setStudents(data.students || []);
             setTotalPages(data.totalPages || 1);
@@ -218,174 +219,294 @@ const InternalStudents: React.FC = () => {
     };
 
     return (
-        <div className="max-w-[1600px] mx-auto pb-12">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        <div className="max-w-[1600px] mx-auto pt-6 px-4 md:px-8 pb-12 space-y-6">
+            {/* Header Title + Action Buttons Bar */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-2 border-b border-slate-100">
                 <div>
-                    <h1 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-                        <Users className="text-blue-600" size={24}/> Internal Students
+                    <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
+                        <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm">
+                            <Users size={22} />
+                        </div>
+                        Internal Students
                     </h1>
-                    <p className="text-slate-500 font-medium text-xs mt-0.5">Manage isolated student records for internal examinations</p>
+                    <p className="text-slate-500 font-medium text-xs mt-1">Manage isolated student records and class mappings for internal examinations</p>
                 </div>
-                <div className="flex items-center gap-2 overflow-x-auto pb-1">
+
+                {/* Ordered Action Buttons: Add Student -> Import Data -> Passwords -> Sync Semesters -> Export -> Delete All */}
+                <div className="flex items-center gap-2.5 flex-wrap">
+                    {/* 1. Add Student */}
                     <Button 
-                        color="danger" 
-                        variant="shadow" 
-                        startContent={<Trash2 size={18}/>} 
-                        onPress={() => setIsDeleteAllOpen(true)} 
-                        className="font-black rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-red-200"
+                        color="primary" 
+                        variant="shadow"
+                        startContent={<Plus size={18}/>} 
+                        onPress={() => setIsAddOpen(true)} 
+                        className="font-black rounded-xl bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-200 h-10 px-4 text-xs hover:scale-[1.02] active:scale-[0.98] transition-all"
                     >
-                        Delete All
+                        Add Student
                     </Button>
-                    <Button 
-                        variant="shadow" 
-                        startContent={<FileDown size={18}/>} 
-                        className="font-black rounded-xl bg-gradient-to-r from-slate-700 to-slate-900 text-white shadow-slate-200"
-                    >
-                        Export
-                    </Button>
-                    <Button 
-                        variant="shadow" 
-                        color="warning" 
-                        startContent={<KeyRound size={18}/>} 
-                        onPress={handleExportPasswords}
-                        className="font-black rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-orange-200"
-                    >
-                        Passwords
-                    </Button>
+
+                    {/* 2. Import Data */}
                     <Button 
                         color="primary" 
                         variant="shadow" 
                         startContent={<FileSpreadsheet size={18}/>} 
                         onPress={() => setIsImportOpen(true)} 
-                        className="font-black rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-emerald-200"
+                        className="font-black rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-200 h-10 px-4 text-xs hover:scale-[1.02] active:scale-[0.98] transition-all"
                     >
                         Import Data
                     </Button>
+
+                    {/* 3. Passwords */}
+                    <Button 
+                        variant="shadow" 
+                        color="warning" 
+                        startContent={<KeyRound size={18}/>} 
+                        onPress={handleExportPasswords}
+                        className="font-black rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-md shadow-orange-200 h-10 px-4 text-xs hover:scale-[1.02] active:scale-[0.98] transition-all"
+                    >
+                        Passwords
+                    </Button>
+
+                    {/* 4. Sync Semesters */}
                     <Button 
                         variant="shadow" 
                         color="secondary" 
                         startContent={<RefreshCw size={18} className={isSyncing ? "animate-spin" : ""} />} 
                         onPress={handleSyncSemesters}
                         isLoading={isSyncing}
-                        className="font-black rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-600 text-white shadow-purple-200"
+                        className="font-black rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-600 text-white shadow-md shadow-purple-200 h-10 px-4 text-xs hover:scale-[1.02] active:scale-[0.98] transition-all"
                     >
                         Sync Semesters
                     </Button>
+
+                    {/* 5. Export */}
                     <Button 
-                        color="primary" 
-                        variant="shadow"
-                        startContent={<Plus size={18}/>} 
-                        onPress={() => setIsAddOpen(true)} 
-                        className="font-black rounded-xl bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-200"
+                        variant="shadow" 
+                        startContent={<FileDown size={18}/>} 
+                        className="font-black rounded-xl bg-gradient-to-r from-slate-700 to-slate-900 text-white shadow-md shadow-slate-200 h-10 px-4 text-xs hover:scale-[1.02] active:scale-[0.98] transition-all"
                     >
-                        Add Student
+                        Export
+                    </Button>
+
+                    {/* 6. Delete All */}
+                    <Button 
+                        color="danger" 
+                        variant="flat" 
+                        startContent={<Trash2 size={16}/>} 
+                        onPress={() => setIsDeleteAllOpen(true)} 
+                        className="font-bold rounded-xl bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 h-10 px-4 text-xs transition-all hover:scale-[1.02] active:scale-[0.98]"
+                    >
+                        Delete All
                     </Button>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+            {/* Stats Overview Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                 {/* Total Students Card */}
-                <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-5 rounded-2xl shadow-lg shadow-blue-100 flex flex-col justify-between relative overflow-hidden group hover:scale-[1.02] transition-all">
+                <div className="bg-gradient-to-br from-blue-600 via-indigo-600 to-indigo-700 p-5 rounded-2xl shadow-lg shadow-blue-100 flex flex-col justify-between relative overflow-hidden group hover:scale-[1.02] transition-all">
                     <div className="relative z-10">
-                        <p className="text-blue-100 text-[0.65rem] font-bold uppercase tracking-widest mb-1">Total Students</p>
+                        <p className="text-blue-100 text-[0.65rem] font-black uppercase tracking-widest mb-1">Total Students</p>
                         <h3 className="text-3xl font-black text-white">{stats.totalStudents}</h3>
                     </div>
                     <Users className="absolute -right-2 -bottom-2 text-white/10 group-hover:scale-110 transition-transform duration-500" size={80}/>
                 </div>
 
                 {/* Active Students Card */}
-                <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-5 rounded-2xl shadow-lg shadow-emerald-100 flex flex-col justify-between relative overflow-hidden group hover:scale-[1.02] transition-all">
+                <div className="bg-gradient-to-br from-emerald-500 via-teal-600 to-teal-700 p-5 rounded-2xl shadow-lg shadow-emerald-100 flex flex-col justify-between relative overflow-hidden group hover:scale-[1.02] transition-all">
                     <div className="relative z-10">
-                        <p className="text-emerald-50 text-[0.65rem] font-bold uppercase tracking-widest mb-1">Active Students</p>
+                        <p className="text-emerald-50 text-[0.65rem] font-black uppercase tracking-widest mb-1">Active Students</p>
                         <h3 className="text-3xl font-black text-white">{stats.activeStudents}</h3>
                     </div>
                     <CheckCircle2 className="absolute -right-2 -bottom-2 text-white/10 group-hover:scale-110 transition-transform duration-500" size={80}/>
                 </div>
 
                 {/* Graduated Card */}
-                <div className="bg-gradient-to-br from-violet-600 to-purple-700 p-5 rounded-2xl shadow-lg shadow-purple-100 flex flex-col justify-between relative overflow-hidden group hover:scale-[1.02] transition-all">
+                <div className="bg-gradient-to-br from-violet-600 via-purple-600 to-purple-700 p-5 rounded-2xl shadow-lg shadow-purple-100 flex flex-col justify-between relative overflow-hidden group hover:scale-[1.02] transition-all">
                     <div className="relative z-10">
-                        <p className="text-purple-100 text-[0.65rem] font-bold uppercase tracking-widest mb-1">Graduated</p>
+                        <p className="text-purple-100 text-[0.65rem] font-black uppercase tracking-widest mb-1">Graduated</p>
                         <h3 className="text-3xl font-black text-white">{stats.graduated}</h3>
                     </div>
                     <GraduationCap className="absolute -right-2 -bottom-2 text-white/10 group-hover:scale-110 transition-transform duration-500" size={80}/>
                 </div>
 
                 {/* Dropped Card */}
-                <div className="bg-gradient-to-br from-rose-600 to-pink-700 p-5 rounded-2xl shadow-lg shadow-pink-100 flex flex-col justify-between relative overflow-hidden group hover:scale-[1.02] transition-all">
+                <div className="bg-gradient-to-br from-rose-600 via-pink-600 to-pink-700 p-5 rounded-2xl shadow-lg shadow-pink-100 flex flex-col justify-between relative overflow-hidden group hover:scale-[1.02] transition-all">
                     <div className="relative z-10">
-                        <p className="text-rose-100 text-[0.65rem] font-bold uppercase tracking-widest mb-1">Dropped Out</p>
+                        <p className="text-rose-100 text-[0.65rem] font-black uppercase tracking-widest mb-1">Dropped Out</p>
                         <h3 className="text-3xl font-black text-white">{stats.dropped}</h3>
                     </div>
                     <AlertTriangle className="absolute -right-2 -bottom-2 text-white/10 group-hover:scale-110 transition-transform duration-500" size={80}/>
                 </div>
 
                 {/* Total Departments Card */}
-                <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-5 rounded-2xl shadow-lg shadow-orange-100 flex flex-col justify-between relative overflow-hidden group hover:scale-[1.02] transition-all">
+                <div className="bg-gradient-to-br from-amber-500 via-orange-500 to-orange-600 p-5 rounded-2xl shadow-lg shadow-orange-100 flex flex-col justify-between relative overflow-hidden group hover:scale-[1.02] transition-all">
                     <div className="relative z-10">
-                        <p className="text-amber-100 text-[0.65rem] font-bold uppercase tracking-widest mb-1">Departments</p>
+                        <p className="text-amber-100 text-[0.65rem] font-black uppercase tracking-widest mb-1">Departments</p>
                         <h3 className="text-3xl font-black text-white">{filterOptions.departments.length}</h3>
                     </div>
                     <Building2 className="absolute -right-2 -bottom-2 text-white/10 group-hover:scale-110 transition-transform duration-500" size={80}/>
                 </div>
             </div>
 
+            {/* Main Table Card with Search & Filters */}
             <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xl shadow-slate-100/50 overflow-hidden">
-                <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row gap-3 items-center justify-between bg-slate-50/50">
-                    <div className="relative w-full sm:w-80">
-                        <Input
-                            placeholder="Search by name, reg no..."
+                <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row gap-3 items-center justify-between bg-slate-50/50">
+                    {/* Search Bar with Icon Boundary Divider */}
+                    <div className="relative flex items-center w-full md:w-80 h-10 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-indigo-400 focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-100 transition-all overflow-hidden">
+                        <div className="flex items-center justify-center pl-3 pr-2.5 h-full bg-slate-50/80 border-r border-slate-200/80 text-slate-400 shrink-0">
+                            <Search size={16} />
+                        </div>
+                        <input
+                            type="text"
+                            placeholder="Search by name, reg no, roll no..."
                             value={searchQuery}
-                            onValueChange={setSearchQuery}
-                            startContent={<Search size={16} className="text-slate-400" />}
-                            isClearable
-                            onClear={() => setSearchQuery("")}
-                            classNames={{
-                                inputWrapper: "bg-white border border-slate-200 shadow-sm rounded-xl hover:border-slate-300 focus-within:border-blue-600"
-                            }}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full !h-full !px-3 !py-0 !bg-transparent !border-none !shadow-none !rounded-none !outline-none !ring-0 text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:!outline-none focus:!ring-0 focus:!border-none"
                         />
+                        {searchQuery && (
+                            <button 
+                                type="button"
+                                onClick={() => setSearchQuery("")}
+                                className="text-slate-400 hover:text-slate-600 pr-3 pl-1 h-full flex items-center justify-center transition-colors shrink-0"
+                            >
+                                <X size={14} />
+                            </button>
+                        )}
                     </div>
-                    <div className="flex items-center gap-2 w-full sm:w-auto">
+
+                    {/* Filter Dropdowns */}
+                    <div className="flex items-center gap-2.5 w-full md:w-auto justify-end flex-wrap sm:flex-nowrap">
+                        {/* Department Filter */}
                         <Select
+                            aria-label="Filter by department"
                             placeholder="All Departments"
+                            size="sm"
+                            variant="bordered"
                             selectedKeys={filters.dept ? [filters.dept] : []}
                             onSelectionChange={handleSelectChange('dept')}
-                            className="w-full sm:w-48"
+                            className="w-full sm:w-44"
+                            selectorIcon={<ChevronDown size={14} className="text-slate-400 shrink-0" />}
                             classNames={{
-                                trigger: "bg-white border border-slate-200 shadow-sm rounded-xl h-10"
+                                trigger: "bg-white border border-slate-200 shadow-sm rounded-xl h-10 min-h-10 hover:border-indigo-400 data-[hover=true]:border-indigo-400 focus-within:border-indigo-600 transition-colors px-3 pr-7 relative",
+                                value: "text-xs font-semibold text-slate-700 text-left",
+                                selectorIcon: "right-2.5 absolute text-slate-400 pointer-events-none"
+                            }}
+                            popoverProps={{
+                                classNames: {
+                                    content: "!bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-2xl rounded-2xl p-1.5 z-[9999] opacity-100 min-w-[260px]"
+                                }
+                            }}
+                            listboxProps={{
+                                classNames: {
+                                    base: "bg-white p-1"
+                                }
                             }}
                         >
                             {filterOptions.departments.map(d => (
-                                <SelectItem key={d.DepartmentID} value={d.DepartmentID}>
-                                    {d.DepartmentCode}
+                                <SelectItem key={d.DepartmentID} value={d.DepartmentID} textValue={`${d.DepartmentCode} ${d.DepartmentName}`}>
+                                    <div className="flex items-center gap-2.5 py-1 px-1 w-full">
+                                        <span className="px-2 py-0.5 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-700 font-extrabold text-xs font-mono shrink-0">
+                                            {d.DepartmentCode}
+                                        </span>
+                                        <span className="text-xs font-semibold text-slate-700 truncate">
+                                            {d.DepartmentName}
+                                        </span>
+                                    </div>
                                 </SelectItem>
                             ))}
                         </Select>
 
+                        {/* Semester Filter */}
                         <Select
+                            aria-label="Filter by semester"
+                            placeholder="All Semesters"
+                            size="sm"
+                            variant="bordered"
+                            selectedKeys={filters.sem ? [filters.sem] : []}
+                            onSelectionChange={handleSelectChange('sem')}
+                            className="w-full sm:w-36"
+                            selectorIcon={<ChevronDown size={14} className="text-slate-400 shrink-0" />}
+                            classNames={{
+                                trigger: "bg-white border border-slate-200 shadow-sm rounded-xl h-10 min-h-10 hover:border-indigo-400 data-[hover=true]:border-indigo-400 focus-within:border-indigo-600 transition-colors px-3 pr-7 relative",
+                                value: "text-xs font-semibold text-slate-700 text-left",
+                                selectorIcon: "right-2.5 absolute text-slate-400 pointer-events-none"
+                            }}
+                            popoverProps={{
+                                classNames: {
+                                    content: "!bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-2xl rounded-2xl p-1.5 z-[9999] opacity-100 min-w-[200px]"
+                                }
+                            }}
+                            listboxProps={{
+                                classNames: {
+                                    base: "bg-white p-1"
+                                }
+                            }}
+                        >
+                            {[1, 2, 3, 4, 5, 6, 7, 8].map(sem => (
+                                <SelectItem key={String(sem)} value={String(sem)} textValue={`Semester ${sem}`}>
+                                    <div className="flex items-center gap-2.5 py-1 px-1 w-full">
+                                        <span className="px-2 py-0.5 rounded-lg bg-purple-50 border border-purple-100 text-purple-700 font-extrabold text-xs font-mono shrink-0">
+                                            S{sem}
+                                        </span>
+                                        <span className="text-xs font-semibold text-slate-700">
+                                            Semester {sem}
+                                        </span>
+                                    </div>
+                                </SelectItem>
+                            ))}
+                        </Select>
+
+                        {/* Batch Filter */}
+                        <Select
+                            aria-label="Filter by batch"
                             placeholder="All Batches"
+                            size="sm"
+                            variant="bordered"
                             selectedKeys={filters.batch ? [filters.batch] : []}
                             onSelectionChange={handleSelectChange('batch')}
                             className="w-full sm:w-36"
+                            selectorIcon={<ChevronDown size={14} className="text-slate-400 shrink-0" />}
                             classNames={{
-                                trigger: "bg-white border border-slate-200 shadow-sm rounded-xl h-10"
+                                trigger: "bg-white border border-slate-200 shadow-sm rounded-xl h-10 min-h-10 hover:border-indigo-400 data-[hover=true]:border-indigo-400 focus-within:border-indigo-600 transition-colors px-3 pr-7 relative",
+                                value: "text-xs font-semibold text-slate-700 text-left",
+                                selectorIcon: "right-2.5 absolute text-slate-400 pointer-events-none"
+                            }}
+                            popoverProps={{
+                                classNames: {
+                                    content: "!bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-2xl rounded-2xl p-1.5 z-[9999] opacity-100 min-w-[200px]"
+                                }
+                            }}
+                            listboxProps={{
+                                classNames: {
+                                    base: "bg-white p-1"
+                                }
                             }}
                         >
                             {filterOptions.batchYears.map(year => (
-                                <SelectItem key={year} value={year}>
-                                    {year}
+                                <SelectItem key={String(year)} value={String(year)} textValue={String(year)}>
+                                    <div className="flex items-center gap-2.5 py-1 px-1 w-full">
+                                        <span className="px-2 py-0.5 rounded-lg bg-amber-50 border border-amber-100 text-amber-700 font-extrabold text-xs font-mono shrink-0">
+                                            {year}
+                                        </span>
+                                        <span className="text-xs font-semibold text-slate-700">
+                                            Batch {year}
+                                        </span>
+                                    </div>
                                 </SelectItem>
                             ))}
                         </Select>
 
-                        {(searchQuery || filters.dept || filters.batch) && (
-                            <Button 
-                                isIconOnly variant="flat" color="danger" size="sm" 
-                                onPress={() => { setSearchQuery(""); setFilters({ dept: "", batch: "" }); }}
-                                className="rounded-xl"
-                            >
-                                <X size={16} />
-                            </Button>
+                        {(searchQuery || filters.dept || filters.batch || filters.sem) && (
+                            <Tooltip content="Clear Filters">
+                                <Button 
+                                    isIconOnly variant="flat" color="danger" size="sm" 
+                                    onPress={() => { setSearchQuery(""); setFilters({ dept: "", batch: "", sem: "" }); }}
+                                    className="rounded-xl h-10 w-10 min-w-10 bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 transition-colors shrink-0"
+                                >
+                                    <X size={16} />
+                                </Button>
+                            </Tooltip>
                         )}
                     </div>
                 </div>
@@ -423,9 +544,9 @@ const InternalStudents: React.FC = () => {
                             </div>
                             <p className="text-lg font-semibold text-slate-800">No internal students found</p>
                             <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">We couldn't find any records matching your search or filters.</p>
-                            {(searchQuery || filters.dept || filters.batch) && (
+                            {(searchQuery || filters.dept || filters.batch || filters.sem) && (
                                 <Button 
-                                    onPress={() => { setSearchQuery(""); setFilters({ dept: "", batch: "" }); }} 
+                                    onPress={() => { setSearchQuery(""); setFilters({ dept: "", batch: "", sem: "" }); }} 
                                     variant="flat" className="mt-4 font-bold" color="primary"
                                 >
                                     Clear all filters
@@ -435,15 +556,15 @@ const InternalStudents: React.FC = () => {
                     }
                 >
                     <TableHeader>
-                        <TableColumn width={60}>#</TableColumn>
-                        <TableColumn width={220}>Reg No / Class Roll No</TableColumn>
-                        <TableColumn>Full Name</TableColumn>
-                        <TableColumn align="center">Department</TableColumn>
-                        <TableColumn align="center">Program</TableColumn>
-                        <TableColumn key="sem" align="center" width={80} className="font-bold text-slate-500 uppercase tracking-wider">Sem</TableColumn>
-                        <TableColumn key="batch" align="center" width={100} className="font-bold text-slate-500 uppercase tracking-wider">Batch</TableColumn>
-                        <TableColumn key="status" align="center" width={120} className="font-bold text-slate-500 uppercase tracking-wider">Status</TableColumn>
-                        <TableColumn key="actions" align="center" width={120} className="font-bold text-slate-500 uppercase tracking-wider">Actions</TableColumn>
+                        <TableColumn width={60} align="center" className="font-extrabold text-slate-500 uppercase tracking-wider text-center">#</TableColumn>
+                        <TableColumn width={220} align="start" className="font-extrabold text-slate-500 uppercase tracking-wider text-left">Reg No / Class Roll No</TableColumn>
+                        <TableColumn align="start" className="font-extrabold text-slate-500 uppercase tracking-wider text-left">Full Name</TableColumn>
+                        <TableColumn align="center" width={120} className="font-extrabold text-slate-500 uppercase tracking-wider text-center">Department</TableColumn>
+                        <TableColumn align="center" width={120} className="font-extrabold text-slate-500 uppercase tracking-wider text-center">Program</TableColumn>
+                        <TableColumn align="center" width={90} className="font-extrabold text-slate-500 uppercase tracking-wider text-center">Sem</TableColumn>
+                        <TableColumn align="center" width={100} className="font-extrabold text-slate-500 uppercase tracking-wider text-center">Batch</TableColumn>
+                        <TableColumn align="center" width={130} className="font-extrabold text-slate-500 uppercase tracking-wider text-center">Status</TableColumn>
+                        <TableColumn align="center" width={120} className="font-extrabold text-slate-500 uppercase tracking-wider text-center">Actions</TableColumn>
                     </TableHeader>
                     <TableBody 
                         loadingContent={<div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>}
@@ -451,46 +572,56 @@ const InternalStudents: React.FC = () => {
                         emptyContent={!loading && "No internal students found."}
                     >
                         {students.map((student, i) => (
-                            <TableRow key={student.InternalStudentID}>
-                                <TableCell className="text-slate-400 font-medium">{(page - 1) * 10 + i + 1}</TableCell>
-                                <TableCell>
-                                    <div className="font-bold text-indigo-700">{student.RegisterNumber}</div>
-                                     {(student.RollNumber || student.Division) && (
-                                         <div className="text-[0.75rem] text-slate-500 font-semibold mt-0.5">
-                                             {student.RollNumber ? <>Roll No: <span className="text-slate-900 font-extrabold">{student.RollNumber}</span></> : null}
-                                             {student.RollNumber && student.Division ? ' • ' : null}
-                                             {student.Division ? <>Div <span className="text-slate-900 font-extrabold">{student.Division}</span></> : null}
-                                         </div>
-                                     )}
+                            <TableRow key={student.InternalStudentID} className="hover:bg-slate-50/60 transition-colors">
+                                <TableCell className="text-center text-slate-400 font-bold text-xs">{(page - 1) * 10 + i + 1}</TableCell>
+                                <TableCell className="text-left">
+                                    <div className="font-bold text-indigo-700 font-mono text-sm">{student.RegisterNumber}</div>
+                                    {(student.RollNumber || student.Division) && (
+                                        <div className="text-[0.75rem] text-slate-500 font-semibold mt-0.5">
+                                            {student.RollNumber ? <>Roll No: <span className="text-slate-900 font-extrabold">{student.RollNumber}</span></> : null}
+                                            {student.RollNumber && student.Division ? ' • ' : null}
+                                            {student.Division ? <>Div <span className="text-slate-900 font-extrabold">{student.Division}</span></> : null}
+                                        </div>
+                                    )}
                                 </TableCell>
-                                <TableCell className="font-semibold text-slate-900">{student.FullName || 'N/A'}</TableCell>
+                                <TableCell className="text-left font-semibold text-slate-900">{student.FullName || 'N/A'}</TableCell>
                                 <TableCell className="text-center">
-                                    <Chip size="sm" variant="flat" className="bg-indigo-50 text-indigo-700 font-bold border-indigo-100 mx-auto">
-                                        {student.Department?.DepartmentCode || '-'}
-                                    </Chip>
-                                </TableCell>
-                                <TableCell className="text-slate-600 text-xs text-center">{student.Program?.ProgramName || '-'}</TableCell>
-                                <TableCell className="text-slate-700 font-bold text-center">
-                                    {student.SemesterModel?.SemesterNumber 
-                                        ? `S${student.SemesterModel.SemesterNumber}` 
-                                        : (student.Semester ? (String(student.Semester).toUpperCase().startsWith('S') ? String(student.Semester).toUpperCase() : `S${student.Semester}`) : '-')}
-                                </TableCell>
-                                <TableCell className="text-center font-bold text-slate-500">{student.BatchYear || '-'}</TableCell>
-                                <TableCell className="text-center">
-                                    <div className={`
-                                        inline-flex items-center justify-center px-4 py-1 rounded-full text-[0.65rem] font-black uppercase tracking-widest shadow-sm border
-                                        ${
-                                            (student.Status?.toUpperCase() === 'ACTIVE') ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white border-emerald-400/50' :
-                                            (student.Status?.toUpperCase() === 'GRADUATED') ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white border-blue-400/50' :
-                                            (student.Status?.toUpperCase() === 'DROPPED') ? 'bg-gradient-to-r from-red-500 to-rose-600 text-white border-red-400/50' :
-                                            (student.Status?.toUpperCase() === 'INACTIVE') ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white border-amber-400/50' :
-                                            'bg-slate-100 text-slate-500 border-slate-200'
-                                        }
-                                    `}>
-                                        {student.Status || 'UNKNOWN'}
+                                    <div className="flex justify-center">
+                                        <Chip size="sm" variant="flat" className="bg-indigo-50 text-indigo-700 font-bold border border-indigo-100">
+                                            {student.Department?.DepartmentCode || '-'}
+                                        </Chip>
                                     </div>
                                 </TableCell>
-                                <TableCell>
+                                <TableCell className="text-center font-semibold text-xs text-slate-600">
+                                    {student.Program?.ProgramName || '-'}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                    <span className="inline-block px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 font-black text-xs font-mono">
+                                        {student.SemesterModel?.SemesterNumber 
+                                            ? `S${student.SemesterModel.SemesterNumber}` 
+                                            : (student.Semester ? (String(student.Semester).toUpperCase().startsWith('S') ? String(student.Semester).toUpperCase() : `S${student.Semester}`) : '-')}
+                                    </span>
+                                </TableCell>
+                                <TableCell className="text-center font-bold text-xs text-slate-600">
+                                    {student.BatchYear || '-'}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                    <div className="flex justify-center">
+                                        <div className={`
+                                            inline-flex items-center justify-center px-3 py-1 rounded-full text-[0.65rem] font-black uppercase tracking-widest shadow-sm border
+                                            ${
+                                                (student.Status?.toUpperCase() === 'ACTIVE') ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white border-emerald-400/50' :
+                                                (student.Status?.toUpperCase() === 'GRADUATED') ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white border-blue-400/50' :
+                                                (student.Status?.toUpperCase() === 'DROPPED') ? 'bg-gradient-to-r from-red-500 to-rose-600 text-white border-red-400/50' :
+                                                (student.Status?.toUpperCase() === 'INACTIVE') ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white border-amber-400/50' :
+                                                'bg-slate-100 text-slate-500 border-slate-200'
+                                            }
+                                        `}>
+                                            {student.Status || 'UNKNOWN'}
+                                        </div>
+                                    </div>
+                                </TableCell>
+                                <TableCell className="text-center">
                                     <div className="flex items-center justify-center gap-1">
                                         <Tooltip content="Quick View" delay={500}>
                                             <Button 
@@ -509,32 +640,50 @@ const InternalStudents: React.FC = () => {
                                             </Button>
                                         </Tooltip>
                                         
-                                        <Dropdown placement="bottom-end">
+                                        <Dropdown 
+                                            placement="bottom-end"
+                                            classNames={{
+                                                content: "!bg-white border border-slate-200/90 shadow-2xl rounded-2xl p-1.5 min-w-[170px] z-[9999] opacity-100"
+                                            }}
+                                            popoverProps={{
+                                                classNames: {
+                                                    content: "!bg-white border border-slate-200/90 shadow-2xl rounded-2xl p-1.5 z-[9999] opacity-100 min-w-[170px]"
+                                                }
+                                            }}
+                                        >
                                             <DropdownTrigger>
-                                                <Button isIconOnly size="sm" variant="light">
+                                                <Button isIconOnly size="sm" variant="light" className="hover:bg-slate-100 rounded-xl text-slate-500">
                                                     <MoreVertical size={18} className="text-slate-400" />
                                                 </Button>
                                             </DropdownTrigger>
-                                            <DropdownMenu aria-label="Action Menu" variant="flat">
+                                            <DropdownMenu 
+                                                aria-label="Action Menu" 
+                                                variant="flat"
+                                                classNames={{
+                                                    base: "bg-white p-1"
+                                                }}
+                                            >
                                                 <DropdownItem 
                                                     key="view" 
-                                                    startContent={<Eye size={16}/>}
+                                                    startContent={<Eye size={15} className="text-slate-500" />}
                                                     onPress={() => viewStudent(student)}
+                                                    className="rounded-xl font-semibold text-slate-700 hover:bg-slate-100/80 data-[hover=true]:bg-slate-100/80 py-2 px-3 text-xs"
                                                 >
                                                     Quick View
                                                 </DropdownItem>
                                                 <DropdownItem 
                                                     key="edit" 
-                                                    startContent={<Pencil size={16}/>}
+                                                    startContent={<Pencil size={15} className="text-indigo-600" />}
                                                     onPress={() => handleEdit(student)}
+                                                    className="rounded-xl font-semibold text-slate-700 hover:bg-slate-100/80 data-[hover=true]:bg-slate-100/80 py-2 px-3 text-xs"
                                                 >
                                                     Edit Student
                                                 </DropdownItem>
                                                 <DropdownItem 
                                                     key="delete" 
-                                                    className="text-danger" 
+                                                    className="rounded-xl font-bold text-rose-600 hover:bg-rose-50 data-[hover=true]:bg-rose-50 py-2 px-3 text-xs border-t border-slate-100/80 mt-1" 
                                                     color="danger"
-                                                    startContent={<Trash2 size={16}/>}
+                                                    startContent={<Trash2 size={15} className="text-rose-500" />}
                                                     onPress={() => { setSelectedStudent(student); setIsDeleteOpen(true); }}
                                                 >
                                                     Delete Record
