@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardBody, Button, Input, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Tooltip } from "@heroui/react";
-import { BookOpen, Plus, CheckCircle, Search, Sparkles, Grid3x3, Tag, Edit2, Trash2, GraduationCap, ArrowRight, FileText, CalendarDays } from "lucide-react";
+import { BookOpen, Plus, CheckCircle, Search, Sparkles, Grid3x3, Tag, Edit2, Trash2, GraduationCap, ArrowRight, FileText, CalendarDays, ShieldCheck, AlertTriangle } from "lucide-react";
 import { toast } from 'react-hot-toast';
 import { SeriesService } from '../services/seriesService';
 
@@ -28,6 +28,10 @@ const SeriesSelection: React.FC = () => {
     // Delete Modal State
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [deleteSeriesId, setDeleteSeriesId] = useState<number | null>(null);
+
+    // Conflict Details Modal State
+    const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
+    const [selectedConflictSeries, setSelectedConflictSeries] = useState<any>(null);
 
     // ==========================================
     // UI/UX STATE (NEW)
@@ -126,20 +130,24 @@ const SeriesSelection: React.FC = () => {
         }
     };
 
-    const handleSelectSeries = (seriesId: number) => {
-        navigate(`/admin/exams/series/${seriesId}`);
+    const handleSelectSeries = (s: any) => {
+        navigate(`/admin/exams/series/${s.ExamSeriesID}`, {
+            state: { seriesName: s.SeriesName, examType: s.ExamType }
+        });
     };
 
     // ==========================================
-    // UI DERIVED STATE (FILTERING)
+    // UI DERIVED STATE (FILTERING BY TAB & SEARCH)
     // ==========================================
-    const filteredSeries = series.filter(s =>
-        s.ExamType === activeTab &&
+    const tabSeries = series.filter(s => s.ExamType === activeTab);
+
+    const filteredSeries = tabSeries.filter(s =>
         s.SeriesName.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const activeCount = series.filter(s => s.IsActive).length;
-    const completedCount = series.filter(s => !s.IsActive).length;
+    const totalSeriesCount = tabSeries.length;
+    const activeCount = tabSeries.filter(s => s.IsActive).length;
+    const completedCount = tabSeries.filter(s => !s.IsActive).length;
 
     // ==========================================
     // RENDER UI
@@ -194,8 +202,8 @@ const SeriesSelection: React.FC = () => {
                     </div>
                 </div>
 
-                {/* 3. SUMMARY CARDS */}
-                {!loading && series.length > 0 && (
+                {/* 3. SUMMARY CARDS (PER TAB) */}
+                {!loading && (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
                         <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow group flex items-center gap-4">
                             <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
@@ -203,7 +211,7 @@ const SeriesSelection: React.FC = () => {
                             </div>
                             <div>
                                 <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-0.5">Total Series</p>
-                                <h3 className="text-2xl font-extrabold text-slate-900">{series.length}</h3>
+                                <h3 className="text-2xl font-extrabold text-slate-900">{totalSeriesCount}</h3>
                             </div>
                         </div>
                         <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow group flex items-center gap-4">
@@ -295,71 +303,110 @@ const SeriesSelection: React.FC = () => {
                                 >
                                     <div
                                         className="p-7 flex flex-col h-full w-full relative"
-                                        onClick={() => handleSelectSeries(s.ExamSeriesID)}
+                                        onClick={() => handleSelectSeries(s)}
                                     >
 
-                                        {/* HEADER: Badge & Hidden Quick Actions */}
-                                        <div className="flex justify-between items-start mb-6 w-full">
-                                            <div className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold tracking-wider uppercase border border-white/50 shadow-sm transition-colors ${badgeBg}`}>
-                                                {isInternal ? 'Internal' : 'End Semester'}
-                                            </div>
+                                        {/* HEADER: Type Badge (Left) & Active Status + Quick Actions (Right) */}
+                                        <div className="flex justify-between items-center mb-3 w-full min-h-[32px]">
+                                            {/* Left: Type Badge */}
+                                            <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black tracking-wider uppercase border border-white/40 shadow-xs ${badgeBg}`}>
+                                                {isInternal ? 'Internal' : 'End Sem'}
+                                            </span>
 
-                                            {/* Quick Actions - Appear on Hover smoothly without disrupting layout */}
-                                            <div
-                                                className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-300 z-20"
-                                                onClick={(e) => e.stopPropagation()}
-                                                onPointerDown={(e) => e.stopPropagation()}
-                                            >
-                                                <Button
-                                                    isIconOnly variant="flat" size="sm"
-                                                    className="bg-slate-100/80 text-slate-500 hover:bg-slate-200 hover:text-slate-900 shadow-sm min-w-8 w-8 h-8 rounded-lg"
-                                                    onPress={(e) => {
-                                                        setEditSeriesId(s.ExamSeriesID);
-                                                        setEditSeriesName(s.SeriesName);
-                                                        setEditSeriesType(s.ExamType);
-                                                        setEditIsActive(s.IsActive);
-                                                        setIsEditModalOpen(true);
-                                                    }}
-                                                ><Edit2 size={13} strokeWidth={2.5} /></Button>
-                                                <Button
-                                                    isIconOnly variant="flat" size="sm" color="danger"
-                                                    className="bg-red-50/80 text-red-500 hover:bg-red-100 hover:text-red-700 shadow-sm min-w-8 w-8 h-8 rounded-lg"
-                                                    onPress={(e) => {
-                                                        setDeleteSeriesId(s.ExamSeriesID);
-                                                        setIsDeleteModalOpen(true);
-                                                    }}
-                                                ><Trash2 size={13} strokeWidth={2.5} /></Button>
+                                            {/* Right: Active Status & Quick Actions */}
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border ${s.IsActive ? 'bg-emerald-50 text-emerald-600 border-emerald-200/60' : 'bg-slate-100 text-slate-400 border-slate-200/60'}`}>
+                                                    {s.IsActive ? 'Active' : 'Completed'}
+                                                </span>
+
+                                                {/* Quick Actions */}
+                                                <div
+                                                    className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 z-20"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    onPointerDown={(e) => e.stopPropagation()}
+                                                >
+                                                    <Button
+                                                        isIconOnly variant="flat" size="sm"
+                                                        className="bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 min-w-7 w-7 h-7 rounded-lg"
+                                                        onPress={() => {
+                                                            setEditSeriesId(s.ExamSeriesID);
+                                                            setEditSeriesName(s.SeriesName);
+                                                            setEditSeriesType(s.ExamType);
+                                                            setEditIsActive(s.IsActive);
+                                                            setIsEditModalOpen(true);
+                                                        }}
+                                                    ><Edit2 size={12} strokeWidth={2.5} /></Button>
+                                                    <Button
+                                                        isIconOnly variant="flat" size="sm" color="danger"
+                                                        className="bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-700 min-w-7 w-7 h-7 rounded-lg"
+                                                        onPress={() => {
+                                                            setDeleteSeriesId(s.ExamSeriesID);
+                                                            setIsDeleteModalOpen(true);
+                                                        }}
+                                                    ><Trash2 size={12} strokeWidth={2.5} /></Button>
+                                                </div>
                                             </div>
                                         </div>
 
-                                        {/* BODY: Title */}
-                                        <div className="mb-6 flex-1">
-                                            <h3 className={`text-[22px] font-extrabold text-slate-900 leading-tight mb-3 ${hoverTitleColor} transition-colors line-clamp-2`}>
+                                        {/* BODY: Title, Semesters & Telemetry Badges */}
+                                        <div className="mb-4 flex-1">
+                                            <h3 className={`text-[19px] font-black text-slate-900 leading-snug mb-2 ${hoverTitleColor} transition-colors line-clamp-2`}>
                                                 {s.SeriesName}
                                             </h3>
 
-                                            {/* Metrics Row */}
-                                            <div className="flex items-center gap-4 text-slate-500 font-medium">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center">
-                                                        <FileText size={14} className={isInternal ? "text-indigo-400" : "text-purple-400"} />
+                                            {/* Semester Row (Always Fully Visible) */}
+                                            <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mb-4">
+                                                <GraduationCap size={14} className="text-indigo-500 shrink-0" />
+                                                <span className="font-semibold text-slate-600">Semesters:</span>
+                                                <span className="font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/60">
+                                                    {s.SemesterDisplay || 'All Semesters'}
+                                                </span>
+                                            </div>
+
+                                            {/* Side-by-Side Telemetry Row */}
+                                            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                                                {/* Exams Count Badge */}
+                                                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200/60 text-slate-700 font-bold text-xs shrink-0">
+                                                    <FileText size={13} className={isInternal ? "text-indigo-500" : "text-purple-500"} />
+                                                    <span>{s.ExamsCount || 0} Exams</span>
+                                                </div>
+
+                                                {/* Conflict Status Badge */}
+                                                {(s.ExamsCount || 0) === 0 ? (
+                                                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-50 text-slate-500 border border-slate-200/60 shrink-0">
+                                                        <ShieldCheck size={13} className="text-slate-400" />
+                                                        <span>0 Conflicts</span>
                                                     </div>
-                                                    <span className="text-sm">{s.ExamsCount || 0} Exams</span>
-                                                </div>
-                                                <div className="w-1 h-1 rounded-full bg-slate-300"></div>
-                                                <div className={`px-2.5 py-1 rounded-lg text-xs font-bold ${s.IsActive ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
-                                                    {s.IsActive ? 'Active' : 'Completed'}
-                                                </div>
+                                                ) : (s.ConflictCount || 0) > 0 ? (
+                                                    <Tooltip content="Click to view conflict breakdown details" placement="top">
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedConflictSeries(s);
+                                                                setIsConflictModalOpen(true);
+                                                            }}
+                                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/80 transition-all cursor-pointer shrink-0 shadow-2xs group/btn"
+                                                        >
+                                                            <AlertTriangle size={13} className="text-amber-600 group-hover/btn:scale-110 transition-transform shrink-0" />
+                                                            <span>{s.ConflictCount} {s.ConflictCount === 1 ? 'Conflict' : 'Conflicts'} ({s.ConflictFreeCount || 0} Clean)</span>
+                                                        </button>
+                                                    </Tooltip>
+                                                ) : (
+                                                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shrink-0">
+                                                        <CheckCircle size={13} className="text-emerald-600" />
+                                                        <span>0 Conflicts</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
 
-                                        {/* FOOTER: Call to Action (Dynamic) */}
-                                        <div className="mt-auto pt-5 border-t border-slate-100/80 flex justify-between items-center w-full">
-                                            <span className={`text-sm font-bold text-slate-400 ${hoverTitleColor} transition-colors`}>
+                                        {/* FOOTER: Call to Action */}
+                                        <div className="mt-auto pt-4 border-t border-slate-100 flex justify-between items-center w-full">
+                                            <span className={`text-xs font-extrabold tracking-wide text-slate-400 uppercase ${hoverTitleColor} transition-colors`}>
                                                 Manage Exams
                                             </span>
-                                            <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all bg-slate-50 text-slate-400 ${hoverIconBg} group-hover:text-white group-hover:shadow-lg ${hoverShadow}`}>
-                                                <ArrowRight size={16} className="group-hover:translate-x-0.5 transition-transform" />
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all bg-slate-50 text-slate-400 ${hoverIconBg} group-hover:text-white group-hover:shadow-md ${hoverShadow}`}>
+                                                <ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
                                             </div>
                                         </div>
 
@@ -577,6 +624,77 @@ const SeriesSelection: React.FC = () => {
                             </Button>
                         </div>
                     </ModalBody>
+                </ModalContent>
+            </Modal>
+
+            {/* Conflict Breakdown Modal */}
+            <Modal
+                isOpen={isConflictModalOpen}
+                onClose={() => setIsConflictModalOpen(false)}
+                size="2xl"
+                backdrop="blur"
+                placement="center"
+                classNames={{
+                    base: "bg-white shadow-2xl rounded-3xl",
+                    header: "border-b border-slate-100 pb-4 pt-6 px-8",
+                    body: "py-6 px-8 max-h-[70vh] overflow-y-auto",
+                    footer: "border-t border-slate-100 pt-4 pb-6 px-8",
+                    closeButton: "top-5 right-5 text-slate-400 hover:bg-slate-100"
+                }}
+            >
+                <ModalContent>
+                    <ModalHeader className="flex items-center gap-3 text-slate-900">
+                        <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center border border-amber-100 shrink-0">
+                            <AlertTriangle className="text-amber-600" size={20} />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-bold">Schedule Conflict Details</h2>
+                            <p className="text-xs font-semibold text-slate-500 mt-0.5">
+                                {selectedConflictSeries?.SeriesName} — {selectedConflictSeries?.ConflictCount || 0} Conflict{(selectedConflictSeries?.ConflictCount || 0) === 1 ? '' : 's'} Detected
+                            </p>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="space-y-4">
+                        {(!selectedConflictSeries?.ConflictsList || selectedConflictSeries.ConflictsList.length === 0) ? (
+                            <div className="text-center py-8 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                                <CheckCircle className="mx-auto text-emerald-500 mb-2" size={32} />
+                                <p className="text-sm font-bold text-slate-700">No Active Conflicts Detected</p>
+                                <p className="text-xs text-slate-500 mt-1">All exams in this series are scheduled cleanly without overlapping slots.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {selectedConflictSeries.ConflictsList.map((item: any, idx: number) => (
+                                    <div key={idx} className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200/70 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <span className="px-2.5 py-0.5 rounded-md text-[11px] font-black uppercase bg-amber-100 text-amber-800 border border-amber-200">
+                                                    {item.conflictType || 'Schedule Overlap'}
+                                                </span>
+                                                <span className="text-xs font-extrabold text-slate-700">{item.subjectCode}</span>
+                                            </div>
+                                            <span className="text-xs font-bold text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                                                📅 {item.date} ({item.session})
+                                            </span>
+                                        </div>
+                                        <h4 className="text-sm font-bold text-slate-900">{item.examName}</h4>
+                                        <p className="text-xs text-slate-600 font-medium leading-relaxed bg-white/80 p-2.5 rounded-xl border border-amber-100">
+                                            <span className="font-bold text-amber-900">Issue / Cause: </span>
+                                            {item.details}
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </ModalBody>
+                    <ModalFooter>
+                        <Button
+                            variant="flat"
+                            className="bg-slate-100 font-bold text-slate-700 hover:bg-slate-200 rounded-xl h-11 px-6"
+                            onPress={() => setIsConflictModalOpen(false)}
+                        >
+                            Close
+                        </Button>
+                    </ModalFooter>
                 </ModalContent>
             </Modal>
         </div>

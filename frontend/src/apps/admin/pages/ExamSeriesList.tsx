@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Card, CardBody, Button } from "@heroui/react";
 import { BookOpen, Plus, Clock, FileText, AlertCircle, ArrowLeft, CheckCircle, CalendarDays, Upload, Pencil, Trash2, Users } from "lucide-react";
 import { toast } from 'react-hot-toast';
 import { ExamService } from '../services/examService';
 import { SeriesService } from '../services/seriesService';
+import { AccessTokenStore } from '../../../services/api';
 import CreateExamModal from '../components/exams/CreateExamModal';
 import ExamImportModal from '../components/exams/ExamImportModal';
 import { InternalExamImportModal } from '../components/internal-structure/InternalExamImportModal';
@@ -97,6 +98,8 @@ const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
 
 const ExamSeriesList: React.FC = () => {
     const navigate = useNavigate();
+    const location = useLocation();
+    const locationState = location.state as { seriesName?: string; examType?: 'Internal' | 'EndSemester' } | undefined;
     const { seriesId } = useParams<{ seriesId: string }>();
     const [exams, setExams] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -106,17 +109,24 @@ const ExamSeriesList: React.FC = () => {
     const [deleteExamIds, setDeleteExamIds] = useState<number[] | null>(null);
     const [isDeleteAllOpen, setIsDeleteAllOpen] = useState(false);
     const [selectedExam, setSelectedExam] = useState<any>(null);
-    const [seriesName, setSeriesName] = useState<string>('');
-    const [examType, setExamType] = useState<'Internal' | 'EndSemester'>('Internal');
+    const [seriesName, setSeriesName] = useState<string>(locationState?.seriesName || '');
+    const [examType, setExamType] = useState<'Internal' | 'EndSemester'>(locationState?.examType || 'Internal');
 
     useEffect(() => {
-        if (seriesId) {
+        if (locationState?.seriesName) {
+            setSeriesName(locationState.seriesName);
+            if (locationState.examType) setExamType(locationState.examType);
+        } else if (seriesId && AccessTokenStore.hasAnySession()) {
             fetchSeriesDetails();
+        }
+
+        if (seriesId && AccessTokenStore.hasAnySession()) {
             fetchExams();
         }
-    }, [seriesId]);
+    }, [seriesId, locationState]);
 
     const fetchSeriesDetails = async () => {
+        if (!AccessTokenStore.hasAnySession()) return;
         try {
             const response = await SeriesService.getAll();
             const series = Array.isArray(response) ? response : response.data || [];
@@ -126,11 +136,12 @@ const ExamSeriesList: React.FC = () => {
                 setExamType(found.ExamType);
             }
         } catch (error) {
-            console.error("Failed to fetch series details", error);
+            // Silently handled by API interceptor
         }
     };
 
     const fetchExams = async () => {
+        if (!AccessTokenStore.hasAnySession()) return;
         setLoading(true);
         try {
             const response = await ExamService.getAll({ seriesId });

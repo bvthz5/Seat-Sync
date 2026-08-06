@@ -5,7 +5,7 @@ export const AuthService = {
     async login(email: string, password: string, role?: string): Promise<LoginResponse> {
         const response = await api.post<LoginResponse>('/auth/login', { email, password, role });
         if (response.data.accessToken) {
-            AccessTokenStore.setToken(response.data.accessToken);
+            AccessTokenStore.setToken(response.data.accessToken, response.data.refreshToken);
         }
         return response.data;
     },
@@ -19,7 +19,17 @@ export const AuthService = {
     },
 
     async refresh(): Promise<string> {
-        const response = await api.post<{ accessToken: string }>('/auth/refresh');
+        const storedRefreshToken = AccessTokenStore.refreshToken;
+        const response = await api.post<{ accessToken: string; refreshToken?: string }>(
+            '/auth/refresh',
+            { refreshToken: storedRefreshToken },
+            {
+                headers: storedRefreshToken ? { 'X-Refresh-Token': storedRefreshToken } : {}
+            }
+        );
+        if (response.data.accessToken) {
+            AccessTokenStore.setToken(response.data.accessToken, response.data.refreshToken);
+        }
         return response.data.accessToken;
     },
 

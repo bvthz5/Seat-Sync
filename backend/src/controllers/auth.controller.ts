@@ -30,7 +30,7 @@ export class AuthController {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === "production",
                 sameSite: "lax",
-                path: "/api/auth/refresh",
+                path: "/",
                 maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
             });
 
@@ -71,11 +71,11 @@ export class AuthController {
 
     /**
      * POST /api/auth/refresh
-     * Refresh access token using refresh token from cookie
+     * Refresh access token using refresh token from cookie, body, or header
      */
     static async refresh(req: Request, res: Response): Promise<void> {
         try {
-            const refreshToken = req.cookies.refreshToken;
+            const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken || (req.headers['x-refresh-token'] as string);
 
             if (!refreshToken) {
                 res.status(401).json({
@@ -92,11 +92,11 @@ export class AuthController {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === "production",
                 sameSite: "lax",
-                path: "/api/auth/refresh",
+                path: "/",
                 maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
             });
 
-            res.status(200).json({ accessToken });
+            res.status(200).json({ accessToken, refreshToken: newRefreshToken });
         } catch (error: any) {
             console.error("Refresh error:", error.message);
             res.status(401).json({
@@ -117,7 +117,7 @@ export class AuthController {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === "production",
                 sameSite: "lax",
-                path: "/api/auth/refresh",
+                path: "/",
             });
 
             res.status(200).json({

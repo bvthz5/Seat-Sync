@@ -171,7 +171,7 @@ export class StudentAuthController {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
-        path: "/api/auth/refresh",
+        path: "/",
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
 

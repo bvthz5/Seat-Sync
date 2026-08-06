@@ -23,6 +23,21 @@ const getStorageKey = (): string => {
     return STORAGE_KEYS.fallback;
 };
 
+const REFRESH_STORAGE_KEYS = {
+    admin:       'ss_admin_refresh_token',
+    invigilator: 'ss_invigilator_refresh_token',
+    student:     'ss_student_refresh_token',
+    fallback:    'ss_refresh_token',
+} as const;
+
+const getRefreshStorageKey = (): string => {
+    const path = window.location.pathname.toLowerCase();
+    if (path.includes('/admin'))       return REFRESH_STORAGE_KEYS.admin;
+    if (path.includes('/invigilator')) return REFRESH_STORAGE_KEYS.invigilator;
+    if (path.includes('/student'))     return REFRESH_STORAGE_KEYS.student;
+    return REFRESH_STORAGE_KEYS.fallback;
+};
+
 const getEffectiveToken = (): string | null => {
     // Only read the token for the current portal — no cross-role fallback
     // (prevents a stale student token from accidentally authenticating an admin request)
@@ -32,27 +47,47 @@ const getEffectiveToken = (): string | null => {
     return null;
 };
 
+const getEffectiveRefreshToken = (): string | null => {
+    const key  = getRefreshStorageKey();
+    const raw  = sessionStorage.getItem(key);
+    if (raw && raw !== 'undefined' && raw !== 'null') return raw.trim();
+    return null;
+};
+
 export const AccessTokenStore = {
     get token() { return getEffectiveToken(); },
+    get refreshToken() { return getEffectiveRefreshToken(); },
 
-    setToken: (t: string) => {
+    setToken: (t: string, rt?: string) => {
         const token = (t || '').trim();
         const key   = getStorageKey();
         if (!token || token === 'undefined' || token === 'null') {
             sessionStorage.removeItem(key);
-            return;
+        } else {
+            sessionStorage.setItem(key, token);
         }
-        sessionStorage.setItem(key, token);
+
+        const refKey = getRefreshStorageKey();
+        const refToken = (rt || '').trim();
+        if (!refToken || refToken === 'undefined' || refToken === 'null') {
+            // Keep existing if not explicitly updating
+        } else {
+            sessionStorage.setItem(refKey, refToken);
+        }
     },
 
     /** Clears ALL portal token keys so a logout is truly clean. */
     clear: () => {
         Object.values(STORAGE_KEYS).forEach(k => sessionStorage.removeItem(k));
+        Object.values(REFRESH_STORAGE_KEYS).forEach(k => sessionStorage.removeItem(k));
     },
 
     /** Returns true when there is ANY session token present (any portal). */
     hasAnySession: (): boolean => {
         return Object.values(STORAGE_KEYS).some(k => {
+            const v = sessionStorage.getItem(k);
+            return v && v !== 'undefined' && v !== 'null';
+        }) || Object.values(REFRESH_STORAGE_KEYS).some(k => {
             const v = sessionStorage.getItem(k);
             return v && v !== 'undefined' && v !== 'null';
         });
@@ -119,15 +154,20 @@ api.interceptors.response.use(
             isRefreshing = true;
 
             try {
+                const storedRefreshToken = AccessTokenStore.refreshToken;
                 const res = await axios.post(
                     `${api.defaults.baseURL}/auth/refresh`,
-                    {},
-                    { withCredentials: true }
+                    { refreshToken: storedRefreshToken },
+                    { 
+                        withCredentials: true,
+                        headers: storedRefreshToken ? { 'X-Refresh-Token': storedRefreshToken } : {}
+                    }
                 );
                 const newToken = ((res.data as any)?.accessToken ?? '').trim();
+                const newRefreshToken = ((res.data as any)?.refreshToken ?? '').trim();
                 if (!newToken) throw new Error('Empty refresh token');
 
-                AccessTokenStore.setToken(newToken);
+                AccessTokenStore.setToken(newToken, newRefreshToken);
                 api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
                 processQueue(null, newToken);
 

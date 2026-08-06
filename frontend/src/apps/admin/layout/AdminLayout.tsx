@@ -8,6 +8,7 @@ import { Menu, Bell, LogOut, User, ChevronDown } from 'lucide-react';
 import { GlobalNotificationDrawer } from '../components/notifications/GlobalNotificationDrawer';
 import { invigilatorService } from '../services/invigilatorService';
 import { getNotificationStats } from '../services/notificationService';
+import { AccessTokenStore } from '../../../services/api';
 import SeatingTypeModal from '../components/seating/SeatingTypeModal';
 import CollegeStructureTypeModal from '../components/structure/CollegeStructureTypeModal';
 import StudentTypeModal from '../components/students/StudentTypeModal';
@@ -24,19 +25,20 @@ const AdminLayout: React.FC = () => {
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
 
     const fetchCounts = async () => {
+        if (!AccessTokenStore.hasAnySession()) return;
         try {
             const [notifStats, swaps] = await Promise.all([
                 getNotificationStats(),
                 invigilatorService.getSwaps('PENDING')
             ]);
-            setUnreadCount((notifStats.unread || 0) + (swaps?.length || 0));
+            setUnreadCount((notifStats?.unread || 0) + (swaps?.length || 0));
         } catch (e) {
-            console.error("Failed to fetch notification counts", e);
+            // Silently handle background polling errors
         }
     };
 
     React.useEffect(() => {
-        if (user) {
+        if (user && AccessTokenStore.hasAnySession()) {
             fetchCounts();
             const interval = setInterval(fetchCounts, 60000); // Check every minute
             return () => clearInterval(interval);

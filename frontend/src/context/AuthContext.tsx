@@ -114,38 +114,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         initAuth().finally(() => clearTimeout(timeout));
     }, [clearSession]);
 
-    // ── Auto-logout on tab/window visibility loss (browser minimize/close) ────
-    // "pagehide" fires reliably on Chrome/Edge/Firefox/Safari when tab is closed
+    // ── Session persistence configuration ───────────────────────────────────
     useEffect(() => {
-        const handlePageHide = () => {
-            // Don't clear on simple navigation within the SPA
-            // Only clear when the page is not being kept in bfcache
-            // (event.persisted = false means the page is truly unloading)
-        };
-        const handleBeforeUnload = () => {
-            // sessionStorage is automatically cleared by the browser on close,
-            // but we also call logout API silently so the server invalidates the
-            // refresh-token cookie.  We use sendBeacon so it survives tab close.
-            if (isAuthenticated) {
-                try {
-                    navigator.sendBeacon(
-                        (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api') + '/auth/logout'
-                    );
-                } catch { /* ignore */ }
-            }
-        };
-        window.addEventListener('pagehide', handlePageHide);
-        window.addEventListener('beforeunload', handleBeforeUnload);
-        return () => {
-            window.removeEventListener('pagehide', handlePageHide);
-            window.removeEventListener('beforeunload', handleBeforeUnload);
-        };
+        // Intentionally keep session active across reloads/navigations
     }, [isAuthenticated]);
 
     // ── Login ─────────────────────────────────────────────────────────────────
     const login = useCallback(async (email: string, password: string, role?: string) => {
         const data = await AuthService.login(email, password, role);
-        AccessTokenStore.setToken(data.accessToken);
+        AccessTokenStore.setToken(data.accessToken, data.refreshToken);
         setAccessToken(data.accessToken);
         setUser(data.user);
         setIsAuth(true);
