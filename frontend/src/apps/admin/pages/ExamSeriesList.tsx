@@ -365,9 +365,8 @@ const ExamSeriesList: React.FC = () => {
                         {groupExamsByPaper(exams).map((examGroup) => {
                             const hasMissingDept = examGroup.branches.some(b => isMissingDepartment(b.departmentCode, b.departmentName));
                             const cardBorderClass = hasMissingDept 
-                                ? 'border-amber-200/80 hover:border-amber-300 shadow-amber-100/40 ring-1 ring-amber-100/50' 
-                                : 'border-slate-200/60 hover:border-slate-300/85';
-                            const accentLineColor = hasMissingDept ? 'from-amber-400 to-amber-500' : 'from-indigo-500 to-indigo-600';
+                                ? 'border-amber-300/80 shadow-amber-100/50 ring-1 ring-amber-200/50' 
+                                : 'border-slate-200/80 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-500/5';
                             
                             // Standardize title format for aesthetic neatness
                             const formattedTitle = examGroup.examName
@@ -379,31 +378,38 @@ const ExamSeriesList: React.FC = () => {
                             return (
                                 <Card
                                     key={examGroup.groupKey}
-                                    className={`bg-white/95 border text-left hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] hover:-translate-y-1 transition-all duration-300 group rounded-[2.2rem] overflow-hidden ${cardBorderClass}`}
+                                    className={`bg-white border text-left hover:-translate-y-1 transition-all duration-200 group rounded-2xl overflow-hidden shadow-sm ${cardBorderClass}`}
                                 >
-                                    <div className={`h-1.5 w-full bg-gradient-to-r ${accentLineColor}`}></div>
-                                    <CardBody className="p-7 space-y-6 flex flex-col justify-between h-full">
-                                        <div className="space-y-4">
-                                            <div>
-                                                <h3 className="text-lg font-black text-slate-900 leading-snug group-hover:text-indigo-600 transition-colors line-clamp-2">
-                                                    {formattedTitle}
-                                                </h3>
-                                                <div className="flex items-center gap-2 mt-1.5">
-                                                    <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-md truncate max-w-full" title={examGroup.subjectCode || examGroup.examName}>
-                                                        {examGroup.subjectCode || "NO CODE"}
-                                                    </span>
-                                                </div>
+                                    <CardBody className="p-5 flex flex-col justify-between h-full space-y-4">
+                                        {/* Top Meta Bar: Subject Code + Status Chip */}
+                                        <div>
+                                            <div className="flex items-center justify-between gap-2 mb-3">
+                                                <span className="font-extrabold text-[11px] tracking-wider text-indigo-700 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-lg uppercase truncate max-w-[140px]" title={examGroup.subjectCode || examGroup.examName}>
+                                                    {examGroup.subjectCode || "NO CODE"}
+                                                </span>
+                                                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
+                                                    examGroup.status === 'Scheduled' ? 'bg-blue-50 text-blue-700 border-blue-200/60' :
+                                                    examGroup.status === 'Completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60' :
+                                                    'bg-purple-50 text-purple-700 border-purple-200/60'
+                                                }`}>
+                                                    {examGroup.status}
+                                                </span>
                                             </div>
 
-                                            {/* Department Badges Grid */}
-                                            <div className="flex flex-wrap gap-1.5">
+                                            {/* Subject Title */}
+                                            <h3 className="text-base font-bold text-slate-900 leading-snug group-hover:text-indigo-600 transition-colors line-clamp-2 min-h-[2.75rem]">
+                                                {formattedTitle}
+                                            </h3>
+
+                                            {/* Department Badges */}
+                                            <div className="flex flex-wrap gap-1.5 mt-3">
                                                 {examGroup.branches.map((branch) => (
                                                     <span 
                                                         key={branch.examId} 
-                                                        className={`inline-flex items-center px-2.5 py-1 rounded-xl text-[10px] font-extrabold tracking-wider uppercase border ${
+                                                        className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase border ${
                                                             isMissingDepartment(branch.departmentCode, branch.departmentName)
-                                                                ? 'bg-amber-50 text-amber-700 border-amber-200/50'
-                                                                : 'bg-indigo-50/80 text-indigo-600 border-indigo-100/50'
+                                                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                                : 'bg-slate-100 text-slate-600 border-slate-200/60'
                                                         }`}
                                                     >
                                                         Dept: {branch.departmentCode}
@@ -412,31 +418,16 @@ const ExamSeriesList: React.FC = () => {
                                             </div>
                                         </div>
 
-                                        <div className="space-y-5">
-                                            {/* Status Shift Row */}
-                                            <div className="flex items-center gap-2">
-                                                <span className={`px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider border ${
-                                                    examGroup.status === 'Scheduled' ? 'bg-indigo-50 text-indigo-700 border-indigo-100/50' :
-                                                    examGroup.status === 'Completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-100/50' :
-                                                    'bg-purple-50 text-purple-700 border-purple-100/50'
-                                                }`}>
-                                                    {examGroup.status}
-                                                </span>
-                                                <span className="px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-slate-50 text-slate-500 border border-slate-100">
-                                                    {examGroup.session === 'FN' ? 'Morning (FN)' : 'Afternoon (AN)'}
-                                                </span>
-                                            </div>
-
-                                            <div className="h-px bg-slate-100"></div>
-
-                                            {/* Date */}
-                                            <div className="flex items-center justify-between text-slate-400 text-xs font-bold pt-0.5 group-hover:text-indigo-500 transition-colors">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-6 h-6 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center">
-                                                        <CalendarDays size={12} className="text-slate-400" />
-                                                    </div>
+                                        <div className="space-y-3 pt-2 border-t border-slate-100">
+                                            {/* Date & Session Box */}
+                                            <div className="bg-slate-50/80 rounded-xl p-2.5 border border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-600">
+                                                <div className="flex items-center gap-1.5 text-slate-700">
+                                                    <CalendarDays size={14} className="text-slate-400 shrink-0" />
                                                     <span>{new Date(examGroup.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
                                                 </div>
+                                                <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-500 shrink-0">
+                                                    {examGroup.session === 'FN' ? 'Morning (FN)' : 'Afternoon (AN)'}
+                                                </span>
                                             </div>
 
                                             {/* Action Buttons Row */}
@@ -445,8 +436,8 @@ const ExamSeriesList: React.FC = () => {
                                                     <Button
                                                         size="sm"
                                                         variant="flat"
-                                                        className="flex-1 bg-indigo-50/80 text-indigo-600 hover:bg-indigo-100 font-bold rounded-xl text-xs h-9 transition-colors"
-                                                        startContent={<Users size={12} />}
+                                                        className="flex-1 bg-indigo-50 hover:bg-indigo-600 text-indigo-600 hover:text-white font-bold rounded-xl text-xs h-9 transition-all border border-indigo-100 flex items-center justify-center gap-1"
+                                                        startContent={<Users size={13} />}
                                                         onPress={() => navigate(`/admin/exams/series/${seriesId}/internal/${examGroup.branches[0]?.examId}`)}
                                                     >
                                                         Students
@@ -455,8 +446,8 @@ const ExamSeriesList: React.FC = () => {
                                                 <Button
                                                     size="sm"
                                                     variant="flat"
-                                                    className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-700 font-bold rounded-xl text-xs h-9 transition-colors"
-                                                    startContent={<Pencil size={12} />}
+                                                    className="flex-1 bg-slate-100 hover:bg-slate-800 text-slate-700 hover:text-white font-bold rounded-xl text-xs h-9 transition-all border border-slate-200 flex items-center justify-center gap-1"
+                                                    startContent={<Pencil size={13} />}
                                                     onPress={() => handleEdit(exams.find(e => e.ExamID === examGroup.branches[0].examId))}
                                                 >
                                                     Edit
@@ -464,8 +455,8 @@ const ExamSeriesList: React.FC = () => {
                                                 <Button
                                                     size="sm"
                                                     variant="flat"
-                                                    className="flex-1 bg-rose-50/50 hover:bg-rose-50 text-rose-500 font-bold rounded-xl text-xs h-9 transition-colors"
-                                                    startContent={<Trash2 size={12} />}
+                                                    className="flex-1 bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white font-bold rounded-xl text-xs h-9 transition-all border border-rose-200/70 flex items-center justify-center gap-1"
+                                                    startContent={<Trash2 size={13} />}
                                                     onPress={() => handleDeleteClick(examGroup.branches.map(b => b.examId))}
                                                 >
                                                     Delete

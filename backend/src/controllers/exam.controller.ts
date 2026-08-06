@@ -632,7 +632,7 @@ export class ExamController {
                     where: ieWhere,
                     include: [{
                         model: InternalExamDepartment,
-                        include: [{ model: Department, attributes: ['DepartmentName', 'DepartmentCode'] }]
+                        include: [{ model: Department, attributes: ['DepartmentID', 'DepartmentName', 'DepartmentCode'] }]
                     }],
                     order: [['ExamDate', 'ASC']]
                 });
@@ -644,6 +644,7 @@ export class ExamController {
                     const depts = data.InternalExamDepartments || [];
                     const deptName = depts.length > 0 ? depts.map((d: any) => d.Department?.DepartmentCode).join(', ') : 'ALL_BRANCHES';
                     const fullDeptName = depts.length > 0 ? depts.map((d: any) => d.Department?.DepartmentName).join(', ') : 'All Branches';
+                    const mainDeptID = depts[0]?.Department?.DepartmentID || depts[0]?.DepartmentID || undefined;
 
                     const examDate = new Date(data.ExamDate);
                     const startHour = data.Session === 'FN' ? 10 : 14;
@@ -664,10 +665,13 @@ export class ExamController {
                         Session: data.Session,
                         Duration: data.Duration || 150,
                         Status: calcStatus,
+                        DepartmentID: mainDeptID,
                         Subject: {
                             SubjectName: data.SubjectName,
                             SubjectCode: data.SubjectCode,
+                            DepartmentID: mainDeptID,
                             Department: {
+                                DepartmentID: mainDeptID,
                                 DepartmentName: fullDeptName,
                                 DepartmentCode: deptName
                             }
@@ -761,11 +765,16 @@ export class ExamController {
     // Create a new exam
     static async createExam(req: Request, res: Response) {
         try {
-            const { SubjectID, ExamName, ExamDate, Session, Duration, ExamSeriesID, DepartmentID } = req.body;
+            let { SubjectID, ExamName, ExamDate, Session, Duration, ExamSeriesID, DepartmentID } = req.body;
 
             // Basic validation
-            if (!SubjectID || !ExamName || !ExamDate || !Session || !Duration) {
-                return res.status(400).json({ message: 'Missing required fields' });
+            if (!SubjectID || !ExamDate || !Session || !Duration) {
+                return res.status(400).json({ message: 'Missing required fields (Subject, Exam Date, Session, or Duration)' });
+            }
+
+            if (!ExamName && SubjectID) {
+                const sub = await Subject.findByPk(SubjectID);
+                ExamName = sub ? sub.SubjectName : 'Scheduled Exam';
             }
 
             // Validate ExamSeriesID if provided
@@ -802,7 +811,8 @@ export class ExamController {
                     defaults: {
                         SubjectCode: currentSubject.SubjectCode,
                         SubjectName: currentSubject.SubjectName,
-                        DepartmentID: departmentIdNum
+                        DepartmentID: departmentIdNum,
+                        SemesterID: currentSubject.SemesterID || 1
                     }
                 });
 
@@ -820,11 +830,11 @@ export class ExamController {
             }
 
             const payload: any = {
-                SubjectID: finalSubjectId,
+                SubjectID: Number(finalSubjectId),
                 ExamName,
                 ExamDate,
                 Session,
-                Duration,
+                Duration: Number(Duration),
                 Status: status,
                 IsEmergencyMode: false,
                 AttendanceLocked: false
@@ -838,6 +848,7 @@ export class ExamController {
 
             res.status(201).json(newExam);
         } catch (error: any) {
+            console.error("Error creating exam:", error);
             res.status(500).json({ message: 'Error creating exam', error: error.message });
         }
     }

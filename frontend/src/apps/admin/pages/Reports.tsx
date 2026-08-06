@@ -9,6 +9,11 @@ import {
     Tab,
     Pagination,
     Spinner,
+    Modal,
+    ModalContent,
+    ModalHeader,
+    ModalBody,
+    ModalFooter,
 } from '@heroui/react';
 import {
     BarChart3,
@@ -16,6 +21,7 @@ import {
     FileSpreadsheet,
     Search,
     ChevronRight,
+    ChevronDown,
     MapPin,
     Users,
     ClipboardCheck,
@@ -127,16 +133,16 @@ function ChartTooltip({ active, payload, label }: any) {
 
 function KpiTile({ label, value, sub, icon, iconBg, trend }: { label: string; value: string; sub: string; icon: React.ReactNode; iconBg: string; trend?: 'up' | 'down' | 'neutral' }) {
     return (
-        <div className="bg-white border border-slate-100 rounded-2xl p-5 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow group">
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col gap-3 shadow-2xs hover:shadow-md transition-all group">
             <div className="flex items-start justify-between">
                 <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${iconBg} group-hover:scale-105 transition-transform`}>{icon}</div>
-                {trend === 'up' && <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-600"><TrendingUp size={12} />{sub}</span>}
-                {trend === 'down' && <span className="flex items-center gap-1 text-[11px] font-bold text-rose-500"><TrendingDown size={12} />{sub}</span>}
+                {trend === 'up' && <span className="flex items-center gap-1 text-[11px] font-extrabold text-emerald-600"><TrendingUp size={12} />{sub}</span>}
+                {trend === 'down' && <span className="flex items-center gap-1 text-[11px] font-extrabold text-rose-500"><TrendingDown size={12} />{sub}</span>}
             </div>
             <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{label}</p>
+                <p className="text-xs font-black text-slate-400 uppercase tracking-wider">{label}</p>
                 <p className="text-2xl font-black text-slate-900 mt-0.5 tracking-tight">{value}</p>
-                {trend === 'neutral' && <p className="text-[11px] text-slate-400 mt-0.5">{sub}</p>}
+                {trend === 'neutral' && <p className="text-[11px] font-bold text-slate-400 mt-0.5">{sub}</p>}
             </div>
         </div>
     );
@@ -159,6 +165,7 @@ const Reports: React.FC = () => {
     const [seriesReports, setSeriesReports] = useState<ReportRow[]>([]);
     const [dashboardData, setDashboardData] = useState<any>(null);
     const [loadingReports, setLoadingReports] = useState(false);
+    const [selectedRecord, setSelectedRecord] = useState<ReportRow | null>(null);
 
     // Fetch real series list on mount
     useEffect(() => {
@@ -204,8 +211,6 @@ const Reports: React.FC = () => {
 
     const selectedSeries = seriesList.find(s => String(s.ExamSeriesID) === selectedSeriesId);
 
-    
-
     const departments = useMemo(() => [...new Set(seriesReports.map(r => r.department))].sort(), [seriesReports]);
 
     const filtered = useMemo(() => {
@@ -246,7 +251,7 @@ const Reports: React.FC = () => {
         <div className="min-h-screen bg-[#F4F6F9]">
 
             {/* ── Top Header Bar ── */}
-            <div className="bg-white border-b border-slate-100">
+            <div className="bg-white border-b border-slate-200/80">
                 <div className="max-w-[1400px] mx-auto px-8 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                         <div className="flex items-center gap-2 text-xs text-slate-400 mb-1">
@@ -262,51 +267,46 @@ const Reports: React.FC = () => {
 
                     <div className="flex items-center gap-2.5 flex-wrap">
                         {/* Series Selector */}
-                        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
-                            <Layers size={15} className="text-indigo-500 shrink-0" />
+                        <div className="relative flex items-center gap-2 bg-slate-50 border border-slate-200/90 rounded-xl px-3 py-2 focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-100 transition-all shadow-2xs">
+                            <Layers size={16} className="text-indigo-600 shrink-0" />
                             {loadingSeries ? (
                                 <Spinner size="sm" />
                             ) : (
-                                <Select id="field-mg1nwvt" name="field-mg1nwvt" aria-label="Exam Series"
-                                    size="sm"
-                                    className="w-56"
-                                    variant="flat"
-                                    selectedKeys={selectedSeriesId ? new Set([selectedSeriesId]) : new Set()}
-                                    onSelectionChange={k => { setSelectedSeriesId(Array.from(k as Set<string>)[0] || ''); setPage(1); }}
-                                    classNames={{
-                                        trigger: '!bg-transparent shadow-none border-none h-8 min-h-8 font-bold text-slate-700',
-                                        value: 'text-sm font-bold text-slate-800',
-                                        popoverContent: 'bg-white border border-slate-100 shadow-xl rounded-xl',
-                                    }}
-                                    disallowEmptySelection
-                                >
-                                    {seriesList.map(s => (
-                                        <SelectItem key={String(s.ExamSeriesID)} textValue={s.SeriesName}>
-                                            <div className="flex items-center gap-2">
-                                                <Calendar size={13} className="text-indigo-500" />
-                                                <span className="font-semibold text-sm">{s.SeriesName}</span>
-                                            </div>
-                                        </SelectItem>
-                                    ))}
-                                </Select>
+                                <>
+                                    <select
+                                        id="field-series-select"
+                                        name="field-series-select"
+                                        aria-label="Exam Series"
+                                        value={selectedSeriesId}
+                                        onChange={e => { setSelectedSeriesId(e.target.value); setPage(1); }}
+                                        className="bg-transparent text-sm font-extrabold text-slate-800 outline-none border-none ring-0 focus:ring-0 cursor-pointer pr-6 max-w-[200px] truncate appearance-none"
+                                    >
+                                        {seriesList.map(s => (
+                                            <option key={String(s.ExamSeriesID)} value={String(s.ExamSeriesID)} className="font-semibold text-slate-800">
+                                                {s.SeriesName}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown size={14} className="text-slate-400 absolute right-3 pointer-events-none" />
+                                </>
                             )}
                         </div>
 
                         <div className="h-8 w-px bg-slate-200" />
 
                         <Button isIconOnly size="sm" variant="bordered"
-                            className="bg-white border-slate-200 text-slate-500 rounded-xl h-9 w-9"
+                            className="bg-white border-slate-200 text-slate-500 hover:text-indigo-600 rounded-xl h-9 w-9 shadow-2xs"
                             onPress={() => window.print()}>
                             <Printer size={15} />
                         </Button>
                         <Button size="sm" variant="bordered"
-                            className="bg-white border-slate-200 text-slate-600 font-semibold rounded-xl h-9 px-4 text-xs"
-                            startContent={<FileSpreadsheet size={14} />}
+                            className="bg-white border-slate-200 text-slate-600 font-bold hover:bg-slate-50 rounded-xl h-9 px-4 text-xs shadow-2xs"
+                            startContent={<FileSpreadsheet size={14} className="text-emerald-600" />}
                             onPress={() => exportToCSV(filtered, csvName)}>
                             Export CSV
                         </Button>
                         <Button size="sm"
-                            className="bg-indigo-600 text-white font-bold shadow-md shadow-indigo-200 rounded-xl h-9 px-5 text-xs"
+                            className="bg-indigo-600 text-white font-black shadow-md shadow-indigo-200 rounded-xl h-9 px-5 text-xs hover:bg-indigo-500 transition-all"
                             startContent={<Download size={14} />}
                             onPress={() => exportToCSV(seriesReports, csvName)}>
                             Download Report
@@ -319,26 +319,26 @@ const Reports: React.FC = () => {
 
                 {/* ── Series Context Banner ── */}
                 {selectedSeries && (
-                    <div className="bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 rounded-2xl px-7 py-5 flex items-center justify-between shadow-lg">
+                    <div className="bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 rounded-2xl px-7 py-5 flex items-center justify-between shadow-lg shadow-indigo-200">
                         <div>
-                            <p className="text-indigo-200 text-xs font-bold uppercase tracking-widest mb-1">Currently Viewing</p>
-                            <h2 className="text-white text-xl font-black tracking-tight">{selectedSeries.SeriesName}</h2>
-                            <p className="text-indigo-200 text-sm mt-0.5">{seriesReports.length} exams · {totalReg.toLocaleString()} students registered</p>
+                            <p className="text-xs font-black uppercase tracking-widest mb-1" style={{ color: '#c7d2fe' }}>Currently Viewing</p>
+                            <h2 className="text-xl font-black tracking-tight" style={{ color: '#ffffff' }}>{selectedSeries.SeriesName}</h2>
+                            <p className="text-xs font-bold mt-1" style={{ color: '#e0e7ff' }}>{seriesReports.length} exams · {totalReg.toLocaleString()} students registered</p>
                         </div>
-                        <div className="hidden md:flex items-center gap-6">
-                            <div className="text-center">
-                                <p className="text-2xl font-black text-white">{overallRate}%</p>
-                                <p className="text-indigo-200 text-xs font-semibold mt-0.5">Avg. Attendance</p>
+                        <div className="hidden md:flex items-center gap-4 select-none">
+                            <div className="text-center px-5 py-3 rounded-xl border" style={{ backgroundColor: 'rgba(255, 255, 255, 0.18)', borderColor: 'rgba(255, 255, 255, 0.25)' }}>
+                                <p className="text-xl font-black leading-none" style={{ color: '#ffffff' }}>{overallRate}%</p>
+                                <p className="font-black text-[10px] mt-1 uppercase tracking-wider" style={{ color: '#ffffff' }}>Avg. Attendance</p>
                             </div>
-                            <div className="w-px h-12 bg-indigo-400/40" />
-                            <div className="text-center">
-                                <p className="text-2xl font-black text-white">{completedCount}/{seriesReports.length}</p>
-                                <p className="text-indigo-200 text-xs font-semibold mt-0.5">Exams Done</p>
+                            <div className="text-center px-5 py-3 rounded-xl border" style={{ backgroundColor: 'rgba(255, 255, 255, 0.18)', borderColor: 'rgba(255, 255, 255, 0.25)' }}>
+                                <p className="text-xl font-black leading-none" style={{ color: '#ffffff' }}>{completedCount}/{seriesReports.length}</p>
+                                <p className="font-black text-[10px] mt-1 uppercase tracking-wider" style={{ color: '#ffffff' }}>Exams Done</p>
                             </div>
-                            <div className="w-px h-12 bg-indigo-400/40" />
-                            <div className="text-center">
-                                <p className="text-2xl font-black text-white">{((totalPres / totalSeats) * 100).toFixed(0)}%</p>
-                                <p className="text-indigo-200 text-xs font-semibold mt-0.5">Seat Utilization</p>
+                            <div className="text-center px-5 py-3 rounded-xl border" style={{ backgroundColor: 'rgba(255, 255, 255, 0.18)', borderColor: 'rgba(255, 255, 255, 0.25)' }}>
+                                <p className="text-xl font-black leading-none" style={{ color: '#ffffff' }}>
+                                    {totalSeats > 0 ? `${((totalPres / totalSeats) * 100).toFixed(0)}%` : '0%'}
+                                </p>
+                                <p className="font-black text-[10px] mt-1 uppercase tracking-wider" style={{ color: '#ffffff' }}>Seat Utilization</p>
                             </div>
                         </div>
                     </div>
@@ -346,15 +346,15 @@ const Reports: React.FC = () => {
 
                 {/* ── KPI Row ── */}
                 <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-                    <KpiTile icon={<FileText size={19} className="text-indigo-600" />} iconBg="bg-indigo-50" label="Total Exams" value={String(seriesReports.length)} sub="This series" trend="neutral" />
-                    <KpiTile icon={<Users size={19} className="text-violet-600" />} iconBg="bg-violet-50" label="Registered Students" value={totalReg.toLocaleString()} sub="+8.2% vs last" trend="up" />
-                    <KpiTile icon={<ClipboardCheck size={19} className="text-emerald-600" />} iconBg="bg-emerald-50" label="Avg. Attendance" value={`${overallRate}%`} sub="+3.1% vs last" trend="up" />
-                    <KpiTile icon={<CheckCircle2 size={19} className="text-sky-600" />} iconBg="bg-sky-50" label="Exams Completed" value={`${completedCount}/${seriesReports.length}`} sub="1 cancelled" trend="neutral" />
-                    <KpiTile icon={<MapPin size={19} className="text-amber-600" />} iconBg="bg-amber-50" label="Seats Allocated" value={totalSeats.toLocaleString()} sub="-2.4% gap" trend="down" />
+                    <KpiTile icon={<FileText size={19} className="text-indigo-600" />} iconBg="bg-indigo-50 border border-indigo-100" label="Total Exams" value={String(seriesReports.length)} sub="This series" trend="neutral" />
+                    <KpiTile icon={<Users size={19} className="text-violet-600" />} iconBg="bg-violet-50 border border-violet-100" label="Registered Students" value={totalReg.toLocaleString()} sub="+8.2% vs last" trend="up" />
+                    <KpiTile icon={<ClipboardCheck size={19} className="text-emerald-600" />} iconBg="bg-emerald-50 border border-emerald-100" label="Avg. Attendance" value={`${overallRate}%`} sub="+3.1% vs last" trend="up" />
+                    <KpiTile icon={<CheckCircle2 size={19} className="text-sky-600" />} iconBg="bg-sky-50 border border-sky-100" label="Exams Completed" value={`${completedCount}/${seriesReports.length}`} sub="1 cancelled" trend="neutral" />
+                    <KpiTile icon={<MapPin size={19} className="text-amber-600" />} iconBg="bg-amber-50 border border-amber-100" label="Seats Allocated" value={totalSeats.toLocaleString()} sub="-2.4% gap" trend="down" />
                 </div>
 
                 {/* ── Main Body (Tabs) ── */}
-                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+                <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden">
                     <div className="border-b border-slate-100 px-6 bg-white">
                         <Tabs
                             selectedKey={activeTab}
@@ -364,13 +364,13 @@ const Reports: React.FC = () => {
                                 tabList: 'gap-8 w-full rounded-none p-0 bg-transparent',
                                 cursor: 'w-full bg-indigo-600 h-0.5',
                                 tab: 'max-w-fit px-0 h-14',
-                                tabContent: 'group-data-[selected=true]:text-indigo-600 text-slate-400 font-semibold text-sm',
+                                tabContent: 'group-data-[selected=true]:text-indigo-600 text-slate-400 font-bold text-sm',
                             }}
                         >
-                            <Tab key="records" title={<div className="flex items-center gap-1.5"><FileText size={15} />Exam Records</div>} />
-                            <Tab key="overview" title={<div className="flex items-center gap-1.5"><BarChart3 size={15} />Analytics</div>} />
-                            <Tab key="seating" title={<div className="flex items-center gap-1.5"><Building2 size={15} />Seating</div>} />
-                            <Tab key="invig" title={<div className="flex items-center gap-1.5"><Users size={15} />Invigilators</div>} />
+                            <Tab key="records" title={<div className="flex items-center gap-2"><FileText size={15} />Exam Records</div>} />
+                            <Tab key="overview" title={<div className="flex items-center gap-2"><BarChart3 size={15} />Analytics</div>} />
+                            <Tab key="seating" title={<div className="flex items-center gap-2"><Building2 size={15} />Seating</div>} />
+                            <Tab key="invig" title={<div className="flex items-center gap-2"><Users size={15} />Invigilators</div>} />
                         </Tabs>
                     </div>
 
@@ -380,45 +380,70 @@ const Reports: React.FC = () => {
                         {activeTab === 'records' && (
                             <div className="space-y-4">
                                 {/* Filters */}
-                                <div className="flex flex-col sm:flex-row gap-3">
-                                    <Input id="field-eskce01" name="field-eskce01" aria-label="Search exam, hall, invigilator…" className="sm:max-w-xs"
-                                        placeholder="Search exam, hall, invigilator…"
-                                        startContent={<Search size={14} className="text-slate-400" />}
-                                        value={search}
-                                        onValueChange={v => { setSearch(v); setPage(1); }}
-                                        classNames={{ inputWrapper: 'bg-slate-50 shadow-none border border-slate-100 group-data-[focus=true]:border-indigo-400 rounded-xl h-10', input: 'text-sm' }}
-                                        
-                                    />
-                                    <div className="flex gap-2 flex-wrap">
-                                        <Select id="field-6mp8hht" name="field-6mp8hht" aria-label="Department" placeholder="All Departments" size="sm" className="w-44" variant="bordered"
-                                            selectedKeys={deptFilter ? new Set([deptFilter]) : new Set()}
-                                            onSelectionChange={k => { setDeptFilter(Array.from(k as Set<string>)[0] || ''); setPage(1); }}
-                                            classNames={{ trigger: 'bg-white border-slate-200 rounded-xl h-10', popoverContent: 'bg-white border border-slate-100 shadow-xl rounded-xl' }}>
-                                            {departments.map(d => <SelectItem key={d}>{d}</SelectItem>)}
-                                        </Select>
-                                        <Select id="field-ut93jrd" name="field-ut93jrd" aria-label="Status" placeholder="All Statuses" size="sm" className="w-36" variant="bordered"
-                                            selectedKeys={statusFilter ? new Set([statusFilter]) : new Set()}
-                                            onSelectionChange={k => { setStatusFilter(Array.from(k as Set<string>)[0] || ''); setPage(1); }}
-                                            classNames={{ trigger: 'bg-white border-slate-200 rounded-xl h-10', popoverContent: 'bg-white border border-slate-100 shadow-xl rounded-xl' }}>
-                                            {(['Completed', 'In Progress', 'Scheduled', 'Cancelled'] as ExamStatus[]).map(s => <SelectItem key={s}>{s}</SelectItem>)}
-                                        </Select>
-                                        <Select id="field-sib88kk" name="field-sib88kk" aria-label="Session" placeholder="All Sessions" size="sm" className="w-32" variant="bordered"
-                                            selectedKeys={sessionFilter ? new Set([sessionFilter]) : new Set()}
-                                            onSelectionChange={k => { setSessionFilter(Array.from(k as Set<string>)[0] || ''); setPage(1); }}
-                                            classNames={{ trigger: 'bg-white border-slate-200 rounded-xl h-10', popoverContent: 'bg-white border border-slate-100 shadow-xl rounded-xl' }}>
-                                            {['Morning', 'Afternoon'].map(s => <SelectItem key={s}>{s}</SelectItem>)}
-                                        </Select>
+                                <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                                    <div className="flex items-center gap-2.5 flex-wrap w-full sm:w-auto">
+                                        <div className="flex items-center w-full sm:w-64 h-10 rounded-xl border border-slate-200/90 bg-slate-50 focus-within:bg-white focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-100 transition-all overflow-hidden px-3 gap-2">
+                                            <Search size={14} className="text-slate-400 shrink-0" />
+                                            <input
+                                                type="text"
+                                                placeholder="Search exam, hall, invigilator…"
+                                                value={search}
+                                                onChange={e => { setSearch(e.target.value); setPage(1); }}
+                                                className="w-full h-full text-xs font-semibold text-slate-800 placeholder:text-slate-400 bg-transparent border-none outline-none ring-0 focus:ring-0 p-0 m-0"
+                                            />
+                                        </div>
+
+                                        <div className="relative flex items-center h-10 rounded-xl border border-slate-200/90 bg-slate-50 focus-within:bg-white focus-within:border-indigo-600 transition-all px-3">
+                                            <select
+                                                aria-label="Department"
+                                                value={deptFilter}
+                                                onChange={e => { setDeptFilter(e.target.value); setPage(1); }}
+                                                className="bg-transparent text-xs font-extrabold text-slate-700 border-none outline-none ring-0 focus:ring-0 cursor-pointer pr-6 appearance-none"
+                                            >
+                                                <option value="">All Departments</option>
+                                                {departments.map(d => <option key={d} value={d}>{d}</option>)}
+                                            </select>
+                                            <ChevronDown size={13} className="text-slate-400 absolute right-2.5 pointer-events-none" />
+                                        </div>
+
+                                        <div className="relative flex items-center h-10 rounded-xl border border-slate-200/90 bg-slate-50 focus-within:bg-white focus-within:border-indigo-600 transition-all px-3">
+                                            <select
+                                                aria-label="Status"
+                                                value={statusFilter}
+                                                onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
+                                                className="bg-transparent text-xs font-extrabold text-slate-700 border-none outline-none ring-0 focus:ring-0 cursor-pointer pr-6 appearance-none"
+                                            >
+                                                <option value="">All Statuses</option>
+                                                {(['Completed', 'In Progress', 'Scheduled', 'Cancelled'] as ExamStatus[]).map(s => <option key={s} value={s}>{s}</option>)}
+                                            </select>
+                                            <ChevronDown size={13} className="text-slate-400 absolute right-2.5 pointer-events-none" />
+                                        </div>
+
+                                        <div className="relative flex items-center h-10 rounded-xl border border-slate-200/90 bg-slate-50 focus-within:bg-white focus-within:border-indigo-600 transition-all px-3">
+                                            <select
+                                                aria-label="Session"
+                                                value={sessionFilter}
+                                                onChange={e => { setSessionFilter(e.target.value); setPage(1); }}
+                                                className="bg-transparent text-xs font-extrabold text-slate-700 border-none outline-none ring-0 focus:ring-0 cursor-pointer pr-6 appearance-none"
+                                            >
+                                                <option value="">All Sessions</option>
+                                                {['Morning', 'Afternoon', 'FN', 'AN'].map(s => <option key={s} value={s}>{s}</option>)}
+                                            </select>
+                                            <ChevronDown size={13} className="text-slate-400 absolute right-2.5 pointer-events-none" />
+                                        </div>
+
                                         {(search || deptFilter || statusFilter || sessionFilter) && (
-                                            <Button size="sm" variant="light" className="text-slate-400 font-semibold h-10 text-xs" onPress={clearFilters}>
+                                            <Button size="sm" variant="light" className="text-slate-500 font-extrabold h-10 text-xs hover:bg-slate-100 rounded-xl" onPress={clearFilters}>
                                                 <RefreshCw size={13} /> Clear
                                             </Button>
                                         )}
                                     </div>
-                                    <div className="ml-auto flex items-center gap-2">
-                                        <span className="text-xs text-slate-400 font-semibold">{filtered.length} records</span>
+
+                                    <div className="flex items-center gap-3 shrink-0">
+                                        <span className="text-xs text-slate-400 font-bold">{filtered.length} records</span>
                                         <Button size="sm" variant="bordered"
-                                            className="bg-white border-slate-200 text-slate-600 font-semibold rounded-xl h-9 px-4 text-xs"
-                                            startContent={<FileSpreadsheet size={13} />}
+                                            className="bg-white border-slate-200 text-slate-700 font-extrabold rounded-xl h-9 px-4 text-xs shadow-2xs"
+                                            startContent={<FileSpreadsheet size={13} className="text-emerald-600" />}
                                             onPress={() => exportToCSV(filtered, csvName)}>
                                             Export View
                                         </Button>
@@ -426,9 +451,9 @@ const Reports: React.FC = () => {
                                 </div>
 
                                 {/* Table */}
-                                <div className="border border-slate-100 rounded-xl overflow-hidden">
+                                <div className="border border-slate-200/80 rounded-2xl overflow-hidden shadow-2xs">
                                     {/* TH */}
-                                    <div className="grid bg-slate-50 border-b border-slate-100 px-5 py-3"
+                                    <div className="grid bg-slate-50/80 border-b border-slate-200/80 px-5 py-3"
                                         style={{ gridTemplateColumns: '1.2fr 2fr 1.2fr 0.8fr 0.8fr 1.2fr 0.6fr 0.8fr 0.8fr 1fr 0.4fr' }}>
                                         {['Code', 'Subject', 'Department', 'Date', 'Session', 'Hall', 'Reg.', 'Present', 'Absent', 'Status', ''].map(c => (
                                             <span key={c} className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{c}</span>
@@ -436,56 +461,69 @@ const Reports: React.FC = () => {
                                     </div>
                                     {pageItems.length === 0 ? (
                                         <div className="py-20 text-center">
-                                            <FileText size={32} className="mx-auto mb-3 text-slate-200" />
-                                            <p className="text-slate-400 text-sm font-medium">No exam records match your filters.</p>
+                                            <FileText size={32} className="mx-auto mb-3 text-slate-300" />
+                                            <p className="text-slate-500 text-sm font-semibold">No exam records match your filters.</p>
                                         </div>
-                                    ) : pageItems.map((row, idx) => (
-                                        <div key={row.id}
-                                            className={`grid px-5 py-4 items-center hover:bg-slate-50/80 transition-colors ${idx < pageItems.length - 1 ? 'border-b border-slate-50' : ''}`}
-                                            style={{ gridTemplateColumns: '1.2fr 2fr 1.2fr 0.8fr 0.8fr 1.2fr 0.6fr 0.8fr 0.8fr 1fr 0.4fr' }}>
-                                            <span className="text-[11px] font-black text-indigo-500">{row.examCode}</span>
-                                            <div>
-                                                <p className="text-sm font-bold text-slate-900 leading-snug">{row.subject}</p>
-                                                <div className="flex items-center gap-1.5 mt-0.5">
-                                                    <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[8px] font-black shrink-0"
-                                                        style={{ backgroundColor: AVATAR_COLORS[row.invigilatorInitials] || '#6366f1' }}>
-                                                        {row.invigilatorInitials}
+                                    ) : pageItems.map((row, idx) => {
+                                        const dateFormatted = (() => {
+                                            try {
+                                                const d = new Date(row.date);
+                                                return isNaN(d.getTime()) ? row.date : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+                                            } catch { return row.date; }
+                                        })();
+
+                                        return (
+                                            <div key={row.id}
+                                                className={`grid px-5 py-3.5 items-center hover:bg-indigo-50/30 transition-colors ${idx < pageItems.length - 1 ? 'border-b border-slate-100' : ''}`}
+                                                style={{ gridTemplateColumns: '1.2fr 2fr 1.2fr 0.8fr 0.8fr 1.2fr 0.6fr 0.8fr 0.8fr 1fr 0.4fr' }}>
+                                                <span className="text-[11px] font-black text-indigo-600">{row.examCode}</span>
+                                                <div>
+                                                    <p className="text-xs font-extrabold text-slate-900 leading-snug">{row.subject}</p>
+                                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                                        <div className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[7px] font-black shrink-0"
+                                                            style={{ backgroundColor: AVATAR_COLORS[row.invigilatorInitials] || '#6366f1' }}>
+                                                            {row.invigilatorInitials}
+                                                        </div>
+                                                        <span className="text-[11px] text-slate-400 font-medium truncate">{row.invigilator}</span>
                                                     </div>
-                                                    <span className="text-[11px] text-slate-400 truncate">{row.invigilator}</span>
                                                 </div>
+                                                <span className="text-xs text-slate-600 font-semibold truncate pr-2">{row.department}</span>
+                                                <span className="text-xs font-bold text-slate-700">{dateFormatted}</span>
+                                                <span className="text-xs font-bold text-slate-600">{row.session}</span>
+                                                <div className="flex items-center gap-1 min-w-0">
+                                                    <MapPin size={11} className="text-slate-400 shrink-0" />
+                                                    <span className="text-xs font-semibold text-slate-700 truncate">{row.hall}</span>
+                                                </div>
+                                                <span className="text-xs font-black text-slate-800">{row.registered}</span>
+                                                <div>
+                                                    <span className="text-xs font-black text-slate-800">
+                                                        {row.present}
+                                                    </span>
+                                                    <span className="text-[10px] font-bold text-slate-400 ml-1">/ {row.registered}</span>
+                                                </div>
+                                                <span className={`text-xs font-bold ${row.absent > 10 ? 'text-rose-600' : 'text-slate-500'}`}>{row.absent || '—'}</span>
+                                                <Chip size="sm"
+                                                    className={`text-[10px] font-black border px-2 py-0.5 ${STATUS_CONFIG[row.status].chipClass}`}
+                                                    startContent={STATUS_CONFIG[row.status].icon}>
+                                                    {row.status}
+                                                </Chip>
+                                                <button
+                                                    className="text-slate-400 hover:text-indigo-600 transition-colors p-1.5 rounded-xl hover:bg-indigo-50 cursor-pointer"
+                                                    title="View detail"
+                                                    onClick={() => setSelectedRecord(row)}
+                                                >
+                                                    <Eye size={15} />
+                                                </button>
                                             </div>
-                                            <span className="text-xs text-slate-500 font-medium truncate pr-2">{row.department}</span>
-                                            <span className="text-xs text-slate-500">{row.date.slice(5)}</span>
-                                            <span className="text-xs font-medium text-slate-600">{row.session}</span>
-                                            <div className="flex items-center gap-1 min-w-0">
-                                                <MapPin size={11} className="text-slate-300 shrink-0" />
-                                                <span className="text-xs text-slate-600 truncate">{row.hall}</span>
-                                            </div>
-                                            <span className="text-sm font-bold text-slate-800">{row.registered}</span>
-                                            <div>
-                                                <span className={`text-sm font-black ${rateColor(row.attendanceRate)}`}>
-                                                    {row.attendanceRate > 0 ? `${row.attendanceRate.toFixed(0)}%` : '—'}
-                                                </span>
-                                                <p className="text-[10px] text-slate-400">{row.present}/{row.registered}</p>
-                                            </div>
-                                            <span className={`text-xs font-bold ${row.absent > 15 ? 'text-rose-500' : 'text-slate-500'}`}>{row.absent || '—'}</span>
-                                            <Chip size="sm"
-                                                className={`text-[10px] font-bold border px-2 ${STATUS_CONFIG[row.status].chipClass}`}
-                                                startContent={STATUS_CONFIG[row.status].icon}>
-                                                {row.status}
-                                            </Chip>
-                                            <button className="text-slate-300 hover:text-indigo-500 transition-colors" title="View detail">
-                                                <Eye size={14} />
-                                            </button>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                     {/* Footer */}
-                                    <div className="flex items-center justify-between px-5 py-4 border-t border-slate-50 bg-white">
-                                        <span className="text-xs font-semibold text-slate-400">
+                                    <div className="flex items-center justify-between px-5 py-4 border-t border-slate-100 bg-white">
+                                        <span className="text-xs font-bold text-slate-400">
                                             Showing {filtered.length === 0 ? 0 : (cp - 1) * ROWS_PER_PAGE + 1}–{Math.min(cp * ROWS_PER_PAGE, filtered.length)} of {filtered.length} exams
                                         </span>
                                         <Pagination total={pages} page={cp} onChange={setPage}
-                                            classNames={{ wrapper: 'gap-1', item: 'bg-transparent text-slate-500 font-bold text-xs w-8 h-8 min-w-[32px] rounded-lg', cursor: 'bg-indigo-700 text-white font-bold text-xs w-8 h-8 rounded-lg' }} />
+                                            classNames={{ wrapper: 'gap-1', item: 'bg-transparent text-slate-500 font-bold text-xs w-8 h-8 min-w-[32px] rounded-lg', cursor: 'bg-indigo-600 text-white font-bold text-xs w-8 h-8 rounded-lg' }} />
                                     </div>
                                 </div>
                             </div>
@@ -638,7 +676,7 @@ const Reports: React.FC = () => {
                                     </div>
                                     {invigilators
                                         .sort((a: any, b: any) => b.averageAttendance - a.averageAttendance)
-                                        .map((inv: any, i, a) => (
+                                        .map((inv: any, i: number, a: any) => (
                                         <div key={inv.facultyId || inv.facultyName} className={`grid px-5 py-4 items-center hover:bg-slate-50/70 transition-colors ${i < a.length - 1 ? 'border-b border-slate-50' : ''}`}
                                             style={{ gridTemplateColumns: '2.5fr 1.5fr 0.8fr 1fr 1fr 1fr 0.8fr' }}>
                                             <div className="flex items-center gap-3">
@@ -667,6 +705,63 @@ const Reports: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {/* ── EXAM DETAIL MODAL ── */}
+            <Modal isOpen={!!selectedRecord} onOpenChange={open => !open && setSelectedRecord(null)} size="lg">
+                <ModalContent className="bg-white rounded-2xl border border-slate-100 shadow-2xl overflow-hidden">
+                    {() => selectedRecord && (
+                        <>
+                            <ModalHeader className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-50">
+                                <div>
+                                    <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{selectedRecord.examCode}</span>
+                                    <h3 className="text-base font-extrabold text-slate-900 leading-snug">{selectedRecord.subject}</h3>
+                                </div>
+                                <Chip size="sm" className={`text-[10px] font-black border px-2 ${STATUS_CONFIG[selectedRecord.status].chipClass}`}>
+                                    {selectedRecord.status}
+                                </Chip>
+                            </ModalHeader>
+                            <ModalBody className="p-6 space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Department</span>
+                                        <span className="text-sm font-extrabold text-slate-800">{selectedRecord.department}</span>
+                                    </div>
+                                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Hall Location</span>
+                                        <span className="text-sm font-extrabold text-slate-800">{selectedRecord.hall}</span>
+                                    </div>
+                                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Date & Session</span>
+                                        <span className="text-sm font-extrabold text-slate-800">{selectedRecord.date} ({selectedRecord.session})</span>
+                                    </div>
+                                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Invigilator</span>
+                                        <span className="text-sm font-extrabold text-slate-800">{selectedRecord.invigilator}</span>
+                                    </div>
+                                </div>
+
+                                <div className="p-4 bg-indigo-50/50 border border-indigo-100 rounded-xl flex items-center justify-between">
+                                    <div>
+                                        <span className="text-xs font-bold text-indigo-700 uppercase tracking-wider block">Attendance Summary</span>
+                                        <span className="text-2xl font-black text-indigo-950">
+                                            {selectedRecord.present} <span className="text-sm font-semibold text-slate-500">/ {selectedRecord.registered} Present</span>
+                                        </span>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="text-xs font-bold text-rose-500 block">{selectedRecord.absent} Absent</span>
+                                        <span className="text-xs font-black text-emerald-600">{selectedRecord.attendanceRate.toFixed(1)}% Turnout</span>
+                                    </div>
+                                </div>
+                            </ModalBody>
+                            <ModalFooter className="border-t border-slate-100 px-6 py-3 bg-slate-50 flex justify-end">
+                                <Button size="sm" className="bg-slate-900 text-white font-bold rounded-xl px-5" onPress={() => setSelectedRecord(null)}>
+                                    Close
+                                </Button>
+                            </ModalFooter>
+                        </>
+                    )}
+                </ModalContent>
+            </Modal>
         </div>
     );
 };

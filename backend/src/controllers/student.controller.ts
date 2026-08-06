@@ -26,7 +26,7 @@ export const getAllStudents = async (req: Request, res: Response) => {
         const search = req.query.search as string;
         const dept = req.query.dept as string; // DepartmentID
         const program = req.query.program as string; // ProgramID
-        const semester = req.query.semester as string; // SemesterID
+        const semester = req.query.semester as string; // SemesterID or SemesterNumber
         const batch = req.query.batch as string; // BatchYear
         const status = req.query.status as string; // Status (computed field)
         const source = req.query.source as string; // Source (computed field)
@@ -37,14 +37,48 @@ export const getAllStudents = async (req: Request, res: Response) => {
         // Parse and validate numeric filters
         const deptId = dept && !isNaN(parseInt(dept)) ? parseInt(dept) : null;
         const programId = program && !isNaN(parseInt(program)) ? parseInt(program) : null;
-        const semesterId = semester && !isNaN(parseInt(semester)) ? parseInt(semester) : null;
+        const semesterVal = semester && !isNaN(parseInt(semester)) ? parseInt(semester) : null;
         const batchYear = batch && !isNaN(parseInt(batch)) ? parseInt(batch) : null;
 
         // Add direct filter conditions to array
         if (deptId) conditions.push({ DepartmentID: deptId });
         if (programId) conditions.push({ ProgramID: programId });
-        if (semesterId) conditions.push({ SemesterID: semesterId });
         if (batchYear) conditions.push({ BatchYear: batchYear });
+
+        if (semesterVal) {
+            // Find all SemesterIDs corresponding to this SemesterNumber
+            const matchingSemesters = await Semester.findAll({
+                where: { SemesterNumber: semesterVal },
+                attributes: ['SemesterID'],
+                raw: true
+            });
+            const semesterIds = matchingSemesters.map(s => s.SemesterID);
+            const allMatchingIds = Array.from(new Set([...semesterIds, semesterVal]));
+            conditions.push({ SemesterID: { [Op.in]: allMatchingIds } });
+        }
+
+        if (status && status.trim()) {
+            const sUpper = status.trim().toUpperCase();
+            if (sUpper === 'DISABLED') {
+                conditions.push({ '$User.IsActive$': false });
+            } else if (sUpper === 'ACTIVE') {
+                conditions.push({
+                    '$User.IsActive$': { [Op.ne]: false },
+                    FullName: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] },
+                    RegisterNumber: { [Op.and]: [{ [Op.ne]: null }, { [Op.ne]: '' }] },
+                    ProgramID: { [Op.ne]: null }
+                });
+            } else if (sUpper === 'INCOMPLETE') {
+                conditions.push({
+                    '$User.IsActive$': { [Op.ne]: false },
+                    [Op.or]: [
+                        { FullName: { [Op.or]: [null, ''] } },
+                        { RegisterNumber: { [Op.or]: [null, ''] } },
+                        { ProgramID: null }
+                    ]
+                });
+            }
+        }
 
         // Search Logic - add OR condition for search
         if (search && search.trim()) {

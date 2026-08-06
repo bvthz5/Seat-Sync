@@ -166,18 +166,15 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                 newErrors.Email = "College Email is required";
             } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.Email)) {
                 newErrors.Email = "Please enter a valid email address";
-            } else if (!formData.Email.toLowerCase().endsWith("@sjcetpalai.ac.in")) {
-                newErrors.Email = "Email must end with @sjcetpalai.ac.in";
+            } else if (!/@([a-zA-Z0-9-]+\.)*sjcetpalai\.ac\.in$/i.test(formData.Email.trim())) {
+                newErrors.Email = "Email must be from @sjcetpalai.ac.in (or subdomains like @ce.sjcetpalai.ac.in)";
             }
         }
 
         if (!formData.RegisterNumber?.trim()) {
             newErrors.RegisterNumber = "Register Number is required";
-        } else if (!/^[A-Z0-9\-_&/.]+$'/i.test(formData.RegisterNumber.trim())) {
-            // Allows letters, numbers, hyphens, underscores, ampersand, slash, dot
-            if (!/^[A-Z0-9\-_&/.]+/i.test(formData.RegisterNumber.trim())) {
-                newErrors.RegisterNumber = "Register Number contains invalid characters";
-            }
+        } else if (!/^[A-Z0-9\-_&/.]+/i.test(formData.RegisterNumber.trim())) {
+            newErrors.RegisterNumber = "Register Number contains invalid characters";
         }
 
         if (formData.BatchYear) {

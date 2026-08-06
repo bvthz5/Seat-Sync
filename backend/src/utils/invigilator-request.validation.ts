@@ -98,10 +98,10 @@ export const validateFacultyEmail = (email: any): { valid: boolean; error?: stri
         return { valid: false, error: "Email domain is too long" };
     }
 
-    // Validate college email domain
-    const collegeEmail = "sjcetpalai.ac.in";
-    if (domainPart !== collegeEmail) {
-        return { valid: false, error: `Email must be from the official college domain (${collegeEmail})` };
+    // Validate college email domain (supports subdomains like @ce.sjcetpalai.ac.in)
+    const collegeDomainRegex = /^(?:[a-zA-Z0-9-]+\.)*sjcetpalai\.ac\.in$/i;
+    if (!domainPart || !collegeDomainRegex.test(domainPart)) {
+        return { valid: false, error: "Email must be from the official college domain (sjcetpalai.ac.in)" };
     }
 
     return { valid: true };

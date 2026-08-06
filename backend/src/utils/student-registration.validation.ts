@@ -61,8 +61,9 @@ export const validateEmail = (email: any): { valid: boolean; error?: string } =>
         return { valid: false, error: "Email format is invalid" };
     }
 
-    // Check for college domain
-    if (!trimmed.endsWith(`@${COLLEGE_EMAIL_DOMAIN}`)) {
+    // Check for college domain (supports subdomains like @ce.sjcetpalai.ac.in)
+    const domainRegex = /@([a-zA-Z0-9-]+\.)*sjcetpalai\.ac\.in$/i;
+    if (!domainRegex.test(trimmed)) {
         return {
             valid: false,
             error: `Email must be from the college domain (@${COLLEGE_EMAIL_DOMAIN})`

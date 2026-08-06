@@ -174,39 +174,45 @@ const InternalExamDetailPage: React.FC = () => {
     const exam = examDetail?.exam;
 
     return (
-        <div className="min-h-screen bg-[#f8fafc] pb-12">
-            {/* Header */}
-            <div className="bg-white border-b border-slate-200/60 px-8 py-5 sticky top-0 z-30 shadow-sm">
-                <div className="max-w-[1600px] mx-auto flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
+        <div className="min-h-screen bg-[#F8F9FA] pb-16">
+            {/* Top Navigation Header */}
+            <div className="bg-white border-b border-slate-200/80 px-6 sm:px-8 py-4 sticky top-0 z-30 shadow-xs">
+                <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3.5">
                         <Button
-                            isIconOnly variant="light"
-                            className="text-slate-500 hover:text-slate-900 rounded-xl"
+                            isIconOnly 
+                            variant="flat"
+                            className="bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200 rounded-xl w-10 h-10 transition-all shrink-0"
                             onPress={() => navigate(`/admin/exams/series/${seriesId}`)}
                         >
-                            <ArrowLeft size={20} />
+                            <ArrowLeft size={18} />
                         </Button>
                         <div>
-                            <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
-                                {exam?.SubjectCode || 'Exam'} — {exam?.SubjectName || 'Detail'}
-                            </h1>
-                            <p className="text-slate-500 text-sm font-medium mt-0.5">
-                                Internal Exam Detail • Manage mapped students
+                            <div className="flex items-center gap-2">
+                                <span className="px-2.5 py-0.5 rounded-md bg-indigo-50 border border-indigo-100 text-indigo-700 font-extrabold text-xs tracking-wide uppercase">
+                                    {exam?.SubjectCode || 'EXAM'}
+                                </span>
+                                <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">
+                                    {exam?.SubjectName || 'Internal Exam Detail'}
+                                </h1>
+                            </div>
+                            <p className="text-slate-400 text-xs font-medium mt-0.5">
+                                Internal Exam Detail • Manage mapped students and class allocations
                             </p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 shrink-0">
                         <Button
-                            className="bg-emerald-600 text-white font-bold shadow-sm hover:bg-emerald-700 rounded-xl h-11 px-5"
-                            startContent={<RefreshCcw size={16} />}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl h-10 px-4 text-xs shadow-sm transition-all"
+                            startContent={<RefreshCcw size={15} className={isAutoMapping ? "animate-spin" : ""} />}
                             isLoading={isAutoMapping}
                             onPress={handleAutoMap}
                         >
                             Auto Register Students
                         </Button>
                         <Button
-                            className="bg-indigo-600 text-white font-bold shadow-sm hover:bg-indigo-700 rounded-xl h-11 px-5"
-                            startContent={<Upload size={16} />}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl h-10 px-4 text-xs shadow-sm transition-all"
+                            startContent={<Upload size={15} />}
                             onPress={() => { setShowImportModal(true); setImportResult(null); setSelectedFile(null); }}
                         >
                             Import Students
@@ -215,53 +221,55 @@ const InternalExamDetailPage: React.FC = () => {
                 </div>
             </div>
 
-            <div className="px-8 max-w-[1600px] mx-auto mt-8 space-y-8">
-                {/* ── Exam Info Cards ── */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-                    <Card className="bg-white border border-slate-200/60 shadow-sm rounded-2xl">
-                        <CardBody className="p-5 flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600">
-                                <CalendarDays size={22} />
+            <div className="px-6 sm:px-8 max-w-[1600px] mx-auto mt-6 space-y-6">
+                {/* ── Exam Info Stat Cards ── */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <Card className="bg-white border border-slate-200/70 shadow-xs rounded-2xl hover:border-blue-200 transition-all">
+                        <CardBody className="p-4 sm:p-5 flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                                <CalendarDays size={20} />
                             </div>
-                            <div>
-                                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Date</p>
-                                <p className="text-lg font-extrabold text-slate-900">{formatDate(exam?.ExamDate || '')}</p>
+                            <div className="min-w-0">
+                                <p className="text-slate-400 text-[11px] font-extrabold uppercase tracking-wider">Exam Date</p>
+                                <p className="text-base font-extrabold text-slate-900 truncate mt-0.5">{formatDate(exam?.ExamDate || '')}</p>
                             </div>
                         </CardBody>
                     </Card>
-                    <Card className="bg-white border border-slate-200/60 shadow-sm rounded-2xl">
-                        <CardBody className="p-5 flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600">
-                                <Clock size={22} />
+
+                    <Card className="bg-white border border-slate-200/70 shadow-xs rounded-2xl hover:border-emerald-200 transition-all">
+                        <CardBody className="p-4 sm:p-5 flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                                <Clock size={20} />
                             </div>
-                            <div>
-                                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Session</p>
-                                <p className="text-lg font-extrabold text-slate-900">
-                                    {exam?.Session === 'FN' ? 'Forenoon' : 'Afternoon'}
-                                    {exam?.StartTime && <span className="text-sm text-slate-400 ml-2">({exam.StartTime} – {exam.EndTime})</span>}
+                            <div className="min-w-0">
+                                <p className="text-slate-400 text-[11px] font-extrabold uppercase tracking-wider">Session</p>
+                                <p className="text-base font-extrabold text-slate-900 truncate mt-0.5">
+                                    {exam?.Session === 'FN' ? 'Forenoon (FN)' : 'Afternoon (AN)'}
                                 </p>
                             </div>
                         </CardBody>
                     </Card>
-                    <Card className="bg-white border border-slate-200/60 shadow-sm rounded-2xl">
-                        <CardBody className="p-5 flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-2xl bg-violet-50 flex items-center justify-center text-violet-600">
-                                <Users size={22} />
+
+                    <Card className="bg-white border border-slate-200/70 shadow-xs rounded-2xl hover:border-violet-200 transition-all">
+                        <CardBody className="p-4 sm:p-5 flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-violet-50 border border-violet-100 flex items-center justify-center text-violet-600 shrink-0">
+                                <Users size={20} />
                             </div>
-                            <div>
-                                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Students Mapped</p>
-                                <p className="text-lg font-extrabold text-slate-900">{examDetail?.studentCount || 0}</p>
+                            <div className="min-w-0">
+                                <p className="text-slate-400 text-[11px] font-extrabold uppercase tracking-wider">Students Mapped</p>
+                                <p className="text-base font-extrabold text-slate-900 truncate mt-0.5">{examDetail?.studentCount || 0}</p>
                             </div>
                         </CardBody>
                     </Card>
-                    <Card className="bg-white border border-slate-200/60 shadow-sm rounded-2xl">
-                        <CardBody className="p-5 flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600">
-                                <GraduationCap size={22} />
+
+                    <Card className="bg-white border border-slate-200/70 shadow-xs rounded-2xl hover:border-amber-200 transition-all">
+                        <CardBody className="p-4 sm:p-5 flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600 shrink-0">
+                                <GraduationCap size={20} />
                             </div>
-                            <div>
-                                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Semester</p>
-                                <p className="text-lg font-extrabold text-slate-900">{exam?.Semester || '-'}</p>
+                            <div className="min-w-0">
+                                <p className="text-slate-400 text-[11px] font-extrabold uppercase tracking-wider">Semester</p>
+                                <p className="text-base font-extrabold text-slate-900 truncate mt-0.5">S{exam?.Semester || '-'}</p>
                             </div>
                         </CardBody>
                     </Card>
@@ -269,18 +277,28 @@ const InternalExamDetailPage: React.FC = () => {
 
                 {/* ── Department Breakdown ── */}
                 {examDetail?.departmentBreakdown && examDetail.departmentBreakdown.length > 0 && (
-                    <Card className="bg-white border border-slate-200/60 shadow-sm rounded-2xl">
-                        <CardBody className="p-6">
-                            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                <Building2 size={16} /> Department Breakdown
-                            </h3>
-                            <div className="flex flex-wrap gap-3">
+                    <Card className="bg-white border border-slate-200/70 shadow-xs rounded-2xl">
+                        <CardBody className="p-5 sm:p-6 space-y-3.5">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                                    <Building2 size={15} className="text-indigo-600" /> Department Breakdown
+                                </h3>
+                                <span className="text-xs font-bold text-slate-400">
+                                    {examDetail.departmentBreakdown.length} Departments
+                                </span>
+                            </div>
+                            <div className="flex flex-wrap gap-2.5">
                                 {examDetail.departmentBreakdown.map((d, i) => (
-                                    <div key={i} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200/60">
-                                        <span className="text-sm font-bold text-indigo-700">{d.DepartmentCode}</span>
-                                        <span className="text-xs text-slate-400">•</span>
-                                        <span className="text-sm text-slate-600">{d.DepartmentName}</span>
-                                        <Chip size="sm" className="bg-indigo-100 text-indigo-700 font-bold ml-1">{d.count}</Chip>
+                                    <div 
+                                        key={i} 
+                                        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50/90 border border-slate-200/70 hover:bg-indigo-50/50 hover:border-indigo-200 transition-all text-xs"
+                                    >
+                                        <span className="font-extrabold text-indigo-700">{d.DepartmentCode}</span>
+                                        <span className="text-slate-300">•</span>
+                                        <span className="font-semibold text-slate-600 max-w-[200px] truncate" title={d.DepartmentName}>{d.DepartmentName}</span>
+                                        <span className="ml-1 px-2 py-0.5 rounded-lg bg-indigo-100/80 text-indigo-700 font-extrabold text-[11px]">
+                                            {d.count}
+                                        </span>
                                     </div>
                                 ))}
                             </div>
@@ -288,38 +306,55 @@ const InternalExamDetailPage: React.FC = () => {
                     </Card>
                 )}
 
-                {/* ── Student List ── */}
-                <Card className="bg-white border border-slate-200/60 shadow-sm rounded-2xl">
-                    <CardBody className="p-6">
-                        {/* Student List Header */}
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-                                <Users size={20} className="text-indigo-600" />
-                                Mapped Students
-                                <Chip size="sm" className="bg-indigo-50 text-indigo-700 font-bold ml-2">{students.length}</Chip>
-                            </h3>
-                            <div className="flex items-center gap-3">
-                                <div className="relative w-64">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                {/* ── Student List Section ── */}
+                <Card className="bg-white border border-slate-200/70 shadow-xs rounded-2xl overflow-hidden">
+                    <CardBody className="p-5 sm:p-6 space-y-5">
+                        {/* Header Row: Title & Actions */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                                    <Users size={18} />
+                                </div>
+                                <h3 className="text-lg font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                                    Mapped Students
+                                    <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 font-extrabold text-xs">
+                                        {students.length}
+                                    </span>
+                                </h3>
+                            </div>
+
+                            <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+                                {/* Single Clean Search Input */}
+                                <div className="w-full sm:w-64">
                                     <Input
                                         placeholder="Search students..."
                                         value={searchQuery}
                                         onValueChange={setSearchQuery}
+                                        isClearable
+                                        onClear={() => setSearchQuery('')}
+                                        startContent={<Search size={16} className="text-slate-400 shrink-0 mr-1" />}
                                         classNames={{
-                                            inputWrapper: 'bg-slate-50 border border-slate-200 rounded-xl h-10 pl-9',
-                                            input: 'text-sm font-medium',
+                                            inputWrapper: 'bg-slate-50/80 border border-slate-200 rounded-xl h-10 shadow-none focus-within:bg-white focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/10 transition-all',
+                                            input: 'text-xs font-medium text-slate-800 placeholder:text-slate-400',
                                         }}
                                     />
                                 </div>
+
                                 <Tooltip content="Refresh student list">
-                                    <Button isIconOnly variant="flat" className="bg-slate-100 text-slate-600 rounded-xl" onPress={loadStudents}>
-                                        <RefreshCcw size={16} />
+                                    <Button 
+                                        isIconOnly 
+                                        variant="flat" 
+                                        className="bg-slate-100 text-slate-600 hover:text-slate-900 rounded-xl h-10 w-10 shrink-0" 
+                                        onPress={loadStudents}
+                                    >
+                                        <RefreshCcw size={15} />
                                     </Button>
                                 </Tooltip>
+
                                 {students.length > 0 && (
                                     <Button
                                         variant="flat"
-                                        className="bg-red-50 text-red-600 font-bold rounded-xl h-10"
+                                        className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold rounded-xl h-10 px-3.5 text-xs transition-all shrink-0"
                                         startContent={<Trash2 size={14} />}
                                         onPress={() => setShowClearConfirm(true)}
                                     >
@@ -333,23 +368,23 @@ const InternalExamDetailPage: React.FC = () => {
                         {studentsLoading ? (
                             <div className="py-16 flex flex-col items-center gap-3">
                                 <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-                                <p className="text-slate-400 text-sm">Loading students...</p>
+                                <p className="text-slate-400 text-sm font-medium">Loading mapped students...</p>
                             </div>
                         ) : filteredStudents.length === 0 ? (
-                            <div className="py-16 text-center">
-                                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-5">
-                                    <Users className="w-10 h-10 text-slate-300" />
+                            <div className="py-16 text-center bg-slate-50/50 rounded-2xl border border-slate-100">
+                                <div className="w-16 h-16 bg-white border border-slate-200/80 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xs">
+                                    <Users className="w-8 h-8 text-slate-400" />
                                 </div>
-                                <h3 className="text-slate-800 font-bold text-lg mb-2">
-                                    {searchQuery ? 'No students match your search' : 'No Students Mapped'}
+                                <h3 className="text-slate-800 font-extrabold text-base mb-1">
+                                    {searchQuery ? 'No matching students found' : 'No Students Mapped'}
                                 </h3>
-                                <p className="text-slate-400 text-sm mb-6">
-                                    {searchQuery ? 'Try different search criteria' : 'Import an Excel file to map students to this exam.'}
+                                <p className="text-slate-400 text-xs mb-5 max-w-sm mx-auto">
+                                    {searchQuery ? 'Try clearing or updating your search query.' : 'Use Auto Register or Import Students to add students.'}
                                 </p>
                                 {!searchQuery && (
                                     <Button
-                                        className="bg-indigo-600 text-white font-bold rounded-xl shadow-md"
-                                        startContent={<Upload size={16} />}
+                                        className="bg-indigo-600 text-white font-bold rounded-xl h-10 px-5 text-xs shadow-xs"
+                                        startContent={<Upload size={15} />}
                                         onPress={() => { setShowImportModal(true); setImportResult(null); setSelectedFile(null); }}
                                     >
                                         Import Students
@@ -357,52 +392,60 @@ const InternalExamDetailPage: React.FC = () => {
                                 )}
                             </div>
                         ) : (
-                            <div className="overflow-x-auto rounded-xl border border-slate-200/60">
-                                <table className="w-full text-sm">
+                            <div className="overflow-x-auto rounded-xl border border-slate-200/70 shadow-xs">
+                                <table className="w-full text-xs text-left">
                                     <thead>
-                                        <tr className="bg-slate-50/80 border-b border-slate-200/60">
-                                            <th className="text-left px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">#</th>
-                                            <th className="text-left px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Register No / Roll</th>
-                                            <th className="text-left px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Name</th>
-                                            <th className="text-left px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Department</th>
-                                            <th className="text-left px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Program</th>
-                                            <th className="text-left px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Sem</th>
-                                            <th className="text-left px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Batch</th>
-                                            <th className="text-center px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Method</th>
-                                            <th className="text-center px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Action</th>
+                                        <tr className="bg-slate-50 border-b border-slate-200/70 text-slate-500 uppercase tracking-wider text-[11px] font-black">
+                                            <th className="px-4 py-3.5 w-12 text-center">#</th>
+                                            <th className="px-4 py-3.5">Register No / Roll</th>
+                                            <th className="px-4 py-3.5">Name</th>
+                                            <th className="px-4 py-3.5">Department</th>
+                                            <th className="px-4 py-3.5">Program</th>
+                                            <th className="px-4 py-3.5">Sem</th>
+                                            <th className="px-4 py-3.5">Batch</th>
+                                            <th className="px-4 py-3.5 text-center">Method</th>
+                                            <th className="px-4 py-3.5 text-center w-20">Action</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
+                                    <tbody className="divide-y divide-slate-100 bg-white">
                                         {filteredStudents.map((s, i) => (
-                                            <tr key={s.internalStudentId} className="border-b border-slate-100/80 hover:bg-indigo-50/30 transition-colors">
-                                                <td className="px-5 py-3 text-slate-400 font-medium">{i + 1}</td>
-                                                <td className="px-5 py-3 font-bold text-indigo-700">
-                                                    <div>{s.registerNumber}</div>
+                                            <tr key={s.internalStudentId} className="hover:bg-indigo-50/20 transition-colors">
+                                                <td className="px-4 py-3 text-center text-slate-400 font-bold">{i + 1}</td>
+                                                <td className="px-4 py-3">
+                                                    <div className="font-extrabold text-indigo-700 text-xs">{s.registerNumber}</div>
                                                     {(s.rollNumber || s.division) && (
-                                                        <div className="text-[0.75rem] text-slate-500 font-medium">
-                                                            {s.rollNumber ? <>Roll No: <span className="text-slate-900 font-bold">{s.rollNumber}</span></> : null}
+                                                        <div className="text-[11px] text-slate-400 font-medium mt-0.5">
+                                                            {s.rollNumber ? <>Roll No: <span className="text-slate-700 font-bold">{s.rollNumber}</span></> : null}
                                                             {s.rollNumber && s.division ? ' • ' : null}
-                                                            {s.division ? <>Div <span className="text-slate-900 font-bold">{s.division}</span></> : null}
+                                                            {s.division ? <>Div <span className="text-slate-700 font-bold">{s.division}</span></> : null}
                                                         </div>
                                                     )}
                                                 </td>
-                                                <td className="px-5 py-3 font-semibold text-slate-900">{s.fullName}</td>
-                                                <td className="px-5 py-3">
-                                                    <Chip size="sm" className="bg-slate-100 text-slate-700 font-bold">{s.departmentCode || '-'}</Chip>
+                                                <td className="px-4 py-3 font-bold text-slate-900">{s.fullName}</td>
+                                                <td className="px-4 py-3">
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-extrabold text-[10px] border border-slate-200/60">
+                                                        {s.departmentCode || '-'}
+                                                    </span>
                                                 </td>
-                                                <td className="px-5 py-3 text-slate-600">{s.program || '-'}</td>
-                                                <td className="px-5 py-3 text-slate-600 font-medium">{s.semester || '-'}</td>
-                                                <td className="px-5 py-3 text-slate-600">{s.batch || s.batchYear || '-'}</td>
-                                                <td className="px-5 py-3 text-center">
-                                                    <Chip size="sm" variant="flat" color={s.registrationMethod === 'EXCEL' ? 'success' : 'primary'} className="font-extrabold text-[0.65rem]">
+                                                <td className="px-4 py-3 text-slate-600 font-medium">{s.program || '-'}</td>
+                                                <td className="px-4 py-3 text-slate-600 font-bold">{s.semester || '-'}</td>
+                                                <td className="px-4 py-3 text-slate-600 font-medium">{s.batch || s.batchYear || '-'}</td>
+                                                <td className="px-4 py-3 text-center">
+                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${
+                                                        s.registrationMethod === 'EXCEL' 
+                                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                                                            : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                                    }`}>
                                                         {s.registrationMethod || 'AUTO'}
-                                                    </Chip>
+                                                    </span>
                                                 </td>
-                                                <td className="px-5 py-3 text-center">
+                                                <td className="px-4 py-3 text-center">
                                                     <Tooltip content="Remove from this exam">
                                                         <Button
-                                                            isIconOnly size="sm" variant="flat"
-                                                            className="bg-red-50 text-red-500 hover:bg-red-100 min-w-7 w-7 h-7 rounded-lg"
+                                                            isIconOnly 
+                                                            size="sm" 
+                                                            variant="flat"
+                                                            className="bg-rose-50 text-rose-500 hover:bg-rose-600 hover:text-white transition-all w-7 h-7 min-w-7 rounded-lg"
                                                             onPress={() => handleRemoveStudent(s.internalStudentId, s.registerNumber)}
                                                         >
                                                             <X size={14} />

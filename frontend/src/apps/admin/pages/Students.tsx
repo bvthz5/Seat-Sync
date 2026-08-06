@@ -10,7 +10,7 @@ import {
     Search, FileSpreadsheet, Pencil, Trash2, AlertTriangle, 
     GraduationCap, BookOpen, FileDown, Users, 
     MoreVertical, CheckCircle2, ShieldCheck, Mail, Phone,
-    Eye, X, Plus, UserCircle, Key, KeyRound
+    Eye, X, Plus, UserCircle, Key, KeyRound, ChevronDown
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import api from '../../../services/api';
@@ -437,11 +437,49 @@ const Students: React.FC = () => {
     };
 
     // Calculate active filters
+    // Calculate active filters
     const activeFiltersCount = Object.values(filters).filter(Boolean).length;
     const clearFilters = () => {
         setFilters({ dept: "", program: "", semester: "", status: "", source: "", batch: "" });
         setPage(1);
     };
+
+    // Deduplicated filter options
+    const uniqueDepartments = React.useMemo(() => {
+        const map = new Map();
+        (departments || []).forEach(d => {
+            const id = d?.DepartmentID?.toString();
+            if (id && !map.has(id)) {
+                map.set(id, d);
+            }
+        });
+        return Array.from(map.values());
+    }, [departments]);
+
+    const uniquePrograms = React.useMemo(() => {
+        const map = new Map();
+        (programs || []).forEach(p => {
+            const id = p?.ProgramID?.toString();
+            if (id && !map.has(id)) {
+                map.set(id, p);
+            }
+        });
+        return Array.from(map.values());
+    }, [programs]);
+
+    const uniqueBatchYears = React.useMemo(() => {
+        const set = new Set<number>();
+        (batchYears || []).forEach(y => {
+            if (y && !isNaN(Number(y))) set.add(Number(y));
+        });
+        if (set.size === 0) {
+            const currentY = new Date().getFullYear();
+            for (let i = 0; i < 8; i++) set.add(currentY - i);
+        }
+        return Array.from(set).sort((a, b) => b - a);
+    }, [batchYears]);
+
+    const uniqueSemestersList = React.useMemo(() => [1, 2, 3, 4, 5, 6, 7, 8], []);
 
     // Table Status Color mapping
     const getStatusColor = (status?: string) => {
@@ -466,39 +504,39 @@ const Students: React.FC = () => {
 
     const TopSummaryCards = () => (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-            <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-5 text-white shadow-lg shadow-blue-500/20 relative overflow-hidden group">
+            <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-900 rounded-2xl p-5 text-white shadow-lg shadow-blue-500/20 relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-4 opacity-20 transform group-hover:scale-110 transition-transform"><Users size={48}/></div>
-                <p className="text-blue-100 text-sm font-medium">Total Students</p>
+                <p className="text-blue-100 font-bold text-xs uppercase tracking-wider">Total Students</p>
                 <div className="mt-2 flex items-baseline gap-2">
-                    <h3 className="text-3xl font-bold">{stats.totalDatabaseCount}</h3>
+                    <h3 className="text-3xl font-black text-white">{stats.totalDatabaseCount}</h3>
                 </div>
             </div>
-            <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-2xl p-5 text-white shadow-lg shadow-emerald-500/20 relative overflow-hidden group">
+            <div className="bg-gradient-to-br from-emerald-500 via-teal-600 to-emerald-800 rounded-2xl p-5 text-white shadow-lg shadow-emerald-500/20 relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-4 opacity-20 transform group-hover:scale-110 transition-transform"><CheckCircle2 size={48}/></div>
-                <p className="text-emerald-100 text-sm font-medium">Active Students</p>
+                <p className="text-emerald-100 font-bold text-xs uppercase tracking-wider">Active Students</p>
                 <div className="mt-2 flex items-baseline gap-2">
-                    <h3 className="text-3xl font-bold">{stats.activeStudents}</h3>
+                    <h3 className="text-3xl font-black text-white">{stats.activeStudents}</h3>
                 </div>
             </div>
-            <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-5 text-white shadow-lg shadow-amber-500/20 relative overflow-hidden group">
+            <div className="bg-gradient-to-br from-amber-500 via-orange-600 to-amber-800 rounded-2xl p-5 text-white shadow-lg shadow-amber-500/20 relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-4 opacity-20 transform group-hover:scale-110 transition-transform"><AlertTriangle size={48}/></div>
-                <p className="text-amber-100 text-sm font-medium">Incomplete Profiles</p>
+                <p className="text-amber-100 font-bold text-xs uppercase tracking-wider">Incomplete Profiles</p>
                 <div className="mt-2 flex items-baseline gap-2">
-                    <h3 className="text-3xl font-bold">{stats.incompleteProfiles}</h3>
+                    <h3 className="text-3xl font-black text-white">{stats.incompleteProfiles}</h3>
                 </div>
             </div>
-            <div className="bg-gradient-to-br from-purple-500 to-purple-700 rounded-2xl p-5 text-white shadow-lg shadow-purple-500/20 relative overflow-hidden group">
+            <div className="bg-gradient-to-br from-purple-600 via-violet-700 to-purple-900 rounded-2xl p-5 text-white shadow-lg shadow-purple-500/20 relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-4 opacity-20 transform group-hover:scale-110 transition-transform"><UserCircle size={48}/></div>
-                <p className="text-purple-100 text-sm font-medium">Self Registered</p>
+                <p className="text-purple-100 font-bold text-xs uppercase tracking-wider">Self Registered</p>
                 <div className="mt-2 flex items-baseline gap-2">
-                    <h3 className="text-3xl font-bold">{stats.selfRegistered}</h3>
+                    <h3 className="text-3xl font-black text-white">{stats.selfRegistered}</h3>
                 </div>
             </div>
-            <div className="bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-2xl p-5 text-white shadow-lg shadow-indigo-500/20 relative overflow-hidden group">
+            <div className="bg-gradient-to-br from-indigo-600 via-blue-700 to-indigo-900 rounded-2xl p-5 text-white shadow-lg shadow-indigo-500/20 relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-4 opacity-20 transform group-hover:scale-110 transition-transform"><ShieldCheck size={48}/></div>
-                <p className="text-indigo-100 text-sm font-medium">Admin Added</p>
+                <p className="text-indigo-100 font-bold text-xs uppercase tracking-wider">Admin Added</p>
                 <div className="mt-2 flex items-baseline gap-2">
-                    <h3 className="text-3xl font-bold">{stats.adminAdded}</h3>
+                    <h3 className="text-3xl font-black text-white">{stats.adminAdded}</h3>
                 </div>
             </div>
         </div>
@@ -508,7 +546,7 @@ const Students: React.FC = () => {
         <div className="relative max-w-[1600px] mx-auto space-y-6 pb-10 min-h-screen">
 
             {/* Header Title with Actions */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                 <div>
                     <h1 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
                         <GraduationCap className="text-indigo-600" size={24}/> University Students
@@ -517,30 +555,13 @@ const Students: React.FC = () => {
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                     <Button 
-                        color="danger" 
-                        variant="shadow" 
-                        startContent={<Trash2 size={18}/>} 
-                        onPress={() => setIsDeleteAllOpen(true)} 
-                        className="font-black rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-red-200"
+                        color="primary" 
+                        variant="shadow"
+                        startContent={<Plus size={18}/>} 
+                        onPress={() => setIsAddOpen(true)} 
+                        className="font-black rounded-xl bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-200"
                     >
-                        Delete All
-                    </Button>
-                    <Button 
-                        variant="shadow" 
-                        startContent={<FileDown size={18}/>} 
-                        onPress={handleExport}
-                        className="font-black rounded-xl bg-gradient-to-r from-slate-700 to-slate-900 text-white shadow-slate-200"
-                    >
-                        Export
-                    </Button>
-                    <Button 
-                        variant="shadow" 
-                        color="warning" 
-                        startContent={<KeyRound size={18}/>} 
-                        onPress={handleExportCredentials}
-                        className="font-black rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-orange-200"
-                    >
-                        Passwords
+                        Add Student
                     </Button>
                     <Button 
                         color="primary" 
@@ -550,6 +571,15 @@ const Students: React.FC = () => {
                         className="font-black rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-emerald-200"
                     >
                         Import Data
+                    </Button>
+                    <Button 
+                        variant="shadow" 
+                        color="warning" 
+                        startContent={<KeyRound size={18}/>} 
+                        onPress={handleExportCredentials}
+                        className="font-black rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-orange-200"
+                    >
+                        Passwords
                     </Button>
                     <Button 
                         color="secondary" 
@@ -570,13 +600,21 @@ const Students: React.FC = () => {
                         Sync Semesters
                     </Button>
                     <Button 
-                        color="primary" 
-                        variant="shadow"
-                        startContent={<Plus size={18}/>} 
-                        onPress={() => setIsAddOpen(true)} 
-                        className="font-black rounded-xl bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-200"
+                        variant="shadow" 
+                        startContent={<FileDown size={18}/>} 
+                        onPress={handleExport}
+                        className="font-black rounded-xl bg-gradient-to-r from-slate-700 to-slate-900 text-white shadow-slate-200"
                     >
-                        Add Student
+                        Export
+                    </Button>
+                    <Button 
+                        color="danger" 
+                        variant="shadow" 
+                        startContent={<Trash2 size={18}/>} 
+                        onPress={() => setIsDeleteAllOpen(true)} 
+                        className="font-black rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-red-200"
+                    >
+                        Delete All
                     </Button>
                 </div>
             </div>
@@ -585,25 +623,31 @@ const Students: React.FC = () => {
             <TopSummaryCards />
 
             {/* Controls Bar: Search & Advanced Filters */}
-            <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-4">
                 <div className="flex flex-col lg:flex-row justify-between gap-4">
-                    <div className="flex-1 max-w-xl">
-                        <Input
+                    <div className="flex-1 max-w-xl h-11 bg-white border border-slate-200 shadow-sm rounded-xl flex items-center overflow-hidden focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-500/10 transition-all">
+                        <div className="px-3.5 py-2.5 bg-slate-50 border-r border-slate-200/90 flex items-center justify-center shrink-0 h-full">
+                            <Search size={16} className="text-slate-400" />
+                        </div>
+                        <input
+                            type="text"
                             id="student-search-enhanced"
                             name="student-search-enhanced"
                             autoComplete="off"
-                            aria-label="Search Students"
-                            classNames={{
-                                inputWrapper: "bg-gray-50 hover:bg-gray-100 focus-within:bg-white border focus-within:border-blue-500 transition-all rounded-xl h-11",
-                                input: "text-sm",
-                            }}
                             placeholder="Search by student name, register number, or email..."
-                            startContent={<Search size={18} className="text-gray-400" />}
                             value={searchQuery}
-                            onValueChange={(val: string) => { setSearchQuery(val); setPage(1); }}
-                            isClearable
-                            onClear={() => setSearchQuery("")}
+                            onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+                            className="w-full !h-full !px-3.5 !py-0 !bg-transparent !border-none !shadow-none !rounded-none !outline-none !ring-0 text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:!outline-none focus:!ring-0 focus:!border-none"
                         />
+                        {searchQuery && (
+                            <button 
+                                type="button"
+                                onClick={() => setSearchQuery("")}
+                                className="text-slate-400 hover:text-slate-600 pr-3.5 pl-1 h-full flex items-center justify-center transition-colors shrink-0"
+                            >
+                                <X size={14} />
+                            </button>
+                        )}
                     </div>
                     {activeFiltersCount > 0 && (
                         <div className="flex items-center">
@@ -614,6 +658,7 @@ const Students: React.FC = () => {
                                 onPress={clearFilters}
                                 aria-label="Clear Filters"
                                 startContent={<X size={14} />}
+                                className="font-bold text-xs text-rose-600 hover:bg-rose-50 rounded-xl"
                             >
                                 Clear Filters ({activeFiltersCount})
                             </Button>
@@ -622,193 +667,127 @@ const Students: React.FC = () => {
                 </div>
 
                 {/* Filter Dropdowns Row */}
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                    <Select 
-                        id="filter-dept"
-                        name="filter-dept"
-                        aria-label="Filter Department"
-                        placeholder="Department" 
-                        selectedKeys={filters.dept ? [filters.dept] : []} 
-                        onSelectionChange={handleSelectChange('dept')}
-                        variant="flat" 
-                        classNames={{ 
-                            trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10",
-                            popoverContent: "bg-white shadow-xl border border-gray-200 rounded-xl"
-                        }}
-                        popoverProps={{
-                            classNames: { content: "bg-white p-1 border border-gray-200 shadow-xl rounded-xl z-50 text-gray-800" }
-                        }}
-                        size="sm"
-                        disableAnimation
-                    >
-                        {departments.map(d => <SelectItem key={d.DepartmentID?.toString()} textValue={d.DepartmentCode || d.DepartmentName}>{d.DepartmentCode || d.DepartmentName}</SelectItem>)}
-                    </Select>
-                    <Select 
-                        id="filter-program"
-                        name="filter-program"
-                        aria-label="Filter Program"
-                        placeholder="Program" 
-                        selectedKeys={filters.program ? [filters.program] : []} 
-                        onSelectionChange={handleSelectChange('program')}
-                        variant="flat" 
-                        classNames={{ 
-                            trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10",
-                            popoverContent: "bg-white shadow-xl border border-gray-200 rounded-xl"
-                        }}
-                        popoverProps={{
-                            classNames: { content: "bg-white p-1 border border-gray-200 shadow-xl rounded-xl z-50 text-gray-800" }
-                        }}
-                        size="sm"
-                        disableAnimation
-                    >
-                        {programs.map(p => <SelectItem key={p.ProgramID?.toString()} textValue={p.ProgramName}>{p.ProgramName}</SelectItem>)}
-                    </Select>
-                    <Select 
-                        id="filter-batch"
-                        name="filter-batch"
-                        aria-label="Filter Batch Year"
-                        placeholder="Batch Year" 
-                        selectedKeys={filters.batch ? [filters.batch] : []} 
-                        onSelectionChange={handleSelectChange('batch')}
-                        variant="flat" 
-                        classNames={{ 
-                            trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10",
-                            popoverContent: "bg-white shadow-xl border border-gray-200 rounded-xl"
-                        }}
-                        popoverProps={{
-                            classNames: { content: "bg-white p-1 border border-gray-200 shadow-xl rounded-xl z-50 text-gray-800" }
-                        }}
-                        size="sm"
-                        disableAnimation
-                    >
-                        {/* Dynamic batch years from API */}
-                        {batchYears.length > 0 ? (
-                            batchYears.map(year => (
-                                <SelectItem key={year.toString()} textValue={year.toString()}>
-                                    {year.toString()}
-                                </SelectItem>
-                            ))
-                        ) : (
-                            <SelectItem key="loading" isDisabled>Loading...</SelectItem>
-                        )}
-                    </Select>
-                    <Select 
-                        id="filter-semester"
-                        name="filter-semester"
-                        aria-label="Filter Semester"
-                        placeholder="Semester" 
-                        selectedKeys={filters.semester ? [filters.semester] : []} 
-                        onSelectionChange={handleSelectChange('semester')}
-                        variant="flat" 
-                        classNames={{ 
-                            trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10",
-                            popoverContent: "bg-white shadow-xl border border-gray-200 rounded-xl"
-                        }}
-                        popoverProps={{
-                            classNames: { content: "bg-white p-1 border border-gray-200 shadow-xl rounded-xl z-50 text-gray-800" }
-                        }}
-                        size="sm"
-                        disableAnimation
-                    >
-                        {semesters.map(s => (
-                            <SelectItem key={s.SemesterID.toString()} textValue={`Semester ${s.SemesterNumber}`}>
-                                Semester {s.SemesterNumber}
-                            </SelectItem>
-                        ))}
-                    </Select>
-                    <Select 
-                        id="filter-status"
-                        name="filter-status"
-                        aria-label="Filter Status"
-                        placeholder="Status" 
-                        selectedKeys={filters.status ? [filters.status] : []} 
-                        onSelectionChange={handleSelectChange('status')}
-                        variant="flat" 
-                        classNames={{ 
-                            trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10",
-                            popoverContent: "bg-white shadow-xl border border-gray-200 rounded-xl"
-                        }}
-                        popoverProps={{
-                            classNames: { content: "bg-white p-1 border border-gray-200 shadow-xl rounded-xl z-50 text-gray-800" }
-                        }}
-                        size="sm"
-                        disableAnimation
-                    >
-                        {statusOptions.map(s => (
-                            <SelectItem key={s.value} textValue={s.label}>
-                                <div className="flex items-center gap-2">
-                                    <div className={`w-2 h-2 rounded-full bg-${s.color}-500`}></div>
-                                    {s.label}
-                                </div>
-                            </SelectItem>
-                        ))}
-                    </Select>
-                    <Select 
-                        id="filter-source"
-                        name="filter-source"
-                        aria-label="Filter Source"
-                        placeholder="Source" 
-                        selectedKeys={filters.source ? [filters.source] : []} 
-                        onSelectionChange={handleSelectChange('source')}
-                        variant="flat" 
-                        classNames={{ 
-                            trigger: "bg-gray-50 hover:bg-gray-100 rounded-lg h-10 min-h-10",
-                            popoverContent: "bg-white shadow-xl border border-gray-200 rounded-xl"
-                        }}
-                        popoverProps={{
-                            classNames: { content: "bg-white p-1 border border-gray-200 shadow-xl rounded-xl z-50 text-gray-800" }
-                        }}
-                        size="sm"
-                        disableAnimation
-                    >
-                        {sourceOptions.map(source => (
-                            <SelectItem key={source.value} textValue={source.label}>
-                                {source.label}
-                            </SelectItem>
-                        ))}
-                    </Select>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <div className="relative flex items-center">
+                        <select
+                            id="filter-dept"
+                            name="filter-dept"
+                            value={filters.dept}
+                            onChange={(e) => handleFilterChange('dept', e.target.value)}
+                            className="w-full h-10 bg-slate-50/80 border border-slate-200/90 hover:border-indigo-300 focus:border-indigo-600 focus:bg-white text-xs font-semibold text-slate-700 px-3 pr-8 rounded-xl outline-none transition-all cursor-pointer appearance-none"
+                        >
+                            <option value="" className="text-slate-400">All Departments</option>
+                            {uniqueDepartments.map(d => (
+                                <option key={d.DepartmentID} value={d.DepartmentID?.toString()}>{d.DepartmentCode || d.DepartmentName}</option>
+                            ))}
+                        </select>
+                        <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+                    </div>
+
+                    <div className="relative flex items-center">
+                        <select
+                            id="filter-program"
+                            name="filter-program"
+                            value={filters.program}
+                            onChange={(e) => handleFilterChange('program', e.target.value)}
+                            className="w-full h-10 bg-slate-50/80 border border-slate-200/90 hover:border-indigo-300 focus:border-indigo-600 focus:bg-white text-xs font-semibold text-slate-700 px-3 pr-8 rounded-xl outline-none transition-all cursor-pointer appearance-none"
+                        >
+                            <option value="" className="text-slate-400">All Programs</option>
+                            {uniquePrograms.map(p => (
+                                <option key={p.ProgramID} value={p.ProgramID?.toString()}>{p.ProgramName}</option>
+                            ))}
+                        </select>
+                        <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+                    </div>
+
+                    <div className="relative flex items-center">
+                        <select
+                            id="filter-batch"
+                            name="filter-batch"
+                            value={filters.batch}
+                            onChange={(e) => handleFilterChange('batch', e.target.value)}
+                            className="w-full h-10 bg-slate-50/80 border border-slate-200/90 hover:border-indigo-300 focus:border-indigo-600 focus:bg-white text-xs font-semibold text-slate-700 px-3 pr-8 rounded-xl outline-none transition-all cursor-pointer appearance-none"
+                        >
+                            <option value="" className="text-slate-400">All Batches</option>
+                            {uniqueBatchYears.map(year => (
+                                <option key={year} value={year.toString()}>Batch {year}</option>
+                            ))}
+                        </select>
+                        <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+                    </div>
+
+                    <div className="relative flex items-center">
+                        <select
+                            id="filter-semester"
+                            name="filter-semester"
+                            value={filters.semester}
+                            onChange={(e) => handleFilterChange('semester', e.target.value)}
+                            className="w-full h-10 bg-slate-50/80 border border-slate-200/90 hover:border-indigo-300 focus:border-indigo-600 focus:bg-white text-xs font-semibold text-slate-700 px-3 pr-8 rounded-xl outline-none transition-all cursor-pointer appearance-none"
+                        >
+                            <option value="" className="text-slate-400">All Semesters</option>
+                            {uniqueSemestersList.map(semNum => (
+                                <option key={semNum} value={semNum.toString()}>Semester {semNum}</option>
+                            ))}
+                        </select>
+                        <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+                    </div>
+
+                    <div className="relative flex items-center">
+                        <select
+                            id="filter-status"
+                            name="filter-status"
+                            value={filters.status}
+                            onChange={(e) => handleFilterChange('status', e.target.value)}
+                            className="w-full h-10 bg-slate-50/80 border border-slate-200/90 hover:border-indigo-300 focus:border-indigo-600 focus:bg-white text-xs font-semibold text-slate-700 px-3 pr-8 rounded-xl outline-none transition-all cursor-pointer appearance-none"
+                        >
+                            <option value="" className="text-slate-400">All Statuses</option>
+                            {statusOptions.map(s => (
+                                <option key={s.value} value={s.value}>{s.label}</option>
+                            ))}
+                        </select>
+                        <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+                    </div>
+
+                    <div className="relative flex items-center">
+                        <select
+                            id="filter-source"
+                            name="filter-source"
+                            value={filters.source}
+                            onChange={(e) => handleFilterChange('source', e.target.value)}
+                            className="w-full h-10 bg-slate-50/80 border border-slate-200/90 hover:border-indigo-300 focus:border-indigo-600 focus:bg-white text-xs font-semibold text-slate-700 px-3 pr-8 rounded-xl outline-none transition-all cursor-pointer appearance-none"
+                        >
+                            <option value="" className="text-slate-400">All Sources</option>
+                            {sourceOptions.map(source => (
+                                <option key={source.value} value={source.value}>{source.label}</option>
+                            ))}
+                        </select>
+                        <ChevronDown size={14} className="absolute right-2.5 text-slate-400 pointer-events-none" />
+                    </div>
                 </div>
             </div>
 
-            {/* Bulk Actions Header (Appears when selection exists) */}
-            {false && (
-                <div className="bg-blue-50 border border-blue-200 p-3 rounded-xl flex flex-wrap items-center justify-between gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
-                    <div className="flex items-center gap-3">
-                        <div className="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shadow-md">
-
-                        </div>
-                        <span className="text-blue-900 font-semibold text-sm">students selected</span>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Button size="sm" className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 font-medium" radius="md" startContent={<FileDown size={14}/>}>Export Selected</Button>
-                        <Button size="sm" className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 font-medium" radius="md">Assign Semester</Button>
-                        <Button size="sm" className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 font-medium" radius="md">Enable / Disable</Button>
-                        <Button size="sm" className="bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 font-medium" radius="md" startContent={<Trash2 size={14}/>} onPress={() => setIsDeleteOpen(true)}>Delete Selected</Button>
-                    </div>
-                </div>
-            )}
-
             {/* Main Table */}
-            <div className="bg-white rounded-xl border border-slate-200/70 shadow-sm overflow-hidden auto-scroll overflow-x-auto relative">
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden auto-scroll overflow-x-auto relative">
                 <Table
                     aria-label="Students Directory Table"
                     shadow="none"
                     classNames={{
                         wrapper: "p-0 rounded-none bg-transparent",
-                        th: "bg-slate-50/80 text-slate-500 font-bold text-[11px] uppercase tracking-wider h-11 border-b border-slate-200 px-6 z-10 sticky top-0",
-                        td: "py-3.5 border-b border-slate-100 group-last:border-none px-6",
-                        table: "min-w-[1000px] min-h-[400px]" // ensure responsive scroll
+                        th: "bg-slate-50/80 text-slate-500 font-extrabold text-[11px] uppercase tracking-wider h-11 border-b border-slate-200 px-5 z-10 sticky top-0",
+                        td: "py-3 border-b border-slate-100 group-last:border-none px-5",
+                        table: "min-w-[1000px] min-h-[400px]"
                     }}
                     bottomContent={
                         totalPages > 1 && (
-                            <div className="flex w-full justify-between items-center px-6 py-4 border-t border-gray-100 bg-gray-50/30">
-                                <span className="text-sm text-gray-500">Showing page {page} of {totalPages}</span>
+                            <div className="flex w-full justify-between items-center px-6 py-4 border-t border-slate-100 bg-slate-50/30">
+                                <span className="text-sm text-slate-500 font-medium">Showing page {page} of {totalPages}</span>
                                 <Pagination
                                     total={totalPages}
                                     page={page}
                                     onChange={setPage}
                                     color="primary"
                                     showControls
+                                    showShadow
                                     aria-label="Student Pagination"
                                     classNames={{
                                         cursor: "bg-blue-600 text-white font-bold shadow-md shadow-blue-600/20"
@@ -819,24 +798,24 @@ const Students: React.FC = () => {
                     }
                 >
                     <TableHeader>
-                        <TableColumn>STUDENT</TableColumn>
-                        <TableColumn>PROGRAM</TableColumn>
-                        <TableColumn>DEPARTMENT</TableColumn>
-                        <TableColumn>BATCH</TableColumn>
-                        <TableColumn>SEMESTER</TableColumn>
-                        <TableColumn>STATUS</TableColumn>
-                        <TableColumn align="center">ACTIONS</TableColumn>
+                        <TableColumn align="start" width={300} className="font-extrabold text-slate-500 uppercase tracking-wider text-xs text-left">Student</TableColumn>
+                        <TableColumn align="start" width={160} className="font-extrabold text-slate-500 uppercase tracking-wider text-xs text-left">Program</TableColumn>
+                        <TableColumn align="center" width={110} className="font-extrabold text-slate-500 uppercase tracking-wider text-xs text-center">Department</TableColumn>
+                        <TableColumn align="center" width={110} className="font-extrabold text-slate-500 uppercase tracking-wider text-xs text-center">Batch</TableColumn>
+                        <TableColumn align="center" width={110} className="font-extrabold text-slate-500 uppercase tracking-wider text-xs text-center">Semester</TableColumn>
+                        <TableColumn align="center" width={130} className="font-extrabold text-slate-500 uppercase tracking-wider text-xs text-center">Status</TableColumn>
+                        <TableColumn align="center" width={120} className="font-extrabold text-slate-500 uppercase tracking-wider text-xs text-center">Actions</TableColumn>
                     </TableHeader>
                     <TableBody
                         emptyContent={
                             <div className="flex flex-col items-center justify-center py-20 text-center">
-                                <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mb-4">
-                                    <Search size={28} className="text-blue-300" />
+                                <div className="w-16 h-16 rounded-full bg-indigo-50 flex items-center justify-center mb-4">
+                                    <Search size={28} className="text-indigo-300" />
                                 </div>
-                                <p className="text-lg font-semibold text-gray-800">No students found</p>
-                                <p className="text-sm text-gray-500 mt-1 max-w-sm mx-auto">We couldn't find any students matching your current search or filter criteria.</p>
+                                <p className="text-lg font-semibold text-slate-800">No students found</p>
+                                <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">We couldn't find any students matching your current search or filter criteria.</p>
                                 {(searchQuery || activeFiltersCount > 0) && (
-                                    <Button onPress={clearFilters} variant="flat" className="mt-4 font-medium" color="primary">Clear all filters</Button>
+                                    <Button onPress={clearFilters} variant="flat" className="mt-4 font-bold" color="primary">Clear all filters</Button>
                                 )}
                             </div>
                         }
@@ -845,100 +824,82 @@ const Students: React.FC = () => {
                         {students.map((item) => (
                             <TableRow key={item.StudentID} className="hover:bg-slate-50/60 transition-colors group cursor-pointer">
                                 {/* Student Info */}
-                                <TableCell>
-                                    <div className="flex items-center gap-3 w-full h-full py-2" onClick={(e) => { e.stopPropagation(); viewStudent(item); }}>
-                                        <div className="relative shrink-0">
-                                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 border border-slate-300 flex items-center justify-center text-slate-600 font-bold text-sm shadow-sm group-hover:scale-105 transition-transform">
-                                                {(item.User?.FullName || "U")[0].toUpperCase()}
-                                            </div>
-                                            <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white ${getStatusDot(item.Status)}`}></div>
+                                <TableCell className="text-left">
+                                    <div className="flex items-center gap-3 w-full py-1.5" onClick={(e) => { e.stopPropagation(); viewStudent(item); }}>
+                                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-blue-600 text-white flex items-center justify-center font-extrabold text-xs shadow-sm shrink-0">
+                                            {(item.User?.FullName || "U")[0].toUpperCase()}
                                         </div>
-                                        <div className="flex flex-col">
-                                            <p className="font-semibold text-gray-900 text-sm group-hover:text-blue-600 transition-colors">{item.User?.FullName || "Unknown"}</p>
+                                        <div className="flex flex-col min-w-0">
+                                            <p className="font-bold text-slate-900 text-xs truncate group-hover:text-indigo-600 transition-colors">
+                                                {item.User?.FullName || "Unknown"}
+                                            </p>
                                             <div className="flex items-center gap-2 mt-0.5">
-                                                <span className="font-mono text-[10px] text-blue-700 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded font-semibold tracking-wider">
+                                                <span className="font-mono text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded font-bold tracking-wider">
                                                     {item.RegisterNumber}
                                                 </span>
-                                                <span className="text-xs text-gray-500 truncate max-w-[120px] lg:max-w-xs">{item.User?.Email}</span>
+                                                {item.User?.Email && (
+                                                    <span className="text-[11px] text-slate-400 truncate max-w-[150px]">{item.User?.Email}</span>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
                                 </TableCell>
                                 
                                 {/* Program */}
-                                <TableCell>
-                                    <div className="flex flex-col gap-2 w-full h-full py-2" onClick={(e) => { e.stopPropagation(); viewStudent(item); }}>
-                                        <p className="text-sm text-slate-800 font-semibold truncate max-w-[200px] leading-none" title={item.Program?.ProgramName}>{item.Program?.ProgramName || 'Unknown Program'}</p>
-                                    </div>
+                                <TableCell className="text-left font-semibold text-xs text-slate-700">
+                                    {item.Program?.ProgramName || 'Unknown Program'}
                                 </TableCell>
 
                                 {/* Department */}
-                                <TableCell>
-                                    <div className="flex w-full h-full py-2" onClick={(e) => { e.stopPropagation(); viewStudent(item); }}>
-                                        <Chip size="sm" variant="flat" className="bg-slate-100 text-slate-600 text-[10px] h-5 px-1.5 font-bold border border-slate-200 rounded-md" title={item.Department?.DepartmentName}>
-                                            {item.Department?.DepartmentCode || item.Department?.DepartmentName || 'N/A'}
+                                <TableCell className="text-center">
+                                    <div className="flex justify-center">
+                                        <Chip size="sm" variant="flat" className="bg-indigo-50 text-indigo-700 font-bold border border-indigo-100 text-xs">
+                                            {item.Department?.DepartmentCode || item.Department?.DepartmentName || '-'}
                                         </Chip>
                                     </div>
                                 </TableCell>
 
                                 {/* Batch */}
-                                <TableCell>
-                                    <div className="flex flex-col gap-2 min-w-[100px] w-full h-full py-2" onClick={(e) => { e.stopPropagation(); viewStudent(item); }}>
-                                        <div className="space-y-1">
-                                            <p className="text-sm font-bold text-slate-800">{item.BatchYear ? `Batch ${item.BatchYear}` : 'N/A'}</p>
-                                            {item.Program?.DurationYears && item.BatchYear && (
-                                                <p className="text-xs text-slate-500">
-                                                    Passout: <span className="font-semibold text-green-600">{item.BatchYear + item.Program.DurationYears}</span>
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
+                                <TableCell className="text-center font-bold text-xs text-slate-700">
+                                    {item.BatchYear ? `Batch ${item.BatchYear}` : '-'}
                                 </TableCell>
 
                                 {/* Semester */}
-                                <TableCell>
-                                    <div className="flex flex-col gap-2 min-w-[100px] w-full h-full py-2" onClick={(e) => { e.stopPropagation(); viewStudent(item); }}>
-                                        <p className="text-sm font-bold text-slate-800">Sem {item.CalculatedSemester || 'N/A'}</p>
-                                        <div className="flex items-center gap-2">
-                                            <Progress 
-                                                size="sm" 
-                                                radius="sm" 
-                                                aria-label={`${item.User?.FullName} progress`}
-                                                classNames={{
-                                                    base: "flex-1", 
-                                                    track: "bg-slate-100", 
-                                                    indicator: "bg-indigo-500"
-                                                }}
-                                                value={((item.CalculatedSemester || 0) / (item.MaxSemesters || 1)) * 100} 
-                                            />
-                                            <span className="text-[10px] font-semibold text-slate-600 min-w-[28px] text-right">
-                                                {Math.round(((item.CalculatedSemester || 0) / (item.MaxSemesters || 1)) * 100)}%
-                                            </span>
-                                        </div>
-                                    </div>
+                                <TableCell className="text-center">
+                                    <span className="inline-block px-2.5 py-1 rounded-md bg-slate-100 text-slate-800 font-black text-xs font-mono">
+                                        S{item.CalculatedSemester || item.Semester?.SemesterNumber || '-'}
+                                    </span>
                                 </TableCell>
 
                                 {/* Status */}
-                                <TableCell>
-                                    <div className="w-full h-full py-2" onClick={(e) => { e.stopPropagation(); viewStudent(item); }}>
-                                        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-semibold w-fit ${getStatusColor(item.Status)}`}>
-                                            <div className={`w-1.5 h-1.5 rounded-full ${getStatusDot(item.Status)}`}></div>
-                                            {item.Status}
+                                <TableCell className="text-center">
+                                    <div className="flex justify-center">
+                                        <div className={`
+                                            inline-flex items-center justify-center px-3 py-1 rounded-full text-[0.65rem] font-black uppercase tracking-widest shadow-sm border
+                                            ${
+                                                item.Status === 'Active' ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white border-emerald-400/50' :
+                                                item.Status === 'Incomplete' ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white border-amber-400/50' :
+                                                item.Status === 'Pending' ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white border-blue-400/50' :
+                                                item.Status === 'Disabled' ? 'bg-gradient-to-r from-rose-500 to-red-600 text-white border-rose-400/50' :
+                                                'bg-slate-100 text-slate-500 border-slate-200'
+                                            }
+                                        `}>
+                                            {item.Status || 'UNKNOWN'}
                                         </div>
                                     </div>
                                 </TableCell>
 
                                 {/* Actions */}
-                                <TableCell>
-                                    <div className="flex justify-center items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                        <Tooltip content="Quick View">
-                                            <Button isIconOnly size="sm" variant="light" onPress={() => viewStudent(item)} className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50/50">
-                                                <Eye size={18} />
+                                <TableCell className="text-center">
+                                    <div className="flex justify-center items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                        <Tooltip content="Quick View" delay={500}>
+                                            <Button isIconOnly size="sm" variant="light" onPress={() => viewStudent(item)}>
+                                                <Eye size={17} className="text-slate-500" />
                                             </Button>
                                         </Tooltip>
-                                        <Tooltip content="Edit Profile">
-                                            <Button isIconOnly size="sm" variant="light" onPress={() => handleEdit(item)} className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50/50 hidden md:flex">
-                                                <Pencil size={16} />
+                                        <Tooltip content="Edit Profile" delay={500}>
+                                            <Button isIconOnly size="sm" variant="light" onPress={() => handleEdit(item)}>
+                                                <Pencil size={16} className="text-slate-500" />
                                             </Button>
                                         </Tooltip>
                                         <Dropdown 

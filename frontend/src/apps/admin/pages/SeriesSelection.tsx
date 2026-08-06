@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardBody, Button, Input, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Tooltip } from "@heroui/react";
-import { BookOpen, Plus, CheckCircle, Search, Sparkles, Grid3x3, Tag, Edit2, Trash2, GraduationCap, ArrowRight, FileText, CalendarDays, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Card, CardBody, Button, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Tooltip } from "@heroui/react";
+import { BookOpen, Plus, CheckCircle, Search, Sparkles, Grid3x3, Tag, Edit2, Trash2, GraduationCap, ArrowRight, FileText, CalendarDays, ShieldCheck, AlertTriangle, X } from "lucide-react";
 import { toast } from 'react-hot-toast';
 import { SeriesService } from '../services/seriesService';
 
@@ -235,21 +235,24 @@ const SeriesSelection: React.FC = () => {
                     </div>
                 )}
 
-                {/* Search Bar mapped to existing searchQuery state */}
+                {/* Clean Single Search Bar */}
                 <div className="mb-8">
-                    <div className="relative max-w-sm">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                        <Input
+                    <div className="flex items-center w-full max-w-sm h-11 rounded-xl border border-slate-200/90 bg-white focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-100 transition-all overflow-hidden shadow-xs">
+                        <div className="w-10 h-full flex items-center justify-center text-slate-400 shrink-0">
+                            <Search size={16} />
+                        </div>
+                        <input
+                            type="text"
                             placeholder="Search series..."
                             value={searchQuery}
-                            onValueChange={setSearchQuery}
-                            size="lg"
-                            className="pl-12"
-                            classNames={{
-                                inputWrapper: "bg-white border border-slate-200 hover:border-slate-300 focus-within:!border-indigo-500 transition-all rounded-xl shadow-sm h-12",
-                                input: "placeholder:text-slate-400 font-medium text-slate-800"
-                            }}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full h-full pr-3 text-xs font-semibold text-slate-800 placeholder:text-slate-400 bg-transparent outline-none border-none ring-0 focus:ring-0"
                         />
+                        {searchQuery && (
+                            <button onClick={() => setSearchQuery('')} className="pr-3 text-slate-400 hover:text-slate-600">
+                                <X size={14} />
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -443,7 +446,7 @@ const SeriesSelection: React.FC = () => {
                     <ModalBody>
                         {createStep === 1 ? (
                             <div className="space-y-4">
-                                <label className="block text-sm font-bold text-slate-700">1. Select Event Type</label>
+                                <label className="block text-sm font-bold text-slate-700">Select Event Type</label>
                                 <div className="grid grid-cols-2 gap-4">
                                     <button
                                         onClick={() => setNewSeriesType('Internal')}
@@ -465,21 +468,20 @@ const SeriesSelection: React.FC = () => {
                             </div>
                         ) : (
                             <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-                                <label className="block text-sm font-bold text-slate-700">2. Enter Series Name</label>
-                                <Input
-                                    autoFocus
-                                    placeholder={newSeriesType === 'Internal' ? "e.g., S1 Internal Oct 2025" : "e.g., Fall 2024 Finals"}
-                                    value={newSeriesName}
-                                    onValueChange={setNewSeriesName}
-                                    size="lg"
-                                    classNames={{
-                                        inputWrapper: "bg-slate-50 border border-slate-200 hover:border-slate-300 focus-within:!border-indigo-600 focus-within:!bg-white rounded-xl shadow-inner h-14 transition-all w-full flex items-center px-4",
-                                        input: "text-slate-900 font-bold text-base bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 shadow-none w-full"
-                                    }}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter' && newSeriesName) handleCreateSeries();
-                                    }}
-                                />
+                                <label className="block text-sm font-bold text-slate-700">Enter Series Name</label>
+                                <div className="flex items-center w-full h-12 rounded-xl border border-slate-200/90 bg-slate-50 focus-within:bg-white focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-100 transition-all overflow-hidden shadow-xs">
+                                    <input
+                                        type="text"
+                                        autoFocus
+                                        placeholder={newSeriesType === 'Internal' ? "e.g., S1 Internal Oct 2025" : "e.g., Fall 2024 Finals"}
+                                        value={newSeriesName}
+                                        onChange={(e) => setNewSeriesName(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && newSeriesName) handleCreateSeries();
+                                        }}
+                                        className="w-full h-full px-4 text-sm font-semibold text-slate-900 placeholder:text-slate-400 bg-transparent outline-none border-none ring-0 focus:ring-0"
+                                    />
+                                </div>
                             </div>
                         )}
                     </ModalBody>
@@ -525,16 +527,16 @@ const SeriesSelection: React.FC = () => {
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-sm font-bold text-slate-700 mb-2">Series Name</label>
-                                <Input
-                                    value={editSeriesName}
-                                    onChange={(e) => setEditSeriesName(e.target.value)}
-                                    placeholder="e.g., Spring 2024 Internals"
-                                    classNames={{
-                                        inputWrapper: "bg-slate-50 border border-slate-200 hover:border-indigo-300 focus-within:!border-indigo-600 focus-within:!bg-white rounded-xl shadow-inner h-12 transition-all w-full flex items-center px-4",
-                                        input: "text-slate-900 font-semibold bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 shadow-none w-full"
-                                    }}
-                                    disabled={isSubmitting}
-                                />
+                                <div className="flex items-center w-full h-12 rounded-xl border border-slate-200/90 bg-slate-50 focus-within:bg-white focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-100 transition-all overflow-hidden shadow-xs">
+                                    <input
+                                        type="text"
+                                        value={editSeriesName}
+                                        onChange={(e) => setEditSeriesName(e.target.value)}
+                                        placeholder="e.g., Spring 2024 Internals"
+                                        disabled={isSubmitting}
+                                        className="w-full h-full px-4 text-sm font-semibold text-slate-900 placeholder:text-slate-400 bg-transparent outline-none border-none ring-0 focus:ring-0 disabled:opacity-50"
+                                    />
+                                </div>
                             </div>
 
                             <div>

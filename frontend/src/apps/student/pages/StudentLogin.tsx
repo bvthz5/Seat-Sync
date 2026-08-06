@@ -38,7 +38,7 @@ const StudentLogin: React.FC = () => {
             return;
         }
 
-        if (loginMethod === 'email' && !trimmedIdentifier.toLowerCase().endsWith("sjcetpalai.ac.in")) {
+        if (loginMethod === 'email' && !/@([a-zA-Z0-9-]+\.)*sjcetpalai\.ac\.in$/i.test(trimmedIdentifier)) {
             toast.error("Please use your official @sjcetpalai.ac.in email");
             triggerShake();
             return;

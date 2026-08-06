@@ -43,6 +43,7 @@ import {
     Shield,
     Printer,
     X,
+    Search,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -502,8 +503,12 @@ const InternalSeatingPlans: React.FC = () => {
         try {
             const detail = await InternalSeatingService.getHallLayout(hall.hallId, selectedDate, selectedSession, Number(selectedSeries));
             setDetailHall({ ...hall, layout: detail });
-        } catch (e) {
-            toast.error("Failed to load hall layout");
+        } catch (e: any) {
+            if (e?.response?.status === 401) {
+                toast.error("Session expired. Please log in again.");
+            } else {
+                toast.error(e?.response?.data?.message || "Failed to load hall layout");
+            }
         } finally {
             setDetailLoading(false);
         }
@@ -569,41 +574,43 @@ const InternalSeatingPlans: React.FC = () => {
                                     animate={{ opacity: 1, y: 0, scale: 1 }}
                                     exit={{ opacity: 0, y: -12, scale: 0.97 }}
                                     transition={{ duration: 0.25, ease: 'easeOut' }}
-                                    className="flex flex-wrap items-center gap-2.5 shrink-0"
+                                    className="flex flex-wrap items-center gap-2.5 shrink-0 select-none"
                                 >
-                                    <button
-                                        onClick={downloadRoomWiseExcel}
-                                        disabled={roomDownloading}
-                                        className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-[12px] font-bold hover:bg-emerald-100 transition-all shadow-sm disabled:opacity-60"
-                                    >
-                                        <FileDown size={14} />
-                                        {roomDownloading ? 'Exporting...' : 'Room Wise'}
-                                    </button>
-                                    <button
-                                        onClick={downloadConsolidatedExcel}
-                                        disabled={consolidatedDownloading}
-                                        className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 text-[12px] font-bold hover:bg-indigo-100 transition-all shadow-sm disabled:opacity-60"
-                                    >
-                                        <FileDown size={14} />
-                                        {consolidatedDownloading ? 'Exporting...' : 'Consolidated'}
-                                    </button>
-                                    <button
-                                        onClick={downloadSubjectWiseExcel}
-                                        disabled={subjectDownloading}
-                                        className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-violet-50 border border-violet-200 text-violet-700 text-[12px] font-bold hover:bg-violet-100 transition-all shadow-sm disabled:opacity-60"
-                                    >
-                                        <FileDown size={14} />
-                                        {subjectDownloading ? 'Exporting...' : 'Batch Wise'}
-                                    </button>
-                                    <div className="w-px h-6 bg-slate-200 mx-1" />
-                                    <button
-                                        onClick={handleClearClick}
-                                        disabled={isClearing}
-                                        className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-[12px] font-bold hover:bg-rose-100 transition-all shadow-sm disabled:opacity-60"
-                                    >
-                                        <Trash2 size={14} />
-                                        {isClearing ? 'Clearing...' : 'Clear Allocation'}
-                                    </button>
+                                    <div className="flex items-center p-1.5 bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-2xl shadow-sm gap-2 select-none">
+                                        <button
+                                            onClick={downloadRoomWiseExcel}
+                                            disabled={roomDownloading}
+                                            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-xl bg-emerald-50/80 border border-emerald-200/80 text-emerald-700 text-[12px] font-extrabold hover:bg-emerald-100/80 hover:border-emerald-300 transition-all shadow-2xs disabled:opacity-60 active:scale-[0.98] select-none cursor-pointer"
+                                        >
+                                            <FileDown size={14} className="text-emerald-600 shrink-0" />
+                                            <span className="select-none leading-none">{roomDownloading ? 'Exporting...' : 'Room Wise'}</span>
+                                        </button>
+                                        <button
+                                            onClick={downloadConsolidatedExcel}
+                                            disabled={consolidatedDownloading}
+                                            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-xl bg-indigo-50/80 border border-indigo-200/80 text-indigo-700 text-[12px] font-extrabold hover:bg-indigo-100/80 hover:border-indigo-300 transition-all shadow-2xs disabled:opacity-60 active:scale-[0.98] select-none cursor-pointer"
+                                        >
+                                            <FileDown size={14} className="text-indigo-600 shrink-0" />
+                                            <span className="select-none leading-none">{consolidatedDownloading ? 'Exporting...' : 'Consolidated'}</span>
+                                        </button>
+                                        <button
+                                            onClick={downloadSubjectWiseExcel}
+                                            disabled={subjectDownloading}
+                                            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-xl bg-purple-50/80 border border-purple-200/80 text-purple-700 text-[12px] font-extrabold hover:bg-purple-100/80 hover:border-purple-300 transition-all shadow-2xs disabled:opacity-60 active:scale-[0.98] select-none cursor-pointer"
+                                        >
+                                            <FileDown size={14} className="text-purple-600 shrink-0" />
+                                            <span className="select-none leading-none">{subjectDownloading ? 'Exporting...' : 'Batch Wise'}</span>
+                                        </button>
+                                        <div className="w-px h-5 bg-slate-200/80 mx-0.5 shrink-0" />
+                                        <button
+                                            onClick={handleClearClick}
+                                            disabled={isClearing}
+                                            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-xl bg-rose-50/80 border border-rose-200/80 text-rose-600 text-[12px] font-extrabold hover:bg-rose-100/80 hover:border-rose-300 transition-all shadow-2xs disabled:opacity-60 active:scale-[0.98] select-none cursor-pointer"
+                                        >
+                                            <Trash2 size={14} className="text-rose-500 shrink-0" />
+                                            <span className="select-none leading-none">{isClearing ? 'Clearing...' : 'Clear Allocation'}</span>
+                                        </button>
+                                    </div>
                                 </motion.div>
                             )}
                         </AnimatePresence>
@@ -839,13 +846,16 @@ const InternalSeatingPlans: React.FC = () => {
                                                         <button onClick={clearAllHalls} className="text-[10px] font-extrabold text-rose-500 hover:text-rose-600 transition-colors uppercase tracking-tight">Clear</button>
                                                     </div>
                                                 </div>
-                                                <Input
-                                                    placeholder="Search halls..."
-                                                    size="sm"
-                                                    value={hallSearch}
-                                                    onChange={e => setHallSearch(e.target.value)}
-                                                    classNames={{ inputWrapper: "h-9 border border-slate-200 bg-slate-50 rounded-lg shadow-none" }}
-                                                />
+                                                <div className="flex items-center w-full h-9 rounded-xl border border-slate-200/90 bg-slate-50 focus-within:bg-white focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-100 transition-all overflow-hidden px-3 gap-2">
+                                                    <Search size={14} className="text-slate-400 shrink-0" />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Search halls..."
+                                                        value={hallSearch}
+                                                        onChange={e => setHallSearch(e.target.value)}
+                                                        className="w-full h-full text-xs font-semibold text-slate-800 placeholder:text-slate-400 bg-transparent outline-none border-none ring-0 focus:ring-0"
+                                                    />
+                                                </div>
                                                 <div className="flex flex-wrap gap-1.5 max-h-[110px] overflow-y-auto pr-0.5 scrollbar-hide">
                                                     {halls.filter(h => h.RoomCode.toLowerCase().includes(hallSearch.toLowerCase())).map(h => (
                                                         <button
@@ -1345,58 +1355,53 @@ const InternalSeatingPlans: React.FC = () => {
                 size="full"
                 backdrop="blur"
                 classNames={{
-                    backdrop: "bg-black/70 backdrop-blur-xl",
-                    base: "max-w-[96vw] max-h-[94vh] m-auto rounded-[28px] bg-[#0a0f1e] border border-slate-800/80 shadow-2xl overflow-hidden",
+                    backdrop: "bg-slate-950/85 backdrop-blur-2xl",
+                    base: "max-w-[96vw] max-h-[94vh] m-auto rounded-[28px] bg-[#0b101d] border border-slate-800 shadow-2xl overflow-hidden flex flex-col",
                 }}
             >
-                <ModalContent>
+                <ModalContent className="bg-[#0b101d] text-white flex flex-col h-full overflow-hidden">
                     {() => (<>
-                        <ModalHeader className="flex justify-between items-center px-8 py-5 border-b border-slate-800/80 bg-gradient-to-r from-[#0f172a] to-[#0a0f1e]">
+                        <ModalHeader className="flex justify-between items-center px-8 py-5 border-b border-slate-800/80 bg-[#0f172a]/90 backdrop-blur-md text-white">
                             <div className="flex items-center gap-4">
                                 <button
                                     onClick={() => setDetailHall(null)}
-                                    className="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all"
+                                    className="w-10 h-10 rounded-2xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 transition-all shadow-sm"
                                 >
-                                    <ArrowLeft size={16} />
+                                    <ArrowLeft size={18} />
                                 </button>
                                 <div>
-                                    <h2 className="text-[18px] font-black text-white tracking-tight">{detailHall?.hallCode}</h2>
-                                    <div className="flex items-center gap-2 mt-0.5">
-                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{fmtDate(selectedDate)}</span>
-                                        <span className="w-1 h-1 rounded-full bg-slate-700" />
-                                        <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">{selectedSession === 'FN' ? 'Forenoon' : 'Afternoon'}</span>
+                                    <div className="flex items-center gap-3">
+                                        <h2 className="text-xl font-black text-white tracking-tight leading-none">{detailHall?.hallCode}</h2>
+                                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                                            Blueprint View
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-1.5">
+                                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{fmtDate(selectedDate)}</span>
+                                        <span className="w-1 h-1 rounded-full bg-slate-600" />
+                                        <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-widest">{selectedSession === 'FN' ? 'Forenoon (FN)' : 'Afternoon (AN)'}</span>
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                                <div className="hidden md:flex items-center gap-4 px-4 py-2 bg-slate-900/80 rounded-xl border border-slate-800">
-                                    <div className="flex items-center gap-2">
-                                        <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
-                                        <span className="text-[10px] font-bold text-slate-400">OCCUPIED</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
-                                        <span className="text-[10px] font-bold text-slate-400">CONFLICT</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="w-2.5 h-2.5 rounded-full bg-slate-700 border border-slate-600" />
-                                        <span className="text-[10px] font-bold text-slate-400">EMPTY</span>
-                                    </div>
+                            <div className="flex items-center gap-4">
+                                <div className="hidden sm:flex items-center gap-3 px-4 py-2 bg-slate-900/90 rounded-2xl border border-slate-800">
+                                    <span className="text-[11px] font-bold text-slate-400">Total Seated:</span>
+                                    <span className="text-sm font-black text-emerald-400">{detailHall?.filledSeats || 0} / {detailHall?.totalSeats || 0}</span>
                                 </div>
                                 <button
                                     onClick={() => setDetailHall(null)}
-                                    className="w-9 h-9 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 hover:bg-rose-500/20 transition-all"
+                                    className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 hover:bg-rose-500/20 transition-all"
                                 >
-                                    <X size={16} />
+                                    <X size={18} />
                                 </button>
                             </div>
                         </ModalHeader>
 
                         <ModalBody
-                            className="p-8 overflow-y-auto"
+                            className="p-8 overflow-y-auto flex-1"
                             style={{
-                                backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(255,255,255,0.03) 1px, transparent 0)',
-                                backgroundSize: '28px 28px',
+                                backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(255,255,255,0.04) 1px, transparent 0)',
+                                backgroundSize: '32px 32px',
                             }}
                         >
                             {detailLoading ? (
@@ -1407,7 +1412,7 @@ const InternalSeatingPlans: React.FC = () => {
                                     <p className="text-slate-400 font-black uppercase tracking-[0.2em] text-[11px]">Rendering Blueprint...</p>
                                 </div>
                             ) : (
-                                <div className="flex gap-10 justify-center items-start min-w-max pb-12">
+                                <div className="flex gap-10 justify-center items-start min-w-max pb-8">
                                     {(!detailHall?.layout?.rows || detailHall?.layout?.rows.length === 0) ? (
                                         <div className="flex flex-col items-center justify-center py-20 w-full">
                                             <AlertCircle className="text-slate-600 mb-4" size={48} />
@@ -1417,13 +1422,13 @@ const InternalSeatingPlans: React.FC = () => {
                                         const isSingleMode = detailHall?.layout?.seatMode === 'Single' || detailHall?.layout?.room?.SeatMode === 'Single';
                                         return (
                                             <div key={row.rowLabel} className="flex flex-col items-center gap-5 shrink-0">
-                                                {/* Row Label */}
-                                                <div className="px-5 py-2 bg-gradient-to-b from-slate-700 to-slate-800 border border-slate-600 rounded-xl shadow-lg">
-                                                    <span className="text-[15px] font-black text-white tracking-widest">{row.rowLabel}</span>
+                                                {/* Column / Row Header */}
+                                                <div className="w-12 h-12 bg-gradient-to-b from-slate-700 to-slate-800 border border-slate-600 rounded-2xl flex items-center justify-center shadow-lg shadow-black/40">
+                                                    <span className="text-[17px] font-black text-white tracking-widest">{row.rowLabel}</span>
                                                 </div>
-                                                <div className="flex flex-col gap-3">
+                                                <div className="flex flex-col gap-3.5">
                                                     {row.benches.map((bench: any) => (
-                                                        <div key={bench.benchNumber} className="flex gap-2.5 p-2 bg-slate-800/40 rounded-2xl border border-white/5 backdrop-blur-sm">
+                                                        <div key={bench.benchNumber} className="flex gap-2.5 p-2 bg-slate-900/60 rounded-2xl border border-white/5 backdrop-blur-md shadow-inner">
                                                             {(isSingleMode ? [bench.left] : [bench.left, bench.right]).map((seat: any, idx: number) => {
                                                                 const isEmpty = !seat?.studentId;
                                                                 const dStyle = getDeptStyle(seat?.deptCode);
@@ -1433,67 +1438,67 @@ const InternalSeatingPlans: React.FC = () => {
                                                                         key={idx}
                                                                         isDisabled={isEmpty}
                                                                         content={
-                                                                            <div className="p-3 min-w-[160px]">
-                                                                                <p className="font-black text-white text-[13px] mb-1 leading-tight">{seat?.name}</p>
-                                                                                <div className="space-y-1 mt-2">
-                                                                                    <p className="text-[10px] text-slate-300"><span className="text-slate-500 font-bold">Reg No :</span> {seat?.registerNumber}</p>
+                                                                            <div className="p-3.5 min-w-[180px]">
+                                                                                <p className="font-black text-white text-[13px] mb-1.5 leading-tight">{seat?.name}</p>
+                                                                                <div className="space-y-1 mt-2 pt-2 border-t border-slate-700/80">
+                                                                                    <p className="text-[11px] text-slate-300"><span className="text-slate-400 font-bold">Reg No :</span> <span className="font-mono font-bold text-white">{seat?.registerNumber}</span></p>
                                                                                     {(seat?.rollNumber !== null && seat?.rollNumber !== undefined) && (
-                                                                                        <p className="text-[10px] text-slate-300"><span className="text-slate-500 font-bold">Roll No:</span> {seat?.rollNumber}</p>
+                                                                                        <p className="text-[11px] text-slate-300"><span className="text-slate-400 font-bold">Roll No:</span> {seat?.rollNumber}</p>
                                                                                     )}
-                                                                                    <p className="text-[10px] text-slate-300"><span className="text-slate-500 font-bold">Dept    :</span> {seat?.deptCode}{seat?.division ? ` (Div ${seat.division})` : ''}</p>
-                                                                                    <p className="text-[10px] text-slate-300"><span className="text-slate-500 font-bold">Subject :</span> {seat?.subjectCode}</p>
+                                                                                    <p className="text-[11px] text-slate-300"><span className="text-slate-400 font-bold">Dept    :</span> {seat?.deptCode}{seat?.division ? ` (Div ${seat.division})` : ''}</p>
+                                                                                    <p className="text-[11px] text-slate-300"><span className="text-slate-400 font-bold">Subject :</span> {seat?.subjectCode}</p>
                                                                                 </div>
-                                                                                <div className="mt-2 pt-2 border-t border-slate-700 flex items-center gap-1.5">
+                                                                                <div className="mt-2.5 pt-2 border-t border-slate-700/80 flex items-center gap-1.5">
                                                                                     <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: dStyle.dot }} />
-                                                                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{seat?.deptCode}{seat?.division ? ` - ${seat.division}` : ''}</span>
+                                                                                    <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{seat?.deptCode}{seat?.division ? ` - ${seat.division}` : ''}</span>
                                                                                 </div>
                                                                             </div>
                                                                         }
-                                                                        classNames={{ content: "bg-[#0f172a] border border-slate-700 p-0 rounded-2xl shadow-2xl" }}
+                                                                        classNames={{ content: "bg-[#0a0f1d] border border-slate-700 p-0 rounded-2xl shadow-2xl" }}
                                                                     >
                                                                         {/* Seat Card — colored by dept */}
                                                                         <div
-                                                                            className={`w-[78px] h-[108px] rounded-2xl border-2 flex flex-col items-center justify-start pt-2 pb-1.5 px-1 transition-all select-none ${
+                                                                            className={`w-[82px] h-[112px] rounded-2xl border-2 flex flex-col items-center justify-between p-1.5 transition-all select-none ${
                                                                                 isEmpty
-                                                                                    ? 'bg-slate-900/40 border-slate-800/60 cursor-default'
-                                                                                    : 'cursor-pointer hover:scale-105 hover:z-10 active:scale-95 shadow-lg'
+                                                                                    ? 'bg-slate-900/30 border-slate-800/50 cursor-default'
+                                                                                    : 'cursor-pointer hover:scale-105 hover:z-20 active:scale-95 shadow-md'
                                                                             }`}
                                                                             style={isEmpty ? {} : {
-                                                                                background: `linear-gradient(160deg, ${dStyle.fill}ee 0%, ${dStyle.fill}99 100%)`,
+                                                                                background: `linear-gradient(160deg, ${dStyle.fill}f0 0%, ${dStyle.fill}aa 100%)`,
                                                                                 borderColor: dStyle.border,
-                                                                                boxShadow: `0 0 18px ${dStyle.dot}30, inset 0 1px 0 rgba(255,255,255,0.06)`
+                                                                                boxShadow: `0 0 16px ${dStyle.dot}25, inset 0 1px 0 rgba(255,255,255,0.08)`
                                                                             }}
                                                                         >
                                                                             {isEmpty ? (
-                                                                                <div className="flex flex-col items-center justify-center h-full gap-1 opacity-25">
+                                                                                <div className="flex flex-col items-center justify-center h-full gap-1 opacity-30">
                                                                                     <div className="w-6 h-6 rounded-lg border-2 border-dashed border-slate-600" />
-                                                                                    <span className="text-[8px] font-black text-slate-500">{isSingleMode ? 'EMPTY' : (idx === 0 ? 'L' : 'R')}</span>
+                                                                                    <span className="text-[9px] font-black text-slate-500">{isSingleMode ? 'EMPTY' : (idx === 0 ? 'L' : 'R')}</span>
                                                                                 </div>
                                                                             ) : (
                                                                                 <>
                                                                                     {/* Dept badge */}
                                                                                     <span
-                                                                                        className="w-full text-center text-[8px] font-black px-1 py-0.5 rounded-lg mb-1"
+                                                                                        className="w-full text-center text-[9px] font-black px-1 py-0.5 rounded-md"
                                                                                         style={{ background: `${dStyle.dot}30`, color: dStyle.text }}
                                                                                     >
                                                                                         {seat.deptCode}
                                                                                     </span>
                                                                                     {/* Roll Number or Register Number */}
-                                                                                    <span className="text-[11px] font-black text-white leading-tight text-center px-0.5 break-all">
+                                                                                    <span className="text-[12px] font-black text-white leading-none text-center tracking-tight my-auto px-0.5 break-all">
                                                                                         {seat.rollNumber !== null && seat.rollNumber !== undefined && String(seat.rollNumber).trim() !== ''
                                                                                             ? seat.rollNumber
                                                                                             : seat.registerNumber}
                                                                                     </span>
                                                                                     {/* Student name */}
-                                                                                    <span className="text-[7px] font-semibold mt-1 leading-[1.2] text-center px-0.5 line-clamp-2" style={{ color: dStyle.text }}>
+                                                                                    <span className="text-[8px] font-semibold leading-[1.2] text-center px-0.5 line-clamp-1 mb-1" style={{ color: dStyle.text }}>
                                                                                         {seat.name}
                                                                                     </span>
                                                                                     {/* Subject code chip */}
                                                                                     <span
-                                                                                        className="mt-auto text-[7px] font-black px-1.5 py-0.5 rounded-md w-full text-center"
-                                                                                        style={{ background: 'rgba(0,0,0,0.35)', color: 'rgba(255,255,255,0.6)' }}
+                                                                                        className="text-[7.5px] font-black px-1.5 py-0.5 rounded-md w-full text-center uppercase tracking-tighter"
+                                                                                        style={{ background: 'rgba(0,0,0,0.4)', color: 'rgba(255,255,255,0.7)' }}
                                                                                     >
-                                                                                        {seat.subjectCode?.slice(0, 6)}
+                                                                                        {seat.subjectCode?.slice(0, 7)}
                                                                                     </span>
                                                                                 </>
                                                                             )}
@@ -1511,23 +1516,23 @@ const InternalSeatingPlans: React.FC = () => {
                             )}
                         </ModalBody>
 
-                        <ModalFooter className="border-t border-slate-800/80 bg-[#0a0f1e] px-6 py-4 flex flex-col gap-4">
+                        <ModalFooter className="border-t border-slate-800/80 bg-[#0b101d] px-8 py-5 flex flex-col gap-4">
                             {/* Dept/Batch Color Legend */}
                             {detailHall?.layout?.rows && detailHall.layout.rows.length > 0 && (() => {
                                 const legend = buildDeptLegend(detailHall.layout.rows);
                                 return legend.length > 0 ? (
-                                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-3 border-b border-slate-800">
-                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.15em] shrink-0">Dept / Batch</span>
+                                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pb-3 border-b border-slate-800/80">
+                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] shrink-0">Dept Color Palette</span>
                                         {legend.map(({ deptCode, style }) => (
-                                            <div key={deptCode} className="flex items-center gap-1.5">
-                                                <span className="w-3 h-3 rounded-full shrink-0 shadow-sm" style={{ background: style.dot, boxShadow: `0 0 6px ${style.dot}80` }} />
-                                                <span className="text-[10px] font-black uppercase tracking-wide" style={{ color: style.text }}>{deptCode}</span>
+                                            <div key={deptCode} className="flex items-center gap-2 bg-slate-900/60 px-2.5 py-1 rounded-xl border border-slate-800">
+                                                <span className="w-3 h-3 rounded-full shrink-0 shadow-sm" style={{ background: style.dot, boxShadow: `0 0 8px ${style.dot}80` }} />
+                                                <span className="text-[11px] font-black uppercase tracking-wide" style={{ color: style.text }}>{deptCode}</span>
                                             </div>
                                         ))}
                                         {/* Empty seat legend */}
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="w-3 h-3 rounded-full border-2 border-dashed border-slate-700 shrink-0" />
-                                            <span className="text-[10px] font-black text-slate-600 uppercase tracking-wide">Empty</span>
+                                        <div className="flex items-center gap-2 bg-slate-900/60 px-2.5 py-1 rounded-xl border border-slate-800">
+                                            <span className="w-3 h-3 rounded-full border-2 border-dashed border-slate-600 shrink-0" />
+                                            <span className="text-[11px] font-black text-slate-400 uppercase tracking-wide">Empty Seat</span>
                                         </div>
                                     </div>
                                 ) : null;
@@ -1535,20 +1540,27 @@ const InternalSeatingPlans: React.FC = () => {
 
                             {/* Stats + Close */}
                             <div className="flex items-center justify-between">
-                                <div className="flex gap-8">
+                                <div className="flex items-center gap-8">
                                     <div>
-                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">Students Seated</span>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Students Seated</span>
                                         <span className="text-2xl font-black text-white">{detailHall?.filledSeats || 0}</span>
                                     </div>
                                     <div className="w-px h-10 bg-slate-800" />
                                     <div>
-                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">Total Capacity</span>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Total Capacity</span>
                                         <span className="text-2xl font-black text-white">{detailHall?.totalSeats || 0}</span>
+                                    </div>
+                                    <div className="w-px h-10 bg-slate-800" />
+                                    <div>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Fill Rate</span>
+                                        <span className="text-2xl font-black text-emerald-400">
+                                            {detailHall?.totalSeats > 0 ? Math.round(((detailHall?.filledSeats || 0) / detailHall.totalSeats) * 100) : 0}%
+                                        </span>
                                     </div>
                                 </div>
                                 <button
                                     onClick={() => setDetailHall(null)}
-                                    className="h-11 px-8 rounded-2xl bg-indigo-600 text-white font-black text-[13px] hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-900/30"
+                                    className="h-11 px-8 rounded-2xl bg-indigo-600 text-white font-black text-[13px] hover:bg-indigo-500 active:scale-98 transition-all shadow-lg shadow-indigo-900/40 select-none cursor-pointer"
                                 >
                                     Close Blueprint
                                 </button>
