@@ -178,7 +178,7 @@ export const importInternalStudents = async (req: Request, res: Response) => {
     if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
 
     const internalExamId = req.body.internalExamId ? parseInt(req.body.internalExamId) : null;
-    
+
     // Verify exam if provided
     let exam = null;
     if (internalExamId) {
@@ -230,28 +230,28 @@ export const importInternalStudents = async (req: Request, res: Response) => {
 
                     const h = header.toLowerCase().trim();
                     if (h === 'roll' || h === 'rollno' || h === 'roll no' || h === 'class roll' || h === 'class roll no' || h === 'roll number' || h === 'sl no' || h === 'slno' || h === 'sno' || h === 'sl.no' || h === 'si no') {
-                         record['RollNumber'] = val;
+                        record['RollNumber'] = val;
                     } else if (h === 'university regno' || h === 'university reg no' || h.includes('regno') || h.includes('reg no') || h.includes('register') || h.includes('registration') || h === 'reg_no' || h === 'reg') {
-                         record['RegisterNumber'] = val;
+                        record['RegisterNumber'] = val;
                     } else if (h === 'name' || h === 'student name' || h === 'full name' || h === 'name of student') {
-                         record['Name'] = val;
+                        record['Name'] = val;
                     } else if (h === 'batch' || h === 'class' || h.includes('batch')) {
-                         record['Batch'] = val;
+                        record['Batch'] = val;
                     } else if (h === 'dept' || h === 'branch' || h === 'department') {
-                         record['Department'] = val;
+                        record['Department'] = val;
                     } else if (h === 'sem' || h === 'semester') {
-                         record['Semester'] = val;
+                        record['Semester'] = val;
                     } else if (h === 'prog' || h === 'program' || h === 'course') {
-                         record['Program'] = val;
+                        record['Program'] = val;
                     } else if (h === 'div' || h === 'division' || h === 'sec' || h === 'section') {
-                         record['Division'] = val;
+                        record['Division'] = val;
                     } else if (h.includes('email') || h.includes('mail')) {
-                         record['Email'] = val;
+                        record['Email'] = val;
                     } else {
-                         record[header] = val;
+                        record[header] = val;
                     }
                 }
-                
+
                 if (!record['Batch'] && globalBatch) record['Batch'] = globalBatch;
 
                 // Skip duplicated header rows inside data
@@ -371,7 +371,7 @@ export const importInternalStudents = async (req: Request, res: Response) => {
                         processedClassRolls.add(classRollKey);
                     }
                 }
-                
+
                 let targetSemester: any = null;
                 if (targetProgram) {
                     targetSemester = semCache.get(`${targetProgram.ProgramID}_${semNum}`);
@@ -473,7 +473,7 @@ export const importInternalStudents = async (req: Request, res: Response) => {
             errors: errors.slice(0, 50),
         });
     } catch (error: any) {
-        try { await t.rollback(); } catch (_) {}
+        try { await t.rollback(); } catch (_) { }
         console.error('Internal Student Import Error:', error);
         res.status(500).json({ message: error.message });
     }
@@ -747,7 +747,7 @@ export const updateInternalStudent = async (req: Request, res: Response) => {
 export const createInternalStudent = async (req: Request, res: Response) => {
     try {
         const { RegisterNumber, FullName, DepartmentID, ProgramID, SemesterID, BatchYear } = req.body;
-        
+
         if (!RegisterNumber || !FullName) {
             return res.status(400).json({ message: 'RegisterNumber and FullName are required' });
         }
@@ -799,7 +799,7 @@ export const exportInternalStudentCredentials = async (req: Request, res: Respon
     try {
         const { dept } = req.query;
         const whereClause: any = { Status: 'ACTIVE' };
-        
+
         if (dept && !isNaN(parseInt(dept as string))) {
             whereClause.DepartmentID = parseInt(dept as string);
         }
@@ -818,32 +818,32 @@ export const exportInternalStudentCredentials = async (req: Request, res: Respon
         });
 
         if (students.length === 0) {
-            return res.status(404).json({ 
-                success: false, 
-                message: "No active internal students found matching your criteria. Cannot generate credentials for an empty list." 
+            return res.status(404).json({
+                success: false,
+                message: "No active internal students found matching your criteria. Cannot generate credentials for an empty list."
             });
         }
 
         const wb = XLSX.utils.book_new();
         const deptGroups = new Map<string, any[]>();
-        
+
         students.forEach(s => {
             const deptName = s.Department?.DepartmentName || 'General';
             if (!deptGroups.has(deptName)) {
                 deptGroups.set(deptName, []);
             }
-            
+
             const fullName = (s.FullName || 'Student').trim();
             const regNo = (s.RegisterNumber || '').trim().toUpperCase();
-            
+
             // Generate email based on institutional formula: namePassout@program.sjcetpalai.ac.in
             const email = s.User?.Email || generateStudentEmail(
-                fullName, 
-                s.BatchYear || new Date().getFullYear(), 
+                fullName,
+                s.BatchYear || new Date().getFullYear(),
                 s.Program?.ProgramCode || s.Department?.DepartmentCode || 'STUDENT',
                 s.Program?.DurationYears || 2
             );
-            
+
             deptGroups.get(deptName)?.push({
                 'Register Number': regNo,
                 'Email': email,

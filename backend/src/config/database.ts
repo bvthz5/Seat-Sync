@@ -1264,6 +1264,39 @@ async function ensureSchemaIntegrity() {
     }
 }
 
+async function syncMissingColumns() {
+    try {
+        const queryInterface = sequelize.getQueryInterface();
+        const models = sequelize.models;
+
+        for (const [modelName, model] of Object.entries(models)) {
+            const rawTableName = model.getTableName();
+            const tableName = typeof rawTableName === "string" ? rawTableName : (rawTableName as any).tableName;
+            try {
+                const tableDesc = await queryInterface.describeTable(tableName);
+                const modelAttributes = model.getAttributes();
+
+                for (const [attrName, attr] of Object.entries(modelAttributes)) {
+                    const columnName = attr.field || attrName;
+                    if (!tableDesc[columnName]) {
+                        console.log(`[SchemaIntegrity] Auto-adding missing column '${columnName}' to table '${tableName}'...`);
+                        try {
+                            await queryInterface.addColumn(tableName, columnName, attr as any);
+                            console.log(`[SchemaIntegrity] Added column '${columnName}' to '${tableName}'.`);
+                        } catch (addErr: any) {
+                            console.warn(`[SchemaIntegrity] Column add note ('${columnName}' in '${tableName}'):`, addErr.message);
+                        }
+                    }
+                }
+            } catch (tableErr: any) {
+                // Table does not exist yet; sequelize.sync() will create it
+            }
+        }
+    } catch (e: any) {
+        console.warn("[SchemaIntegrity] Missing columns sync note:", e.message);
+    }
+}
+
 export async function connectDB() {
     if (DB_DIALECT !== "sqlite") {
         try {
@@ -1287,6 +1320,8 @@ export async function connectDB() {
         await ensureSchemaIntegrity();
 
         await import("../models/index.js");
+
+        await syncMissingColumns();
 
         const dialect = sequelize.getDialect();
         if (dialect === 'mssql' || process.env.DB_ALTER_SYNC !== 'true') {

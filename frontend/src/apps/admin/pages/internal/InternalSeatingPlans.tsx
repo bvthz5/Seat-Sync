@@ -14,6 +14,10 @@ import {
     ModalFooter,
     Input,
     Tooltip,
+    Dropdown,
+    DropdownTrigger,
+    DropdownMenu,
+    DropdownItem,
 } from '@heroui/react';
 import {
     Calendar,
@@ -31,11 +35,14 @@ import {
     Power,
     XCircle,
     FileDown,
+    FileSpreadsheet,
+    FileText,
     Zap,
     Rocket,
     Moon,
     Sun,
     ChevronRight,
+    ChevronDown,
     Settings2,
     Building2,
     Sparkles,
@@ -73,7 +80,20 @@ const getDeptStyle = (deptCode: string) => {
     if (!deptCode) return DEPT_PALETTE[0];
     let hash = 0;
     for (let i = 0; i < deptCode.length; i++) hash = deptCode.charCodeAt(i) + ((hash << 5) - hash);
-    return DEPT_PALETTE[Math.abs(hash) % DEPT_PALETTE.length];
+    return DEPT_PALETTE[Math.abs(hash) % DEPT_PALETTE.length] || DEPT_PALETTE[0];
+};
+
+const downloadExcelFile = (XLSXStyle: any, wb: any, fileName: string) => {
+    const excelBuffer = XLSXStyle.write(wb, { bookType: 'xlsx', type: 'array' });
+    const dataBlob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 };
 
 // Build a de-duplicated legend array from seat data
@@ -346,10 +366,8 @@ const InternalSeatingPlans: React.FC = () => {
                         { v: alloc.Student?.RegisterNumber || '', s: { font: boldFont, border: allThin, alignment: { horizontal: 'center' } } },
                         { v: alloc.Student?.FullName || '', s: { font: bodyFont, border: allThin } },
                         { v: seatNum, s: { font: boldFont, border: allThin, alignment: { horizontal: 'center' } } },
-                        { v: alloc.Student?.Department?.DeptCode || '', s: { font: bodyFont, border: allThin, alignment: { horizontal: 'center' } } },
                     ]);
                 });
-
                 const ws = XLSXStyle.utils.aoa_to_sheet(sheetData);
                 ws['!cols'] = [{ wch: 8 }, { wch: 20 }, { wch: 30 }, { wch: 12 }, { wch: 15 }];
                 ws['!merges'] = [
@@ -359,7 +377,7 @@ const InternalSeatingPlans: React.FC = () => {
                 XLSXStyle.utils.book_append_sheet(wb, ws, roomCode.substring(0, 31));
             });
 
-            XLSXStyle.writeFile(wb, `RoomWise_Seating_${selectedDate}_${selectedSession}.xlsx`);
+            downloadExcelFile(XLSXStyle, wb, `RoomWise_Seating_${selectedDate}_${selectedSession}.xlsx`);
             toast.success('Room Wise Seating downloaded');
         } catch (e) {
             console.error(e);
@@ -419,7 +437,7 @@ const InternalSeatingPlans: React.FC = () => {
 
             const wb = XLSXStyle.utils.book_new();
             XLSXStyle.utils.book_append_sheet(wb, ws, 'Consolidated Seating');
-            XLSXStyle.writeFile(wb, `Consolidated_Seating_${selectedDate}_${selectedSession}.xlsx`);
+            downloadExcelFile(XLSXStyle, wb, `Consolidated_Seating_${selectedDate}_${selectedSession}.xlsx`);
             toast.success('Consolidated Seating downloaded');
         } catch (e) {
             console.error(e);
@@ -487,11 +505,366 @@ const InternalSeatingPlans: React.FC = () => {
                 XLSXStyle.utils.book_append_sheet(wb, ws, subName.substring(0, 31));
             });
 
-            XLSXStyle.writeFile(wb, `SubjectWise_Consolidated_${selectedDate}_${selectedSession}.xlsx`);
+            downloadExcelFile(XLSXStyle, wb, `SubjectWise_Consolidated_${selectedDate}_${selectedSession}.xlsx`);
             toast.success('Batch Wise Seating downloaded');
         } catch (e) {
             console.error(e);
             toast.error('Failed to export Batch Wise Seating');
+        } finally {
+            setSubjectDownloading(false);
+        }
+    };
+
+    /* ── PDF EXPORT FUNCTIONS FOR INTERNAL SEATING ── */
+
+    /** Bulk Export All Room PDFs as a single ZIP file */
+    const downloadRoomWisePDFZip = async () => {
+        if (!selectedDate || !selectedSession || !selectedSeries) return;
+        setRoomDownloading(true);
+        const tid = toast.loading('Generating Room Wise PDF ZIP package...');
+        try {
+            const { default: jsPDF } = await import('jspdf');
+            const { default: autoTable } = await import('jspdf-autotable');
+            const { default: JSZip } = await import('jszip');
+
+            const data = await InternalReportsService.getRoomWise(selectedDate, selectedSession, Number(selectedSeries));
+            if (!data || data.length === 0) {
+                toast.error('No seating allocations found', { id: tid });
+                return;
+            }
+
+            const roomsMap: Record<string, any[]> = {};
+            data.forEach((alloc: any) => {
+                const rCode = alloc.Seat?.Room?.RoomCode || 'Unknown';
+                if (!roomsMap[rCode]) roomsMap[rCode] = [];
+                roomsMap[rCode].push(alloc);
+            });
+
+            const zip = new JSZip();
+            const selectedSeriesName = seriesList.find(s => String(s.ExamSeriesID) === selectedSeries)?.SeriesName || 'Internal Exam';
+            const dateStr = fmtDate(selectedDate);
+            const sessionStr = selectedSession === 'FN' ? 'Forenoon (09:30 AM)' : 'Afternoon (01:30 PM)';
+
+            Object.entries(roomsMap).forEach(([roomCode, allocs]) => {
+                const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+                const pageW = doc.internal.pageSize.getWidth();
+
+                // ── Header Band ──
+                doc.setFillColor(15, 23, 42); // Dark Navy
+                doc.rect(0, 0, pageW, 32, 'F');
+
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+                doc.text("ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI", pageW / 2, 9, { align: 'center' });
+
+                doc.setFontSize(10);
+                doc.text("INTERNAL EXAMINATION - ROOM SEATING ARRANGEMENT", pageW / 2, 17, { align: 'center' });
+
+                doc.setFillColor(99, 102, 241); // Indigo accent line
+                doc.rect(20, 20, pageW - 40, 0.5, 'F');
+
+                doc.setFontSize(9); doc.setTextColor(203, 213, 225);
+                doc.text(`Series: ${selectedSeriesName}  ·  Date: ${dateStr}  ·  Session: ${sessionStr}`, pageW / 2, 26, { align: 'center' });
+
+                // ── Metadata Bar ──
+                doc.setFillColor(248, 250, 252);
+                doc.rect(0, 32, pageW, 14, 'F');
+                doc.setDrawColor(226, 232, 240);
+                doc.line(0, 46, pageW, 46);
+
+                const infoCols = [
+                    { label: 'HALL / ROOM CODE', value: roomCode },
+                    { label: 'EXAM DATE', value: dateStr },
+                    { label: 'SESSION', value: selectedSession === 'FN' ? 'Forenoon (FN)' : 'Afternoon (AN)' },
+                    { label: 'SEATED COUNT', value: `${allocs.length} Students` }
+                ];
+
+                infoCols.forEach((col, i) => {
+                    const x = 15 + i * (pageW / 4);
+                    doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139);
+                    doc.text(col.label, x, 38);
+                    doc.setFontSize(9.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 23, 42);
+                    doc.text(col.value, x, 43);
+                });
+
+                // ── Table Rows ──
+                const tableRows = allocs.map((alloc: any, idx: number) => {
+                    const seatNum = `${alloc.Seat?.RowLabel || ''}${alloc.Seat?.BenchNumber || ''}${alloc.Seat?.SeatNumber === 2 ? 'R' : alloc.Seat?.SeatNumber === 1 ? 'L' : ''}`;
+                    const subjectText = alloc.Exam ? `${alloc.Exam.SubjectCode || ''} ${alloc.Exam.SubjectName || ''}`.trim() : 'N/A';
+                    return [
+                        idx + 1,
+                        seatNum,
+                        alloc.Student?.RegisterNumber || '',
+                        alloc.Student?.FullName || '',
+                        alloc.Student?.Department?.DepartmentCode || alloc.Student?.Department?.DeptCode || '',
+                        subjectText
+                    ];
+                });
+
+                autoTable(doc, {
+                    startY: 50,
+                    head: [['Sl.No', 'Seat No', 'Register Number', 'Student Name', 'Branch / Dept', 'Exam Subject']],
+                    body: tableRows,
+                    styles: { fontSize: 8.5, cellPadding: 2.5, font: 'helvetica', textColor: [30, 41, 59], valign: 'middle' },
+                    headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, halign: 'center' },
+                    columnStyles: {
+                        0: { cellWidth: 15, halign: 'center', fontStyle: 'bold', fillColor: [241, 245, 249] },
+                        1: { cellWidth: 25, halign: 'center', fontStyle: 'bold' },
+                        2: { cellWidth: 35, font: 'courier', fontStyle: 'bold', fontSize: 9.5 },
+                        3: { cellWidth: 'auto' },
+                        4: { cellWidth: 28, halign: 'center', fontStyle: 'bold' },
+                        5: { cellWidth: 55, fontSize: 8 }
+                    },
+                    alternateRowStyles: { fillColor: [250, 252, 255] },
+                    didDrawPage: (dataInfo: any) => {
+                        doc.setFontSize(7.5); doc.setTextColor(148, 163, 184);
+                        doc.text(
+                            `Page ${dataInfo.pageNumber}  ·  CONFIDENTIAL  ·  Room: ${roomCode}  ·  SeatSync Internal Exam System`,
+                            pageW / 2, doc.internal.pageSize.getHeight() - 6, { align: 'center' }
+                        );
+                    }
+                });
+
+                // Signatures
+                const finalY = (doc as any).lastAutoTable.finalY + 12;
+                const pageH = doc.internal.pageSize.getHeight();
+                if (finalY < pageH - 25) {
+                    const sigRoles = ['Invigilator Signature', 'Chief Superintendent', 'Controller of Examinations'];
+                    const sigW = (pageW - 40) / 3;
+                    sigRoles.forEach((role, i) => {
+                        const x = 20 + i * (sigW + 10);
+                        doc.setDrawColor(203, 213, 225);
+                        doc.line(x, finalY + 10, x + sigW - 10, finalY + 10);
+                        doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(71, 85, 105);
+                        doc.text(role, x + (sigW - 10) / 2, finalY + 15, { align: 'center' });
+                    });
+                }
+
+                const pdfBuffer = doc.output('arraybuffer');
+                zip.file(`Room_${roomCode}_Seating_${selectedDate}.pdf`, pdfBuffer);
+            });
+
+            const content = await zip.generateAsync({ type: 'blob' });
+            const url = URL.createObjectURL(content);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `RoomWise_PDFs_${selectedDate}_${selectedSession}.zip`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+
+            toast.success(`Exported ${Object.keys(roomsMap).length} Room PDFs in ZIP!`, { id: tid });
+        } catch (e: any) {
+            console.error(e);
+            toast.error(e.message || 'Failed to export Room Wise PDF ZIP', { id: tid });
+        } finally {
+            setRoomDownloading(false);
+        }
+    };
+
+    /** Export Consolidated PDF Report */
+    const downloadConsolidatedPDF = async () => {
+        if (!selectedDate || !selectedSession || !selectedSeries) return;
+        setConsolidatedDownloading(true);
+        const tid = toast.loading('Generating Consolidated PDF report...');
+        try {
+            const { default: jsPDF } = await import('jspdf');
+            const { default: autoTable } = await import('jspdf-autotable');
+
+            const data = await InternalReportsService.getConsolidated(selectedDate, selectedSession, Number(selectedSeries));
+            if (!data || data.length === 0) {
+                toast.error('No seating allocations found', { id: tid });
+                return;
+            }
+
+            const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+            const pageW = doc.internal.pageSize.getWidth();
+            const selectedSeriesName = seriesList.find(s => String(s.ExamSeriesID) === selectedSeries)?.SeriesName || 'Internal Exam';
+            const dateStr = fmtDate(selectedDate);
+            const sessionStr = selectedSession === 'FN' ? 'Forenoon (09:30 AM)' : 'Afternoon (01:30 PM)';
+
+            // ── Header Band ──
+            doc.setFillColor(15, 23, 42);
+            doc.rect(0, 0, pageW, 32, 'F');
+
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+            doc.text("ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI", pageW / 2, 9, { align: 'center' });
+
+            doc.setFontSize(10);
+            doc.text("CONSOLIDATED INTERNAL SEATING ARRANGEMENT", pageW / 2, 17, { align: 'center' });
+
+            doc.setFillColor(99, 102, 241);
+            doc.rect(15, 20, pageW - 30, 0.5, 'F');
+
+            doc.setFontSize(8.5); doc.setTextColor(203, 213, 225);
+            doc.text(`Series: ${selectedSeriesName}  ·  Date: ${dateStr}  ·  Session: ${sessionStr}`, pageW / 2, 26, { align: 'center' });
+
+            // ── Metadata Bar ──
+            doc.setFillColor(248, 250, 252);
+            doc.rect(0, 32, pageW, 12, 'F');
+            doc.setDrawColor(226, 232, 240);
+            doc.line(0, 44, pageW, 44);
+
+            doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 116, 139);
+            doc.text(`TOTAL SEATED STUDENTS: ${data.length}`, 15, 40);
+
+            const tableRows = data.map((alloc: any, idx: number) => {
+                const roomCode = alloc.Seat?.Room?.RoomCode || 'N/A';
+                const seatNum = `${alloc.Seat?.RowLabel || ''}${alloc.Seat?.BenchNumber || ''}${alloc.Seat?.SeatNumber === 2 ? 'R' : alloc.Seat?.SeatNumber === 1 ? 'L' : ''}`;
+                return [
+                    idx + 1,
+                    roomCode,
+                    alloc.Student?.RegisterNumber || '',
+                    alloc.Student?.FullName || '',
+                    seatNum,
+                    alloc.Student?.Department?.DepartmentCode || alloc.Student?.Department?.DeptCode || ''
+                ];
+            });
+
+            autoTable(doc, {
+                startY: 48,
+                head: [['Sl.No', 'Hall / Room', 'Register Number', 'Student Name', 'Seat No', 'Branch / Dept']],
+                body: tableRows,
+                styles: { fontSize: 8, cellPadding: 2.2, font: 'helvetica', textColor: [30, 41, 59], valign: 'middle' },
+                headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5, halign: 'center' },
+                columnStyles: {
+                    0: { cellWidth: 12, halign: 'center', fontStyle: 'bold', fillColor: [241, 245, 249] },
+                    1: { cellWidth: 25, halign: 'center', fontStyle: 'bold' },
+                    2: { cellWidth: 32, font: 'courier', fontStyle: 'bold', fontSize: 9 },
+                    3: { cellWidth: 'auto' },
+                    4: { cellWidth: 20, halign: 'center', fontStyle: 'bold' },
+                    5: { cellWidth: 25, halign: 'center' }
+                },
+                alternateRowStyles: { fillColor: [250, 252, 255] },
+                didDrawPage: (dataInfo: any) => {
+                    doc.setFontSize(7.5); doc.setTextColor(148, 163, 184);
+                    doc.text(
+                        `Page ${dataInfo.pageNumber}  ·  CONFIDENTIAL  ·  SeatSync Internal Exam System`,
+                        pageW / 2, doc.internal.pageSize.getHeight() - 6, { align: 'center' }
+                    );
+                }
+            });
+
+            doc.save(`Consolidated_Seating_${selectedDate}_${selectedSession}.pdf`);
+            toast.success('Consolidated Seating PDF downloaded', { id: tid });
+        } catch (e: any) {
+            console.error(e);
+            toast.error(e.message || 'Failed to export Consolidated PDF', { id: tid });
+        } finally {
+            setConsolidatedDownloading(false);
+        }
+    };
+
+    /** Export Batch / Branch Wise PDF Report */
+    const downloadSubjectWisePDF = async () => {
+        if (!selectedDate || !selectedSession || !selectedSeries) return;
+        setSubjectDownloading(true);
+        const tid = toast.loading('Generating Batch Wise PDF report...');
+        try {
+            const { default: jsPDF } = await import('jspdf');
+            const { default: autoTable } = await import('jspdf-autotable');
+
+            const data = await InternalReportsService.getConsolidated(selectedDate, selectedSession, Number(selectedSeries));
+            if (!data || data.length === 0) {
+                toast.error('No seating allocations found', { id: tid });
+                return;
+            }
+
+            const deptMap: Record<string, any[]> = {};
+            data.forEach((alloc: any) => {
+                const deptName = alloc.Student?.Department?.DepartmentName || alloc.Student?.Department?.DeptName || 'General / Other';
+                if (!deptMap[deptName]) deptMap[deptName] = [];
+                deptMap[deptName].push(alloc);
+            });
+
+            const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+            const pageW = doc.internal.pageSize.getWidth();
+            const selectedSeriesName = seriesList.find(s => String(s.ExamSeriesID) === selectedSeries)?.SeriesName || 'Internal Exam';
+            const dateStr = fmtDate(selectedDate);
+            const sessionStr = selectedSession === 'FN' ? 'Forenoon (09:30 AM)' : 'Afternoon (01:30 PM)';
+
+            // ── Header Band ──
+            doc.setFillColor(15, 23, 42);
+            doc.rect(0, 0, pageW, 32, 'F');
+
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+            doc.text("ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI", pageW / 2, 9, { align: 'center' });
+
+            doc.setFontSize(10);
+            doc.text("BATCH / BRANCH WISE INTERNAL SEATING REPORT", pageW / 2, 17, { align: 'center' });
+
+            doc.setFillColor(168, 85, 247); // Purple accent line
+            doc.rect(15, 20, pageW - 30, 0.5, 'F');
+
+            doc.setFontSize(8.5); doc.setTextColor(203, 213, 225);
+            doc.text(`Series: ${selectedSeriesName}  ·  Date: ${dateStr}  ·  Session: ${sessionStr}`, pageW / 2, 26, { align: 'center' });
+
+            let currentY = 38;
+
+            Object.entries(deptMap).forEach(([deptName, allocs], dIdx) => {
+                if (dIdx > 0) {
+                    currentY += 8;
+                    if (currentY > doc.internal.pageSize.getHeight() - 40) {
+                        doc.addPage();
+                        currentY = 20;
+                    }
+                }
+
+                doc.setFillColor(243, 232, 255);
+                doc.setDrawColor(216, 180, 254);
+                doc.roundedRect(14, currentY, pageW - 28, 9, 2, 2, 'FD');
+
+                doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(107, 33, 168);
+                doc.text(`${deptName.toUpperCase()}  (${allocs.length} Students)`, 18, currentY + 6);
+
+                currentY += 12;
+
+                const tableRows = allocs.map((alloc: any, idx: number) => {
+                    const roomCode = alloc.Seat?.Room?.RoomCode || 'N/A';
+                    const seatNum = `${alloc.Seat?.RowLabel || ''}${alloc.Seat?.BenchNumber || ''}${alloc.Seat?.SeatNumber === 2 ? 'R' : alloc.Seat?.SeatNumber === 1 ? 'L' : ''}`;
+                    return [
+                        idx + 1,
+                        alloc.Student?.RegisterNumber || '',
+                        alloc.Student?.FullName || '',
+                        roomCode,
+                        seatNum
+                    ];
+                });
+
+                autoTable(doc, {
+                    startY: currentY,
+                    head: [['Sl.No', 'Register Number', 'Student Name', 'Hall / Room', 'Seat No']],
+                    body: tableRows,
+                    styles: { fontSize: 8, cellPadding: 2.2, font: 'helvetica', textColor: [30, 41, 59], valign: 'middle' },
+                    headStyles: { fillColor: [88, 28, 135], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5, halign: 'center' },
+                    columnStyles: {
+                        0: { cellWidth: 12, halign: 'center', fontStyle: 'bold', fillColor: [250, 245, 255] },
+                        1: { cellWidth: 35, font: 'courier', fontStyle: 'bold', fontSize: 9 },
+                        2: { cellWidth: 'auto' },
+                        3: { cellWidth: 30, halign: 'center', fontStyle: 'bold' },
+                        4: { cellWidth: 25, halign: 'center', fontStyle: 'bold' }
+                    },
+                    alternateRowStyles: { fillColor: [253, 244, 255] },
+                    didDrawPage: (dataInfo: any) => {
+                        doc.setFontSize(7.5); doc.setTextColor(148, 163, 184);
+                        doc.text(
+                            `Page ${dataInfo.pageNumber}  ·  CONFIDENTIAL  ·  SeatSync Internal Exam System`,
+                            pageW / 2, doc.internal.pageSize.getHeight() - 6, { align: 'center' }
+                        );
+                    }
+                });
+
+                currentY = (doc as any).lastAutoTable.finalY;
+            });
+
+            doc.save(`BatchWise_Seating_${selectedDate}_${selectedSession}.pdf`);
+            toast.success('Batch Wise Seating PDF downloaded', { id: tid });
+        } catch (e: any) {
+            console.error(e);
+            toast.error(e.message || 'Failed to export Batch Wise PDF', { id: tid });
         } finally {
             setSubjectDownloading(false);
         }
@@ -577,30 +950,146 @@ const InternalSeatingPlans: React.FC = () => {
                                     className="flex flex-wrap items-center gap-2.5 shrink-0 select-none"
                                 >
                                     <div className="flex items-center p-1.5 bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-2xl shadow-sm gap-2 select-none">
-                                        <button
-                                            onClick={downloadRoomWiseExcel}
-                                            disabled={roomDownloading}
-                                            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-xl bg-emerald-50/80 border border-emerald-200/80 text-emerald-700 text-[12px] font-extrabold hover:bg-emerald-100/80 hover:border-emerald-300 transition-all shadow-2xs disabled:opacity-60 active:scale-[0.98] select-none cursor-pointer"
+                                        {/* Room Wise Dropdown */}
+                                        <Dropdown 
+                                            placement="bottom-start"
+                                            classNames={{
+                                                content: "!bg-white !bg-opacity-100 bg-white border border-slate-200/90 shadow-2xl shadow-slate-300/40 rounded-2xl p-1 z-50 overflow-hidden"
+                                            }}
                                         >
-                                            <FileDown size={14} className="text-emerald-600 shrink-0" />
-                                            <span className="select-none leading-none">{roomDownloading ? 'Exporting...' : 'Room Wise'}</span>
-                                        </button>
-                                        <button
-                                            onClick={downloadConsolidatedExcel}
-                                            disabled={consolidatedDownloading}
-                                            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-xl bg-indigo-50/80 border border-indigo-200/80 text-indigo-700 text-[12px] font-extrabold hover:bg-indigo-100/80 hover:border-indigo-300 transition-all shadow-2xs disabled:opacity-60 active:scale-[0.98] select-none cursor-pointer"
+                                            <DropdownTrigger>
+                                                <button
+                                                    disabled={roomDownloading}
+                                                    className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-emerald-50/80 border border-emerald-200/80 text-emerald-700 text-[12px] font-extrabold hover:bg-emerald-100/80 hover:border-emerald-300 transition-all shadow-2xs disabled:opacity-60 active:scale-[0.98] select-none cursor-pointer"
+                                                >
+                                                    <FileDown size={14} className="text-emerald-600 shrink-0" />
+                                                    <span className="select-none leading-none">{roomDownloading ? 'Exporting...' : 'Room Wise'}</span>
+                                                    <ChevronDown size={13} className="text-emerald-500 shrink-0" />
+                                                </button>
+                                            </DropdownTrigger>
+                                            <DropdownMenu 
+                                                aria-label="Room Wise Export Options"
+                                                className="p-1 min-w-[240px] bg-white rounded-xl"
+                                                itemClasses={{
+                                                    base: "data-[hover=true]:bg-slate-100/80 rounded-xl p-2.5 transition-all text-slate-800",
+                                                    title: "text-[13px] font-bold text-slate-800",
+                                                    description: "text-[11px] text-slate-500 font-medium"
+                                                }}
+                                                onAction={(key) => {
+                                                    if (key === 'excel') downloadRoomWiseExcel();
+                                                    if (key === 'pdf') downloadRoomWisePDFZip();
+                                                }}
+                                            >
+                                                <DropdownItem
+                                                    key="excel"
+                                                    startContent={<FileSpreadsheet className="w-4.5 h-4.5 text-emerald-600 shrink-0" />}
+                                                    description="Download all rooms as multi-sheet Excel file"
+                                                >
+                                                    Excel Spreadsheet (.xlsx)
+                                                </DropdownItem>
+                                                <DropdownItem
+                                                    key="pdf"
+                                                    startContent={<FileDown className="w-4.5 h-4.5 text-rose-600 shrink-0" />}
+                                                    description="Bulk export all room PDFs as a ZIP file"
+                                                >
+                                                    Bulk PDF Package (.zip)
+                                                </DropdownItem>
+                                            </DropdownMenu>
+                                        </Dropdown>
+
+                                        {/* Consolidated Dropdown */}
+                                        <Dropdown 
+                                            placement="bottom-start"
+                                            classNames={{
+                                                content: "!bg-white !bg-opacity-100 bg-white border border-slate-200/90 shadow-2xl shadow-slate-300/40 rounded-2xl p-1 z-50 overflow-hidden"
+                                            }}
                                         >
-                                            <FileDown size={14} className="text-indigo-600 shrink-0" />
-                                            <span className="select-none leading-none">{consolidatedDownloading ? 'Exporting...' : 'Consolidated'}</span>
-                                        </button>
-                                        <button
-                                            onClick={downloadSubjectWiseExcel}
-                                            disabled={subjectDownloading}
-                                            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-xl bg-purple-50/80 border border-purple-200/80 text-purple-700 text-[12px] font-extrabold hover:bg-purple-100/80 hover:border-purple-300 transition-all shadow-2xs disabled:opacity-60 active:scale-[0.98] select-none cursor-pointer"
+                                            <DropdownTrigger>
+                                                <button
+                                                    disabled={consolidatedDownloading}
+                                                    className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-indigo-50/80 border border-indigo-200/80 text-indigo-700 text-[12px] font-extrabold hover:bg-indigo-100/80 hover:border-indigo-300 transition-all shadow-2xs disabled:opacity-60 active:scale-[0.98] select-none cursor-pointer"
+                                                >
+                                                    <FileDown size={14} className="text-indigo-600 shrink-0" />
+                                                    <span className="select-none leading-none">{consolidatedDownloading ? 'Exporting...' : 'Consolidated'}</span>
+                                                    <ChevronDown size={13} className="text-indigo-500 shrink-0" />
+                                                </button>
+                                            </DropdownTrigger>
+                                            <DropdownMenu 
+                                                aria-label="Consolidated Export Options"
+                                                className="p-1 min-w-[240px] bg-white rounded-xl"
+                                                itemClasses={{
+                                                    base: "data-[hover=true]:bg-slate-100/80 rounded-xl p-2.5 transition-all text-slate-800",
+                                                    title: "text-[13px] font-bold text-slate-800",
+                                                    description: "text-[11px] text-slate-500 font-medium"
+                                                }}
+                                                onAction={(key) => {
+                                                    if (key === 'excel') downloadConsolidatedExcel();
+                                                    if (key === 'pdf') downloadConsolidatedPDF();
+                                                }}
+                                            >
+                                                <DropdownItem
+                                                    key="excel"
+                                                    startContent={<FileSpreadsheet className="w-4.5 h-4.5 text-indigo-600 shrink-0" />}
+                                                    description="Download full seating table as Excel sheet"
+                                                >
+                                                    Excel Spreadsheet (.xlsx)
+                                                </DropdownItem>
+                                                <DropdownItem
+                                                    key="pdf"
+                                                    startContent={<FileDown className="w-4.5 h-4.5 text-rose-600 shrink-0" />}
+                                                    description="Download official consolidated PDF report"
+                                                >
+                                                    PDF Document (.pdf)
+                                                </DropdownItem>
+                                            </DropdownMenu>
+                                        </Dropdown>
+
+                                        {/* Batch Wise Dropdown */}
+                                        <Dropdown 
+                                            placement="bottom-start"
+                                            classNames={{
+                                                content: "!bg-white !bg-opacity-100 bg-white border border-slate-200/90 shadow-2xl shadow-slate-300/40 rounded-2xl p-1 z-50 overflow-hidden"
+                                            }}
                                         >
-                                            <FileDown size={14} className="text-purple-600 shrink-0" />
-                                            <span className="select-none leading-none">{subjectDownloading ? 'Exporting...' : 'Batch Wise'}</span>
-                                        </button>
+                                            <DropdownTrigger>
+                                                <button
+                                                    disabled={subjectDownloading}
+                                                    className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-purple-50/80 border border-purple-200/80 text-purple-700 text-[12px] font-extrabold hover:bg-purple-100/80 hover:border-purple-300 transition-all shadow-2xs disabled:opacity-60 active:scale-[0.98] select-none cursor-pointer"
+                                                >
+                                                    <FileDown size={14} className="text-purple-600 shrink-0" />
+                                                    <span className="select-none leading-none">{subjectDownloading ? 'Exporting...' : 'Batch Wise'}</span>
+                                                    <ChevronDown size={13} className="text-purple-500 shrink-0" />
+                                                </button>
+                                            </DropdownTrigger>
+                                            <DropdownMenu 
+                                                aria-label="Batch Wise Export Options"
+                                                className="p-1 min-w-[240px] bg-white rounded-xl"
+                                                itemClasses={{
+                                                    base: "data-[hover=true]:bg-slate-100/80 rounded-xl p-2.5 transition-all text-slate-800",
+                                                    title: "text-[13px] font-bold text-slate-800",
+                                                    description: "text-[11px] text-slate-500 font-medium"
+                                                }}
+                                                onAction={(key) => {
+                                                    if (key === 'excel') downloadSubjectWiseExcel();
+                                                    if (key === 'pdf') downloadSubjectWisePDF();
+                                                }}
+                                            >
+                                                <DropdownItem
+                                                    key="excel"
+                                                    startContent={<FileSpreadsheet className="w-4.5 h-4.5 text-purple-600 shrink-0" />}
+                                                    description="Download batch/branch seating as Excel sheet"
+                                                >
+                                                    Excel Spreadsheet (.xlsx)
+                                                </DropdownItem>
+                                                <DropdownItem
+                                                    key="pdf"
+                                                    startContent={<FileDown className="w-4.5 h-4.5 text-rose-600 shrink-0" />}
+                                                    description="Download official batch wise PDF report"
+                                                >
+                                                    PDF Document (.pdf)
+                                                </DropdownItem>
+                                            </DropdownMenu>
+                                        </Dropdown>
                                         <div className="w-px h-5 bg-slate-200/80 mx-0.5 shrink-0" />
                                         <button
                                             onClick={handleClearClick}

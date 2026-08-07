@@ -43,6 +43,19 @@ interface AssignFeedback {
 
 const OFFICIAL_DEPT_PRIORITY = ['CS', 'AD', 'CA', 'CC', 'EC', 'EE', 'ME'];
 
+const downloadExcelFile = (XLSXStyle: any, wb: any, fileName: string) => {
+    const excelBuffer = XLSXStyle.write(wb, { bookType: 'xlsx', type: 'array' });
+    const dataBlob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+};
+
 /* ─── High-End Dark NASA Theme Colors ───────────────────────────── */
 const DARK_DEPT_COLORS: Record<string, { bg: string; text: string; border: string }> = {
     // Cool blues, teals, and soft purples/pinks to match the blueprint theme (No oranges/yellows)
@@ -774,9 +787,10 @@ const SeatingPlans: React.FC = () => {
             { s: { r: 2, c: 0 }, e: { r: 2, c: 8 } },
             { s: { r: 3, c: 0 }, e: { r: 3, c: 8 } },
         ];
+
         const wb = XLSXStyle.utils.book_new();
         XLSXStyle.utils.book_append_sheet(wb, ws, 'Hall Seating');
-        XLSXStyle.writeFile(wb, `Hall_Seating_${detailHall?.hallCode}_${selectedDate}.xlsx`);
+        downloadExcelFile(XLSXStyle, wb, `Hall_Seating_${detailHall?.hallCode}_${selectedDate}.xlsx`);
         toast.success('Excel downloaded');
     };
 
@@ -1147,7 +1161,7 @@ const SeatingPlans: React.FC = () => {
             ws['!merges'] = merges;
             const wb = XLSXStyle.utils.book_new();
             XLSXStyle.utils.book_append_sheet(wb, ws, 'Consolidated Seating');
-            XLSXStyle.writeFile(wb, `SubjectWise_Consolidated_${selectedDate}.xlsx`);
+            downloadExcelFile(XLSXStyle, wb, `SubjectWise_Consolidated_${selectedDate}.xlsx`);
             toast.success('Subject-wise Consolidated Excel downloaded');
         } catch (e) { console.error(e); toast.error('Failed to generate Subject Wise Excel'); }
         finally { setSubjectDownloading(false); }
@@ -1387,7 +1401,7 @@ const SeatingPlans: React.FC = () => {
             ws['!merges'] = merges;
             const wb = XLSXStyle.utils.book_new();
             XLSXStyle.utils.book_append_sheet(wb, ws, 'Consolidated');
-            XLSXStyle.writeFile(wb, `Consolidated_Seating_${selectedDate}_${selectedSession}.xlsx`);
+            downloadExcelFile(XLSXStyle, wb, `Consolidated_Seating_${selectedDate}_${selectedSession}.xlsx`);
             toast.success('Excel downloaded');
         } catch (e) { console.error(e); toast.error('Failed to generate Excel'); }
         finally { setGlobalDownloading(false); }
@@ -1809,7 +1823,7 @@ const SeatingPlans: React.FC = () => {
                 XLSXStyle.utils.book_append_sheet(wb, ws, sheetName);
             }
 
-            XLSXStyle.writeFile(wb, `Seating_Grid_All_Halls_${selectedDate}_${selectedSession}.xlsx`);
+            downloadExcelFile(XLSXStyle, wb, `Seating_Grid_All_Halls_${selectedDate}_${selectedSession}.xlsx`);
             toast.success('Excel downloaded');
         } catch (err: any) {
             console.error('downloadSeatingExcel error:', err);

@@ -346,14 +346,14 @@ export const importStudents = async (req: Request, res: Response) => {
                         record[header] = val;
                     }
                 }
-                
+
                 if (!record['Batch'] && globalBatch) {
-                     record['Batch'] = globalBatch;
+                    record['Batch'] = globalBatch;
                 }
 
                 const regNoVal = String(record['Register Number'] || '').toLowerCase();
                 const nameVal = String(record['Name'] || '').toLowerCase();
-                
+
                 // Skip duplicated header rows inside the data
                 if (nameVal.includes('name') && (regNoVal.includes('reg') || regNoVal === '')) {
                     console.warn("Skipping duplicated header row inside data.");
@@ -399,14 +399,14 @@ export const importStudents = async (req: Request, res: Response) => {
             if (!text) return {};
 
             const info: any = {};
-            
+
             // New explicit match from prompt: "BHM 2023 (S1)"
             const customRegex = /([A-Z]+)\s(\d{4}).*(S(\d))/i;
             const customMatch = text.match(customRegex);
             if (customMatch) {
-                 if (customMatch[1]) info.leadingCode = customMatch[1].toUpperCase();
-                 if (customMatch[2]) info.startYear = parseInt(customMatch[2], 10);
-                 if (customMatch[4]) info.semesterNumber = parseInt(customMatch[4], 10);
+                if (customMatch[1]) info.leadingCode = customMatch[1].toUpperCase();
+                if (customMatch[2]) info.startYear = parseInt(customMatch[2], 10);
+                if (customMatch[4]) info.semesterNumber = parseInt(customMatch[4], 10);
             }
 
             const yearMatch = text.match(/\b(20\d{2})\s*-\s*(20\d{2})\b/);
@@ -426,7 +426,7 @@ export const importStudents = async (req: Request, res: Response) => {
             } else if (!info.leadingCode && prefixTokens.length > 0) {
                 info.leadingCode = prefixTokens[0] as string;
             }
-            
+
             if (normalizedPrefix) info.batchPrefix = normalizedPrefix;
             if (prefixTokens.length > 0) info.prefixTokens = prefixTokens;
 
@@ -482,7 +482,7 @@ export const importStudents = async (req: Request, res: Response) => {
         const programsAll = await Program.findAll();
         const deptsAll = await Department.findAll();
         const semestersAll = await Semester.findAll();
-        
+
         const existingStudentsAll = await Student.findAll();
         const existingUsersAll = await User.findAll();
 
@@ -492,7 +492,7 @@ export const importStudents = async (req: Request, res: Response) => {
             existingStudentsMap.set(s.RegisterNumber, s);
             existingStudentsMapByUserId.set(s.UserID, s);
         });
-        
+
         const existingUsersMap = new Map<number, any>();
         const existingUsersMapByEmail = new Map<string, any>();
         existingUsersAll.forEach((u: any) => {
@@ -505,7 +505,7 @@ export const importStudents = async (req: Request, res: Response) => {
         semestersAll.forEach((s: any) => {
             semestersMap.set(`${s.ProgramID}_${s.SemesterNumber}`, s);
         });
-        
+
         // Hash default password once to avoid O(N) bcrypt delay
         // bcrypt is already imported at the top
 
@@ -525,7 +525,7 @@ export const importStudents = async (req: Request, res: Response) => {
         for (const row of data) {
             const name = normalizeKey(row, ['Name', 'Student Name', 'Full Name', 'StudentName']);
             const regNoRaw = normalizeKey(row, [
-                'Register Number', 'RegisterNumber', 'Reg No', 'RegNo', 'Register', 'Register', 
+                'Register Number', 'RegisterNumber', 'Reg No', 'RegNo', 'Register', 'Register',
                 'Register No', 'University RegNo', 'University Reg No', 'UniversityRegNo'
             ]);
             const regNo = String(regNoRaw ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -536,10 +536,10 @@ export const importStudents = async (req: Request, res: Response) => {
             }
         }
 
-        
+
         const precomputedHashes = new Map<string, string>();
         const passwordChunks = Array.from(passwordsToHash);
-        
+
         // Batch hash in larger parallel groups (50) to fully utilize CPU
         const BATCH_SIZE = 50;
         for (let i = 0; i < passwordChunks.length; i += BATCH_SIZE) {
@@ -594,7 +594,7 @@ export const importStudents = async (req: Request, res: Response) => {
         for (const row of data) {
             // Flexible Key Matching
             const regNoRaw = normalizeKey(row, [
-                'Register Number', 'RegisterNumber', 'Reg No', 'RegNo', 'Register', 'Register', 
+                'Register Number', 'RegisterNumber', 'Reg No', 'RegNo', 'Register', 'Register',
                 'Register No', 'University RegNo', 'University Reg No', 'UniversityRegNo'
             ]);
             const name = normalizeKey(row, ['Name', 'Student Name', 'Full Name', 'StudentName']);
@@ -602,7 +602,7 @@ export const importStudents = async (req: Request, res: Response) => {
             const programInput = normalizeKey(row, ['Program', 'Program Name', 'Programme', 'Course', 'Branch', 'Stream']);
             const semesterInput = normalizeKey(row, ['Semester', 'Sem', 'Term']);
             const batchInput = normalizeKey(row, ['Batch', 'Batch Name', 'Class']);
-            
+
             const regNo = String(regNoRaw ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
             const normalizedName = String(name ?? '').trim();
 
@@ -623,7 +623,7 @@ export const importStudents = async (req: Request, res: Response) => {
                 const rawAcademicString = row['Batch'] || programInput || batchInput;
                 const parsed = parseBatchString(rawAcademicString);
                 const programCode = normalizeProgram(parsed.programCode);
-                
+
                 let targetProgram = programNormalizedCache.get(programCode);
                 if (!targetProgram) {
                     targetProgram = await resolveOrCreateProgram(programCode, t);
@@ -643,7 +643,7 @@ export const importStudents = async (req: Request, res: Response) => {
                 // Try to get batch year from: parsed data > register number > existing student > current year
                 const joiningYearFromReg = extractBatchYearFromRegisterNumber(regNo);
                 const effectiveBatchYear = parsed.batchYear || joiningYearFromReg || existingStudent?.BatchYear || new Date().getFullYear();
-                
+
                 let parsedSemester = parsed.semester || normalizeSemesterNumber(semesterInput) || 1;
                 if (!parsed.semester && !semesterInput) {
                     const yearsComp = new Date().getFullYear() - effectiveBatchYear;
@@ -668,7 +668,7 @@ export const importStudents = async (req: Request, res: Response) => {
                 const studentEmail = (email && String(email).includes('@')) ? String(email).trim().toLowerCase() : null;
 
                 let user = existingStudent?.UserID ? existingUsersMap.get(existingStudent.UserID) : (studentEmail ? existingUsersMapByEmail.get(studentEmail) : null);
-                
+
                 rowManifests.push({
                     row,
                     regNo,
@@ -707,7 +707,7 @@ export const importStudents = async (req: Request, res: Response) => {
                             programCodeFromReg,
                             m.targetProgram?.DurationYears || 2
                         );
-                        
+
                         currentUser = await User.create({
                             Email: generatedEmail,
                             FullName: m.normalizedName,
@@ -733,7 +733,7 @@ export const importStudents = async (req: Request, res: Response) => {
                     }
 
                     if (m.existingStudent) {
-                        const hasChanged = 
+                        const hasChanged =
                             m.existingStudent.UserID !== currentUser.UserID ||
                             m.existingStudent.DepartmentID !== m.targetDept.DepartmentID ||
                             m.existingStudent.ProgramID !== m.targetProgram.ProgramID ||
@@ -763,20 +763,20 @@ export const importStudents = async (req: Request, res: Response) => {
                     successCount++;
                 } catch (err: any) {
                     const errorDetail = err.errors ? err.errors.map((e: any) => e.message).join(', ') : err.message;
-                    errors.push({ row: m.row['_sourceRowIdx'] || 'Unknown', reason: `Insertion error (${m.normalizedName} | ${m.regNo}): ${errorDetail}` });   
+                    errors.push({ row: m.row['_sourceRowIdx'] || 'Unknown', reason: `Insertion error (${m.normalizedName} | ${m.regNo}): ${errorDetail}` });
                 }
             }
         }
 
         await t.commit();
-        
+
         // Final background logging of errors
         if (errors.length > 0) {
             try {
                 const { appendFileSync } = await import('fs');
                 const { resolve } = await import('path');
-                appendFileSync(resolve('debug_error.log'), `Import on ${new Date().toISOString()}:\n${errors.map((e:any) => typeof e === 'string' ? e : `Row ${e.row}: ${e.reason}`).join('\n')}\n`);
-            } catch (e) {}
+                appendFileSync(resolve('debug_error.log'), `Import on ${new Date().toISOString()}:\n${errors.map((e: any) => typeof e === 'string' ? e : `Row ${e.row}: ${e.reason}`).join('\n')}\n`);
+            } catch (e) { }
         }
 
         res.status(200).json({
@@ -787,7 +787,7 @@ export const importStudents = async (req: Request, res: Response) => {
         });
 
     } catch (error: any) {
-        try { await t.rollback(); } catch (e) {}
+        try { await t.rollback(); } catch (e) { }
         console.error("Bulk Import Error:", error);
 
         // DEBUG: Write error to file for AI Agent to read
@@ -981,8 +981,8 @@ export const createStudent = async (req: Request, res: Response) => {
                 .catch(err => console.error('Failed to send credentials email:', err.message));
         }
 
-        res.status(201).json({ 
-            message: "Student created successfully", 
+        res.status(201).json({
+            message: "Student created successfully",
             student: newStudent,
             credentialsEmailSent: !!collegeEmail
         });
@@ -1237,8 +1237,8 @@ export const bulkImportStudentsWithSeats = async (req: Request, res: Response) =
         // Optional validation if seat allocation is requested
         if (blockId && floorId && roomId) {
             if (!blockId || !floorId || !roomId) {
-                return res.status(400).json({ 
-                    message: "All of blockId, floorId, roomId must be provided for seat allocation" 
+                return res.status(400).json({
+                    message: "All of blockId, floorId, roomId must be provided for seat allocation"
                 });
             }
         }
@@ -1305,7 +1305,7 @@ export const getStudentImportTemplate = async (req: Request, res: Response) => {
         // Send as attachment
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', 'attachment; filename="student_import_template.xlsx"');
-        
+
         const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
         res.send(buffer);
 
@@ -1493,7 +1493,7 @@ export const exportStudentCredentials = async (req: Request, res: Response) => {
     try {
         const { dept } = req.query;
         const whereClause: any = { Status: 'ACTIVE' };
-        
+
         if (dept && !isNaN(parseInt(dept as string))) {
             whereClause.DepartmentID = parseInt(dept as string);
         }
@@ -1515,32 +1515,32 @@ export const exportStudentCredentials = async (req: Request, res: Response) => {
 
         // Group students by department
         const deptGroups = new Map<string, any[]>();
-        
+
         students.forEach(s => {
             const deptName = s.Department?.DepartmentName || 'General';
             if (!deptGroups.has(deptName)) {
                 deptGroups.set(deptName, []);
             }
-            
+
             const fullName = (s.FullName || s.User?.FullName || 'Student').trim();
             const regNo = (s.RegisterNumber || '').trim().toUpperCase();
             const isChanged = s.User?.IsPasswordChanged;
-            
+
             const email = s.User?.Email || generateStudentEmail(
-                fullName, 
-                s.BatchYear || new Date().getFullYear(), 
+                fullName,
+                s.BatchYear || new Date().getFullYear(),
                 s.Program?.ProgramCode || s.Department?.DepartmentCode || 'STUDENT',
                 s.Program?.DurationYears || 2
             );
-            
+
             deptGroups.get(deptName)?.push({
                 'Register Number': regNo,
                 'Email': email,
                 'Full Name': fullName,
                 'Default Password': generateDefaultPassword(fullName, regNo),
                 'Password Status': isChanged ? 'Changed' : 'Initial Default',
-                'Note': isChanged 
-                    ? 'Password already changed by student. If login fails, student must use their new password.' 
+                'Note': isChanged
+                    ? 'Password already changed by student. If login fails, student must use their new password.'
                     : 'Initial default password. Use the Email and Password shown here.'
             });
         });
@@ -1552,7 +1552,7 @@ export const exportStudentCredentials = async (req: Request, res: Response) => {
             deptGroups.forEach((data, deptName) => {
                 const safeSheetName = deptName.substring(0, 31).replace(/[\[\]\*\?\/\\\:]/g, '');
                 const ws = XLSX.utils.json_to_sheet(data);
-                
+
                 const colWidths = [
                     { wch: 20 }, // Register Number
                     { wch: 30 }, // Full Name
@@ -1561,7 +1561,7 @@ export const exportStudentCredentials = async (req: Request, res: Response) => {
                     { wch: 80 }  // Note
                 ];
                 ws['!cols'] = colWidths;
-                
+
                 XLSX.utils.book_append_sheet(wb, ws, safeSheetName);
             });
         }

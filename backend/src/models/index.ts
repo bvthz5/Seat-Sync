@@ -230,8 +230,8 @@ InternalRoom.belongsTo(InternalFloor, { foreignKey: 'FloorID', as: 'Floor' });
 InternalBlock.hasMany(InternalRoom, { foreignKey: 'BlockID', as: 'Rooms', onDelete: 'CASCADE' });
 InternalRoom.belongsTo(InternalBlock, { foreignKey: 'BlockID', as: 'Block' });
 
-InternalRoom.hasMany(InternalSeat, { foreignKey: 'RoomID', onDelete: 'CASCADE' });
-InternalSeat.belongsTo(InternalRoom, { foreignKey: 'RoomID' });
+InternalRoom.hasMany(InternalSeat, { foreignKey: 'RoomID', as: 'Seats', onDelete: 'CASCADE' });
+InternalSeat.belongsTo(InternalRoom, { foreignKey: 'RoomID', as: 'Room' });
 
 // Seating layout & column associations
 InternalRoom.hasOne(InternalSeatLayout, { foreignKey: 'RoomID', as: 'Layout', onDelete: 'CASCADE' });

@@ -372,13 +372,13 @@ export const getStudentDashboard = async (req: Request, res: Response) => {
             if (targetExam.isInternal) {
                 const assignment = await InternalSeatAllocation.findOne({ 
                     where: { InternalExamID: targetExam.examId, InternalStudentID: internalStudent?.InternalStudentID }, 
-                    include: [{ model: InternalSeat, include: [{ model: InternalRoom, include: [InternalBlock, InternalFloor] }] }] 
+                    include: [{ model: InternalSeat, as: 'Seat', include: [{ model: InternalRoom, as: 'Room', include: [{ model: InternalBlock, as: 'Block' }, { model: InternalFloor, as: 'Floor' }] }] }] 
                 });
                 if (assignment) {
-                    const seat = (assignment as any).InternalSeat;
-                    const room = seat?.InternalRoom;
+                    const seat = (assignment as any).Seat;
+                    const room = seat?.Room;
                     const roomCode = room?.RoomCode || room?.RoomName || "";
-                    let floorLabel = parseFloorLabel(room?.InternalFloor?.FloorName, room?.InternalFloor?.FloorNumber, roomCode);
+                    let floorLabel = parseFloorLabel(room?.Floor?.FloorName, room?.Floor?.FloorNumber, roomCode);
                     seating = { 
                         examId: targetExam.examId, 
                         isInternal: true,
@@ -386,7 +386,7 @@ export const getStudentDashboard = async (req: Request, res: Response) => {
                         rowLabel: seat?.RowLabel,
                         benchNumber: seat?.BenchNumber,
                         roomCode: roomCode, 
-                        blockName: room?.InternalBlock?.BlockName, 
+                        blockName: room?.Block?.BlockName, 
                         floorName: floorLabel,
                         rowLayout: room?.RowLayout,
                         seatsPerBench: room?.SeatsPerBench
@@ -533,21 +533,21 @@ export const getStudentSeating = async (req: Request, res: Response) => {
         if (isInternal) {
             const assignment = await InternalSeatAllocation.findOne({ 
                 where: { InternalExamID: targetExam.InternalExamID, InternalStudentID: internalStudent?.InternalStudentID }, 
-                include: [{ model: InternalSeat, include: [{ model: InternalRoom, include: [InternalBlock, InternalFloor] }] }] 
+                include: [{ model: InternalSeat, as: 'Seat', include: [{ model: InternalRoom, as: 'Room', include: [{ model: InternalBlock, as: 'Block' }, { model: InternalFloor, as: 'Floor' }] }] }] 
             });
             if (!assignment) return res.json({ success: true, data: { exam: mappedInfo, assignment: null, layout: [] } });
             
-            const seat = (assignment as any).InternalSeat;
-            const room = seat?.InternalRoom;
+            const seat = (assignment as any).Seat;
+            const room = seat?.Room;
             const layout = await InternalSeatAllocation.findAll({ 
                 where: { InternalExamID: targetExam.InternalExamID }, 
-                include: [{ model: InternalSeat, required: true, where: { InternalRoomID: seat.InternalRoomID } }, { model: InternalStudent, as: 'Student', include: [{ model: User, attributes: ["FullName"] }] }] 
+                include: [{ model: InternalSeat, as: 'Seat', required: true, where: { RoomID: seat.RoomID } }, { model: InternalStudent, as: 'Student', include: [{ model: User, attributes: ["FullName"] }] }] 
             });
             const roomLayout = layout.map((item: any) => ({ 
                 studentId: item.InternalStudentID, 
-                seatNumber: item.InternalSeat?.SeatNumber, 
-                rowLabel: item.InternalSeat?.RowLabel,
-                benchNumber: item.InternalSeat?.BenchNumber,
+                seatNumber: item.Seat?.SeatNumber, 
+                rowLabel: item.Seat?.RowLabel,
+                benchNumber: item.Seat?.BenchNumber,
                 isMe: item.InternalStudentID === internalStudent?.InternalStudentID 
             }));
             
@@ -558,8 +558,8 @@ export const getStudentSeating = async (req: Request, res: Response) => {
                     rowLabel: seat.RowLabel,
                     benchNumber: seat.BenchNumber,
                     roomCode: room.RoomCode || room.RoomName, 
-                    blockName: room.InternalBlock?.BlockName, 
-                    floorName: parseFloorLabel(room.InternalFloor?.FloorName, room.InternalFloor?.FloorNumber, room.RoomCode || room.RoomName || ""),
+                    blockName: room.Block?.BlockName, 
+                    floorName: parseFloorLabel(room.Floor?.FloorName, room.Floor?.FloorNumber, room.RoomCode || room.RoomName || ""),
                     rowLayout: room.RowLayout,
                     seatsPerBench: room.SeatsPerBench,
                     rollNumber: internalStudent?.RollNumber ?? null,
@@ -593,10 +593,10 @@ export const getSeatLayout = async (req: Request, res: Response) => {
         if (isInternal) {
             const internalStudent = await loadInternalStudent(userId);
             if (!internalStudent) return res.status(404).json({ message: "Student not found" });
-            const assignment = await InternalSeatAllocation.findOne({ where: { InternalExamID: examId, InternalStudentID: internalStudent.InternalStudentID }, include: [{ model: InternalSeat }] });
-            if (!assignment || !(assignment as any).InternalSeat) return res.status(404).json({ message: "No seating" });
-            const layout = await InternalSeatAllocation.findAll({ where: { InternalExamID: examId }, include: [{ model: InternalSeat, required: true, where: { InternalRoomID: (assignment as any).InternalSeat.InternalRoomID } }] });
-            res.json({ success: true, data: layout.map((item: any) => ({ studentId: item.InternalStudentID, seatNumber: item.InternalSeat?.SeatNumber, rowLabel: item.InternalSeat?.RowLabel, benchNumber: item.InternalSeat?.BenchNumber, isMe: item.InternalStudentID === internalStudent.InternalStudentID })) });
+            const assignment = await InternalSeatAllocation.findOne({ where: { InternalExamID: examId, InternalStudentID: internalStudent.InternalStudentID }, include: [{ model: InternalSeat, as: 'Seat' }] });
+            if (!assignment || !(assignment as any).Seat) return res.status(404).json({ message: "No seating" });
+            const layout = await InternalSeatAllocation.findAll({ where: { InternalExamID: examId }, include: [{ model: InternalSeat, as: 'Seat', required: true, where: { RoomID: (assignment as any).Seat.RoomID } }] });
+            res.json({ success: true, data: layout.map((item: any) => ({ studentId: item.InternalStudentID, seatNumber: item.Seat?.SeatNumber, rowLabel: item.Seat?.RowLabel, benchNumber: item.Seat?.BenchNumber, isMe: item.InternalStudentID === internalStudent.InternalStudentID })) });
         } else {
             const student = await loadStudent(userId);
             if (!student) return res.status(404).json({ message: "Student not found" });

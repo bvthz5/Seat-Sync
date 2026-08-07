@@ -49,7 +49,7 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
 
         setIsUploading(true);
         setProgress(10);
-        
+
         // Progress bar simulation
         const progressInterval = setInterval(() => {
             setProgress(prev => {
@@ -67,9 +67,9 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
             }
             clearInterval(progressInterval);
             setProgress(100);
-            
+
             const errorCount = response.failedCount || response.errorCount || 0;
-            
+
             setUploadStats({
                 success: response.successCount || 0,
                 errors: errorCount,
@@ -127,32 +127,32 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
                     </div>
 
                     <div className="p-8 space-y-8 overflow-y-auto">
-                        
-                    {uploadStats.active && (
-                        <div className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100">
-                            <h3 className="text-lg font-bold mb-4">Import Results</h3>
-                            <div className="flex gap-4 mb-4">
-                                <div className="bg-green-50 p-4 rounded-lg flex-1">
-                                    <p className="text-sm text-green-600 font-semibold"> Imported</p>
-                                    <p className="text-2xl font-bold text-green-700">{uploadStats.success}</p>
+
+                        {uploadStats.active && (
+                            <div className="mb-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100">
+                                <h3 className="text-lg font-bold mb-4">Import Results</h3>
+                                <div className="flex gap-4 mb-4">
+                                    <div className="bg-green-50 p-4 rounded-lg flex-1">
+                                        <p className="text-sm text-green-600 font-semibold"> Imported</p>
+                                        <p className="text-2xl font-bold text-green-700">{uploadStats.success}</p>
+                                    </div>
+                                    <div className="bg-red-50 p-4 rounded-lg flex-1">
+                                        <p className="text-sm text-red-600 font-semibold"> Failed</p>
+                                        <p className="text-2xl font-bold text-red-700">{uploadStats.errors}</p>
+                                    </div>
                                 </div>
-                                <div className="bg-red-50 p-4 rounded-lg flex-1">
-                                    <p className="text-sm text-red-600 font-semibold"> Failed</p>
-                                    <p className="text-2xl font-bold text-red-700">{uploadStats.errors}</p>
-                                </div>
+                                {uploadStats.errors > 0 && uploadStats.errorList && uploadStats.errorList.length > 0 && (
+                                    <div className="bg-red-50 p-4 rounded-lg">
+                                        <p className="text-sm text-red-800 font-bold mb-2">Error List:</p>
+                                        <ul className="list-disc list-inside text-xs text-red-700 space-y-1 max-h-32 overflow-y-auto">
+                                            {uploadStats.errorList.map((e: any, i: number) => (
+                                                <li key={i}>Row {e.row}: {e.reason}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
                             </div>
-                            {uploadStats.errors > 0 && uploadStats.errorList && uploadStats.errorList.length > 0 && (
-                                <div className="bg-red-50 p-4 rounded-lg">
-                                    <p className="text-sm text-red-800 font-bold mb-2">Error List:</p>
-                                    <ul className="list-disc list-inside text-xs text-red-700 space-y-1 max-h-32 overflow-y-auto">
-                                        {uploadStats.errorList.map((e: any, i: number) => (
-                                            <li key={i}>Row {e.row}: {e.reason}</li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
-                        </div>
-                    )}
+                        )}
 
                         {/* Smart Features Info */}
                         <div className="bg-blue-50 border border-blue-100 rounded-xl p-5 relative overflow-hidden">
@@ -223,8 +223,8 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
                                     <span className="text-sm font-bold text-blue-600">{Math.round(progress)}%</span>
                                 </div>
                                 <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                    <motion.div 
-                                        className="bg-blue-600 h-2.5 rounded-full" 
+                                    <motion.div
+                                        className="bg-blue-600 h-2.5 rounded-full"
                                         initial={{ width: 0 }}
                                         animate={{ width: `${progress}%` }}
                                         transition={{ ease: "easeOut", duration: 0.5 }}
@@ -236,23 +236,23 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
                         {/* Formatting Guide */}
                         <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
                             <h4 className="text-blue-900 text-base font-semibold mb-3 flex items-center gap-2">
-  <Info className="w-4 h-4 text-blue-500" /> Expected File Columns
-</h4>
-<div className="grid grid-cols-2 md:grid-cols-3 gap-x-10 gap-y-2">
-  <ul className="space-y-2 text-sm text-blue-900/80 font-medium">
-    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Name</li>
-    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Register Number</li>
-    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Email</li>
-  </ul>
-  <ul className="space-y-2 text-sm text-blue-900/80 font-medium">
-    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Program</li>
-    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Semester</li>
-    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Batch</li>
-  </ul>
-  <ul className="space-y-2 text-sm text-blue-900/80 font-medium">
-    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Department</li>
-  </ul>
-</div>
+                                <Info className="w-4 h-4 text-blue-500" /> Expected File Columns
+                            </h4>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-10 gap-y-2">
+                                <ul className="space-y-2 text-sm text-blue-900/80 font-medium">
+                                    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Name</li>
+                                    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Register Number</li>
+                                    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Email</li>
+                                </ul>
+                                <ul className="space-y-2 text-sm text-blue-900/80 font-medium">
+                                    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Program</li>
+                                    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Semester</li>
+                                    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Batch</li>
+                                </ul>
+                                <ul className="space-y-2 text-sm text-blue-900/80 font-medium">
+                                    <li className="flex items-center gap-2"><div className="w-2 h-2 bg-blue-600 rounded-full"></div>Department</li>
+                                </ul>
+                            </div>
                         </div>
 
                         {/* Results */}

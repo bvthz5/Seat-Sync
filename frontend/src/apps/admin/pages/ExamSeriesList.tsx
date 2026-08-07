@@ -12,6 +12,7 @@ import ExamImportModal from '../components/exams/ExamImportModal';
 import { InternalExamImportModal } from '../components/internal-structure/InternalExamImportModal';
 import EditExamModal from '../components/exams/EditExamModal';
 import ConfirmationModal from '../components/ConfirmationModal';
+import { BulkAutoRegisterModal } from '../components/exams/BulkAutoRegisterModal';
 
 const isMissingDepartment = (code: string, name: string) => {
     return !code || code === 'GEN' || code === 'GENERAL' || name === 'GENERAL';
@@ -193,24 +194,11 @@ const ExamSeriesList: React.FC = () => {
         }
     };
 
-    const handleBulkAutoMap = async () => {
+    const [isBulkAutoRegisterOpen, setIsBulkAutoRegisterOpen] = useState(false);
+
+    const handleBulkAutoMap = () => {
         if (!seriesId) return;
-        setIsBulkMapping(true);
-        const tid = toast.loading('Bulk registering students across all subjects...');
-        try {
-            const result = await InternalStudentService.bulkAutoMapSeries(parseInt(seriesId));
-            if (result.success) {
-                toast.success(result.message, { id: tid, duration: 4000 });
-                fetchExams();
-            } else {
-                toast.error(result.message || 'Bulk auto registration failed', { id: tid });
-            }
-        } catch (error: any) {
-            console.error('Bulk Auto Register Error:', error);
-            toast.error(error.response?.data?.message || 'Failed to bulk auto register students', { id: tid });
-        } finally {
-            setIsBulkMapping(false);
-        }
+        setIsBulkAutoRegisterOpen(true);
     };
 
     return (
@@ -534,6 +522,18 @@ const ExamSeriesList: React.FC = () => {
                 confirmText="Delete All"
                 cancelText="Cancel"
                 type="danger"
+            />
+
+            <BulkAutoRegisterModal
+                isOpen={isBulkAutoRegisterOpen}
+                onClose={() => setIsBulkAutoRegisterOpen(false)}
+                seriesId={seriesId || ''}
+                seriesName={seriesName}
+                totalExamsCount={exams.length}
+                onSuccess={() => {
+                    setIsBulkAutoRegisterOpen(false);
+                    fetchExams();
+                }}
             />
         </div>
     );

@@ -277,6 +277,7 @@ export const internalSeatingController = {
                 where: { Status: 'Active', ExamUsable: true },
                 include: [{
                     model: InternalSeat,
+                    as: 'Seats',
                     where: { IsActive: true },
                     required: false  // LEFT JOIN — rooms with no seats still appear
                 }],
@@ -286,7 +287,7 @@ export const internalSeatingController = {
             // Build a map: roomId -> { hallId, hallCode, total, used }
             const hallStatsMap = new Map<number, { hallId: number; hallCode: string; total: number; used: number }>();
             for (const room of allRooms) {
-                const seats = (room as any).InternalSeats || [];
+                const seats = (room as any).Seats || [];
                 hallStatsMap.set(room.RoomID, {
                     hallId: room.RoomID,
                     hallCode: room.RoomCode,
