@@ -1265,6 +1265,16 @@ async function ensureSchemaIntegrity() {
 }
 
 export async function connectDB() {
+    if (DB_DIALECT !== "sqlite") {
+        try {
+            const { ensureServicesRunning, ensureDatabaseExists } = await import("../utils/serviceManager.js");
+            await ensureServicesRunning();
+            await ensureDatabaseExists(DB_NAME, DB_USER, DB_PASS, DB_HOST, DB_PORT);
+        } catch (srvErr: any) {
+            console.warn("[ServiceManager] Notice during auto-start:", srvErr.message);
+        }
+    }
+
     try {
         await sequelize.authenticate();
         console.log(`Connection Connected: ${sequelize.getDialect()} `);
@@ -1279,9 +1289,9 @@ export async function connectDB() {
         await import("../models/index.js");
 
         const dialect = sequelize.getDialect();
-        if (dialect === 'mssql') {
+        if (dialect === 'mssql' || process.env.DB_ALTER_SYNC !== 'true') {
             await sequelize.sync();
-            console.log("Database synchronized (standard, alter skipped for MSSQL)");
+            console.log(`Database synchronized (standard sync, dialect: ${dialect})`);
         } else {
             try {
                 await sequelize.sync({ alter: true });
