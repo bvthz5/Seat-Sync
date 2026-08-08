@@ -28,7 +28,7 @@ export interface InternalFloor {
     BlockID: number;
     FloorNumber: number;
     Status: 'Active' | 'Inactive';
-    InternalBlock?: { BlockName: string };
+    Block?: { BlockName: string };
 }
 
 export interface InternalRoom {
@@ -44,8 +44,8 @@ export interface InternalRoom {
     SeatMode: "Dual" | "Single" | "Mixed";
     Status: 'Active' | 'Inactive';
     ExamUsable: boolean;
-    InternalBlock?: { BlockName: string };
-    InternalFloor?: { FloorNumber: number };
+    Block?: { BlockName: string };
+    Floor?: { FloorNumber: number };
 }
 
 export interface InternalSeat {
@@ -137,6 +137,10 @@ export const internalStructureService = {
     // ─── BULK ─────────────────────────────────────────────────────────────────
     importStructure: async (data: any[]) => {
         const res = await api.post(`${PREFIX}/import`, { data });
+        return res.data;
+    },
+    getFloorsByBlock: async (blockId: number) => {
+        const res = await api.get(`${PREFIX}/blocks/${blockId}/floors`);
         return res.data;
     },
     deleteAllInternalStructure: async () => {

@@ -328,9 +328,9 @@ export const InvigilatorHeroSVG = () => (
         <g opacity="0.75">
             <rect x="397" y="200" width="85" height="110" rx="4" fill="rgba(0,20,60,0.7)" stroke="#00f5ff" strokeWidth="0.8" />
             <text x="405" y="218" fill="#00f5ff" fontSize="7" className="code-text">INTEGRITY</text>
-            <text x="405" y="232" fill="#0f0" fontSize="6">✓ NO DEVICE</text>
-            <text x="405" y="244" fill="#0f0" fontSize="6">✓ SILENCE</text>
-            <text x="405" y="256" fill="#0f0" fontSize="6">✓ SEALED DOCS</text>
+            <text x="405" y="232" fill="#0f0" fontSize="6"> NO DEVICE</text>
+            <text x="405" y="244" fill="#0f0" fontSize="6"> SILENCE</text>
+            <text x="405" y="256" fill="#0f0" fontSize="6"> SEALED DOCS</text>
             <text x="405" y="268" fill="#ff4" fontSize="6">⊙ SCANNING…</text>
             <text x="405" y="280" fill="#aaf" fontSize="6">ZONE: CLEAR</text>
             <rect x="405" y="290" width="65" height="4" rx="2" fill="#0a1a40" />

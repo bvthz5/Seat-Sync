@@ -45,7 +45,7 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
             const response = await structureService.getBlocks({ limit: 100 });
             const data = response && response.data ? response.data : (Array.isArray(response) ? response : []);
             setBlocks(data);
-             // We do not auto-select the first block, so the user sees all floors.
+            // We do not auto-select the first block, so the user sees all floors.
         } catch (error) {
             console.error(error);
             setBlocks([]);
@@ -248,10 +248,10 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                             className="w-[140px]"
                             variant="bordered"
                             selectedKeys={new Set([statusFilter])}
-                            onSelectionChange={(keys) => { 
+                            onSelectionChange={(keys) => {
                                 const val = Array.from(keys)[0]?.toString() || "all";
-                                setStatusFilter(val); 
-                                setPage(1); 
+                                setStatusFilter(val);
+                                setPage(1);
                             }}
                             classNames={{
                                 trigger: "bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 data-[focus=true]:border-blue-600 shadow-sm rounded-xl h-11 transition-all",
@@ -303,90 +303,90 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                     isHeaderSticky
                     aria-label="Floors table"
                     classNames={{
-                            base: "h-full",
-                            wrapper: "bg-white shadow-sm border border-slate-200 rounded-3xl p-0 h-full overflow-auto custom-scrollbar",
-                            th: "bg-slate-50/50 text-slate-500 font-bold text-[11px] uppercase tracking-wider py-4 px-6 border-b border-slate-100",
-                            td: "py-4 px-6 border-b border-slate-50 group-last:border-0",
-                            tr: "hover:bg-blue-50/30 transition-colors cursor-default"
-                        }}
-                    >
-                        <TableHeader columns={columns}>
-                            {(column) => (
-                                <TableColumn
-                                    key={column.uid}
-                                    align={column.uid === "actions" ? "end" : column.uid === "status" ? "center" : "start"}
-                                    className={column.uid === "actions" ? "text-right" : column.uid === "status" ? "text-center" : "text-left"}
-                                >
-                                    {column.name}
-                                </TableColumn>
-                            )}
-                        </TableHeader>
-                        <TableBody
-                            items={floors}
-                            isLoading={loading}
-                            emptyContent={
-                                <div className="py-20 flex flex-col items-center text-center">
-                                    <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6 shadow-inset">
-                                        <Layers className="text-slate-300" size={32} strokeWidth={1.5} />
-                                    </div>
-                                    <h4 className="text-lg font-bold text-slate-700 mb-1">No floors found</h4>
-                                    <p className="text-slate-400 text-sm max-w-xs mx-auto">
-                                        {selectedBlockId ? "This block doesn't have any floors yet." : "There are no floors configured in the system."}
-                                    </p>
-                                    {!readOnly && <Button variant="light" color="primary" className="mt-4 font-bold" onPress={() => handleOpen()}>Create First Floor</Button>}
+                        base: "h-full",
+                        wrapper: "bg-white shadow-sm border border-slate-200 rounded-3xl p-0 h-full overflow-auto custom-scrollbar",
+                        th: "bg-slate-50/50 text-slate-500 font-bold text-[11px] uppercase tracking-wider py-4 px-6 border-b border-slate-100",
+                        td: "py-4 px-6 border-b border-slate-50 group-last:border-0",
+                        tr: "hover:bg-blue-50/30 transition-colors cursor-default"
+                    }}
+                >
+                    <TableHeader columns={columns}>
+                        {(column) => (
+                            <TableColumn
+                                key={column.uid}
+                                align={column.uid === "actions" ? "end" : column.uid === "status" ? "center" : "start"}
+                                className={column.uid === "actions" ? "text-right" : column.uid === "status" ? "text-center" : "text-left"}
+                            >
+                                {column.name}
+                            </TableColumn>
+                        )}
+                    </TableHeader>
+                    <TableBody
+                        items={floors}
+                        isLoading={loading}
+                        emptyContent={
+                            <div className="py-20 flex flex-col items-center text-center">
+                                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6 shadow-inset">
+                                    <Layers className="text-slate-300" size={32} strokeWidth={1.5} />
                                 </div>
-                            }
-                        >
-                            {(floor) => (
-                                <TableRow key={floor.FloorID}>
-                                    <TableCell>
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl flex items-center justify-center text-blue-600 shadow-sm border border-white">
-                                                <Layers size={18} strokeWidth={2.5} />
-                                            </div>
-                                            <div>
-                                                <span className="block font-bold text-slate-800 text-sm">Floor {floor.FloorNumber}</span>
-                                                <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wide mt-0.5">ID: {floor.FloorID}</span>
-                                            </div>
+                                <h4 className="text-lg font-bold text-slate-700 mb-1">No floors found</h4>
+                                <p className="text-slate-400 text-sm max-w-xs mx-auto">
+                                    {selectedBlockId ? "This block doesn't have any floors yet." : "There are no floors configured in the system."}
+                                </p>
+                                {!readOnly && <Button variant="light" color="primary" className="mt-4 font-bold" onPress={() => handleOpen()}>Create First Floor</Button>}
+                            </div>
+                        }
+                    >
+                        {(floor) => (
+                            <TableRow key={floor.FloorID}>
+                                <TableCell>
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl flex items-center justify-center text-blue-600 shadow-sm border border-white">
+                                            <Layers size={18} strokeWidth={2.5} />
                                         </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center gap-2">
-                                            <Building2 size={14} className="text-slate-400" />
-                                            <span className="text-slate-700 font-semibold text-sm">
-                                                {blocks.find(b => b.BlockID === floor.BlockID)?.BlockName}
-                                            </span>
+                                        <div>
+                                            <span className="block font-bold text-slate-800 text-sm">Floor {floor.FloorNumber}</span>
+                                            <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wide mt-0.5">ID: {floor.FloorID}</span>
                                         </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex justify-center">
-                                            <StatusBadge status={floor.Status} />
+                                    </div>
+                                </TableCell>
+                                <TableCell>
+                                    <div className="flex items-center gap-2">
+                                        <Building2 size={14} className="text-slate-400" />
+                                        <span className="text-slate-700 font-semibold text-sm">
+                                            {blocks.find(b => b.BlockID === floor.BlockID)?.BlockName}
+                                        </span>
+                                    </div>
+                                </TableCell>
+                                <TableCell>
+                                    <div className="flex justify-center">
+                                        <StatusBadge status={floor.Status} />
+                                    </div>
+                                </TableCell>
+                                <TableCell>
+                                    {!readOnly && (
+                                        <div className="flex justify-end gap-1">
+                                            <Tooltip content="Edit Floor">
+                                                <Button isIconOnly size="sm" variant="light" onPress={() => handleOpen(floor)} className="text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
+                                                    <Edit size={16} strokeWidth={2} />
+                                                </Button>
+                                            </Tooltip>
+                                            <Tooltip content="Delete Floor" color="danger">
+                                                <Button isIconOnly size="sm" variant="light" color="danger" onPress={() => handleDelete(floor.FloorID)} className="text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg">
+                                                    <Trash2 size={16} strokeWidth={2} />
+                                                </Button>
+                                            </Tooltip>
                                         </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        {!readOnly && (
-                                            <div className="flex justify-end gap-1">
-                                                <Tooltip content="Edit Floor">
-                                                    <Button isIconOnly size="sm" variant="light" onPress={() => handleOpen(floor)} className="text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
-                                                        <Edit size={16} strokeWidth={2} />
-                                                    </Button>
-                                                </Tooltip>
-                                                <Tooltip content="Delete Floor" color="danger">
-                                                    <Button isIconOnly size="sm" variant="light" color="danger" onPress={() => handleDelete(floor.FloorID)} className="text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg">
-                                                        <Trash2 size={16} strokeWidth={2} />
-                                                    </Button>
-                                                </Tooltip>
-                                            </div>
-                                        )}
-                                    </TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </div>
+                                    )}
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
 
-                {/* Floating Pagination */}
-                {totalPages > 1 && (
+            {/* Floating Pagination */}
+            {totalPages > 1 && (
                 <div className="flex-none flex justify-center pb-2">
                     <div className="flex items-center gap-4 p-2 pl-6 pr-2 bg-white border border-slate-200 rounded-full shadow-xl shadow-slate-200/50">
                         <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mr-2">
@@ -442,23 +442,29 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                 isOpen={isOpen}
                 onOpenChange={onOpenChange}
                 backdrop="blur"
+                motionProps={{
+                    variants: {
+                        enter: { y: 0, opacity: 1, scale: 1, transition: { type: "spring", stiffness: 300, damping: 25 } },
+                        exit: { y: 20, opacity: 0, scale: 0.95, transition: { duration: 0.2 } },
+                    }
+                }}
                 classNames={{
-                    base: "bg-white rounded-3xl shadow-2xl border border-slate-100",
-                    header: "border-b border-slate-100 px-8 py-6",
-                    footer: "border-t border-slate-100 px-8 py-6",
+                    base: "bg-white rounded-[24px] shadow-2xl border border-slate-100 overflow-hidden",
+                    header: "border-b border-slate-100/80 px-8 py-6 bg-slate-50/50",
+                    footer: "border-t border-slate-100/80 px-8 py-6",
                     body: "px-8 py-8"
                 }}
             >
                 <ModalContent>
                     {(onClose) => (
                         <>
-                            <ModalHeader className="flex flex-col gap-1">
-                                <h2 className="text-2xl font-bold text-slate-800 tracking-tight">{editingFloor ? "Edit Floor Details" : "Add New Floor"}</h2>
-                                <p className="text-sm text-slate-500 font-normal">Define the floor number and its status within the block.</p>
+                            <ModalHeader className="flex flex-col gap-1.5">
+                                <h2 className="text-[22px] font-extrabold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent tracking-tight">{editingFloor ? "Edit Floor Details" : "Add New Floor"}</h2>
+                                <p className="text-[13px] text-slate-500 font-medium">Define the floor number and its status within the block.</p>
                             </ModalHeader>
-                            <ModalBody className="space-y-6">
-                                <div className="flex flex-col gap-1.5">
-                                    <div className="text-sm font-semibold text-slate-700 ml-1">
+                            <ModalBody className="space-y-7">
+                                <div className="flex flex-col gap-2 group">
+                                    <div className="text-[13px] font-bold text-slate-700 transition-colors group-focus-within:text-blue-600">
                                         Building Block
                                     </div>
                                     <Autocomplete
@@ -477,15 +483,15 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                                             id: "modal-floor-block-input",
                                             name: "BlockID",
                                             classNames: {
-                                                input: "text-base font-medium text-slate-800 placeholder:text-slate-400 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0",
-                                                inputWrapper: "h-12 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl shadow-sm px-4 transition-all"
+                                                input: "text-[14px] font-semibold text-slate-800 placeholder:text-slate-400 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0",
+                                                inputWrapper: "h-[48px] bg-slate-50/50 border border-slate-200 data-[hover=true]:border-blue-400 data-[hover=true]:bg-white group-data-[focus=true]:border-blue-500 group-data-[focus=true]:ring-4 group-data-[focus=true]:ring-blue-500/10 group-data-[focus=true]:bg-white rounded-[14px] shadow-sm px-4 transition-all"
                                             }
                                         }}
                                         listboxProps={{
                                             hideSelectedIcon: false,
                                             itemClasses: {
                                                 base: "rounded-lg min-h-[44px] data-[hover=true]:bg-blue-50 data-[hover=true]:text-blue-600 px-3 py-2 transition-colors gap-3",
-                                                title: "font-semibold text-base text-slate-700",
+                                                title: "font-semibold text-sm text-slate-700",
                                                 description: "text-xs text-slate-400"
                                             }
                                         }}
@@ -493,20 +499,20 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                                             offset: 10,
                                             classNames: {
                                                 base: "before:bg-white",
-                                                content: "bg-white p-2 border border-slate-100 shadow-2xl rounded-xl min-w-[300px]"
+                                                content: "bg-white p-2 border border-slate-100 shadow-2xl rounded-2xl min-w-[300px]"
                                             }
                                         }}
                                     >
                                         {(blocks || []).map((b) => (
-                                            <AutocompleteItem key={b.BlockID} textValue={b.BlockName} description={`${b.floorCount || 0} floors available`} startContent={<Building2 size={20} className="text-slate-400" />}>
+                                            <AutocompleteItem key={b.BlockID} textValue={b.BlockName} description={`${b.floorCount || 0} floors available`} startContent={<Building2 size={18} className="text-slate-400" />}>
                                                 {b.BlockName}
                                             </AutocompleteItem>
                                         ))}
                                     </Autocomplete>
                                 </div>
 
-                                <div className="flex flex-col gap-1.5">
-                                    <div className="text-sm font-semibold text-slate-700 ml-1">
+                                <div className="flex flex-col gap-2 group">
+                                    <div className="text-[13px] font-bold text-slate-700 transition-colors group-focus-within:text-blue-600">
                                         Floor Number
                                     </div>
                                     <Input
@@ -518,8 +524,8 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                                         aria-label="Floor Number"
                                         variant="bordered"
                                         classNames={{
-                                            inputWrapper: "h-12 bg-white border-1 border-slate-200 data-[hover=true]:border-blue-400 group-data-[focus=true]:border-blue-600 rounded-xl shadow-sm px-4 transition-all",
-                                            input: "text-base font-medium text-slate-800 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
+                                            inputWrapper: "h-[48px] bg-slate-50/50 border border-slate-200 data-[hover=true]:border-blue-400 data-[hover=true]:bg-white group-data-[focus=true]:border-blue-500 group-data-[focus=true]:ring-4 group-data-[focus=true]:ring-blue-500/10 group-data-[focus=true]:bg-white rounded-[14px] shadow-sm px-4 transition-all",
+                                            input: "text-[14px] font-semibold text-slate-800 bg-transparent !outline-none !border-none !ring-0 !shadow-none focus:!ring-0"
                                         }}
                                         value={formData.FloorNumber?.toString()}
                                         onValueChange={(val) => setFormData({ ...formData, FloorNumber: Number(val) })}
@@ -527,30 +533,30 @@ export const FloorManager: React.FC<FloorManagerProps> = ({ readOnly = false }) 
                                 </div>
 
                                 <div className="flex flex-col gap-3 pt-2">
-                                    <span className="text-sm font-medium text-slate-700">Floor Status</span>
-                                    <div className="flex gap-2 p-1 bg-slate-100 rounded-xl border border-slate-200">
+                                    <span className="text-[13px] font-bold text-slate-700">Floor Status</span>
+                                    <div className="flex gap-2 p-1.5 bg-slate-50/80 rounded-[16px] border border-slate-200/60 shadow-sm">
                                         <button
                                             type="button"
                                             onClick={() => setFormData({ ...formData, Status: 'Active' })}
-                                            className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-bold transition-all duration-200 ${formData.Status === 'Active' ? 'bg-white text-emerald-600 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:bg-slate-200/50 hover:text-slate-600'}`}
+                                            className={`flex-1 flex items-center justify-center gap-2.5 py-3 px-4 rounded-[12px] text-[13px] font-bold transition-all duration-300 ${formData.Status === 'Active' ? 'bg-white text-emerald-600 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:bg-slate-200/50 hover:text-slate-600'}`}
                                         >
-                                            <div className={`w-2 h-2 rounded-full ${formData.Status === 'Active' ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                                            <div className={`w-2 h-2 rounded-full shadow-sm ${formData.Status === 'Active' ? 'bg-emerald-500 shadow-emerald-500/50' : 'bg-slate-300'}`} />
                                             Active
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setFormData({ ...formData, Status: 'Inactive' })}
-                                            className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-bold transition-all duration-200 ${formData.Status === 'Inactive' ? 'bg-white text-slate-700 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:bg-slate-200/50 hover:text-slate-600'}`}
+                                            className={`flex-1 flex items-center justify-center gap-2.5 py-3 px-4 rounded-[12px] text-[13px] font-bold transition-all duration-300 ${formData.Status === 'Inactive' ? 'bg-white text-slate-700 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:bg-slate-200/50 hover:text-slate-600'}`}
                                         >
-                                            <div className={`w-2 h-2 rounded-full ${formData.Status === 'Inactive' ? 'bg-slate-500' : 'bg-slate-300'}`} />
+                                            <div className={`w-2 h-2 rounded-full shadow-sm ${formData.Status === 'Inactive' ? 'bg-slate-500 shadow-slate-500/50' : 'bg-slate-300'}`} />
                                             Inactive
                                         </button>
                                     </div>
                                 </div>
                             </ModalBody>
-                            <ModalFooter>
-                                <Button color="danger" variant="light" onPress={onClose} className="font-medium">Cancel</Button>
-                                <Button color="primary" onPress={() => handleSubmit(onClose)} className="font-semibold shadow-lg shadow-blue-500/20 text-white">
+                            <ModalFooter className="flex justify-end gap-3">
+                                <Button color="default" variant="light" onPress={onClose} className="font-bold px-6 py-2.5 h-auto text-[14px] text-slate-600 hover:bg-slate-100 rounded-[12px] transition-all active:scale-95">Cancel</Button>
+                                <Button color="primary" onPress={() => handleSubmit(onClose)} className="font-bold px-6 py-2.5 h-auto text-[14px] text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/30 rounded-[12px] transition-all active:scale-95">
                                     {editingFloor ? "Update Floor" : "Create Floor"}
                                 </Button>
                             </ModalFooter>

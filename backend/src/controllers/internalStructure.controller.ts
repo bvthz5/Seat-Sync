@@ -4,69 +4,20 @@ import { InternalBlock } from "../models/InternalBlock.js";
 import { InternalFloor } from "../models/InternalFloor.js";
 import { InternalRoom } from "../models/InternalRoom.js";
 import { InternalSeat } from "../models/InternalSeat.js";
+import { InternalSeatLayout } from "../models/InternalSeatLayout.js";
+import { InternalSeatColumn } from "../models/InternalSeatColumn.js";
 import { Op } from "sequelize";
+import { InternalInfrastructureImportService } from "../services/internal/internalInfrastructureImport.service.js";
+import { InternalLayoutGeneratorService } from "../services/internal/internalLayoutGenerator.service.js";
 
 // ─── Seat Engine ────────────────────────────────────────────────────────────
-
-/**
- * generateInternalSeats — generates InternalSeat rows from InternalRoom.RowLayout.
- * Row label = A, B, C... (one per RowLayout entry)
- * BenchNumber = 1..N within that row
- * SeatNumber = 1 (Left) or 2 (Right) when SeatsPerBench=2
- *
- * Non-destructive: adds new seats, marks surplus inactive.
- */
-async function generateInternalSeats(room: InternalRoom, transaction?: any): Promise<void> {
-  const roomId = room.RoomID;
-  const layout: number[] = Array.isArray(room.RowLayout) ? room.RowLayout : [];
-  const seatsPerBench = room.SeatsPerBench || 2;
-
-  const expectedSeats: { RowLabel: string; BenchNumber: number; SeatNumber: number }[] = [];
-  layout.forEach((benchCount, rowIdx) => {
-    const rowLabel = String.fromCharCode(65 + rowIdx); // A, B, C...
-    for (let b = 1; b <= benchCount; b++) {
-      for (let s = 1; s <= seatsPerBench; s++) {
-        expectedSeats.push({ RowLabel: rowLabel, BenchNumber: b, SeatNumber: s });
-      }
-    }
-  });
-
-  // Load existing seats
-  const existingSeats = await InternalSeat.findAll({ where: { RoomID: roomId }, transaction });
-  const existingKeys = new Set(existingSeats.map(s => `${s.RowLabel}-${s.BenchNumber}-${s.SeatNumber}`));
-  const expectedKeys = new Set(expectedSeats.map(s => `${s.RowLabel}-${s.BenchNumber}-${s.SeatNumber}`));
-
-  // Create missing seats
-  const toCreate = expectedSeats.filter(s => !existingKeys.has(`${s.RowLabel}-${s.BenchNumber}-${s.SeatNumber}`));
-  if (toCreate.length > 0) {
-    await InternalSeat.bulkCreate(toCreate.map(s => ({ ...s, RoomID: roomId, IsActive: true })), { transaction });
-  }
-
-  // Deactivate surplus seats (seats that no longer exist in the layout)
-  const surplus = existingSeats.filter(s => !expectedKeys.has(`${s.RowLabel}-${s.BenchNumber}-${s.SeatNumber}`));
-  if (surplus.length > 0) {
-    await InternalSeat.update(
-      { IsActive: false },
-      { where: { SeatID: { [Op.in]: surplus.map(s => s.SeatID) } }, transaction }
-    );
-  }
-
-  // Reactivate seats that are now back in layout
-  await InternalSeat.update(
-    { IsActive: true },
-    { 
-      where: { RoomID: roomId, RowLabel: { [Op.in]: [...expectedKeys].map(k => k.split('-')[0]).filter(Boolean) as string[] } },
-      transaction 
-    }
-  );
-}
 
 // ─── BLOCKS ─────────────────────────────────────────────────────────────────
 
 export const getInternalBlocks = async (req: Request, res: Response) => {
   try {
     const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 10;
+    const limit = Number(req.query.limit) || 100; // Increased default limit for admin dropdowns
     const search = req.query.search as string;
     const status = req.query.status as string;
     const offset = (page - 1) * limit;
@@ -160,12 +111,25 @@ export const getInternalFloors = async (req: Request, res: Response) => {
 
     const { count, rows } = await InternalFloor.findAndCountAll({
       where,
-      include: [{ model: InternalBlock, attributes: ["BlockName"] }],
+      include: [{ model: InternalBlock, as: 'Block', attributes: ["BlockName"] }],
       limit, offset,
       order: [["BlockID", "ASC"], ["FloorNumber", "ASC"]],
     });
 
     res.json({ total: count, pages: Math.ceil(count / limit), currentPage: page, data: rows });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const getFloorsByBlock = async (req: Request, res: Response) => {
+  try {
+    const blockId = Number(req.params.blockId);
+    const floors = await InternalFloor.findAll({
+      where: { BlockID: blockId },
+      order: [["FloorNumber", "ASC"]]
+    });
+    res.json(floors);
   } catch (error: any) {
     res.status(500).json({ message: error.message });
   }
@@ -247,8 +211,8 @@ export const getInternalRooms = async (req: Request, res: Response) => {
     const { count, rows } = await InternalRoom.findAndCountAll({
       where,
       include: [
-        { model: InternalBlock, attributes: ["BlockName"] },
-        { model: InternalFloor, attributes: ["FloorNumber"] },
+        { model: InternalBlock, as: 'Block', attributes: ["BlockName"] },
+        { model: InternalFloor, as: 'Floor', attributes: ["FloorNumber"] },
       ],
       limit: limitNum,
       offset,
@@ -268,9 +232,32 @@ export const createInternalRoom = async (req: Request, res: Response) => {
     const existing = await InternalRoom.findOne({ where: { RoomCode, FloorID } });
     if (existing) return res.status(400).json({ message: "Room Code must be unique in this floor" });
 
-    const finalLayout: number[] = RowLayout || [];
-    const spb = SeatsPerBench || 2;
-    const calcCapacity = TotalCapacity || finalLayout.reduce((a: number, b: number) => a + b, 0) * spb;
+    let finalLayout: number[] = RowLayout || [];
+    let parsedCapacity = TotalCapacity !== undefined ? Number(TotalCapacity) : 0;
+    let resolvedSeatMode = SeatMode || 'Dual';
+
+    if (finalLayout.length > 0 && parsedCapacity > 0) {
+      const totalBenches = finalLayout.reduce((a: number, b: number) => a + b, 0);
+      if (totalBenches === parsedCapacity && !SeatMode) {
+        resolvedSeatMode = 'Single';
+      }
+    } else if (parsedCapacity > 0) {
+      if (resolvedSeatMode === 'Single') {
+        finalLayout = InternalLayoutGeneratorService.generateSingleSeatRowLayout(parsedCapacity);
+      } else {
+        finalLayout = InternalLayoutGeneratorService.generateRowLayout(parsedCapacity);
+      }
+    } else {
+      finalLayout = [5, 5, 5, 5, 5, 5];
+    }
+
+    const totalBenches = finalLayout.reduce((a: number, b: number) => a + b, 0);
+    if (totalBenches > 0 && parsedCapacity > 0 && totalBenches === parsedCapacity && !SeatMode) {
+      resolvedSeatMode = 'Single';
+    }
+
+    const spb = resolvedSeatMode === 'Single' ? 1 : 2;
+    const calcCapacity = parsedCapacity || totalBenches * spb;
 
     const room = await InternalRoom.create({
       BlockID, FloorID, RoomCode,
@@ -280,44 +267,15 @@ export const createInternalRoom = async (req: Request, res: Response) => {
       TotalCapacity: calcCapacity,
       RowLayout: finalLayout,
       SeatsPerBench: spb,
-      SeatMode: SeatMode || "Dual",
+      SeatMode: resolvedSeatMode,
       OverrideCap: OverrideCap ?? null,
     } as any);
 
     if (finalLayout.length > 0) {
-      await generateInternalSeats(room);
+      await InternalLayoutGeneratorService.generateSeats(room as any, undefined as any);
     }
 
     res.status(201).json(room);
-  } catch (error: any) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-export const bulkCreateInternalRooms = async (req: Request, res: Response) => {
-  try {
-    const { blockId, floorId, rooms } = req.body;
-    if (!Array.isArray(rooms)) return res.status(400).json({ message: "rooms must be an array" });
-
-    await sequelize.transaction(async (t) => {
-      for (const r of rooms) {
-        const existing = await InternalRoom.findOne({ where: { RoomCode: r.roomCode, FloorID: floorId }, transaction: t });
-        if (existing) continue; // Skip duplicates silently
-
-        const created = await InternalRoom.create({
-          BlockID: blockId,
-          FloorID: floorId,
-          RoomCode: r.roomCode,
-          TotalCapacity: r.TotalCapacity || 0,
-          ExamUsable: true,
-          Status: "Active",
-          RowLayout: [],
-          SeatsPerBench: 2,
-        } as any, { transaction: t });
-      }
-    });
-
-    res.status(201).json({ message: "Rooms created successfully" });
   } catch (error: any) {
     res.status(500).json({ message: error.message });
   }
@@ -339,6 +297,8 @@ export const updateInternalRoom = async (req: Request, res: Response) => {
     const RoomType = req.body.RoomType || req.body.roomType;
     const SeatMode = req.body.SeatMode || req.body.seatMode;
 
+    const previousSeatMode = room.SeatMode;
+
     if (RoomCode) room.RoomCode = RoomCode;
     if (Status) room.Status = Status;
     if (ExamUsable !== undefined) room.ExamUsable = ExamUsable;
@@ -346,31 +306,79 @@ export const updateInternalRoom = async (req: Request, res: Response) => {
     if (RoomType) room.RoomType = RoomType;
     if (SeatMode) room.SeatMode = SeatMode;
 
+    // Only auto-detect Single Seating if SeatMode was NOT explicitly provided in the request
+    if (SeatMode === undefined) {
+      const checkLayout = RowLayout !== undefined ? RowLayout : room.RowLayout;
+      const checkCapacity = TotalCapacity !== undefined ? TotalCapacity : room.TotalCapacity;
+      if (Array.isArray(checkLayout) && checkLayout.length > 0 && checkCapacity > 0) {
+        const totalBenches = checkLayout.reduce((a: number, b: number) => a + b, 0);
+        if (totalBenches === checkCapacity) {
+          room.SeatMode = 'Single';
+        }
+      }
+    }
+
+    // Sync SeatsPerBench from SeatMode
+    if (room.SeatMode === 'Single') {
+      room.SeatsPerBench = 1;
+    } else {
+      room.SeatsPerBench = 2;
+    }
+
     let regenerate = false;
-    // Update layout if provided
-    if (RowLayout !== undefined || SeatsPerBench !== undefined) {
+    const seatModeChanged = room.SeatMode !== previousSeatMode;
+
+    if (RowLayout !== undefined || SeatsPerBench !== undefined || seatModeChanged) {
       const newLayout = RowLayout !== undefined ? RowLayout : room.RowLayout;
-      const newSpb = SeatsPerBench !== undefined ? Number(SeatsPerBench) : room.SeatsPerBench;
       room.RowLayout = newLayout;
-      room.SeatsPerBench = newSpb;
-      
-      // If TotalCapacity is also provided, respect it. 
-      // Otherwise, update TotalCapacity based on the new layout.
+
+      const spb = room.SeatMode === 'Single' ? 1 : 2;
       if (TotalCapacity !== undefined) {
         room.TotalCapacity = TotalCapacity;
       } else if (Array.isArray(newLayout) && newLayout.length > 0) {
-        room.TotalCapacity = newLayout.reduce((a: number, b: number) => a + b, 0) * newSpb;
+        room.TotalCapacity = newLayout.reduce((a: number, b: number) => a + b, 0) * spb;
       }
       regenerate = true;
     } else if (TotalCapacity !== undefined) {
-      // No layout change, just updating capacity manually
       room.TotalCapacity = TotalCapacity;
     }
 
     await room.save();
-    if (regenerate) await generateInternalSeats(room);
+    if (regenerate) await InternalLayoutGeneratorService.generateSeats(room);
 
     res.json({ room, seatsUpdated: regenerate });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
+
+};
+
+export const bulkCreateInternalRooms = async (req: Request, res: Response) => {
+  try {
+    const { blockId, floorId, rooms } = req.body;
+    if (!Array.isArray(rooms)) return res.status(400).json({ message: "rooms must be an array" });
+
+    await sequelize.transaction(async (t) => {
+      for (const r of rooms) {
+        const existing = await InternalRoom.findOne({ where: { RoomCode: r.code, FloorID: floorId }, transaction: t });
+        if (existing) continue;
+
+        const created = await InternalRoom.create({
+          BlockID: blockId,
+          FloorID: floorId,
+          RoomCode: r.code,
+          TotalCapacity: Number(r.capacity) || 0,
+          ExamUsable: true,
+          Status: "Active",
+          RowLayout: InternalLayoutGeneratorService.generateRowLayout(Number(r.capacity) || 0),
+          SeatsPerBench: 2,
+        } as any, { transaction: t });
+
+        await InternalLayoutGeneratorService.generateSeats(created as any, t);
+      }
+    });
+
+    res.status(201).json({ message: "Rooms created successfully" });
   } catch (error: any) {
     res.status(500).json({ message: error.message });
   }
@@ -409,6 +417,19 @@ export const deleteInternalRoom = async (req: Request, res: Response) => {
     const id = Number(req.params.id);
     await sequelize.transaction(async (t) => {
       await InternalSeat.destroy({ where: { RoomID: id }, transaction: t });
+
+      const existingLayout = await InternalSeatLayout.findOne({
+        where: { RoomID: id },
+        transaction: t
+      });
+      if (existingLayout) {
+        await InternalSeatColumn.destroy({
+          where: { LayoutID: existingLayout.LayoutID },
+          transaction: t
+        });
+        await existingLayout.destroy({ transaction: t });
+      }
+
       await InternalRoom.destroy({ where: { RoomID: id }, transaction: t });
     });
     res.json({ message: "Room and associated seats deleted permanently" });
@@ -430,11 +451,13 @@ export const getInternalRoomLayout = async (req: Request, res: Response) => {
       order: [["RowLabel", "ASC"], ["BenchNumber", "ASC"], ["SeatNumber", "ASC"]],
     });
 
-    // Consistency check
-    if (room.RowLayout && Array.isArray(room.RowLayout) && room.SeatsPerBench) {
-      const expected = room.RowLayout.reduce((sum: number, n: number) => sum + n, 0) * room.SeatsPerBench;
+    if (room.RowLayout && Array.isArray(room.RowLayout)) {
+      const totalBenches = room.RowLayout.reduce((sum: number, n: number) => sum + n, 0);
+      // Single = 1 seat per bench, Dual = 2 seats per bench
+      const seatsPerBench = room.SeatMode === 'Single' ? 1 : 2;
+      const expected = totalBenches * seatsPerBench;
       if (seats.length !== expected) {
-        await generateInternalSeats(room);
+        await InternalLayoutGeneratorService.generateSeats(room);
         seats = await InternalSeat.findAll({
           where: { RoomID: roomId },
           order: [["RowLabel", "ASC"], ["BenchNumber", "ASC"], ["SeatNumber", "ASC"]],
@@ -454,15 +477,32 @@ export const updateInternalRoomLayout = async (req: Request, res: Response) => {
     const room = await InternalRoom.findByPk(id) as any;
     if (!room) return res.status(404).json({ message: "Room not found" });
 
-    const { RowLayout, SeatsPerBench } = req.body;
+    const { RowLayout, SeatsPerBench, SeatMode } = req.body;
     if (RowLayout !== undefined) room.RowLayout = RowLayout;
+    if (SeatMode !== undefined) room.SeatMode = SeatMode;
     if (SeatsPerBench !== undefined) room.SeatsPerBench = Number(SeatsPerBench);
 
+    // Only auto-detect Single Seating if SeatMode was NOT explicitly provided in the request
+    if (SeatMode === undefined && room.RowLayout && Array.isArray(room.RowLayout)) {
+      const totalBenches = room.RowLayout.reduce((a: number, b: number) => a + b, 0);
+      if (totalBenches === room.TotalCapacity) {
+        room.SeatMode = 'Single';
+      }
+    }
+
+    // Sync SeatsPerBench from SeatMode to keep them consistent
+    if (room.SeatMode === 'Single') {
+      room.SeatsPerBench = 1;
+    } else {
+      room.SeatsPerBench = 2;
+    }
+
     if (room.RowLayout && Array.isArray(room.RowLayout)) {
-      room.TotalCapacity = room.RowLayout.reduce((a: number, b: number) => a + b, 0) * (room.SeatsPerBench || 2);
+      const seatsPerBench = room.SeatMode === 'Single' ? 1 : 2;
+      room.TotalCapacity = room.RowLayout.reduce((a: number, b: number) => a + b, 0) * seatsPerBench;
     }
     await room.save();
-    await generateInternalSeats(room);
+    await InternalLayoutGeneratorService.generateSeats(room);
 
     res.json({ message: "Layout updated and seats regenerated", room });
   } catch (error: any) {
@@ -473,7 +513,7 @@ export const updateInternalRoomLayout = async (req: Request, res: Response) => {
 export const updateInternalSeatStates = async (req: Request, res: Response) => {
   try {
     const roomId = Number(req.params.id);
-    const { updates } = req.body; // Array of { SeatID, IsActive }
+    const { updates } = req.body;
 
     if (!Array.isArray(updates)) return res.status(400).json({ message: "updates must be an array" });
 
@@ -498,153 +538,33 @@ export const updateInternalSeatStates = async (req: Request, res: Response) => {
   }
 };
 
-// ─── DELETE ALL ───────────────────────────────────────────────────────────────
+// ─── BULK IMPORT ──────────────────────────────────────────────────────────────
+
+export const importInternalStructure = async (req: Request, res: Response) => {
+  try {
+    const rawData = req.body.data;
+    if (!rawData) return res.status(400).json({ message: "No data provided" });
+
+    const stats = await InternalInfrastructureImportService.importBatch(rawData);
+    res.json(stats);
+  } catch (error: any) {
+    console.error("INTERNAL IMPORT ERROR:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
 
 export const deleteAllInternalStructureData = async (req: Request, res: Response) => {
   try {
     await sequelize.transaction(async (t) => {
       await InternalSeat.destroy({ where: {}, transaction: t });
+      await InternalSeatColumn.destroy({ where: {}, transaction: t });
+      await InternalSeatLayout.destroy({ where: {}, transaction: t });
       await InternalRoom.destroy({ where: {}, transaction: t });
       await InternalFloor.destroy({ where: {}, transaction: t });
       await InternalBlock.destroy({ where: {}, transaction: t });
     });
     res.json({ message: "All internal structure data deleted successfully." });
   } catch (error: any) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// ─── BULK IMPORT ──────────────────────────────────────────────────────────────
-
-export const importInternalStructure = async (req: Request, res: Response) => {
-  try {
-    const { data } = req.body as {
-      data: { BlockName?: string; FloorNumber?: string | number; RoomCode: string; Capacity: string | number }[]
-    };
-
-    if (!Array.isArray(data) || data.length === 0) {
-      return res.status(400).json({ message: "No data provided" });
-    }
-
-    let blocksCreated = 0;
-    let floorsCreated = 0;
-    let roomsCreated = 0;
-
-    const blockCache = new Map<string, number>();
-    const floorCache = new Map<string, number>();
-
-    await sequelize.transaction(async (t) => {
-      for (const row of data) {
-        const rawCode = String(row.RoomCode || "").trim();
-        if (!rawCode || rawCode.toUpperCase().includes("DISREGARD")) continue;
-
-        // --- 1. Intelligent Normalization & Regex Splitting ---
-        // Rule: Capture FIRST alphabetic token as Block, everything else as Room
-        let blockName = "";
-        let roomCode = "";
-
-        const splitMatch = rawCode.match(/^([A-Za-z]+)\s*(.*)$/);
-        if (splitMatch) {
-          blockName = (splitMatch[1] || "").toUpperCase().trim();
-          roomCode = (splitMatch[2] || "").trim() || rawCode;
-        } else {
-          blockName = "MISC";
-          roomCode = rawCode;
-        }
-
-        // --- 2. Automatic Floor Deduction ---
-        let floorNum = 0;
-        // Standard rooms (starts with 105, 202 etc) -> floor = Math.floor(room / 100)
-        // Special rooms (e.g. 19 (DRAWING HALL)) -> floor = 0 (Ground)
-        const standardNumMatch = roomCode.match(/^(\d{3,})/); // 100 or above
-        if (standardNumMatch) {
-          const num = parseInt(standardNumMatch[1] || "0");
-          floorNum = Math.floor(num / 100);
-        } else {
-          floorNum = 0; // Ground floor for special rooms or small room numbers
-        }
-
-        // Override if FloorNumber explicitly provided in Excel
-        if (row.FloorNumber !== undefined && row.FloorNumber !== null && String(row.FloorNumber).trim() !== "") {
-          floorNum = parseInt(String(row.FloorNumber)) || 0;
-        }
-
-        const capacity = parseInt(String(row.Capacity || "0")) || 0;
-
-        // --- 3. Deduplicated Block Creation ---
-        let blockId = blockCache.get(blockName);
-        if (!blockId) {
-          let block = await InternalBlock.findOne({ where: { BlockName: blockName }, transaction: t });
-          if (!block) {
-            block = await InternalBlock.create({ BlockName: blockName, Status: "Active" }, { transaction: t });
-            blocksCreated++;
-          }
-          blockId = block.BlockID;
-          blockCache.set(blockName, blockId);
-        }
-
-        // --- 4. Deduplicated Floor Creation ---
-        const floorKey = `${blockId}-${floorNum}`;
-        let floorId = floorCache.get(floorKey);
-        if (!floorId) {
-          let floor = await InternalFloor.findOne({ where: { BlockID: blockId, FloorNumber: floorNum }, transaction: t });
-          if (!floor) {
-            floor = await InternalFloor.create({ BlockID: blockId, FloorNumber: floorNum, Status: "Active" }, { transaction: t });
-            floorsCreated++;
-          }
-          floorId = floor.FloorID;
-          floorCache.set(floorKey, floorId);
-        }
-
-        // --- 5. Room & Auto-Layout Generation ---
-        const existingRoom = await InternalRoom.findOne({ where: { RoomCode: roomCode, FloorID: floorId }, transaction: t });
-        
-        // Seating Layout Logic (Production Grade)
-        const spb = 2; // Fixed Dual Mode for Internal
-        const totalBenches = Math.ceil(capacity / spb);
-        const benchesPerRow = capacity > 100 ? 10 : 6; 
-        const rowCount = Math.ceil(totalBenches / benchesPerRow);
-        
-        const layout: number[] = [];
-        let remaining = totalBenches;
-        for (let i = 0; i < rowCount; i++) {
-          const take = Math.min(remaining, benchesPerRow);
-          layout.push(take);
-          remaining -= take;
-        }
-
-        if (!existingRoom) {
-          const room = await InternalRoom.create({
-            BlockID: blockId,
-            FloorID: floorId,
-            RoomCode: roomCode,
-            TotalCapacity: capacity,
-            RowLayout: layout,
-            SeatsPerBench: spb,
-            RoomType: "Classroom", // Internal only
-            SeatMode: "Dual",
-            ExamUsable: true,
-            Status: "Active",
-          } as any, { transaction: t });
-          
-          if (layout.length > 0) {
-            await generateInternalSeats(room, t);
-          }
-          roomsCreated++;
-        } else {
-          // Update existing room structure
-          existingRoom.TotalCapacity = capacity;
-          existingRoom.RowLayout = layout;
-          existingRoom.SeatsPerBench = spb;
-          await existingRoom.save({ transaction: t });
-          await generateInternalSeats(existingRoom, t);
-        }
-      }
-    });
-
-    res.json({ blocksCreated, floorsCreated, roomsCreated });
-  } catch (error: any) {
-    console.error("INTERNAL IMPORT ERROR:", error);
     res.status(500).json({ message: error.message });
   }
 };

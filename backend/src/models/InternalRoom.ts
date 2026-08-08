@@ -1,7 +1,7 @@
 import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from "../config/database.js";
-import { InternalFloor } from "./InternalFloor.js";
-import { InternalBlock } from "./InternalBlock.js";
+import InternalFloor from "./InternalFloor.js";
+import InternalBlock from "./InternalBlock.js";
 
 interface InternalRoomAttributes {
   RoomID: number;
@@ -16,6 +16,8 @@ interface InternalRoomAttributes {
   SeatMode: "Dual" | "Single" | "Mixed";
   Status: "Active" | "Inactive";
   ExamUsable: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 interface InternalRoomCreationAttributes extends Optional<InternalRoomAttributes, "RoomID" | "RowLayout" | "SeatsPerBench" | "OverrideCap" | "RoomType" | "SeatMode"> { }
@@ -34,6 +36,8 @@ export class InternalRoom extends Model<InternalRoomAttributes, InternalRoomCrea
   declare SeatMode: "Dual" | "Single" | "Mixed";
   declare Status: "Active" | "Inactive";
   declare ExamUsable: boolean;
+  declare createdAt: Date;
+  declare updatedAt: Date;
   declare Block?: InternalBlock;
   declare Floor?: InternalFloor;
 }
@@ -107,6 +111,14 @@ InternalRoom.init(
       allowNull: false,
       defaultValue: true,
     },
+    createdAt: {
+      type: DataTypes.DATE,
+      field: "createdAt",
+    },
+    updatedAt: {
+      type: DataTypes.DATE,
+      field: "updatedAt",
+    },
   },
   {
     sequelize,
@@ -118,9 +130,6 @@ InternalRoom.init(
   }
 );
 
-InternalRoom.belongsTo(InternalFloor, { foreignKey: "FloorID" });
-InternalFloor.hasMany(InternalRoom, { foreignKey: "FloorID" });
-InternalRoom.belongsTo(InternalBlock, { foreignKey: "BlockID" });
-InternalBlock.hasMany(InternalRoom, { foreignKey: "BlockID" });
+// Associations are managed in models/index.ts to avoid alias conflicts.
 
 export default InternalRoom;

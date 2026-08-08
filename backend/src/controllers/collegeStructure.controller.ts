@@ -12,7 +12,9 @@ export const deleteAllStructureData = async (req: Request, res: Response) => {
             await InvigilatorAssignment.destroy({ where: {}, transaction: t });
             await SeatAllocation.destroy({ where: {}, transaction: t });
             await Seat.destroy({ where: {}, transaction: t });
-            await Zone.destroy({ where: {}, transaction: t });
+            await DutySwap.destroy({ where: {}, transaction: t });
+            await IncidentReport.destroy({ where: {}, transaction: t });
+            await InvigilatorAssignment.destroy({ where: {}, transaction: t });
             await Room.destroy({ where: {}, transaction: t });
             await Floor.destroy({ where: {}, transaction: t });
             await Block.destroy({ where: {}, transaction: t });
@@ -29,10 +31,13 @@ import { Block } from "../models/Block.js";
 import { Floor } from "../models/Floor.js";
 import { Room } from "../models/Room.js";
 import { Seat } from "../models/Seat.js";
-import { Zone } from "../models/Zone.js";
 import { Exam } from "../models/Exam.js";
 import { SeatAllocation } from "../models/SeatAllocation.js";
+import { DutySwap } from "../models/DutySwap.js";
+import { IncidentReport } from "../models/IncidentReport.js";
+import { InvigilatorAssignment } from "../models/InvigilatorAssignment.js";
 import { Op } from "sequelize";
+
 
 // --- BLOCKS ---
 
@@ -141,7 +146,6 @@ export const deleteBlock = async (req: Request, res: Response) => {
         await sequelize.transaction(async (t) => {
             if (roomIds.length > 0) {
                 await Seat.destroy({ where: { RoomID: { [Op.in]: roomIds } }, transaction: t });
-                await Zone.destroy({ where: { RoomID: { [Op.in]: roomIds } }, transaction: t });
             }
             await Room.destroy({ where: { BlockID: id }, transaction: t });
             await Floor.destroy({ where: { BlockID: id }, transaction: t });
@@ -263,7 +267,6 @@ export const deleteFloor = async (req: Request, res: Response) => {
         await sequelize.transaction(async (t) => {
             if (roomIds.length > 0) {
                 await Seat.destroy({ where: { RoomID: { [Op.in]: roomIds } }, transaction: t });
-                await Zone.destroy({ where: { RoomID: { [Op.in]: roomIds } }, transaction: t });
             }
             await Room.destroy({ where: { FloorID: id }, transaction: t });
             await Floor.destroy({ where: { FloorID: id }, transaction: t });
@@ -356,12 +359,9 @@ export const getRoomLayout = async (req: Request, res: Response) => {
             }
         }
 
-        const zones = await Zone.findAll({ where: { RoomID: roomId } });
-
         res.json({
             room,
             seats,
-            zones,
             seatCount: seats.length
         });
     } catch (error: any) {
@@ -518,117 +518,13 @@ export const bulkCreateRooms = async (req: Request, res: Response) => {
         res.status(500).json({ message: error.message });
     }
 };
-// --- ZONES ---
-
-export const getZones = async (req: Request, res: Response) => {
-    try {
-        const roomId = Number(req.params.roomId);
-        const zones = await Zone.findAll({ where: { RoomID: roomId } });
-        res.json(zones);
-    } catch (error: any) {
-        res.status(500).json({ message: error.message });
-    }
-};
-
-export const createZone = async (req: Request, res: Response) => {
-    try {
-        const roomId = Number(req.params.roomId);
-        const { ZoneCode, ZoneName, Color } = req.body;
-
-        const zone = await Zone.create({
-            RoomID: roomId,
-            ZoneCode,
-            ZoneName,
-            Color
-        });
-
-        res.status(201).json(zone);
-    } catch (error: any) {
-        res.status(500).json({ message: error.message });
-    }
-};
-
-export const deleteZone = async (req: Request, res: Response) => {
-    try {
-        const id = Number(req.params.id);
-
-        // Remove zone assignments from seats before deleting the zone
-        await Seat.update({ ZoneID: null }, { where: { ZoneID: id } });
-
-        await Zone.destroy({ where: { ZoneID: id } });
-        res.json({ message: "Zone deleted successfully" });
-    } catch (error: any) {
-        res.status(500).json({ message: error.message });
-    }
-};
-
-
-export const autoZoneRoom = async (req: Request, res: Response) => {
-    try {
-        const roomId = Number(req.params.roomId);
-        const { zoneCount } = req.body;
-
-        if (!zoneCount || zoneCount < 2 || zoneCount > 6) {
-            return res.status(400).json({ message: "zoneCount must be between 2 and 6" });
-        }
-
-        const room = await Room.findByPk(roomId);
-        if (!room) return res.status(404).json({ message: "Room not found" });
-
-        // 1. Fetch seats sorted by RowIndex, BenchIndex, SeatIndex
-        const seats = await Seat.findAll({
-            where: { RoomID: roomId, IsActive: true },
-            order: [['RowIndex', 'ASC'], ['BenchIndex', 'ASC'], ['SeatIndex', 'ASC']]
-        });
-
-        if (seats.length === 0) {
-            return res.status(400).json({ message: "No active seats found to zone." });
-        }
-
-        // Clean existing zones
-        await Seat.update({ ZoneID: null }, { where: { RoomID: roomId } });
-        await Zone.destroy({ where: { RoomID: roomId } });
-
-        // Create new zones
-        const colors = ['blue', 'red', 'green', 'yellow', 'purple', 'orange'];
-        const zones: any[] = [];
-        for (let i = 0; i < zoneCount; i++) {
-            const z = await Zone.create({
-                RoomID: roomId,
-                ZoneCode: `Z${i + 1}`,
-                ZoneName: `Zone ${i + 1}`,
-                Color: colors[i % colors.length] as string
-            });
-            zones.push(z);
-        }
-
-        // 2. Determine max columns
-        const maxColumns = Math.max(...seats.map(s => s.BenchIndex));
-
-        // 3. Divide columns into zones
-        const columnsPerZone = Math.ceil(maxColumns / zoneCount);
-
-        // 4. Assign seats
-        const updatePromises = seats.map(seat => {
-            const zoneIndex = Math.min(Math.floor((seat.BenchIndex - 1) / columnsPerZone), zoneCount - 1);
-            const targetZoneId = (zones[zoneIndex] as any).ZoneID;
-            return Seat.update({ ZoneID: targetZoneId }, { where: { SeatID: seat.SeatID } });
-        });
-
-        await Promise.all(updatePromises);
-        res.json({ message: 'Auto-zoning completed successfully', zones });
-
-    } catch (error: any) {
-        res.status(500).json({ message: error.message });
-    }
-};
 
 // --- SEAT MANAGEMENT ---
 
-export const updateSeatZones = async (req: Request, res: Response) => {
+export const updateSeatStates = async (req: Request, res: Response) => {
     try {
         const roomId = Number(req.params.roomId);
-        const { updates } = req.body; // Array of { SeatID, ZoneID, IsActive }
+        const { updates } = req.body; // Array of { SeatID, IsActive }
 
         if (!Array.isArray(updates)) {
             return res.status(400).json({ message: "Invalid updates format. Expected array." });
@@ -640,11 +536,9 @@ export const updateSeatZones = async (req: Request, res: Response) => {
         // Transactional update for safety
         await sequelize.transaction(async (t) => {
             const updatePromises = updates.map(update => {
-                const { SeatID, ZoneID, IsActive } = update;
+                const { SeatID, IsActive } = update;
                 const updateData: any = {};
 
-                // Allow null to clear the zone
-                if (ZoneID !== undefined) updateData.ZoneID = ZoneID;
                 if (IsActive !== undefined) updateData.IsActive = IsActive;
 
                 if (Object.keys(updateData).length > 0) {

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Modal, ModalContent, ModalHeader, ModalBody, Card, CardBody } from "@heroui/react";
 import { useNavigate } from 'react-router-dom';
-import { Building2, GraduationCap, BookOpen, ArrowRight } from "lucide-react";
+import { Building2, GraduationCap, BookOpen, ArrowRight, Tag } from "lucide-react";
 
 interface CollegeStructureTypeModalProps {
     isOpen: boolean;
@@ -21,100 +21,65 @@ const CollegeStructureTypeModal: React.FC<CollegeStructureTypeModalProps> = ({ i
     };
 
     return (
-        <Modal
-            isOpen={isOpen}
+        <Modal 
+            isOpen={isOpen} 
             onClose={onClose}
-            size="2xl"
+            size="md"
             backdrop="blur"
             classNames={{
-                base: "bg-white shadow-2xl rounded-3xl border border-slate-100",
-                header: "border-b border-slate-100 pb-5 pt-7 px-8",
-                body: "py-8 px-8 pb-10",
-                closeButton: "top-5 right-5 text-slate-400 hover:bg-slate-100 rounded-xl"
+                base: "glass-card rounded-[40px] border-white/40 shadow-glass overflow-hidden",
+                header: "pb-0 pt-10 px-10 text-center flex flex-col items-center",
+                body: "py-10 px-10",
+                closeButton: "top-6 right-6 bg-white/50 backdrop-blur-md hover:bg-white hover:rotate-90 transition-all duration-500 rounded-full p-2 border border-white/50 shadow-sm"
             }}
         >
             <ModalContent>
                 <ModalHeader className="flex flex-col gap-1.5">
-                    <div className="flex items-center gap-3 mb-0.5">
-                        <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
-                            <Building2 size={20} className="text-indigo-600" />
-                        </div>
-                        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">College Structure</h2>
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="w-8 h-1 bg-indigo-500 rounded-full" />
+                        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-indigo-500/80">Infrastructure Configuration</span>
+                        <div className="w-8 h-1 bg-indigo-500 rounded-full" />
                     </div>
-                    <p className="text-sm text-slate-500 font-medium pl-[52px]">
-                        Select the structure type to configure
-                    </p>
+                    <h2 className="text-3xl font-black text-slate-900 tracking-tight leading-tight">College <span className="text-indigo-600">Structure</span></h2>
                 </ModalHeader>
-
                 <ModalBody>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        {/* Internal Exam Card */}
-                        <Card
-                            isPressable
-                            onPress={() => handleSelect('internal')}
-                            className="bg-white border-2 border-slate-100 hover:border-indigo-400 hover:shadow-xl hover:shadow-indigo-100/60 transition-all duration-300 group overflow-hidden rounded-2xl cursor-pointer"
+                    <div className="grid grid-cols-2 gap-8">
+                        {/* Internal Option - Now First */}
+                        <button 
+                            onClick={() => handleSelect('internal')}
+                            className="group relative aspect-[0.9/1] flex flex-col items-center justify-center text-center p-8 rounded-[40px] bg-white border border-slate-100 hover:border-indigo-200 hover:shadow-premium-hover transition-all duration-500 ease-out hover:-translate-y-3 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-150"
                         >
-                            <CardBody className="p-8 flex flex-col items-center text-center gap-5">
-                                <div className="relative">
-                                    <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-50 to-indigo-100 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-sm">
-                                        <BookOpen size={36} strokeWidth={1.8} />
-                                    </div>
-                                    <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 scale-75 group-hover:scale-100">
-                                        <ArrowRight size={12} className="text-white" />
-                                    </div>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <h3 className="text-xl font-bold text-slate-900 group-hover:text-indigo-700 transition-colors">
-                                        Internal Exam
-                                    </h3>
-                                    <p className="text-sm text-slate-500 font-medium leading-relaxed">
-                                        Internal Exam Structure
-                                    </p>
-                                </div>
-                                <div className="w-full pt-2 border-t border-slate-100">
-                                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-400 group-hover:text-indigo-600 transition-colors uppercase tracking-wider">
-                                        Configure Structure
-                                        <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
-                                    </span>
-                                </div>
-                            </CardBody>
-                        </Card>
+                            <div className="w-20 h-20 rounded-3xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-500 shadow-sm group-hover:shadow-indigo-200 group-hover:shadow-lg">
+                                <Tag size={36} />
+                            </div>
+                            <h3 className="text-xl font-black text-slate-900 leading-tight group-hover:text-indigo-600 transition-colors px-2">Internal Structure</h3>
+                            <div className="mt-4 w-10 h-1.5 bg-indigo-100 rounded-full group-hover:w-16 group-hover:bg-indigo-500 transition-all duration-300" />
+                            
+                            {/* Floating micro-glow effect */}
+                            <div className="absolute inset-0 bg-indigo-400/0 group-hover:bg-indigo-400/5 rounded-[40px] transition-colors duration-500 pointer-events-none" />
+                        </button>
 
-                        {/* End Semester Card */}
-                        <Card
-                            isPressable
-                            onPress={() => handleSelect('endsem')}
-                            className="bg-white border-2 border-slate-100 hover:border-purple-400 hover:shadow-xl hover:shadow-purple-100/60 transition-all duration-300 group overflow-hidden rounded-2xl cursor-pointer"
+                        {/* End Semester Option - Now Second */}
+                        <button 
+                            onClick={() => handleSelect('endsem')}
+                            className="group relative aspect-[0.9/1] flex flex-col items-center justify-center text-center p-8 rounded-[40px] bg-white border border-slate-100 hover:border-violet-200 hover:shadow-premium-hover transition-all duration-500 ease-out hover:-translate-y-3 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300"
                         >
-                            <CardBody className="p-8 flex flex-col items-center text-center gap-5">
-                                <div className="relative">
-                                    <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-50 to-purple-100 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-sm">
-                                        <GraduationCap size={36} strokeWidth={1.8} />
-                                    </div>
-                                    <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 scale-75 group-hover:scale-100">
-                                        <ArrowRight size={12} className="text-white" />
-                                    </div>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <h3 className="text-xl font-bold text-slate-900 group-hover:text-purple-700 transition-colors">
-                                        End Semester Exam
-                                    </h3>
-                                    <p className="text-sm text-slate-500 font-medium leading-relaxed">
-                                        End Semester Structure
-                                    </p>
-                                </div>
-                                <div className="w-full pt-2 border-t border-slate-100">
-                                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-purple-400 group-hover:text-purple-600 transition-colors uppercase tracking-wider">
-                                        Configure Structure
-                                        <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
-                                    </span>
-                                </div>
-                            </CardBody>
-                        </Card>
+                            <div className="w-20 h-20 rounded-3xl bg-violet-50 text-violet-600 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-violet-600 group-hover:text-white transition-all duration-500 shadow-sm group-hover:shadow-violet-200 group-hover:shadow-lg">
+                                <GraduationCap size={36} />
+                            </div>
+                            <h3 className="text-xl font-black text-slate-900 leading-tight group-hover:text-violet-600 transition-colors px-2">University Structure</h3>
+                            <div className="mt-4 w-10 h-1.5 bg-violet-100 rounded-full group-hover:w-16 group-hover:bg-violet-500 transition-all duration-300" />
+                            
+                            {/* Floating micro-glow effect */}
+                            <div className="absolute inset-0 bg-violet-400/0 group-hover:bg-violet-400/5 rounded-[40px] transition-colors duration-500 pointer-events-none" />
+                        </button>
                     </div>
                 </ModalBody>
+
             </ModalContent>
         </Modal>
+
+
     );
 };
 

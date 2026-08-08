@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     ArrowLeft, Users, CheckCircle2, UserX, AlertCircle, AlertTriangle,
     Search, Filter, Save, FileSignature,
-    ChevronDown, Printer, FileText, Upload, LayoutGrid, RefreshCcw, ClipboardList, Lock
+    ChevronDown, Printer, FileText, Upload, LayoutGrid, RefreshCcw, ClipboardList, Lock,
+    DoorOpen
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -366,7 +367,7 @@ export default function AttendanceConsole() {
                         {/* Emergency Alert Button */}
                         <button
                             onClick={() => {
-                                toast.error("EMERGENCY ALERT SENT TO CONTROL ROOM", { duration: 5000, icon: '🚨' });
+                                toast.error("EMERGENCY ALERT SENT TO CONTROL ROOM", { duration: 5000, icon: '' });
                             }}
                             className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-red-500/20 border border-red-500 mr-2"
                         >
@@ -390,9 +391,9 @@ export default function AttendanceConsole() {
                 </div>
             </header>
 
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex flex-col lg:flex-row overflow-auto lg:overflow-hidden">
                 {/* 2. LEFT PANEL: Controls & List View */}
-                <aside className="w-[340px] xl:w-[400px] bg-white border-r border-slate-200 flex flex-col shrink-0 z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
+                <aside className="w-full lg:w-[340px] xl:w-[400px] bg-white border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col shrink-0 z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
 
                     {/* Action Panel */}
                     <div className="p-5 border-b border-slate-100 bg-slate-50/50 space-y-3">
@@ -410,13 +411,13 @@ export default function AttendanceConsole() {
                         </div>
                         <div className="flex gap-2">
                             <button
-                                onClick={() => toast.success("Request for Additional Answer Sheets sent to Exam Cell.", { icon: '📄' })}
+                                onClick={() => toast.success("Request for Additional Answer Sheets sent to Exam Cell.", { icon: '' })}
                                 className="flex-1 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 font-bold py-2 rounded-xl text-[11px] transition-colors shadow-sm flex items-center justify-center gap-1.5"
                             >
                                 <FileText size={14} /> Req. Answer Sheets
                             </button>
                             <button
-                                onClick={() => toast.success("Reliever requested. A staff member will arrive shortly.", { icon: '🧑‍🏫' })}
+                                onClick={() => toast.success("Reliever requested. A staff member will arrive shortly.")}
                                 className="flex-1 bg-amber-50 border border-amber-200 hover:bg-amber-100 text-amber-700 font-bold py-2 rounded-xl text-[11px] transition-colors shadow-sm flex items-center justify-center gap-1.5"
                             >
                                 <Users size={14} /> Req. Reliever
@@ -541,7 +542,7 @@ export default function AttendanceConsole() {
                 </aside>
 
                 {/* 3. RIGHT PANEL: Visual Seating Grid Map */}
-                <main className="flex-1 bg-slate-100 overflow-hidden flex flex-col relative inner-shadow-left">
+                <main className="flex-1 bg-slate-100 overflow-auto lg:overflow-hidden flex flex-col relative inner-shadow-left">
                     {/* Visual Grid Header */}
                     <div className="flex items-center justify-between p-6 border-b border-slate-200/80 bg-slate-50 shrink-0">
                         <div>

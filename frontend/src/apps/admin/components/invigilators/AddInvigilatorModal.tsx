@@ -115,7 +115,7 @@ const AddInvigilatorModal: React.FC<AddInvigilatorModalProps> = ({ isOpen, onClo
                             onClick={handleClose}
                             className="ml-auto w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors text-sm"
                         >
-                            ✕
+                            
                         </button>
                     </div>
                 </div>

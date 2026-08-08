@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Autocomplete, AutocompleteItem, Input, Button, Card, CardBody, CardHeader, Divider, Tooltip, Chip, Switch, Select, SelectItem, Badge, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from '@heroui/react';
 import { Trash2, MousePointer2, CheckCircle2, RotateCcw, Save, Layers, Building, Building2, Armchair, Layout, Check, X, Shield, Plus, Grid3X3, Spline, ArrowRight, ArrowLeft, MonitorPlay, AlertTriangle, MapPin, ChevronRight, Hash, Maximize2, Minimize2, Eye, Ban, Minus, DoorOpen, Box, Grid } from 'lucide-react';
 import { structureService } from '../../services/structureService';
-import { Block, Floor, Room, Zone } from '../../types/collegeStructure';
+import { Block, Floor, Room } from '../../types/collegeStructure';
 import { toast } from '../../../../utils/toast';
 
 interface LayoutConfigProps {
@@ -21,8 +21,6 @@ interface SeatConfig {
     benchIndex: number;
     seatIndex: number;
     isActive: boolean;
-    logicalRow: number;
-    zoneId?: number;
 }
 
 export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, singleSeatOnly = false }) => {
@@ -43,20 +41,12 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
     });
 
     const [viewMode, setViewMode] = useState<ViewMode>('PHYSICAL');
-    const [showZoneModal, setShowZoneModal] = useState(false);
-    const [selectedZoneCount, setSelectedZoneCount] = useState(4);
     const [disabledSeatIds, setDisabledSeatIds] = useState<Set<string>>(new Set());
-
-    // Zone Management State
-    const [zones, setZones] = useState<Zone[]>([]);
-    const [seatZoneMap, setSeatZoneMap] = useState<Map<string, number>>(new Map());
     const [seatIdMap, setSeatIdMap] = useState<Map<string, number>>(new Map());
-    // Cleaned up manual zone states
 
     const [isSaved, setIsSaved] = useState(true);
     const [loading, setLoading] = useState(false);
     const [initialConfig, setInitialConfig] = useState<any>(null);
-    const [initialSeatZoneMap, setInitialSeatZoneMap] = useState<Map<string, number> | null>(null);
     const [initialDisabledSeatIds, setInitialDisabledSeatIds] = useState<Set<string>>(new Set());
     const [isFullScreen, setIsFullScreen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -136,7 +126,6 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
                     setInitialConfig(newConfig);
 
                     const newDisabledSet = new Set<string>();
-                    const newZoneMap = new Map<string, number>();
                     const newSeatIdMap = new Map<string, number>();
 
                     if (data.seats) {
@@ -145,18 +134,12 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
                             const seatId = `${rowLabel}-${s.BenchNumber}-${s.SeatNumber}`;
                             newSeatIdMap.set(seatId, s.SeatID);
                             if (s.IsActive === false) newDisabledSet.add(seatId);
-                            if (s.ZoneID) {
-                                newZoneMap.set(seatId, Number(s.ZoneID));
-                            }
                         });
                     }
 
                     setDisabledSeatIds(newDisabledSet);
                     setInitialDisabledSeatIds(new Set(newDisabledSet)); // baseline for dirty check
-                    setSeatZoneMap(newZoneMap);
-                    setInitialSeatZoneMap(newZoneMap);
                     setSeatIdMap(newSeatIdMap);
-                    setZones(data.zones || []);
 
                 } catch (error) {
                     toast.error("Failed to load room layout");
@@ -166,10 +149,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
             } else {
                 setConfig({ rowLayout: [], seatsPerBench: 2, roomType: 'ROOM' });
                 setInitialConfig(null);
-                setInitialSeatZoneMap(null);
                 setDisabledSeatIds(new Set());
-                setSeatZoneMap(new Map());
-                setZones([]);
             }
         };
 
@@ -214,9 +194,6 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
                 for (let s = 1; s <= config.seatsPerBench; s++) {
                     const seatId = `${colLabel}-${b + 1}-${s}`;
                     const isActive = !disabledSeatIds.has(seatId);
-                    const zoneId = seatZoneMap.get(seatId);
-
-                    const logicalRow = b + 1;
 
                     seats.push({
                         id: seatId,
@@ -224,15 +201,13 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
                         colLabel,
                         benchIndex: b,
                         seatIndex: s,
-                        isActive,
-                        logicalRow,
-                        zoneId
+                        isActive
                     });
                 }
             }
         });
         return seats;
-    }, [config, disabledSeatIds, selectedRoomId, seatZoneMap]);
+    }, [config, disabledSeatIds, selectedRoomId]);
 
     const activeSeatCount = generatedSeats.filter(s => s.isActive).length;
     const capacityCount = config.rowLayout.reduce((acc, curr) => acc + (curr * config.seatsPerBench), 0);
@@ -248,9 +223,6 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
                 newSet.delete(seatId);
             } else {
                 newSet.add(seatId);
-                const newMap = new Map(seatZoneMap);
-                newMap.delete(seatId);
-                setSeatZoneMap(newMap);
             }
             setDisabledSeatIds(newSet);
             return;
@@ -277,25 +249,6 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
         setConfig({ ...config, rowLayout: newLayout });
     };
 
-    const handleAutoZone = async () => {
-        if (!selectedRoomId) return;
-        try {
-            setLoading(true);
-            await structureService.autoZoneRoom(Number(selectedRoomId), selectedZoneCount);
-            toast.success("Room auto-zoned successfully");
-            setShowZoneModal(false);
-
-            // Refresh logic - unmount and remount room
-            const currentId = selectedRoomId;
-            setSelectedRoomId("");
-            setTimeout(() => setSelectedRoomId(currentId), 50);
-
-        } catch (error: any) {
-            toast.error(error.response?.data?.message || "Failed to auto-zone room");
-        } finally {
-            setLoading(false);
-        }
-    };
 
 
 
@@ -311,9 +264,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
         // Internal guard: skip if nothing actually changed from saved baseline
         const disabledChanged = disabledSeatIds.size !== initialDisabledSeatIds.size ||
             [...disabledSeatIds].some(id => !initialDisabledSeatIds.has(id));
-        const zonesChanged = seatZoneMap.size !== (initialSeatZoneMap?.size ?? 0) ||
-            [...seatZoneMap.entries()].some(([k, v]) => initialSeatZoneMap?.get(k) !== v);
-        if (!disabledChanged && !zonesChanged) return;
+        if (!disabledChanged) return;
 
         try {
             const updates: any[] = [];
@@ -327,16 +278,14 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
                             updates.push({
                                 SeatID: dbSeatId,
                                 IsActive: !disabledSeatIds.has(seatId),
-                                ZoneID: seatZoneMap.get(seatId) || null,
                             });
                         }
                     }
                 }
             });
             if (updates.length > 0) {
-                await structureService.updateSeatZones(Number(selectedRoomId), updates);
+                await structureService.updateSeatStates(Number(selectedRoomId), updates);
                 setInitialDisabledSeatIds(new Set(disabledSeatIds));
-                setInitialSeatZoneMap(new Map(seatZoneMap));
                 setIsSaved(true);
 
                 // Dispatch event for auto-refresh on Seating Plans
@@ -386,14 +335,13 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
                             updates.push({
                                 SeatID: dbSeatId,
                                 IsActive: !disabledSeatIds.has(seatId),
-                                ZoneID: seatZoneMap.get(seatId) || null,
                             });
                         }
                     }
                 }
             });
             if (updates.length > 0) {
-                await structureService.updateSeatZones(Number(selectedRoomId), updates);
+                await structureService.updateSeatStates(Number(selectedRoomId), updates);
             }
 
             toast.success('Layout saved successfully');
@@ -410,24 +358,17 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
 
             const data = await structureService.getRoomLayout(Number(selectedRoomId));
             const newSeatIdMap = new Map<string, number>();
-            const currentZoneMap = new Map<string, number>();
             if (data.seats) {
                 data.seats.forEach((s: any) => {
                     const rowLabel = s.RowLabel ? s.RowLabel.trim() : '';
                     const seatId = `${rowLabel}-${s.BenchNumber}-${s.SeatNumber}`;
                     newSeatIdMap.set(seatId, s.SeatID);
-                    if (s.ZoneID) currentZoneMap.set(seatId, s.ZoneID);
                 });
             }
             setSeatIdMap(newSeatIdMap);
 
             if (layoutChanged) {
-                setSeatZoneMap(new Map());
-                setInitialSeatZoneMap(new Map());
                 setDisabledSeatIds(new Set());
-            } else {
-                setSeatZoneMap(currentZoneMap);
-                setInitialSeatZoneMap(currentZoneMap);
             }
         } catch (error: any) {
             toast.error(error.response?.data?.message || 'Failed to save layout');
@@ -440,7 +381,6 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
         if (initialConfig) {
             setConfig(initialConfig);
             setDisabledSeatIds(new Set(initialDisabledSeatIds));
-            if (initialSeatZoneMap) setSeatZoneMap(new Map(initialSeatZoneMap));
             toast.success("Layout reset to saved state");
         }
     };
@@ -453,13 +393,8 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
         for (const id of disabledSeatIds) {
             if (!initialDisabledSeatIds.has(id)) return true;
         }
-        if (!initialSeatZoneMap) return seatZoneMap.size > 0;
-        if (seatZoneMap.size !== initialSeatZoneMap.size) return true;
-        for (const [key, val] of seatZoneMap) {
-            if (initialSeatZoneMap.get(key) !== val) return true;
-        }
         return false;
-    }, [config, initialConfig, disabledSeatIds, initialDisabledSeatIds, seatZoneMap, initialSeatZoneMap]);
+    }, [config, initialConfig, disabledSeatIds, initialDisabledSeatIds]);
 
     // ── Auto-save: watches ONLY seat state, never layout dims ──
     // Depends directly on the state values — no computed memo needed.
@@ -468,24 +403,11 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
         if (!selectedRoomId || seatIdMap.size === 0) return;
         const timer = setTimeout(() => { autoSaveSeatStates(); }, 1000);
         return () => clearTimeout(timer);
-    }, [disabledSeatIds, seatZoneMap, selectedRoomId]);
+    }, [disabledSeatIds, selectedRoomId]);
 
 
     return (
         <div className="flex flex-col gap-8 pb-12 relative">
-            <Modal isOpen={showZoneModal} onClose={() => setShowZoneModal(false)} size="sm" classNames={{ backdrop: "bg-slate-900/50 backdrop-blur-sm", base: "bg-white border border-slate-200 shadow-2xl" }}>
-                <ModalContent>
-                    <ModalHeader className="flex flex-col gap-1 text-slate-800">Auto-Zone Room</ModalHeader>
-                    <ModalBody>
-                        <p className="text-sm text-slate-500 mb-2">Evenly divide the room into zones column-by-column.</p>
-                        <Input name="custom-input" type="number" label="Number of Zones" labelPlacement="outside" min={2} max={6} value={selectedZoneCount.toString()} onValueChange={(val) => setSelectedZoneCount(Number(val))} classNames={{ inputWrapper: "bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors shadow-sm" }} />
-                    </ModalBody>
-                    <ModalFooter>
-                        <Button color="danger" variant="light" onPress={() => setShowZoneModal(false)}>Cancel</Button>
-                        <Button color="primary" onPress={handleAutoZone} isLoading={loading}>Execute</Button>
-                    </ModalFooter>
-                </ModalContent>
-            </Modal>
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 relative overflow-hidden">
                 <div className="flex items-center gap-5 z-10 w-full">
                     <div className="p-3 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-200">
@@ -621,7 +543,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
                                                 Reset
                                             </Button>
 
-                                            {/* Save: green "Saved ✓" when clean, blue "Save" when dirty */}
+                                            {/* Save: green "Saved " when clean, blue "Save" when dirty */}
                                             <Button
                                                 isLoading={loading}
                                                 isDisabled={(!isDirty && isSaved) || capacityCount === 0 || loading}
@@ -633,7 +555,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
                                                         : 'bg-emerald-50 text-emerald-600 border border-emerald-200 cursor-default'
                                                 }`}
                                             >
-                                                {isDirty ? 'Save' : 'Saved ✓'}
+                                                {isDirty ? 'Save' : 'Saved '}
                                             </Button>
                                         </div>
                                     )}
@@ -671,7 +593,6 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
                             <Button size="sm" onPress={() => setViewMode('DISABLE')} startContent={<Ban size={13}/>}
                                 className={viewMode === 'DISABLE' ? 'text-white font-bold uppercase text-[10px]' : 'bg-transparent text-rose-400/70 font-bold uppercase text-[10px] hover:text-rose-300'}
                                 style={viewMode === 'DISABLE' ? { background: 'linear-gradient(135deg,#be123c,#9f1239)', boxShadow: '0 0 14px rgba(244,63,94,0.4)' } : {}}>Disable</Button>
-                            <Button size="sm" className="bg-transparent text-amber-400/80 font-bold uppercase text-[10px] hover:text-amber-300 hover:bg-amber-400/10" onPress={() => setShowZoneModal(true)} startContent={<Grid3X3 size={13}/>}>Auto-Zone</Button>
                             <div className="w-px h-4 bg-white/10 mx-0.5" />
                             <Tooltip content="Toggle Fullscreen">
                                 <Button isIconOnly variant="light" size="sm" className="text-indigo-400/60 hover:text-white" onPress={toggleFullScreen}>
@@ -701,7 +622,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
                                             boxShadow: '0 4px 24px rgba(0,0,0,0.45), 0 0 40px rgba(99,102,241,0.05), inset 0 1px 0 rgba(129,140,248,0.12)',
                                         }}>
                                         <div className="absolute top-0 left-6 right-6 h-px" style={{ background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.09),transparent)' }} />
-                                        <span className="text-[11px] font-black uppercase tracking-[0.4em] select-none" style={{ color: 'rgba(165,180,252,0.5)', textShadow: '0 0 20px rgba(99,102,241,0.2)' }}>✦ Front Blackboard ✦</span>
+                                        <span className="text-[11px] font-black uppercase tracking-[0.4em] select-none" style={{ color: 'rgba(165,180,252,0.5)', textShadow: '0 0 20px rgba(99,102,241,0.2)' }}> Front Blackboard </span>
                                         <div className="absolute bottom-0 left-0 right-0 h-[2.5px]" style={{ background: 'linear-gradient(90deg,transparent,rgba(99,102,241,0.5),rgba(139,92,246,0.4),transparent)' }} />
                                     </div>
                                     <div className="w-4/5 h-3 -mt-0.5" style={{ background: 'radial-gradient(ellipse,rgba(99,102,241,0.08) 0%,transparent 70%)' }} />
@@ -746,7 +667,6 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
                                                         const makeSeatCell = (seatIndex: number) => {
                                                             const seatId = `${colLetter}-${benchNum}-${seatIndex}`;
                                                             const isActive = !disabledSeatIds.has(seatId);
-                                                            const zoneId = seatZoneMap.get(seatId);
                                                             const seatLabel = isDual
                                                                 ? `${colLetterLower}${benchNum}${seatIndex === 1 ? 'l' : 'r'}`
                                                                 : `${colLetterLower}${benchNum}`;
@@ -763,16 +683,6 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
                                                             } else if (viewMode === 'DISABLE') {
                                                                 seatCls += 'hover:scale-110 active:scale-95 ';
                                                                 seatStyle = { background: 'linear-gradient(135deg,#3730a3,#4338ca)', borderColor: '#818cf8', color: '#e0e7ff', boxShadow: '0 0 16px rgba(99,102,241,0.5), inset 0 1px 0 rgba(255,255,255,0.15)' };
-                                                            } else if (viewMode === 'PHYSICAL' && zoneId) {
-                                                                const z = zones.find(zn => zn.ZoneID === zoneId);
-                                                                const zoneMap: Record<string, React.CSSProperties> = {
-                                                                    red:    { background: 'linear-gradient(135deg,#7f1d1d,#991b1b)', borderColor: '#f87171', color: '#fecaca', boxShadow: '0 0 14px rgba(248,113,113,0.35)' },
-                                                                    green:  { background: 'linear-gradient(135deg,#14532d,#166534)', borderColor: '#4ade80', color: '#bbf7d0', boxShadow: '0 0 14px rgba(74,222,128,0.35)' },
-                                                                    yellow: { background: 'linear-gradient(135deg,#713f12,#854d0e)', borderColor: '#fbbf24', color: '#fef08a', boxShadow: '0 0 14px rgba(251,191,36,0.35)' },
-                                                                    purple: { background: 'linear-gradient(135deg,#4a1d96,#5b21b6)', borderColor: '#c084fc', color: '#e9d5ff', boxShadow: '0 0 14px rgba(192,132,252,0.35)' },
-                                                                };
-                                                                seatStyle = z ? (zoneMap[z.Color?.toLowerCase() ?? ''] ?? { background: 'linear-gradient(135deg,#1e3a8a,#1e40af)', borderColor: '#60a5fa', color: '#bfdbfe', boxShadow: '0 0 12px rgba(96,165,250,0.3)' }) : { background: '#0e1830', borderColor: 'rgba(255,255,255,0.08)', color: '#475569' };
-                                                                seatCls += 'hover:scale-105 active:scale-95 ';
                                                             } else {
                                                                 seatCls += 'hover:scale-110 active:scale-95 ';
                                                                 seatStyle = { background: 'linear-gradient(135deg,rgba(99,102,241,0.18) 0%,rgba(15,28,74,0.85) 100%)', borderColor: 'rgba(129,140,248,0.3)', color: '#a5b4fc', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.07)' };
@@ -783,9 +693,7 @@ export const LayoutConfig: React.FC<LayoutConfigProps> = ({ readOnly = false, si
                                                                     classNames={{ content: 'bg-slate-900/95 border border-indigo-500/30 text-indigo-200 rounded-lg text-[10px] font-mono px-2 py-1' }}>
                                                                     <div className={seatCls} style={seatStyle} onClick={() => toggleSeat(seatId)}>
                                                                         {isActive
-                                                                            ? zoneId
-                                                                                ? <span className="font-black text-[9px]">{zones.find(zn => zn.ZoneID === zoneId)?.ZoneCode}</span>
-                                                                                : <span className="font-bold tracking-tight">{seatLabel}</span>
+                                                                            ? <span className="font-bold tracking-tight">{seatLabel}</span>
                                                                             : <Ban size={11} className="opacity-50" />}
                                                                     </div>
                                                                 </Tooltip>

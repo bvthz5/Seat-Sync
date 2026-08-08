@@ -95,13 +95,9 @@ export const createAcademicYear = async (req: Request, res: Response): Promise<v
             data: year
         });
     } catch (error: any) {
-        console.error("[createAcademicYear] Error:", error);
-        console.error("[createAcademicYear] Error stack:", error.stack);
-        console.error("[createAcademicYear] Sequelize errors:", error.errors);
-
         // Handle unique constraint violation
         if (error.name === 'SequelizeUniqueConstraintError') {
-            console.log("[createAcademicYear] Unique constraint violation detected");
+            console.warn(`[createAcademicYear] Unique constraint violation: duplicate entry.`);
             res.status(400).json({
                 success: false,
                 message: `Academic year '${error.fields?.UQ__Academic__294C4DA93FF6F462 || error.fields?.YearName || 'N/A'}' already exists. Please choose a different year name.`,
@@ -110,6 +106,7 @@ export const createAcademicYear = async (req: Request, res: Response): Promise<v
             return;
         }
 
+        console.error(`[createAcademicYear] Error: ${error.message}`);
         // Generic error response
         res.status(500).json({
             success: false,
@@ -301,7 +298,17 @@ export const createDepartment = async (req: Request, res: Response): Promise<voi
             data: department
         });
     } catch (error: any) {
-        console.error("Error creating department:", error);
+        if (error.name === 'SequelizeUniqueConstraintError') {
+            console.warn(`Error creating department: duplicate entry for code.`);
+            res.status(400).json({
+                success: false,
+                message: `Department with code '${error.fields?.DepartmentCode || 'N/A'}' already exists.`,
+                error: "Duplicate department"
+            });
+            return;
+        }
+
+        console.error("Error creating department:", error.message);
         res.status(500).json({
             success: false,
             message: "Failed to create department",
@@ -379,7 +386,17 @@ export const createProgram = async (req: Request, res: Response): Promise<void> 
             data: program
         });
     } catch (error: any) {
-        console.error("Error creating program:", error);
+        if (error.name === 'SequelizeUniqueConstraintError') {
+            console.warn(`Error creating program: duplicate entry for code.`);
+            res.status(400).json({
+                success: false,
+                message: `Program with code '${error.fields?.ProgramCode || 'N/A'}' already exists.`,
+                error: "Duplicate program"
+            });
+            return;
+        }
+
+        console.error("Error creating program:", error.message);
         res.status(500).json({
             success: false,
             message: "Failed to create program",
@@ -497,13 +514,13 @@ export const getAllSubjects = async (req: Request, res: Response): Promise<void>
 
 export const createSubject = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { SubjectCode, SubjectName, DepartmentID, ProgramID, AcademicYearID, Credits } = req.body;
+        const { SubjectCode, SubjectName, DepartmentID, ProgramID, AcademicYearID, Credits, SemesterID } = req.body;
         const currentUser = (req as any).user;
 
-        if (!SubjectCode || !SubjectName || !DepartmentID || !ProgramID || !AcademicYearID) {
+        if (!SubjectCode || !SubjectName || !DepartmentID || !ProgramID || !AcademicYearID || !SemesterID) {
             res.status(400).json({
                 success: false,
-                message: "SubjectCode, SubjectName, DepartmentID, ProgramID, and AcademicYearID are required"
+                message: "SubjectCode, SubjectName, DepartmentID, ProgramID, SemesterID, and AcademicYearID are required"
             });
             return;
         }
@@ -511,7 +528,8 @@ export const createSubject = async (req: Request, res: Response): Promise<void> 
         const subject = await Subject.create({
             SubjectCode,
             SubjectName,
-            DepartmentID
+            DepartmentID,
+            SemesterID
         });
 
         // Log activity

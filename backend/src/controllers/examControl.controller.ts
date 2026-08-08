@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { Exam, ActivityLog, Room, SeatAllocation, Seat, Student, Notification, User, Zone } from "../models/index.js";
+import { Exam, ActivityLog, Room, SeatAllocation, Seat, Student, Notification, User } from "../models/index.js";
 import { Op } from "sequelize";
 import { sequelize } from "../config/database.js";
 

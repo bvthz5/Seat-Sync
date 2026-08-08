@@ -14,13 +14,15 @@ import { ExamSeries, InternalExam, InternalExamDepartment } from '../models/inde
 import * as XLSX from 'xlsx';
 import { PDFParse } from 'pdf-parse';
 import { createWorker } from 'tesseract.js';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { createRequire } from 'module';
 import os from 'os';
 import path from 'path';
 import mammoth from 'mammoth';
 import { sequelize } from '../config/database.js';
-import { generateDefaultPassword } from '../utils/student.utils.js';
+import { generateDefaultPassword, generateStudentEmail, extractBatchYearFromRegisterNumber, extractProgramCodeFromRegisterNumber } from '../utils/student.utils.js';
+
+const require = createRequire(import.meta.url);
 
 const DATE_PATTERN =
     /\b(?:\d{4}-\d{2}-\d{2}|\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{1,2}\s*[A-Za-z]{3,9}\.?\s*\d{4})\b/;
@@ -84,7 +86,7 @@ const parseExamDateValue = (raw: unknown): Date | null => {
         if (y === 2001 && !text.includes('2001')) {
             y = new Date().getFullYear();
         }
-        
+
         // Fix known typos in the original timetable file (e.g. 2027, 2028 instead of 2026)
         if (y === 2027 || y === 2028) {
             y = 2026;
@@ -106,7 +108,7 @@ const formatDateForDb = (date: Date): string => {
 const parseDepartmentCodes = (raw: unknown): string[] => {
     let text = String(raw ?? '').trim();
     if (!text) return [];
-    
+
     // Pre-process: if it contains " (", strip everything after it for individual codes
     // e.g. "EEE (WP), CSE" -> "EEE, CSE"
     text = text.replace(/\s*\(.*?\)/g, '');
@@ -161,17 +163,17 @@ const DEPARTMENT_CODE_DISPLAY_NAMES: Record<string, string> = {
 
 const normalizeDepartmentCode = (value: unknown): string => {
     let text = String(value ?? '').toUpperCase().trim();
-    
+
     // Strip everything in parentheses (e.g., "EEE (WP)" -> "EEE")
     text = text.replace(/\(.*\)/g, '').trim();
-    
+
     // Strip everything after a space or underscore if it looks like a suffix (e.g., "EEE_WP" -> "EEE", "CSE BATCH 1" -> "CSE")
     // But keep it if the whole thing is a known alias
     const parts = text.split(/[\s_]+/);
     let raw = parts[0] ? parts[0].replace(/[^A-Z0-9]/g, '') : '';
-    
+
     if (!raw) return '';
-    
+
     // If the first part is IT prefix (e.g. ITEE), handle it
     if (raw.startsWith('IT') && raw.length > 2 && !DEPARTMENT_CODE_ALIASES[raw]) {
         const withoutIT = raw.slice(2);
@@ -484,9 +486,9 @@ const sanitizeEmailToken = (value: string) =>
         .trim();
 
 const buildEligibleStudentEmail = (fullName: string, registerNumber: string) => {
-    const nameToken = sanitizeEmailToken(fullName) || 'student';
-    const regToken = sanitizeEmailToken(registerNumber) || 'reg';
-    return `${nameToken}.${regToken}@students.local`;
+    const joiningYear = extractBatchYearFromRegisterNumber(registerNumber) || new Date().getFullYear();
+    const programCode = extractProgramCodeFromRegisterNumber(registerNumber) || 'student';
+    return generateStudentEmail(fullName, joiningYear, programCode);
 };
 
 const resolveProgramForEligibleImport = async (
@@ -513,8 +515,8 @@ const resolveProgramForEligibleImport = async (
         if (program) return program;
 
         return Program.create({
-            ProgramName: programValue || programCodeValue,
-            ProgramCode: programCodeValue || undefined,
+            ProgramName: programValue || programCodeValue || `Program-${Date.now()}`,
+            ProgramCode: programCodeValue || `PRG-${departmentId}-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`,
             DepartmentID: departmentId,
             IsActive: true
         } as any, { transaction });
@@ -630,7 +632,7 @@ export class ExamController {
                     where: ieWhere,
                     include: [{
                         model: InternalExamDepartment,
-                        include: [{ model: Department, attributes: ['DepartmentName', 'DepartmentCode'] }]
+                        include: [{ model: Department, attributes: ['DepartmentID', 'DepartmentName', 'DepartmentCode'] }]
                     }],
                     order: [['ExamDate', 'ASC']]
                 });
@@ -638,11 +640,12 @@ export class ExamController {
                 const now = new Date();
                 const transformed = internalExams.map(ie => {
                     const data = ie.toJSON() as any;
-                    
+
                     const depts = data.InternalExamDepartments || [];
                     const deptName = depts.length > 0 ? depts.map((d: any) => d.Department?.DepartmentCode).join(', ') : 'ALL_BRANCHES';
                     const fullDeptName = depts.length > 0 ? depts.map((d: any) => d.Department?.DepartmentName).join(', ') : 'All Branches';
-                    
+                    const mainDeptID = depts[0]?.Department?.DepartmentID || depts[0]?.DepartmentID || undefined;
+
                     const examDate = new Date(data.ExamDate);
                     const startHour = data.Session === 'FN' ? 10 : 14;
                     const examStart = new Date(examDate);
@@ -662,10 +665,13 @@ export class ExamController {
                         Session: data.Session,
                         Duration: data.Duration || 150,
                         Status: calcStatus,
+                        DepartmentID: mainDeptID,
                         Subject: {
                             SubjectName: data.SubjectName,
                             SubjectCode: data.SubjectCode,
+                            DepartmentID: mainDeptID,
                             Department: {
+                                DepartmentID: mainDeptID,
                                 DepartmentName: fullDeptName,
                                 DepartmentCode: deptName
                             }
@@ -752,7 +758,6 @@ export class ExamController {
 
             res.json(examsWithStatus);
         } catch (error: any) {
-            console.error("DEBUG: getExams failed:", error);
             res.status(500).json({ message: 'Error fetching exams', error: error.message });
         }
     }
@@ -760,11 +765,16 @@ export class ExamController {
     // Create a new exam
     static async createExam(req: Request, res: Response) {
         try {
-            const { SubjectID, ExamName, ExamDate, Session, Duration, ExamSeriesID, DepartmentID } = req.body;
+            let { SubjectID, ExamName, ExamDate, Session, Duration, ExamSeriesID, DepartmentID } = req.body;
 
             // Basic validation
-            if (!SubjectID || !ExamName || !ExamDate || !Session || !Duration) {
-                return res.status(400).json({ message: 'Missing required fields' });
+            if (!SubjectID || !ExamDate || !Session || !Duration) {
+                return res.status(400).json({ message: 'Missing required fields (Subject, Exam Date, Session, or Duration)' });
+            }
+
+            if (!ExamName && SubjectID) {
+                const sub = await Subject.findByPk(SubjectID);
+                ExamName = sub ? sub.SubjectName : 'Scheduled Exam';
             }
 
             // Validate ExamSeriesID if provided
@@ -801,7 +811,8 @@ export class ExamController {
                     defaults: {
                         SubjectCode: currentSubject.SubjectCode,
                         SubjectName: currentSubject.SubjectName,
-                        DepartmentID: departmentIdNum
+                        DepartmentID: departmentIdNum,
+                        SemesterID: currentSubject.SemesterID || 1
                     }
                 });
 
@@ -819,11 +830,11 @@ export class ExamController {
             }
 
             const payload: any = {
-                SubjectID: finalSubjectId,
+                SubjectID: Number(finalSubjectId),
                 ExamName,
                 ExamDate,
                 Session,
-                Duration,
+                Duration: Number(Duration),
                 Status: status,
                 IsEmergencyMode: false,
                 AttendanceLocked: false
@@ -837,6 +848,7 @@ export class ExamController {
 
             res.status(201).json(newExam);
         } catch (error: any) {
+            console.error("Error creating exam:", error);
             res.status(500).json({ message: 'Error creating exam', error: error.message });
         }
     }
@@ -847,9 +859,110 @@ export class ExamController {
             const { id } = req.params;
             const updates = { ...req.body };
 
-            const exam = await Exam.findByPk(id as string);
+            let exam = await Exam.findByPk(id as string);
             if (!exam) {
-                return res.status(404).json({ message: 'Exam not found' });
+                // If not found in standard Exams, try InternalExams fallback
+                const internalExam = await InternalExam.findByPk(id as string);
+                if (!internalExam) {
+                    return res.status(404).json({ message: 'Exam not found' });
+                }
+
+                // Update internal exam fields
+                const { SubjectID, ExamDate, Session, Duration, DepartmentID } = updates;
+
+                const internalUpdates: any = {};
+                if (ExamDate !== undefined) internalUpdates.ExamDate = ExamDate;
+                if (Session !== undefined) internalUpdates.Session = Session;
+                if (Duration !== undefined) internalUpdates.Duration = Number(Duration);
+
+                // If SubjectID is supplied, find the Subject and sync SubjectCode & SubjectName
+                if (SubjectID !== undefined && SubjectID !== null && String(SubjectID).trim() !== '') {
+                    const subject = await Subject.findByPk(Number(SubjectID));
+                    if (!subject) {
+                        return res.status(404).json({ message: 'Subject not found' });
+                    }
+                    internalUpdates.SubjectCode = subject.SubjectCode;
+                    internalUpdates.SubjectName = subject.SubjectName;
+                }
+
+                await internalExam.update(internalUpdates);
+
+                // Sync DepartmentID in InternalExamDepartments mapping
+                if (DepartmentID !== undefined && DepartmentID !== null && String(DepartmentID).trim() !== '') {
+                    const departmentId = Number(DepartmentID);
+                    const department = await Department.findByPk(departmentId);
+                    if (!department) {
+                        return res.status(404).json({ message: 'Department not found' });
+                    }
+
+                    // Delete existing department mappings for this internal exam
+                    await sequelize.query('DELETE FROM InternalExamDepartments WHERE InternalExamID = :id', {
+                        replacements: { id: internalExam.InternalExamID },
+                        type: QueryTypes.DELETE
+                    });
+
+                    // Add the new department mapping
+                    await sequelize.query(
+                        'INSERT INTO InternalExamDepartments (InternalExamID, DepartmentID, createdAt, updatedAt) VALUES (:examId, :deptId, NOW(), NOW())',
+                        {
+                            replacements: { examId: internalExam.InternalExamID, deptId: departmentId },
+                            type: QueryTypes.INSERT
+                        }
+                    );
+                }
+
+                // Query the updated record to format it compatibly with standard Exam object for frontend
+                const updatedInternalExam = await InternalExam.findByPk(id as string, {
+                    include: [{
+                        model: InternalExamDepartment,
+                        include: [{ model: Department, attributes: ['DepartmentName', 'DepartmentCode'] }]
+                    }]
+                });
+
+                if (!updatedInternalExam) {
+                    return res.status(404).json({ message: 'Error retrieving updated internal exam' });
+                }
+
+                const data = updatedInternalExam.toJSON() as any;
+                const depts = data.InternalExamDepartments || [];
+                const deptName = depts.length > 0 ? depts.map((d: any) => d.Department?.DepartmentCode).join(', ') : 'ALL_BRANCHES';
+                const fullDeptName = depts.length > 0 ? depts.map((d: any) => d.Department?.DepartmentName).join(', ') : 'All Branches';
+
+                const now = new Date();
+                const examDate = new Date(data.ExamDate);
+                const startHour = data.Session === 'FN' ? 10 : 14;
+                const examStart = new Date(examDate);
+                examStart.setHours(startHour, 0, 0, 0);
+                const examEnd = new Date(examStart.getTime() + (data.Duration || 150) * 60 * 1000);
+
+                let calcStatus = 'Scheduled';
+                if (now >= examEnd) calcStatus = 'Completed';
+                else if (now >= examStart && now < examEnd) calcStatus = 'In Progress';
+
+                return res.json({
+                    ExamID: data.InternalExamID,
+                    ExamName: data.SubjectName,
+                    ExamDate: data.ExamDate,
+                    Session: data.Session,
+                    Duration: data.Duration || 150,
+                    Status: calcStatus,
+                    Subject: {
+                        SubjectName: data.SubjectName,
+                        SubjectCode: data.SubjectCode,
+                        Department: {
+                            DepartmentName: fullDeptName,
+                            DepartmentCode: deptName
+                        }
+                    },
+                    Enrollment: 0,
+                    AuditStatus: 'Clean'
+                });
+            }
+
+            // Otherwise, handle standard Exam update logic
+            let finalSubjectId = exam.SubjectID;
+            if (updates.SubjectID !== undefined && updates.SubjectID !== null && String(updates.SubjectID).trim() !== '') {
+                finalSubjectId = Number(updates.SubjectID);
             }
 
             const departmentIdRaw = updates.DepartmentID;
@@ -866,7 +979,7 @@ export class ExamController {
                     return res.status(404).json({ message: 'Department not found' });
                 }
 
-                const currentSubject = await Subject.findByPk(exam.SubjectID);
+                const currentSubject = await Subject.findByPk(finalSubjectId);
                 if (!currentSubject) {
                     return res.status(404).json({ message: 'Current subject not found for exam' });
                 }
@@ -879,7 +992,8 @@ export class ExamController {
                     defaults: {
                         SubjectCode: currentSubject.SubjectCode,
                         SubjectName: currentSubject.SubjectName,
-                        DepartmentID: departmentId
+                        DepartmentID: departmentId,
+                        SemesterID: currentSubject.SemesterID
                     }
                 });
 
@@ -887,7 +1001,22 @@ export class ExamController {
             }
 
             await exam.update(updates);
-            res.json(exam);
+
+            const updatedExam = await Exam.findByPk(exam.ExamID, {
+                include: [
+                    {
+                        model: Subject,
+                        include: [
+                            {
+                                model: Department,
+                                attributes: ['DepartmentID', 'DepartmentName', 'DepartmentCode']
+                            }
+                        ]
+                    }
+                ]
+            });
+
+            res.json(updatedExam);
         } catch (error: any) {
             res.status(500).json({ message: 'Error updating exam', error: error.message });
         }
@@ -957,7 +1086,7 @@ export class ExamController {
             if (seriesId) seatQuery += ' AND ExamSeriesID = :seriesId';
             if (date) seatQuery += ' AND ExamDate = :date';
             seatQuery += ')';
-            
+
             await sequelize.query(seatQuery, { replacements, type: QueryTypes.DELETE });
 
             await sequelize.query(query, {
@@ -1259,7 +1388,7 @@ export class ExamController {
                         ? "No timetable rows could be parsed from PDF (including OCR fallback). Please verify the PDF format or use the Excel template."
                         : (isDocx || isDoc || isRtf)
                             ? "No timetable rows could be parsed from the Word/RTF file. Please verify the document format or use the Excel template."
-                        : "No rows found in uploaded file"
+                            : "No rows found in uploaded file"
                 });
             }
 
@@ -1315,7 +1444,7 @@ export class ExamController {
             // Get or create default semester for subject assignment during import
             let defaultSemesterID = 1;
             let anySemester = await Semester.findOne();
-            
+
             if (anySemester) {
                 defaultSemesterID = anySemester.SemesterID;
             } else {
@@ -1329,7 +1458,7 @@ export class ExamController {
                         IsActive: true
                     } as any);
                 }
-                
+
                 try {
                     const newSem = await Semester.create({
                         SemesterNumber: 1,
@@ -1426,7 +1555,7 @@ export class ExamController {
                     if (timeRaw && typeof durationRaw === 'undefined') {
                         const t = String(timeRaw).toLowerCase();
                         if (t.includes('12:00') || t.includes('12:30') || t.includes('4:00')) {
-                            duration = 150; 
+                            duration = 150;
                         } else if (t.includes('1:00') || t.includes('4:30') || t.includes('12:30')) {
                             duration = 180;
                         }
@@ -1476,7 +1605,7 @@ export class ExamController {
 
                         // 1.5 Resolve Program and Semester based on row data
                         let rowSemesterID: number = defaultSemesterID;
-                        
+
                         // Robustly find column values regardless of slight header variations
                         const getRowVal = (keys: string[]) => {
                             for (const key of keys) {
@@ -1496,11 +1625,11 @@ export class ExamController {
 
                         if (programmeRaw || examTypeRaw) {
                             const progName = programmeRaw ? String(programmeRaw).trim() : 'General Program';
-                            
+
                             let prog = await Program.findOne({
                                 where: { ProgramName: progName, DepartmentID: departmentID }
                             });
-                            
+
                             if (!prog) {
                                 const baseCode = progName.replace(/\s+/g, '-').substring(0, 15).toUpperCase();
                                 const progCode = `${baseCode}-${departmentID}`;
@@ -1511,16 +1640,16 @@ export class ExamController {
                                     IsActive: true
                                 } as any);
                             }
-                            
+
                             const semName = examTypeRaw ? String(examTypeRaw).trim() : 'Semester 1';
                             let semNum = 1;
                             const semMatch = semName.match(/[sS](\d+)/);
                             if (semMatch && semMatch[1]) {
                                 semNum = parseInt(semMatch[1], 10);
                             }
-                            
+
                             let [sem] = await Semester.findOrCreate({
-                                where: { 
+                                where: {
                                     SemesterName: semName,
                                     ProgramID: prog.ProgramID
                                 },
@@ -1531,7 +1660,7 @@ export class ExamController {
                                     IsActive: true
                                 } as any
                             });
-                            
+
                             rowSemesterID = sem.SemesterID;
                         }
 
@@ -1550,7 +1679,7 @@ export class ExamController {
 
                         if (cachedSubjID !== undefined) {
                             subjectID = cachedSubjID;
-                            
+
                             // Optionally update the subject's semester if it was assigned to default before
                             await Subject.update(
                                 { SemesterID: rowSemesterID } as any,
@@ -1571,7 +1700,7 @@ export class ExamController {
                             });
                             subjectID = subj.SubjectID;
                             subjectCache.set(subjectKey, subjectID);
-                            
+
                             // If the subject already existed but was found by findOrCreate (race condition), update it
                             if (!subj.isNewRecord && subj.SemesterID !== rowSemesterID) {
                                 await subj.update({ SemesterID: rowSemesterID } as any);
@@ -1581,12 +1710,12 @@ export class ExamController {
                         // 3. Upsert exam for this subject/department
                         // We use SubjectID, Date, and Session as the unique identifier for an exam in a series.
                         // This prevents different subjects or different sessions from overwriting each other.
-                        const whereClause: any = { 
+                        const whereClause: any = {
                             SubjectID: subjectID,
                             ExamDate: formattedDate,
                             Session: session.toUpperCase()
                         };
-                        
+
                         if (seriesId) {
                             whereClause.ExamSeriesID = parseInt(String(seriesId));
                         }
@@ -1702,9 +1831,9 @@ export class ExamController {
             const transaction = await sequelize.transaction();
             try {
                 const result = await ExamController._processEligibleStudentsRows(
-                    examId, 
-                    rows, 
-                    transaction, 
+                    examId,
+                    rows,
+                    transaction,
                     department.DepartmentID
                 );
                 await transaction.commit();
@@ -1728,7 +1857,8 @@ export class ExamController {
             console.error('importEligibleStudents error:', error);
             return res.status(500).json({
                 message: 'Failed to import eligible students',
-                error: error.message
+                error: error.message,
+                stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
             });
         }
     }
@@ -1790,52 +1920,47 @@ export class ExamController {
                 // NEW STUDENT: Create User first
                 const plainPassword = generateDefaultPassword(fullName, normalizedRegNo);
                 const hashedPassword = await bcrypt.hash(plainPassword, 12);
-                
+
                 // Extract email or generate a fallback
                 const emailRaw = String(getEligibleCellValue(row, ['Email', 'Email Address', 'EmailAddress']) ?? '').trim();
-                const studentEmail = (emailRaw && emailRaw.includes('@')) 
-                    ? emailRaw.toLowerCase() 
-                    : `${normalizedRegNo.toLowerCase()}@student.local`;
+                let studentEmail = (emailRaw && emailRaw.includes('@'))
+                    ? emailRaw.toLowerCase()
+                    : null;
 
-                let user = await User.findOne({
-                    where: { Email: studentEmail },
-                    transaction
-                });
+                if (!studentEmail) {
+                    const joiningYear = extractBatchYearFromRegisterNumber(normalizedRegNo) || new Date().getFullYear();
+                    const programCode = extractProgramCodeFromRegisterNumber(normalizedRegNo) || 'student';
+                    studentEmail = generateStudentEmail(fullName, joiningYear, programCode);
+                }
+
+                let user = await User.findOne({ where: { Email: studentEmail }, transaction });
 
                 if (!user) {
-                    try {
-                        user = await User.create({
-                            Email: studentEmail,
-                            FullName: fullName,
-                            PasswordHash: hashedPassword,
-                            Role: 'student',
-                            IsActive: true,
-                            IsPasswordChanged: false,
-                            IsActivated: false,
-                            FailedLoginAttempts: 0,
-                            AccountLockedUntil: null
-                        } as any, { transaction });
-                        createdUsers++;
-                    } catch (createErr: any) {
-                        if (createErr.name === 'SequelizeUniqueConstraintError' || createErr.number === 2601) {
-                            user = await User.findOne({
-                                where: { Email: studentEmail },
-                                transaction
-                            });
-                            if (!user) throw createErr;
-                        } else {
-                            throw createErr;
-                        }
-                    }
+                    user = await User.create({
+                        Email: studentEmail,
+                        FullName: fullName,
+                        PasswordHash: hashedPassword,
+                        Role: 'student',
+                        IsActive: true,
+                        IsPasswordChanged: false,
+                        IsActivated: false,
+                        FailedLoginAttempts: 0,
+                        AccountLockedUntil: null
+                    } as any, { transaction });
+                    createdUsers++;
                 } else {
-                    // Update user if details changed
-                    const userUpdates: any = {};
-                    if (user.FullName !== fullName) userUpdates.FullName = fullName;
-                    if (user.Role !== 'student') userUpdates.Role = 'student';
-                    
-                    if (Object.keys(userUpdates).length > 0) {
-                        await user.update(userUpdates, { transaction });
+                    // Update user's name if needed
+                    if (user.FullName !== fullName) {
+                        await user.update({ FullName: fullName }, { transaction });
                         updatedUsers++;
+                    }
+                    
+                    // Force update password to default if it's not changed yet
+                    if (!user.IsPasswordChanged) {
+                        const plainPassword = generateDefaultPassword(fullName, normalizedRegNo);
+                        const hashedPassword = await bcrypt.hash(plainPassword, 12);
+                        await user.update({ PasswordHash: hashedPassword }, { transaction });
+                        console.log(`[Import] Updated default password for user: ${user.Email}`);
                     }
                 }
 
@@ -1843,6 +1968,8 @@ export class ExamController {
                 const deptId = defaultDepartmentId;
                 let progId = undefined;
                 let semId = undefined;
+                let batchYearForEmail = extractBatchYearFromRegisterNumber(normalizedRegNo) || new Date().getFullYear();
+                let programCodeForEmail = extractProgramCodeFromRegisterNumber(normalizedRegNo) || 'STUDENT';
 
                 if (deptId) {
                     try {
@@ -1850,6 +1977,35 @@ export class ExamController {
                         progId = program.ProgramID;
                         const semester = await resolveSemesterForEligibleImport(progId, row, transaction);
                         semId = semester.SemesterID;
+
+                        // Update user email with proper institutional email if not provided in import
+                        if (!emailRaw || !emailRaw.includes('@')) {
+                            try {
+                                const generatedEmail = generateStudentEmail(
+                                    fullName,
+                                    batchYearForEmail,
+                                    programCodeForEmail,
+                                    program.DurationYears || 2
+                                );
+
+                                // Check if this email is already taken by ANOTHER user
+                                const existingEmailUser = await User.findOne({
+                                    where: {
+                                        Email: generatedEmail,
+                                        UserID: { [Op.ne]: user.UserID }
+                                    },
+                                    transaction
+                                });
+
+                                if (!existingEmailUser) {
+                                    await user.update({ Email: generatedEmail }, { transaction });
+                                } else {
+                                    console.warn(`[Import] Institutional email ${generatedEmail} already taken, keeping fallback ${user.Email}`);
+                                }
+                            } catch (emailErr: any) {
+                                console.warn('[Import] Failed to update institutional email:', emailErr.message);
+                            }
+                        }
                     } catch (e) {
                         console.warn('Error resolving academic details for row:', rowNumber);
                     }
@@ -1863,27 +2019,27 @@ export class ExamController {
                     DepartmentID: deptId,
                     ProgramID: progId,
                     SemesterID: semId,
-                    BatchYear: new Date().getFullYear()
+                    BatchYear: batchYearForEmail
                 } as any, { transaction });
-                
+
                 createdStudents++;
             } else {
                 // EXISTING STUDENT: Update details if they have changed (Case 2/3)
                 const updates: any = { Status: 'ACTIVE' };
                 if (student.FullName !== fullName) updates.FullName = fullName;
-                
+
                 // Only update academic details if the row provides them or they are currently missing
                 const deptId = defaultDepartmentId;
                 if (deptId && !student.DepartmentID) updates.DepartmentID = deptId;
-                
+
                 await student.update(updates, { transaction });
-                
+
                 // Also update user's full name if it changed
                 if (student.User && student.User.FullName !== fullName) {
                     await student.User.update({ FullName: fullName }, { transaction });
                     updatedUsers++;
                 }
-                
+
                 updatedStudents++;
             }
 
@@ -2018,7 +2174,7 @@ export class ExamController {
                         const bLen = normalizeStr((b as any).Subject?.SubjectName).length;
                         return bLen - aLen;
                     });
-                    
+
                     if (partialMatches.length > 0) {
                         const maxLen = normalizeStr((partialMatches[0] as any).Subject?.SubjectName).length;
                         partialMatches = partialMatches.filter(exam => normalizeStr((exam as any).Subject?.SubjectName).length === maxLen);
@@ -2046,13 +2202,13 @@ export class ExamController {
                     const transaction = await sequelize.transaction();
                     try {
                         const importResult = await ExamController._processEligibleStudentsRows(
-                            (finalExam as any).ExamID, 
-                            rows, 
+                            (finalExam as any).ExamID,
+                            rows,
                             transaction,
                             (finalExam as any).Subject?.DepartmentID
                         );
                         await transaction.commit();
-                        
+
                         result.success.push({
                             file: originalName,
                             exam: (finalExam as any).ExamName,
@@ -2096,7 +2252,7 @@ export class ExamController {
             // 3. Find true student conflicts
             const updates: Promise<any>[] = [];
             const slots = new Map<string, any[]>();
-            
+
             // Group by Date + Session
             exams.forEach(exam => {
                 const key = `${exam.ExamDate}_${exam.Session}`;
@@ -2132,7 +2288,7 @@ export class ExamController {
                     if (eIds.length > 1) {
                         // This student is in multiple exams!
                         eIds.forEach(id => conflictingExamIds.add(id));
-                        
+
                         // Build details
                         eIds.forEach(id => {
                             if (!conflictDetailsMap.has(id)) conflictDetailsMap.set(id, new Set());
@@ -2270,7 +2426,7 @@ export class ExamController {
                 IsEligible: row.IsEligible === 1 || row.IsEligible === true,
             }));
 
-            const eligibleStudents   = allStudents.filter(s => s.IsEligible);
+            const eligibleStudents = allStudents.filter(s => s.IsEligible);
             const ineligibleStudents = allStudents.filter(s => !s.IsEligible);
 
             // Compute batch-wise counts for eligible students

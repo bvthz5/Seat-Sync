@@ -37,7 +37,7 @@ const MetricCard = ({ title, subtitle, value, icon, trend, trendUp, accent, icon
         </div>
         <div>
             <div className={`h-0.5 w-8 rounded-full ${accent} mb-3`} />
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">{title}</p>
+            <p className="text-[11px] font-semibold text-slate-600 uppercase tracking-widest">{title}</p>
             <div className="mt-1 flex items-baseline gap-1">
                 {loading ? (
                     <div className="w-14 h-8 rounded-lg bg-slate-100 animate-pulse" />
@@ -47,9 +47,9 @@ const MetricCard = ({ title, subtitle, value, icon, trend, trendUp, accent, icon
                     </span>
                 )}
             </div>
-            <p className="text-xs text-slate-400 mt-1">{subtitle}</p>
+            <p className="text-xs text-slate-500 mt-1">{subtitle}</p>
         </div>
-        <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-400 group-hover:text-indigo-600 transition-colors cursor-pointer">
+        <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 group-hover:text-indigo-600 transition-colors cursor-pointer">
             <span>View details</span>
             <ArrowRight size={11} className="group-hover:translate-x-0.5 transition-transform" />
         </div>

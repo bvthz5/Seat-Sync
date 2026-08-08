@@ -15,12 +15,20 @@ import {
     Subject,
     User,
     UserProfile,
+    InternalStudent,
+    InternalExam,
+    InternalExamRegistration,
+    InternalSeatAllocation,
+    InternalSeat,
+    InternalRoom,
+    InternalBlock,
+    InternalFloor
 } from "../models/index.js";
 import { notificationService } from "../services/notification.service.js";
 
 const FN_START_TIME = "09:30";
 const AN_START_TIME = "13:30";
-const SEATING_VISIBLE_MINUTES = 45;
+const SEATING_VISIBLE_MINUTES = 60;
 const ACADEMIC_YEAR_START_MONTH_INDEX = 5;
 
 const formatDate = (date: string | Date) => {
@@ -47,8 +55,10 @@ const getExamTimes = (date: string | Date, session: string) => {
     return { start, startTimeStr };
 };
 
-const getExamStatus = (examDate: string | Date, session: string, durationMin: number, now: Date) => {
+const getExamStatus = (examDate: string | Date, session: string, duration: number, now: Date) => {
     const { start } = getExamTimes(examDate, session);
+    // If duration is missing or very small (e.g., 3 hours), normalize to minutes, defaulting to 180 mins (3 hours)
+    const durationMin = duration ? (duration <= 5 ? duration * 60 : duration) : 180;
     const end = new Date(start.getTime() + durationMin * 60000);
     if (now < start) return "UPCOMING";
     if (now >= start && now < end) return "LIVE";
@@ -88,10 +98,13 @@ const getProfilePayload = (student: any) => ({
     name: student.User?.FullName ?? student.User?.Email ?? "Student",
     email: student.User?.Email ?? null,
     registerNumber: student.RegisterNumber,
+    rollNumber: student.RollNumber ?? null,
+    division: student.Division ?? null,
+    batch: student.Batch ?? null,
     department: student.Department?.DepartmentName ?? null,
     departmentCode: student.Department?.DepartmentCode ?? null,
     program: student.Program?.ProgramName ?? null,
-    semester: student.Semester?.SemesterNumber ?? student.Semester?.SemesterName ?? null,
+    semester: student.Semester?.SemesterNumber ?? student.Semester?.SemesterName ?? student.Semester ?? null,
     batchYear: student.BatchYear,
 });
 
@@ -108,7 +121,26 @@ const mapExam = (exam: any, now: Date) => {
         startTime: start.toISOString(),
         duration: exam.Duration,
         status: status,
-        isSeatingVisible: isSeatingVisible(exam.ExamDate, exam.Session, now)
+        isSeatingVisible: isSeatingVisible(exam.ExamDate, exam.Session, now),
+        isInternal: false
+    };
+};
+
+const mapInternalExam = (exam: any, now: Date) => {
+    const status = getExamStatus(exam.ExamDate, exam.Session, exam.Duration || 150, now);
+    const { start } = getExamTimes(exam.ExamDate, exam.Session);
+    return {
+        examId: exam.InternalExamID,
+        subject: exam.SubjectName,
+        subjectCode: exam.SubjectCode || null,
+        date: exam.ExamDate,
+        dateLabel: formatDate(exam.ExamDate),
+        session: exam.Session,
+        startTime: start.toISOString(),
+        duration: exam.Duration || 150,
+        status: status,
+        isSeatingVisible: isSeatingVisible(exam.ExamDate, exam.Session, now),
+        isInternal: true
     };
 };
 
@@ -139,6 +171,35 @@ const getEffectiveSemesterNumber = (student: any, maxSem: number, recordedSem: n
     return Math.min(Math.max(recordedSem ?? 1, timelineSem), maxSem || 8);
 };
 
+const parseFloorLabel = (floorName: string, floorNum: number, roomCode: string) => {
+    if (floorName && floorName.trim() !== "") return floorName;
+    if (typeof floorNum === 'number') {
+        if (floorNum === 0) return "Ground Floor";
+        const suffix = floorNum === 1 ? 'st' : floorNum === 2 ? 'nd' : floorNum === 3 ? 'rd' : 'th';
+        return `${floorNum}${suffix} Floor`;
+    }
+    // Attempt to infer from room code
+    if (roomCode) {
+        // e.g., MTB-207, Room 207, 207 -> starts with optional letters, then a digit
+        const match = roomCode.match(/(?:^|\D)(\d)\d{2}(?:\D|$)/);
+        if (match) {
+            const digit = parseInt(match[1] as string);
+            if (digit === 0) return "Ground Floor";
+            const suffix = digit === 1 ? 'st' : digit === 2 ? 'nd' : digit === 3 ? 'rd' : 'th';
+            return `${digit}${suffix} Floor`;
+        }
+        // Fallback simple extract first digit if it has numbers
+        const firstDigitMatch = roomCode.match(/\d/);
+        if (firstDigitMatch) {
+            const digit = parseInt(firstDigitMatch[0]);
+            if (digit === 0) return "Ground Floor";
+            const suffix = digit === 1 ? 'st' : digit === 2 ? 'nd' : digit === 3 ? 'rd' : 'th';
+            return `${digit}${suffix} Floor`;
+        }
+    }
+    return "Ground Floor";
+};
+
 const loadStudent = async (userId: number) => {
     return Student.findOne({
         where: { UserID: userId },
@@ -147,6 +208,35 @@ const loadStudent = async (userId: number) => {
             { model: Department, attributes: ["DepartmentID", "DepartmentCode", "DepartmentName"] },
             { model: Program, attributes: ["ProgramID", "ProgramName", "ProgramCode", "TotalSemesters"] },
             { model: Semester, attributes: ["SemesterID", "SemesterNumber", "SemesterName"] },
+        ],
+    });
+};
+
+const loadInternalStudent = async (userId: number) => {
+    return InternalStudent.findOne({
+        where: { UserID: userId },
+        include: [
+            { model: User, attributes: ["UserID", "Email", "FullName", "Role", "CreatedAt", "IsActive"], include: [{ model: UserProfile }] },
+            { model: Department, as: 'Department', attributes: ["DepartmentID", "DepartmentCode", "DepartmentName"] },
+            { model: Program, attributes: ["ProgramID", "ProgramName", "ProgramCode", "TotalSemesters"] },
+            { model: Semester, attributes: ["SemesterID", "SemesterNumber", "SemesterName"] },
+        ],
+    });
+};
+
+const fetchInternalRegisteredExams = async (internalStudentId: number) => {
+    return InternalExam.findAll({
+        include: [
+            {
+                model: InternalExamRegistration,
+                where: { InternalStudentID: internalStudentId },
+                attributes: [],
+                required: true,
+            },
+        ],
+        order: [
+            ["ExamDate", "ASC"],
+            ["Session", "ASC"],
         ],
     });
 };
@@ -239,51 +329,100 @@ export const getStudentDashboard = async (req: Request, res: Response) => {
     try {
         const userId = req.user?.UserID;
         if (!userId) return res.status(401).json({ message: "Unauthorized" });
+        
         const student = await loadStudent(userId);
-        if (!student) return res.status(404).json({ message: "Student not found" });
-        const programSemesters = await Semester.findAll({ where: { ProgramID: student.ProgramID }, attributes: ["SemesterID", "SemesterNumber", "SemesterName"] });
+        const internalStudent = await loadInternalStudent(userId);
+        
+        if (!student && !internalStudent) return res.status(404).json({ message: "Student record not found in either system" });
+
+        const programSemesters = student ? await Semester.findAll({ where: { ProgramID: student.ProgramID }, attributes: ["SemesterID", "SemesterNumber", "SemesterName"] }) : [];
         const availableNums = programSemesters.map(parseSemesterNumber).filter((v): v is number => typeof v === "number");
-        const maxSem = Math.max(Number(student.Program?.TotalSemesters) || 0, ...availableNums, 1);
-        const recordedSem = parseSemesterNumber(student.Semester);
-        const effectiveSemNum = getEffectiveSemesterNumber(student, maxSem, recordedSem);
+        const maxSem = student ? Math.max(Number(student.Program?.TotalSemesters) || 0, ...availableNums, 1) : 8;
+        const recordedSem = student ? parseSemesterNumber(student.Semester) : null;
+        const effectiveSemNum = student ? getEffectiveSemesterNumber(student, maxSem, recordedSem) : 1;
         const effectiveSem = programSemesters.find(r => parseSemesterNumber(r) === effectiveSemNum);
-        const semesterValue = (effectiveSem as any)?.SemesterNumber ?? (effectiveSem as any)?.SemesterName ?? effectiveSemNum;
+        const semesterValue = student ? ((effectiveSem as any)?.SemesterNumber ?? (effectiveSem as any)?.SemesterName ?? effectiveSemNum) : ((internalStudent as any)?.SemesterModel?.SemesterNumber || internalStudent?.Semester || 1);
+        
         const now = new Date();
-        const exams = await fetchRegisteredExams(student.StudentID);
-        const examData = exams.map(e => mapExam(e, now));
+        
+        // Fetch End Sem Exams
+        const exams = student ? await fetchRegisteredExams(student.StudentID) : [];
+        const endSemData = exams.map(e => mapExam(e, now));
+        
+        // Fetch Internal Exams
+        const internalExams = internalStudent ? await fetchInternalRegisteredExams(internalStudent.InternalStudentID) : [];
+        const internalData = internalExams.map(e => mapInternalExam(e, now));
+
+        // Merge and Sort
+        const examData = [...endSemData, ...internalData].sort((a, b) => {
+            const dateComp = new Date(a.date).getTime() - new Date(b.date).getTime();
+            if (dateComp !== 0) return dateComp;
+            return a.session === "FN" ? -1 : 1;
+        });
+
         const liveExam = examData.find(e => e.status === "LIVE");
         const upcomingToday = examData.find(e => e.status === "UPCOMING" && e.date === todayInIST());
         const nextUpcoming = examData.find(e => e.status === "UPCOMING");
         const targetExam = liveExam || upcomingToday || nextUpcoming || null;
         const upcomingExams = examData.filter(e => e.status !== "COMPLETED").slice(0, 5);
         const historyExams = examData.filter(e => e.status === "COMPLETED").slice(-6).reverse();
+        
         let seating: any = null;
         if (targetExam?.isSeatingVisible) {
-            const assignment = await SeatAllocation.findOne({ where: { ExamID: targetExam.examId, StudentID: student.StudentID }, include: [{ model: Seat, include: [{ model: Room, include: [Block, Floor] }] }] });
-            if (assignment) {
-                const seat = (assignment as any).Seat;
-                const room = seat?.Room;
-                const floorNum = room?.Floor?.FloorNumber;
-                let floorLabel = room?.Floor?.FloorName || (typeof floorNum === 'number' ? (floorNum === 0 ? "Ground Floor" : `${floorNum}th Floor`) : "Ground Floor");
-                seating = { examId: targetExam.examId, seatNumber: seat?.SeatIndex, benchNumber: seat?.BenchIndex, rowLabel: seat?.RowIndex, roomCode: room?.RoomCode || room?.RoomName, capacity: room?.TotalCapacity || room?.Capacity, blockName: room?.Block?.BlockName, floorName: floorLabel, roomType: room?.RoomType, benchMode: room?.BenchMode };
+            if (targetExam.isInternal) {
+                const assignment = await InternalSeatAllocation.findOne({ 
+                    where: { InternalExamID: targetExam.examId, InternalStudentID: internalStudent?.InternalStudentID }, 
+                    include: [{ model: InternalSeat, as: 'Seat', include: [{ model: InternalRoom, as: 'Room', include: [{ model: InternalBlock, as: 'Block' }, { model: InternalFloor, as: 'Floor' }] }] }] 
+                });
+                if (assignment) {
+                    const seat = (assignment as any).Seat;
+                    const room = seat?.Room;
+                    const roomCode = room?.RoomCode || room?.RoomName || "";
+                    let floorLabel = parseFloorLabel(room?.Floor?.FloorName, room?.Floor?.FloorNumber, roomCode);
+                    seating = { 
+                        examId: targetExam.examId, 
+                        isInternal: true,
+                        seatNumber: seat?.SeatNumber, 
+                        rowLabel: seat?.RowLabel,
+                        benchNumber: seat?.BenchNumber,
+                        roomCode: roomCode, 
+                        blockName: room?.Block?.BlockName, 
+                        floorName: floorLabel,
+                        rowLayout: room?.RowLayout,
+                        seatsPerBench: room?.SeatsPerBench
+                    };
+                }
+            } else {
+                const assignment = await SeatAllocation.findOne({ where: { ExamID: targetExam.examId, StudentID: student?.StudentID }, include: [{ model: Seat, include: [{ model: Room, include: [Block, Floor] }] }] });
+                if (assignment) {
+                    const seat = (assignment as any).Seat;
+                    const room = seat?.Room;
+                    const roomCode = room?.RoomCode || room?.RoomName || "";
+                    let floorLabel = parseFloorLabel(room?.Floor?.FloorName, room?.Floor?.FloorNumber, roomCode);
+                    seating = { examId: targetExam.examId, isInternal: false, seatNumber: seat?.SeatIndex, benchNumber: seat?.BenchIndex, rowLabel: seat?.RowIndex, roomCode: roomCode, capacity: room?.TotalCapacity || room?.Capacity, blockName: room?.Block?.BlockName, floorName: floorLabel, roomType: room?.RoomType, benchMode: room?.BenchMode, rowLayout: room?.RowLayout, seatsPerBench: room?.SeatsPerBench };
+                }
             }
         }
+
         const notificationStats = await notificationService.getUserStats(userId);
         const notifications = await notificationService.getUserNotifications(userId, { limit: 5, page: 1 });
-        const attendanceRows = await Attendance.findAll({ where: { StudentID: student.StudentID, ExamID: { [Op.in]: historyExams.map(e => e.examId) } } });
+        
+        // Attendance only for end-sem for now (unless user asked for internal attendance)
+        const attendanceRows = student ? await Attendance.findAll({ where: { StudentID: student.StudentID, ExamID: { [Op.in]: historyExams.filter(e => !e.isInternal).map(e => e.examId) } } }) : [];
         const attMap = new Map();
         attendanceRows.forEach((r: any) => attMap.set(r.ExamID, r));
+
         res.json({
             success: true,
-            student: { ...getProfilePayload(student), semester: semesterValue },
-            academic: { department: student.Department?.DepartmentName, departmentCode: student.Department?.DepartmentCode, program: student.Program?.ProgramName, semester: semesterValue, batchYear: student.BatchYear },
+            student: student ? { ...getProfilePayload(student), semester: semesterValue } : { ...getProfilePayload(internalStudent), semester: semesterValue },
+            academic: student ? { department: student.Department?.DepartmentName, departmentCode: student.Department?.DepartmentCode, program: student.Program?.ProgramName, semester: semesterValue, batchYear: student.BatchYear } : { department: internalStudent?.Department?.DepartmentName, departmentCode: internalStudent?.Department?.DepartmentCode, program: internalStudent?.Program?.ProgramName, semester: semesterValue, batchYear: internalStudent?.BatchYear },
             stats: { totalExams: examData.length, upcomingExams: upcomingExams.length, unreadNotifications: notificationStats.unread, criticalNotifications: notificationStats.critical },
             todayExam: liveExam || upcomingToday || null,
             targetExam,
             upcomingExams,
             seating,
             notifications: notifications.data,
-            history: historyExams.map(e => ({ ...e, attendanceStatus: getAttendanceStatus(attMap.get(e.examId)), markedAt: attMap.get(e.examId)?.MarkedAt ?? null }))
+            history: historyExams.map(e => ({ ...e, attendanceStatus: e.isInternal ? "N/A" : getAttendanceStatus(attMap.get(e.examId)), markedAt: e.isInternal ? null : attMap.get(e.examId)?.MarkedAt ?? null }))
         });
     } catch (error) {
         console.error("Dashboard error:", error);
@@ -296,10 +435,17 @@ export const getStudentExams = async (req: Request, res: Response) => {
         const userId = req.user?.UserID;
         if (!userId) return res.status(401).json({ message: "Unauthorized" });
         const student = await loadStudent(userId);
-        if (!student) return res.status(404).json({ message: "Student not found" });
+        const internalStudent = await loadInternalStudent(userId);
         const now = new Date();
-        const exams = await fetchRegisteredExams(student.StudentID);
-        res.json({ success: true, data: exams.map(e => mapExam(e, now)) });
+        
+        const exams = student ? await fetchRegisteredExams(student.StudentID) : [];
+        const endSemData = exams.map(e => mapExam(e, now));
+        
+        const internalExams = internalStudent ? await fetchInternalRegisteredExams(internalStudent.InternalStudentID) : [];
+        const internalData = internalExams.map(e => mapInternalExam(e, now));
+
+        const merged = [...endSemData, ...internalData].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        res.json({ success: true, data: merged });
     } catch (error) {
         console.error("Exams error:", error);
         res.status(500).json({ message: "Internal error" });
@@ -311,11 +457,20 @@ export const getStudentUpcomingExams = async (req: Request, res: Response) => {
         const userId = req.user?.UserID;
         if (!userId) return res.status(401).json({ message: "Unauthorized" });
         const student = await loadStudent(userId);
-        if (!student) return res.status(404).json({ message: "Student not found" });
+        const internalStudent = await loadInternalStudent(userId);
         const now = new Date();
-        const exams = await fetchRegisteredExams(student.StudentID);
-        const upcoming = exams.filter(e => getExamStatus(e.ExamDate, e.Session, e.Duration, now) !== "COMPLETED");
-        res.json({ success: true, data: upcoming.map(e => mapExam(e, now)) });
+
+        const exams = student ? await fetchRegisteredExams(student.StudentID) : [];
+        const endSemData = exams.map(e => mapExam(e, now));
+        
+        const internalExams = internalStudent ? await fetchInternalRegisteredExams(internalStudent.InternalStudentID) : [];
+        const internalData = internalExams.map(e => mapInternalExam(e, now));
+
+        const merged = [...endSemData, ...internalData]
+            .filter(e => e.status !== "COMPLETED")
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            
+        res.json({ success: true, data: merged });
     } catch (error) {
         console.error("Upcoming error:", error);
         res.status(500).json({ message: "Internal error" });
@@ -327,30 +482,101 @@ export const getStudentSeating = async (req: Request, res: Response) => {
         const userId = req.user?.UserID;
         if (!userId) return res.status(401).json({ message: "Unauthorized" });
         const student = await loadStudent(userId);
-        if (!student) return res.status(404).json({ message: "Student not found" });
+        const internalStudent = await loadInternalStudent(userId);
+        
         const examId = req.params.examId;
+        const isInternalParam = req.query.isInternal === 'true';
         const now = new Date();
+        
         let targetExam: any;
+        let isInternal = isInternalParam;
+
         if (examId) {
-            targetExam = await Exam.findByPk(examId as string, { include: [{ model: Subject, attributes: ["SubjectName", "SubjectCode"] }] });
+            if (isInternal) {
+                targetExam = await InternalExam.findByPk(examId as string);
+            } else {
+                targetExam = await Exam.findByPk(examId as string, { include: [{ model: Subject, attributes: ["SubjectName", "SubjectCode"] }] });
+                // Fallback if not found in Exam but is actually internal
+                if (!targetExam) {
+                    targetExam = await InternalExam.findByPk(examId as string);
+                    if (targetExam) isInternal = true;
+                }
+            }
         } else {
-            const exams = await fetchRegisteredExams(student.StudentID);
+            // Find "best" exam from both
+            const exams = student ? await fetchRegisteredExams(student.StudentID) : [];
             const mapped = exams.map(e => ({ ...e.toJSON(), ...mapExam(e, now) }));
-            const best = mapped.find(e => e.status === "LIVE") || mapped.find(e => e.status === "UPCOMING" && e.date === todayInIST()) || mapped.find(e => e.status === "UPCOMING");
-            if (best) targetExam = exams.find(e => e.ExamID === best.examId);
+            
+            const iExams = internalStudent ? await fetchInternalRegisteredExams(internalStudent.InternalStudentID) : [];
+            const iMapped = iExams.map(e => ({ ...e.toJSON(), ...mapInternalExam(e, now) }));
+            
+            const allMapped = [...mapped, ...iMapped].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            const best = allMapped.find(e => e.status === "LIVE") || allMapped.find(e => e.status === "UPCOMING" && e.date === todayInIST()) || allMapped.find(e => e.status === "UPCOMING");
+            
+            if (best) {
+                isInternal = best.isInternal;
+                if (isInternal) {
+                    targetExam = iExams.find(e => e.InternalExamID === best.examId);
+                } else {
+                    targetExam = exams.find(e => e.ExamID === best.examId);
+                }
+            }
         }
-        if (!targetExam) return res.status(404).json({ message: "No exam found" });
-        const mappedInfo = mapExam(targetExam, now);
+
+        if (!targetExam) return res.json({ success: false, message: "No exams found. Seating assignments are currently unavailable." });
+        const mappedInfo = isInternal ? mapInternalExam(targetExam, now) : mapExam(targetExam, now);
+        
         if (!mappedInfo.isSeatingVisible) {
-            return res.json({ success: false, message: `Visible from ${formatDate(targetExam.ExamDate)}`, data: { exam: mappedInfo, assignment: null, layout: [], visibilityError: true } });
+            return res.json({ success: false, message: `Visible 45 mins before exam`, data: { exam: mappedInfo, assignment: null, layout: [], visibilityError: true } });
         }
-        const assignment = await SeatAllocation.findOne({ where: { ExamID: targetExam.ExamID, StudentID: student.StudentID }, include: [{ model: Seat, include: [{ model: Room, include: [Block, Floor] }] }] });
-        if (!assignment) return res.json({ success: true, data: { exam: mappedInfo, assignment: null, layout: [] } });
-        const seat = (assignment as any).Seat;
-        const room = seat?.Room;
-        const layout = await SeatAllocation.findAll({ where: { ExamID: targetExam.ExamID }, include: [{ model: Seat, required: true, where: { RoomID: seat.RoomID } }, { model: Student, include: [{ model: User, attributes: ["FullName"] }] }] });
-        const roomLayout = layout.map((item: any) => ({ studentId: item.StudentID, seatNumber: item.Seat?.SeatIndex, rowLabel: item.Seat?.RowIndex, benchNumber: item.Seat?.BenchIndex, isMe: item.StudentID === student.StudentID }));
-        res.json({ success: true, data: { exam: mappedInfo, assignment: { seatNumber: seat.SeatIndex, benchNumber: seat.BenchIndex, rowLabel: seat.RowIndex, roomCode: room.RoomCode || room.RoomName, blockName: room.Block?.BlockName, floorName: room.Floor?.FloorName || "Ground Floor", roomType: room.RoomType, capacity: room.TotalCapacity || room.Capacity }, layout: roomLayout } });
+
+        if (isInternal) {
+            const assignment = await InternalSeatAllocation.findOne({ 
+                where: { InternalExamID: targetExam.InternalExamID, InternalStudentID: internalStudent?.InternalStudentID }, 
+                include: [{ model: InternalSeat, as: 'Seat', include: [{ model: InternalRoom, as: 'Room', include: [{ model: InternalBlock, as: 'Block' }, { model: InternalFloor, as: 'Floor' }] }] }] 
+            });
+            if (!assignment) return res.json({ success: true, data: { exam: mappedInfo, assignment: null, layout: [] } });
+            
+            const seat = (assignment as any).Seat;
+            const room = seat?.Room;
+            const layout = await InternalSeatAllocation.findAll({ 
+                where: { InternalExamID: targetExam.InternalExamID }, 
+                include: [{ model: InternalSeat, as: 'Seat', required: true, where: { RoomID: seat.RoomID } }, { model: InternalStudent, as: 'Student', include: [{ model: User, attributes: ["FullName"] }] }] 
+            });
+            const roomLayout = layout.map((item: any) => ({ 
+                studentId: item.InternalStudentID, 
+                seatNumber: item.Seat?.SeatNumber, 
+                rowLabel: item.Seat?.RowLabel,
+                benchNumber: item.Seat?.BenchNumber,
+                isMe: item.InternalStudentID === internalStudent?.InternalStudentID 
+            }));
+            
+            res.json({ success: true, data: { 
+                exam: mappedInfo, 
+                assignment: { 
+                    seatNumber: seat.SeatNumber, 
+                    rowLabel: seat.RowLabel,
+                    benchNumber: seat.BenchNumber,
+                    roomCode: room.RoomCode || room.RoomName, 
+                    blockName: room.Block?.BlockName, 
+                    floorName: parseFloorLabel(room.Floor?.FloorName, room.Floor?.FloorNumber, room.RoomCode || room.RoomName || ""),
+                    rowLayout: room.RowLayout,
+                    seatsPerBench: room.SeatsPerBench,
+                    rollNumber: internalStudent?.RollNumber ?? null,
+                    division: internalStudent?.Division ?? 'A',
+                    batch: internalStudent?.Batch ?? null
+                }, 
+                layout: roomLayout 
+            }});
+        } else {
+            const assignment = await SeatAllocation.findOne({ where: { ExamID: targetExam.ExamID, StudentID: student?.StudentID }, include: [{ model: Seat, include: [{ model: Room, include: [Block, Floor] }] }] });
+            if (!assignment) return res.json({ success: true, data: { exam: mappedInfo, assignment: null, layout: [] } });
+            const seat = (assignment as any).Seat;
+            const room = seat?.Room;
+            const layout = await SeatAllocation.findAll({ where: { ExamID: targetExam.ExamID }, include: [{ model: Seat, required: true, where: { RoomID: seat.RoomID } }, { model: Student, include: [{ model: User, attributes: ["FullName"] }] }] });
+            const roomLayout = layout.map((item: any) => ({ studentId: item.StudentID, seatNumber: item.Seat?.SeatIndex, rowLabel: item.Seat?.RowIndex, benchNumber: item.Seat?.BenchIndex, isMe: item.StudentID === student?.StudentID }));
+            res.json({ success: true, data: { exam: mappedInfo, assignment: { seatNumber: seat.SeatIndex, benchNumber: seat.BenchIndex, rowLabel: seat.RowIndex, roomCode: room.RoomCode || room.RoomName, blockName: room.Block?.BlockName, floorName: parseFloorLabel(room.Floor?.FloorName, room.Floor?.FloorNumber, room.RoomCode || room.RoomName || ""), roomType: room.RoomType, capacity: room.TotalCapacity || room.Capacity, rowLayout: room.RowLayout, seatsPerBench: room.SeatsPerBench }, layout: roomLayout } });
+        }
     } catch (error) {
         console.error("Seating error:", error);
         res.status(500).json({ message: "Internal error" });
@@ -361,13 +587,24 @@ export const getSeatLayout = async (req: Request, res: Response) => {
     try {
         const userId = req.user?.UserID;
         if (!userId) return res.status(401).json({ message: "Unauthorized" });
-        const student = await loadStudent(userId);
-        if (!student) return res.status(404).json({ message: "Student not found" });
+        const isInternal = req.query.isInternal === 'true';
         const examId = req.params.examId;
-        const assignment = await SeatAllocation.findOne({ where: { ExamID: examId, StudentID: student.StudentID }, include: [{ model: Seat }] });
-        if (!assignment || !(assignment as any).Seat) return res.status(404).json({ message: "No seating" });
-        const layout = await SeatAllocation.findAll({ where: { ExamID: examId }, include: [{ model: Seat, required: true, where: { RoomID: (assignment as any).Seat.RoomID } }] });
-        res.json({ success: true, data: layout.map((item: any) => ({ studentId: item.StudentID, seatNumber: item.Seat?.SeatIndex, rowLabel: item.Seat?.RowIndex, benchNumber: item.Seat?.BenchIndex, isMe: item.StudentID === student.StudentID })) });
+
+        if (isInternal) {
+            const internalStudent = await loadInternalStudent(userId);
+            if (!internalStudent) return res.status(404).json({ message: "Student not found" });
+            const assignment = await InternalSeatAllocation.findOne({ where: { InternalExamID: examId, InternalStudentID: internalStudent.InternalStudentID }, include: [{ model: InternalSeat, as: 'Seat' }] });
+            if (!assignment || !(assignment as any).Seat) return res.status(404).json({ message: "No seating" });
+            const layout = await InternalSeatAllocation.findAll({ where: { InternalExamID: examId }, include: [{ model: InternalSeat, as: 'Seat', required: true, where: { RoomID: (assignment as any).Seat.RoomID } }] });
+            res.json({ success: true, data: layout.map((item: any) => ({ studentId: item.InternalStudentID, seatNumber: item.Seat?.SeatNumber, rowLabel: item.Seat?.RowLabel, benchNumber: item.Seat?.BenchNumber, isMe: item.InternalStudentID === internalStudent.InternalStudentID })) });
+        } else {
+            const student = await loadStudent(userId);
+            if (!student) return res.status(404).json({ message: "Student not found" });
+            const assignment = await SeatAllocation.findOne({ where: { ExamID: examId, StudentID: student.StudentID }, include: [{ model: Seat }] });
+            if (!assignment || !(assignment as any).Seat) return res.status(404).json({ message: "No seating" });
+            const layout = await SeatAllocation.findAll({ where: { ExamID: examId }, include: [{ model: Seat, required: true, where: { RoomID: (assignment as any).Seat.RoomID } }] });
+            res.json({ success: true, data: layout.map((item: any) => ({ studentId: item.StudentID, seatNumber: item.Seat?.SeatIndex, rowLabel: item.Seat?.RowIndex, benchNumber: item.Seat?.BenchIndex, isMe: item.StudentID === student.StudentID })) });
+        }
     } catch (error) {
         console.error("Layout error:", error);
         res.status(500).json({ message: "Internal error" });
@@ -391,14 +628,24 @@ export const getStudentHistory = async (req: Request, res: Response) => {
         const userId = req.user?.UserID;
         if (!userId) return res.status(401).json({ message: "Unauthorized" });
         const student = await loadStudent(userId);
-        if (!student) return res.status(404).json({ message: "Student not found" });
+        const internalStudent = await loadInternalStudent(userId);
         const now = new Date();
-        const exams = await fetchRegisteredExams(student.StudentID);
-        const past = exams.filter(e => getExamStatus(e.ExamDate, e.Session, e.Duration, now) === "COMPLETED");
-        const attendance = await Attendance.findAll({ where: { StudentID: student.StudentID } });
+        
+        const exams = student ? await fetchRegisteredExams(student.StudentID) : [];
+        const endSemData = exams.map(e => mapExam(e, now));
+        
+        const internalExams = internalStudent ? await fetchInternalRegisteredExams(internalStudent.InternalStudentID) : [];
+        const internalData = internalExams.map(e => mapInternalExam(e, now));
+
+        const merged = [...endSemData, ...internalData]
+            .filter(e => e.status === "COMPLETED")
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            
+        const attendance = student ? await Attendance.findAll({ where: { StudentID: student.StudentID } }) : [];
         const attMap = new Map();
         attendance.forEach((r: any) => attMap.set(r.ExamID, r));
-        res.json({ success: true, data: past.map(e => ({ ...mapExam(e, now), attendanceStatus: getAttendanceStatus(attMap.get(e.ExamID)) })) });
+        
+        res.json({ success: true, data: merged.map(e => ({ ...e, attendanceStatus: e.isInternal ? "N/A" : getAttendanceStatus(attMap.get(e.examId)) })) });
     } catch (error) {
         console.error("History error:", error);
         res.status(500).json({ message: "Internal error" });

@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { User, AuthState } from '../types/auth';
 import { AuthService } from '../services/auth.service';
@@ -20,64 +20,129 @@ interface AuthContextType extends AuthState {
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// ─── JWT payload decoder ───────────────────────────────────────────────────────
+function decodeJwt(token: string): Record<string, any> | null {
+    try {
+        const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        return JSON.parse(decodeURIComponent(
+            window.atob(b64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+        ));
+    } catch {
+        return null;
+    }
+}
+
+// ─── Portal  Role mapping ─────────────────────────────────────────────────────
+function isRoleCompatibleWithPortal(role: string, isRoot: boolean): boolean {
+    const path = window.location.pathname.toLowerCase();
+    if (path.startsWith('/admin'))       return role === 'exam_admin' || isRoot;
+    if (path.startsWith('/invigilator')) return role === 'invigilator';
+    if (path.startsWith('/student'))     return role === 'student';
+    return true; // landing page / public
+}
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const [user, setUser] = useState<User | null>(null);
-    const [accessToken, setAccessToken] = useState<string | null>(null);
-    const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-    const [isLoading, setIsLoading] = useState<boolean>(true);
+    const [user, setUser]                   = useState<User | null>(null);
+    const [accessToken, setAccessToken]     = useState<string | null>(null);
+    const [isAuthenticated, setIsAuth]      = useState(false);
+    const [isLoading, setIsLoading]         = useState(true);
 
-    useEffect(() => {
-        const initAuth = async () => {
-            try {
-                let token = AccessTokenStore.token;
-                if (token) {
-                    try {
-                        const payload = JSON.parse(decodeURIComponent(window.atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')));
-                        if (payload.exp && payload.exp < (Date.now() / 1000 + 10)) token = null;
-                    } catch (e) { token = null; }
-                }
-                if (!token) token = await AuthService.refresh();
-                AccessTokenStore.setToken(token);
-                setAccessToken(token);
-                const payload = JSON.parse(decodeURIComponent(window.atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')));
-                const path = window.location.pathname.toLowerCase();
-                const role = payload.Role;
-                const isRoot = payload.IsRootAdmin;
-                let isCompatible = true;
-                if (path.startsWith('/admin')) { if (role !== 'exam_admin' && !isRoot) isCompatible = false; }
-                else if (path.startsWith('/invigilator')) { if (role !== 'invigilator' && !isRoot) isCompatible = false; }
-                else if (path.startsWith('/student')) { if (role !== 'student') isCompatible = false; }
-                if (!isCompatible) { AccessTokenStore.clear(); setIsAuthenticated(false); setUser(null); }
-                else { setUser({ UserID: payload.UserID, Email: payload.Email, Role: payload.Role, IsRootAdmin: payload.IsRootAdmin }); setIsAuthenticated(true); }
-            } catch (error) { setIsAuthenticated(false); AccessTokenStore.clear(); }
-            finally { setIsLoading(false); }
-        };
-        const timer = setTimeout(() => setIsLoading(prev => prev ? false : prev), 5000);
-        initAuth();
-        return () => clearTimeout(timer);
-    }, []);
-
-    const login = async (email: string, password: string, role?: string) => {
-        const data = await AuthService.login(email, password, role);
-        setUser(data.user);
-        setAccessToken(data.accessToken);
-        AccessTokenStore.setToken(data.accessToken);
-        setIsAuthenticated(true);
-        toast.success(`Welcome, ${data.user.Email}`);
-    };
-
-    const logout = async (options?: LogoutOptions) => {
-        try { await AuthService.logout(); } catch (e) { }
+    // ── Shared logout implementation ──────────────────────────────────────────
+    const clearSession = useCallback(() => {
         setUser(null);
         setAccessToken(null);
-        setIsAuthenticated(false);
+        setIsAuth(false);
         AccessTokenStore.clear();
+    }, []);
+
+    // ── Initialise: try to reuse existing in-memory token, then refresh ───────
+    useEffect(() => {
+        const initAuth = async () => {
+            // If there is NO session token at all, skip the refresh call entirely.
+            // This prevents ERR_CONNECTION_REFUSED on a fresh browser open
+            // (sessionStorage is empty after browser close, so we never ping the server).
+            if (!AccessTokenStore.hasAnySession()) {
+                setIsLoading(false);
+                return;
+            }
+
+            try {
+                let token = AccessTokenStore.token;
+
+                // Validate in-memory token expiry
+                if (token) {
+                    const payload = decodeJwt(token);
+                    if (!payload || (payload.exp && payload.exp < (Date.now() / 1000 + 10))) {
+                        token = null;
+                    }
+                }
+
+                // Try refresh only when the in-memory token is expired/missing
+                // but we know there was a session (cookie may still be valid)
+                if (!token) {
+                    token = await AuthService.refresh();
+                }
+
+                const payload = decodeJwt(token);
+                if (!payload) throw new Error('Invalid token payload');
+
+                // Strict portal  role check
+                if (!isRoleCompatibleWithPortal(payload.Role, payload.IsRootAdmin)) {
+                    clearSession();
+                    return;
+                }
+
+                AccessTokenStore.setToken(token);
+                setAccessToken(token);
+                setUser({
+                    UserID:      payload.UserID,
+                    Email:       payload.Email,
+                    Role:        payload.Role,
+                    IsRootAdmin: payload.IsRootAdmin,
+                });
+                setIsAuth(true);
+            } catch {
+                // Refresh failed (expired cookie, server down, etc.) → clean state
+                clearSession();
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        // Safety timeout so UI never hangs if init stalls
+        const timeout = setTimeout(() => setIsLoading(false), 6000);
+        initAuth().finally(() => clearTimeout(timeout));
+    }, [clearSession]);
+
+    // ── Session persistence configuration ───────────────────────────────────
+    useEffect(() => {
+        // Intentionally keep session active across reloads/navigations
+    }, [isAuthenticated]);
+
+    // ── Login ─────────────────────────────────────────────────────────────────
+    const login = useCallback(async (email: string, password: string, role?: string) => {
+        const data = await AuthService.login(email, password, role);
+        AccessTokenStore.setToken(data.accessToken, data.refreshToken);
+        setAccessToken(data.accessToken);
+        setUser(data.user);
+        setIsAuth(true);
+        toast.success(`Welcome, ${data.user.Email}`);
+    }, []);
+
+    // ── Logout ────────────────────────────────────────────────────────────────
+    const logout = useCallback(async (options?: LogoutOptions) => {
+        try { await AuthService.logout(); } catch { /* ignore server errors on logout */ }
+        clearSession();
         if (!options?.silent) toast.success('Logged out successfully');
-    };
+    }, [clearSession]);
 
-    const canAccess = React.useCallback((feature: FeatureKey) => checkPermission(user, feature), [user]);
+    // ── Permission helper ─────────────────────────────────────────────────────
+    const canAccess = useCallback((feature: FeatureKey) => checkPermission(user, feature), [user]);
 
-    const value = React.useMemo(() => ({ user, accessToken, isAuthenticated, isLoading, login, logout, canAccess }), [user, accessToken, isAuthenticated, isLoading, login, logout, canAccess]);
+    const value = useMemo(
+        () => ({ user, accessToken, isAuthenticated, isLoading, login, logout, canAccess }),
+        [user, accessToken, isAuthenticated, isLoading, login, logout, canAccess]
+    );
 
     return (
         <AuthContext.Provider value={value}>

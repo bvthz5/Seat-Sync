@@ -1,6 +1,6 @@
 import { User, ActivityLog, ActiveSession, Notification, PasswordReset, Invigilator, InvigilatorAssignment, InvigilatorAvailability, InvigilatorSubject } from "../models/index.js";
 import { Op } from "sequelize";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { emailService } from "./email.service.js";
 

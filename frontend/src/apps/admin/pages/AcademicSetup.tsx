@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import api from '../../../services/api';
 import { toast } from '../../../utils/toast';
 import {
@@ -320,117 +321,130 @@ const DepartmentsTab: React.FC = () => {
             </div>
 
             {/* Add Modal */}
-            {showAdd && (
-                <Modal title="Add Department" onClose={() => setShowAdd(false)}>
-                    <div className="space-y-4">
-                        <FormField label="Department Code" hint="Format: csa001 (letters + digits)">
-                            <input
-                                id="dept-code"
-                                name="DepartmentCode"
-                                value={form.DepartmentCode}
-                                onChange={e => setForm(p => ({ ...p, DepartmentCode: e.target.value.toLowerCase() }))}
-                                placeholder="e.g. csa001"
-                                autoComplete="off"
-                                className="input"
-                            />
-                        </FormField>
-                        <FormField label="Department Name">
-                            <input
-                                id="dept-name"
-                                name="DepartmentName"
-                                value={form.DepartmentName}
-                                onChange={e => setForm(p => ({ ...p, DepartmentName: e.target.value }))}
-                                placeholder="e.g. Computer Science and Applications"
-                                autoComplete="off"
-                                className="input"
-                            />
-                        </FormField>
-                        <div className="flex justify-end gap-2 pt-2">
-                            <button onClick={() => setShowAdd(false)} className="btn-ghost">Cancel</button>
-                            <button onClick={handleAdd} disabled={saving} className="btn-primary">{saving ? 'Saving…' : 'Add Department'}</button>
+            <AnimatePresence>
+                {showAdd && (
+                    <Modal key="add-dept" title="Add Department" onClose={() => setShowAdd(false)}>
+                        <div className="space-y-5">
+                            <FormField label="Department Code" hint="Format: alphanumeric (e.g. cse, csa001)">
+                                <input
+                                    id="dept-code"
+                                    name="DepartmentCode"
+                                    value={form.DepartmentCode}
+                                    onChange={e => setForm(p => ({ ...p, DepartmentCode: e.target.value.toLowerCase() }))}
+                                    placeholder="e.g. cse"
+                                    autoComplete="off"
+                                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:bg-white"
+                                />
+                            </FormField>
+                            <FormField label="Department Name">
+                                <input
+                                    id="dept-name"
+                                    name="DepartmentName"
+                                    value={form.DepartmentName}
+                                    onChange={e => setForm(p => ({ ...p, DepartmentName: e.target.value }))}
+                                    placeholder="e.g. Computer Science and Applications"
+                                    autoComplete="off"
+                                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:bg-white"
+                                />
+                            </FormField>
+                            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                                <button onClick={() => setShowAdd(false)} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-all active:scale-95">Cancel</button>
+                                <button onClick={handleAdd} disabled={saving} className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed">{saving ? 'Saving…' : 'Add Department'}</button>
+                            </div>
                         </div>
-                    </div>
-                </Modal>
-            )}
+                    </Modal>
+                )}
+            </AnimatePresence>
 
             {/* Edit Modal */}
-            {editTarget && (
-                <Modal title={`Edit: ${editTarget.DepartmentCode}`} onClose={() => setEditTarget(null)}>
-                    <div className="space-y-4">
-                        <FormField label="Department Code">
-                            <input id="edit-dept-code" name="EditDepartmentCode" value={editTarget.DepartmentCode} disabled className="input opacity-60 cursor-not-allowed bg-slate-50" />
-                            <p className="text-xs text-slate-400 mt-1">Code cannot be changed after creation.</p>
-                        </FormField>
-                        <FormField label="Department Name">
-                            <input
-                                id="edit-dept-name"
-                                name="EditDepartmentName"
-                                value={editForm.DepartmentName}
-                                onChange={e => setEditForm({ DepartmentName: e.target.value })}
-                                placeholder="e.g. Computer Science and Applications"
-                                autoComplete="off"
-                                className="input"
-                                autoFocus
-                            />
-                        </FormField>
-                        <div className="flex justify-end gap-2 pt-2">
-                            <button onClick={() => setEditTarget(null)} className="btn-ghost">Cancel</button>
-                            <button onClick={handleEdit} disabled={editSaving} className="btn-primary">{editSaving ? 'Saving…' : 'Save Changes'}</button>
+            <AnimatePresence>
+                {editTarget && (
+                    <Modal key="edit-dept" title={`Edit: ${editTarget.DepartmentCode}`} onClose={() => setEditTarget(null)}>
+                        <div className="space-y-5">
+                            <FormField label="Department Code">
+                                <input id="edit-dept-code" name="EditDepartmentCode" value={editTarget.DepartmentCode} disabled className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm opacity-60 cursor-not-allowed" />
+                                <p className="text-[11px] text-amber-600 mt-1.5 font-medium flex items-center gap-1"><AlertTriangle size={12}/> Code cannot be changed after creation.</p>
+                            </FormField>
+                            <FormField label="Department Name">
+                                <input
+                                    id="edit-dept-name"
+                                    name="EditDepartmentName"
+                                    value={editForm.DepartmentName}
+                                    onChange={e => setEditForm({ DepartmentName: e.target.value })}
+                                    placeholder="e.g. Computer Science and Applications"
+                                    autoComplete="off"
+                                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:bg-white"
+                                    autoFocus
+                                />
+                            </FormField>
+                            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                                <button onClick={() => setEditTarget(null)} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-all active:scale-95">Cancel</button>
+                                <button onClick={handleEdit} disabled={editSaving} className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed">{editSaving ? 'Saving…' : 'Save Changes'}</button>
+                            </div>
                         </div>
-                    </div>
-                </Modal>
-            )}
+                    </Modal>
+                )}
+            </AnimatePresence>
 
             {/* Delete Confirm */}
-            {showDelete && (
-                <ConfirmModal
-                    title={showDelete.mode === 'all' ? 'Delete All Departments?' : `Delete "${showDelete.name}"?`}
-                    message={showDelete.mode === 'all'
-                        ? 'This will remove all departments and their linked programs. This action cannot be undone.'
-                        : 'This will remove the department. Programs linked only to this department will also be affected.'}
-                    onConfirm={handleDelete}
-                    onCancel={() => setShowDelete(null)}
-                />
-            )}
+            <AnimatePresence>
+                {showDelete && (
+                    <ConfirmModal
+                        key="delete-dept"
+                        title={showDelete.mode === 'all' ? 'Delete All Departments?' : `Delete "${showDelete.name}"?`}
+                        message={showDelete.mode === 'all'
+                            ? 'This will remove all departments and their linked programs. This action cannot be undone.'
+                            : 'This will remove the department. Programs linked only to this department will also be affected.'}
+                        onConfirm={handleDelete}
+                        onCancel={() => setShowDelete(null)}
+                    />
+                )}
+            </AnimatePresence>
 
             {/* Import Modal */}
-            {showImport && (
-                <Modal title="Import Academic Data" onClose={() => { setShowImport(false); setImportFile(null); }}>
-                    <div className="space-y-4">
-                        <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:bg-slate-50 transition-colors relative">
-                            <input 
-                                id="import-dept-file"
-                                name="ImportDeptFile"
-                                type="file" 
-                                accept=".xlsx,.xls,.csv" 
-                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
-                                onChange={e => setImportFile(e.target.files?.[0] || null)} 
-                            />
-                            <div className="flex flex-col items-center justify-center gap-2 pointer-events-none">
-                                <FileSpreadsheet size={32} className={importFile ? "text-blue-500" : "text-slate-400"} />
-                                {importFile ? (
-                                    <div className="text-sm font-semibold text-slate-700">{importFile.name}</div>
-                                ) : (
-                                    <>
-                                        <div className="text-sm font-semibold text-slate-700">Click or drag file to this area to upload</div>
-                                        <div className="text-xs text-slate-500">Support for a single or bulk upload.</div>
-                                    </>
-                                )}
-                                <div className="text-xs text-slate-400 mt-1">Accepts .csv, .xls, .xlsx</div>
+            <AnimatePresence>
+                {showImport && (
+                    <Modal key="import-dept" title="Import Academic Data" onClose={() => { setShowImport(false); setImportFile(null); }}>
+                        <div className="space-y-6">
+                            <div className="border-2 border-dashed border-blue-200 bg-blue-50/50 rounded-2xl p-10 text-center hover:bg-blue-50 hover:border-blue-300 transition-all relative group overflow-hidden">
+                                <input 
+                                    id="import-dept-file"
+                                    name="ImportDeptFile"
+                                    type="file" 
+                                    accept=".xlsx,.xls,.csv" 
+                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+                                    onChange={e => setImportFile(e.target.files?.[0] || null)} 
+                                />
+                                <div className="flex flex-col items-center justify-center gap-3 pointer-events-none transform group-hover:scale-105 transition-transform duration-300">
+                                    <div className={`p-4 rounded-full ${importFile ? 'bg-blue-100 text-blue-600' : 'bg-white shadow-sm text-blue-500'}`}>
+                                        <FileSpreadsheet size={36} />
+                                    </div>
+                                    {importFile ? (
+                                        <div className="text-sm font-bold text-slate-800">{importFile.name}</div>
+                                    ) : (
+                                        <>
+                                            <div className="text-sm font-bold text-slate-700">Click or drag file to this area to upload</div>
+                                            <div className="text-[13px] text-slate-500 font-medium">Support for a single or bulk upload.</div>
+                                        </>
+                                    )}
+                                    <div className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase mt-1">Accepts .csv, .xls, .xlsx</div>
+                                </div>
+                            </div>
+                            <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                                <button onClick={downloadTemplate} className="text-sm text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1.5 transition-colors">
+                                    <Download size={14}/> Download Template
+                                </button>
+                                <div className="flex justify-end gap-3">
+                                    <button onClick={() => { setShowImport(false); setImportFile(null); }} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-all active:scale-95">Cancel</button>
+                                    <button onClick={handleImport} disabled={importing || !importFile} className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed">
+                                        {importing ? 'Importing…' : 'Upload Data'}
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                        <div className="flex items-center justify-between pt-2">
-                            <button onClick={downloadTemplate} className="text-sm text-blue-600 hover:text-blue-700 font-medium">
-                                Download Template
-                            </button>
-                            <div className="flex justify-end gap-2">
-                                <button onClick={() => { setShowImport(false); setImportFile(null); }} className="btn-ghost">Cancel</button>
-                                <button onClick={handleImport} disabled={importing || !importFile} className="btn-primary">{importing ? 'Importing…' : 'Upload Data'}</button>
-                            </div>
-                        </div>
-                    </div>
-                </Modal>
-            )}
+                    </Modal>
+                )}
+            </AnimatePresence>
         </>
     );
 };
@@ -719,177 +733,192 @@ const ProgramsTab: React.FC = () => {
             </div>
 
             {/* Add Program Modal */}
-            {showAdd && (
-                <Modal title="Add Program" onClose={() => setShowAdd(false)}>
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-3">
-                            <FormField label="Program Code">
-                                <input id="prog-code" name="ProgramCode" value={form.ProgramCode} onChange={e => setForm(p => ({ ...p, ProgramCode: e.target.value.toUpperCase() }))} placeholder="e.g. BTECH" autoComplete="off" className="input" />
+            <AnimatePresence>
+                {showAdd && (
+                    <Modal key="add-prog" title="Add Program" onClose={() => setShowAdd(false)}>
+                        <div className="space-y-5">
+                            <div className="grid grid-cols-2 gap-4">
+                                <FormField label="Program Code">
+                                    <input id="prog-code" name="ProgramCode" value={form.ProgramCode} onChange={e => setForm(p => ({ ...p, ProgramCode: e.target.value.toUpperCase() }))} placeholder="e.g. BTECH" autoComplete="off" className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:bg-white" />
+                                </FormField>
+                                <FormField label="Duration (Years)" hint="1–5 years → semesters auto-calculated">
+                                    <select id="prog-duration" name="DurationYears" value={form.DurationYears} onChange={e => setForm(p => ({ ...p, DurationYears: Number(e.target.value) }))} className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:bg-white">
+                                        {[1, 2, 3, 4, 5].map(n => (
+                                            <option key={n} value={n}>{n} year{n !== 1 ? 's' : ''} → {n * 2} semesters</option>
+                                        ))}
+                                    </select>
+                                </FormField>
+                            </div>
+                            <FormField label="Program Name">
+                                <input id="prog-name" name="ProgramName" value={form.ProgramName} onChange={e => setForm(p => ({ ...p, ProgramName: e.target.value }))} placeholder="e.g. Bachelor of Technology" autoComplete="off" className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:bg-white" />
                             </FormField>
-                            <FormField label="Duration (Years)" hint="1–5 years → semesters auto-calculated">
-                                <select id="prog-duration" name="DurationYears" value={form.DurationYears} onChange={e => setForm(p => ({ ...p, DurationYears: Number(e.target.value) }))} className="input">
+                            <FormField label="Departments" hint="Select one or more (e.g. B.Tech links CSE, ME, ECE)">
+                                {depts.length === 0 ? (
+                                    <p className="text-sm text-amber-600 bg-amber-50 p-4 rounded-xl border border-amber-200 font-medium">No departments found. Add departments first.</p>
+                                ) : (
+                                    <div className="flex flex-wrap gap-2 p-4 border border-slate-200 rounded-xl bg-slate-50/50 max-h-40 overflow-y-auto custom-scrollbar">
+                                        {depts.map(d => (
+                                            <button
+                                                key={d.DepartmentID}
+                                                type="button"
+                                                onClick={() => toggleDept(d.DepartmentID)}
+                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${form.DepartmentIDs.includes(d.DepartmentID)
+                                                    ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20'
+                                                    : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:text-blue-600 shadow-sm'
+                                                }`}
+                                            >
+                                                {d.DepartmentCode}
+                                                {form.DepartmentIDs.includes(d.DepartmentID) && <X size={12} className="opacity-80" />}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                {form.DepartmentIDs.length > 0 && (
+                                    <p className="text-[12px] text-blue-600 mt-2 font-bold tracking-wide">{form.DepartmentIDs.length} department{form.DepartmentIDs.length !== 1 ? 's' : ''} selected</p>
+                                )}
+                            </FormField>
+    
+                            {form.DurationYears > 0 && (
+                                <div className="flex items-center gap-4 bg-emerald-50 border border-emerald-100 rounded-xl px-5 py-4 shadow-sm">
+                                    <div className="p-2 bg-emerald-100/50 rounded-xl shrink-0">
+                                        <GraduationCap size={20} className="text-emerald-600" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold text-emerald-800">{form.DurationYears * 2} Semesters will be auto-generated</p>
+                                        <p className="text-xs text-emerald-600/80 mt-0.5 font-medium">Semester 1 through {form.DurationYears * 2} will be created automatically.</p>
+                                    </div>
+                                </div>
+                            )}
+    
+                            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                                <button onClick={() => setShowAdd(false)} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-all active:scale-95">Cancel</button>
+                                <button onClick={handleAdd} disabled={saving} className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed">{saving ? 'Creating…' : 'Create Program'}</button>
+                            </div>
+                        </div>
+                    </Modal>
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {showDelete && (
+                    <ConfirmModal
+                        key="delete-prog"
+                        title={showDelete.mode === 'all' ? 'Delete All Programs?' : `Delete "${showDelete.name}"?`}
+                        message={showDelete.mode === 'all' ? 'This will remove all programs and their auto-generated semesters.' : 'This program and its semesters will be deleted permanently.'}
+                        onConfirm={handleDelete}
+                        onCancel={() => setShowDelete(null)}
+                    />
+                )}
+            </AnimatePresence>
+
+            {/* Edit Program Modal */}
+            <AnimatePresence>
+                {editTarget && (
+                    <Modal key="edit-prog" title={`Edit: ${editTarget.ProgramCode}`} onClose={() => setEditTarget(null)}>
+                        <div className="space-y-5">
+                            <FormField label="Program Code">
+                                <input id="edit-prog-code" name="EditProgramCode" value={editTarget.ProgramCode} disabled className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm opacity-60 cursor-not-allowed" />
+                                <p className="text-[11px] text-amber-600 mt-1.5 font-medium flex items-center gap-1"><AlertTriangle size={12}/> Code cannot be changed after creation.</p>
+                            </FormField>
+                            <FormField label="Program Name">
+                                <input
+                                    id="edit-prog-name"
+                                    name="EditProgramName"
+                                    value={editForm.ProgramName}
+                                    onChange={e => setEditForm(p => ({ ...p, ProgramName: e.target.value }))}
+                                    placeholder="e.g. Bachelor of Technology"
+                                    autoComplete="off"
+                                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:bg-white"
+                                    autoFocus
+                                />
+                            </FormField>
+                            <FormField label="Duration (Years)" hint={`Currently ${editForm.DurationYears} yr(s) → ${editForm.DurationYears * 2} semesters`}>
+                                <select
+                                    id="edit-prog-duration"
+                                    name="EditDurationYears"
+                                    value={editForm.DurationYears}
+                                    onChange={e => setEditForm(p => ({ ...p, DurationYears: Number(e.target.value) }))}
+                                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all hover:bg-white"
+                                >
                                     {[1, 2, 3, 4, 5].map(n => (
                                         <option key={n} value={n}>{n} year{n !== 1 ? 's' : ''} → {n * 2} semesters</option>
                                     ))}
                                 </select>
                             </FormField>
-                        </div>
-                        <FormField label="Program Name">
-                            <input id="prog-name" name="ProgramName" value={form.ProgramName} onChange={e => setForm(p => ({ ...p, ProgramName: e.target.value }))} placeholder="e.g. Bachelor of Technology" autoComplete="off" className="input" />
-                        </FormField>
-                        <FormField label="Departments" hint="Select one or more (e.g. B.Tech links CSE, ME, ECE)">
-                            {depts.length === 0 ? (
-                                <p className="text-sm text-amber-600 bg-amber-50 p-3 rounded-xl border border-amber-200">No departments found. Add departments first.</p>
-                            ) : (
-                                <div className="flex flex-wrap gap-2 p-3 border border-slate-200 rounded-xl bg-slate-50 max-h-40 overflow-y-auto">
+                            <FormField label="Departments" hint="Toggle to add / remove departments">
+                                <div className="flex flex-wrap gap-2 p-4 border border-slate-200 rounded-xl bg-slate-50/50 max-h-40 overflow-y-auto custom-scrollbar">
                                     {depts.map(d => (
                                         <button
                                             key={d.DepartmentID}
                                             type="button"
-                                            onClick={() => toggleDept(d.DepartmentID)}
-                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${form.DepartmentIDs.includes(d.DepartmentID)
-                                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                                                : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:text-blue-600'
+                                            onClick={() => toggleEditDept(d.DepartmentID)}
+                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${editForm.DepartmentIDs.includes(d.DepartmentID)
+                                                ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20'
+                                                : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:text-blue-600 shadow-sm'
                                             }`}
                                         >
                                             {d.DepartmentCode}
-                                            {form.DepartmentIDs.includes(d.DepartmentID) && <X size={10} />}
+                                            {editForm.DepartmentIDs.includes(d.DepartmentID) && <X size={12} className="opacity-80" />}
                                         </button>
                                     ))}
                                 </div>
-                            )}
-                            {form.DepartmentIDs.length > 0 && (
-                                <p className="text-xs text-blue-600 mt-1 font-medium">{form.DepartmentIDs.length} department{form.DepartmentIDs.length !== 1 ? 's' : ''} selected</p>
-                            )}
-                        </FormField>
-
-                        {form.DurationYears > 0 && (
-                            <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
-                                <GraduationCap size={18} className="text-emerald-600 shrink-0" />
-                                <div>
-                                    <p className="text-sm font-bold text-emerald-700">{form.DurationYears * 2} Semesters will be auto-generated</p>
-                                    <p className="text-xs text-emerald-600">Semester 1 through {form.DurationYears * 2} will be created automatically.</p>
-                                </div>
+                                {editForm.DepartmentIDs.length > 0 && (
+                                    <p className="text-[12px] text-blue-600 mt-2 font-bold tracking-wide">{editForm.DepartmentIDs.length} department{editForm.DepartmentIDs.length !== 1 ? 's' : ''} selected</p>
+                                )}
+                            </FormField>
+                            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                                <button onClick={() => setEditTarget(null)} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-all active:scale-95">Cancel</button>
+                                <button onClick={handleEditProg} disabled={editSaving} className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed">{editSaving ? 'Saving…' : 'Save Changes'}</button>
                             </div>
-                        )}
-
-                        <div className="flex justify-end gap-2 pt-2">
-                            <button onClick={() => setShowAdd(false)} className="btn-ghost">Cancel</button>
-                            <button onClick={handleAdd} disabled={saving} className="btn-primary">{saving ? 'Creating…' : 'Create Program'}</button>
                         </div>
-                    </div>
-                </Modal>
-            )}
-
-            {showDelete && (
-                <ConfirmModal
-                    title={showDelete.mode === 'all' ? 'Delete All Programs?' : `Delete "${showDelete.name}"?`}
-                    message={showDelete.mode === 'all' ? 'This will remove all programs and their auto-generated semesters.' : 'This program and its semesters will be deleted permanently.'}
-                    onConfirm={handleDelete}
-                    onCancel={() => setShowDelete(null)}
-                />
-            )}
-
-            {/* Edit Program Modal */}
-            {editTarget && (
-                <Modal title={`Edit: ${editTarget.ProgramCode}`} onClose={() => setEditTarget(null)}>
-                    <div className="space-y-4">
-                        <FormField label="Program Code">
-                            <input id="edit-prog-code" name="EditProgramCode" value={editTarget.ProgramCode} disabled className="input opacity-60 cursor-not-allowed bg-slate-50" />
-                            <p className="text-xs text-slate-400 mt-1">Code cannot be changed after creation.</p>
-                        </FormField>
-                        <FormField label="Program Name">
-                            <input
-                                id="edit-prog-name"
-                                name="EditProgramName"
-                                value={editForm.ProgramName}
-                                onChange={e => setEditForm(p => ({ ...p, ProgramName: e.target.value }))}
-                                placeholder="e.g. Bachelor of Technology"
-                                autoComplete="off"
-                                className="input"
-                                autoFocus
-                            />
-                        </FormField>
-                        <FormField label="Duration (Years)" hint={`Currently ${editForm.DurationYears} yr(s) → ${editForm.DurationYears * 2} semesters`}>
-                            <select
-                                id="edit-prog-duration"
-                                name="EditDurationYears"
-                                value={editForm.DurationYears}
-                                onChange={e => setEditForm(p => ({ ...p, DurationYears: Number(e.target.value) }))}
-                                className="input"
-                            >
-                                {[1, 2, 3, 4, 5].map(n => (
-                                    <option key={n} value={n}>{n} year{n !== 1 ? 's' : ''} → {n * 2} semesters</option>
-                                ))}
-                            </select>
-                        </FormField>
-                        <FormField label="Departments" hint="Toggle to add / remove departments">
-                            <div className="flex flex-wrap gap-2 p-3 border border-slate-200 rounded-xl bg-slate-50 max-h-40 overflow-y-auto">
-                                {depts.map(d => (
-                                    <button
-                                        key={d.DepartmentID}
-                                        type="button"
-                                        onClick={() => toggleEditDept(d.DepartmentID)}
-                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${editForm.DepartmentIDs.includes(d.DepartmentID)
-                                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                                            : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:text-blue-600'
-                                        }`}
-                                    >
-                                        {d.DepartmentCode}
-                                        {editForm.DepartmentIDs.includes(d.DepartmentID) && <X size={10} />}
-                                    </button>
-                                ))}
-                            </div>
-                            {editForm.DepartmentIDs.length > 0 && (
-                                <p className="text-xs text-blue-600 mt-1 font-medium">{editForm.DepartmentIDs.length} department{editForm.DepartmentIDs.length !== 1 ? 's' : ''} selected</p>
-                            )}
-                        </FormField>
-                        <div className="flex justify-end gap-2 pt-2">
-                            <button onClick={() => setEditTarget(null)} className="btn-ghost">Cancel</button>
-                            <button onClick={handleEditProg} disabled={editSaving} className="btn-primary">{editSaving ? 'Saving…' : 'Save Changes'}</button>
-                        </div>
-                    </div>
-                </Modal>
-            )}
+                    </Modal>
+                )}
+            </AnimatePresence>
 
             {/* Import Program Modal */}
-            {showImport && (
-                <Modal title="Import Academic Data" onClose={() => { setShowImport(false); setImportFile(null); }}>
-                    <div className="space-y-4">
-                        <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:bg-slate-50 transition-colors relative">
-                            <input 
-                                id="import-prog-file"
-                                name="ImportProgFile"
-                                type="file" 
-                                accept=".xlsx,.xls,.csv" 
-                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
-                                onChange={e => setImportFile(e.target.files?.[0] || null)} 
-                            />
-                            <div className="flex flex-col items-center justify-center gap-2 pointer-events-none">
-                                <FileSpreadsheet size={32} className={importFile ? "text-blue-500" : "text-slate-400"} />
-                                {importFile ? (
-                                    <div className="text-sm font-semibold text-slate-700">{importFile.name}</div>
-                                ) : (
-                                    <>
-                                        <div className="text-sm font-semibold text-slate-700">Click or drag file to this area to upload</div>
-                                        <div className="text-xs text-slate-500">Support for a single or bulk upload.</div>
-                                    </>
-                                )}
-                                <div className="text-xs text-slate-400 mt-1">Accepts .csv, .xls, .xlsx</div>
+            <AnimatePresence>
+                {showImport && (
+                    <Modal key="import-prog" title="Import Academic Data" onClose={() => { setShowImport(false); setImportFile(null); }}>
+                        <div className="space-y-6">
+                            <div className="border-2 border-dashed border-blue-200 bg-blue-50/50 rounded-2xl p-10 text-center hover:bg-blue-50 hover:border-blue-300 transition-all relative group overflow-hidden">
+                                <input 
+                                    id="import-prog-file"
+                                    name="ImportProgFile"
+                                    type="file" 
+                                    accept=".xlsx,.xls,.csv" 
+                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+                                    onChange={e => setImportFile(e.target.files?.[0] || null)} 
+                                />
+                                <div className="flex flex-col items-center justify-center gap-3 pointer-events-none transform group-hover:scale-105 transition-transform duration-300">
+                                    <div className={`p-4 rounded-full ${importFile ? 'bg-blue-100 text-blue-600' : 'bg-white shadow-sm text-blue-500'}`}>
+                                        <FileSpreadsheet size={36} />
+                                    </div>
+                                    {importFile ? (
+                                        <div className="text-sm font-bold text-slate-800">{importFile.name}</div>
+                                    ) : (
+                                        <>
+                                            <div className="text-sm font-bold text-slate-700">Click or drag file to this area to upload</div>
+                                            <div className="text-[13px] text-slate-500 font-medium">Support for a single or bulk upload.</div>
+                                        </>
+                                    )}
+                                    <div className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase mt-1">Accepts .csv, .xls, .xlsx</div>
+                                </div>
+                            </div>
+                            <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                                <button onClick={downloadTemplate} className="text-sm text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1.5 transition-colors">
+                                    <Download size={14}/> Download Template
+                                </button>
+                                <div className="flex justify-end gap-3">
+                                    <button onClick={() => { setShowImport(false); setImportFile(null); }} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-all active:scale-95">Cancel</button>
+                                    <button onClick={handleImport} disabled={importing || !importFile} className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed">
+                                        {importing ? 'Importing…' : 'Upload Data'}
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                        <div className="flex items-center justify-between pt-2">
-                            <button onClick={downloadTemplate} className="text-sm text-blue-600 hover:text-blue-700 font-medium">
-                                Download Template
-                            </button>
-                            <div className="flex justify-end gap-2">
-                                <button onClick={() => { setShowImport(false); setImportFile(null); }} className="btn-ghost">Cancel</button>
-                                <button onClick={handleImport} disabled={importing || !importFile} className="btn-primary">{importing ? 'Importing…' : 'Upload Data'}</button>
-                            </div>
-                        </div>
-                    </div>
-                </Modal>
-            )}
+                    </Modal>
+                )}
+            </AnimatePresence>
         </>
     );
 };
@@ -898,44 +927,64 @@ const ProgramsTab: React.FC = () => {
    SHARED COMPONENTS
 ═══════════════════════════════════════════════════════════ */
 const Modal: React.FC<{ title: string; onClose: () => void; children: React.ReactNode }> = ({ title, onClose, children }) => (
-    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-                <h2 className="text-base font-bold text-slate-800">{title}</h2>
-                <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+        <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} 
+        />
+        <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            className="relative bg-white rounded-[24px] shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden border border-slate-100 flex flex-col"
+        >
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100/80 bg-slate-50/50">
+                <h2 className="text-lg font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">{title}</h2>
+                <button onClick={onClose} className="p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 transition-all active:scale-95">
                     <X size={18} />
                 </button>
             </div>
-            <div className="px-6 py-5">{children}</div>
-        </div>
+            <div className="px-6 py-6 overflow-y-auto custom-scrollbar">{children}</div>
+        </motion.div>
     </div>
 );
 
 const ConfirmModal: React.FC<{ title: string; message: string; onConfirm: () => void; onCancel: () => void }> = ({ title, message, onConfirm, onCancel }) => (
-    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
-            <div className="flex items-start gap-4 mb-5">
-                <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
-                    <AlertTriangle size={20} className="text-red-500" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onCancel} 
+        />
+        <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            className="relative bg-white rounded-[24px] shadow-2xl w-full max-w-sm p-6 border border-slate-100"
+        >
+            <div className="flex items-start gap-4 mb-6">
+                <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center shrink-0 border border-red-100 shadow-sm">
+                    <AlertTriangle size={24} className="text-red-500" />
                 </div>
-                <div>
-                    <h3 className="font-bold text-slate-800">{title}</h3>
-                    <p className="text-sm text-slate-500 mt-1">{message}</p>
+                <div className="pt-1">
+                    <h3 className="font-bold text-slate-800 text-lg leading-tight">{title}</h3>
+                    <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">{message}</p>
                 </div>
             </div>
-            <div className="flex justify-end gap-2">
-                <button onClick={onCancel} className="btn-ghost">Cancel</button>
-                <button onClick={onConfirm} className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-all">Delete</button>
+            <div className="flex justify-end gap-3">
+                <button onClick={onCancel} className="px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-all active:scale-95">Cancel</button>
+                <button onClick={onConfirm} className="px-4 py-2.5 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 shadow-lg shadow-red-500/30 transition-all active:scale-95">Delete Permanently</button>
             </div>
-        </div>
+        </motion.div>
     </div>
 );
 
 const FormField: React.FC<{ label: string; hint?: string; children: React.ReactNode }> = ({ label, hint, children }) => (
-    <div>
-        <span className="block text-sm font-semibold text-slate-700 mb-1.5">{label}</span>
+    <div className="group">
+        <span className="block text-[13px] font-bold text-slate-700 mb-2 transition-colors group-focus-within:text-blue-600">{label}</span>
         {children}
-        {hint && <p className="text-xs text-slate-400 mt-1">{hint}</p>}
+        {hint && <p className="text-[12px] font-medium text-slate-400 mt-2">{hint}</p>}
     </div>
 );
 

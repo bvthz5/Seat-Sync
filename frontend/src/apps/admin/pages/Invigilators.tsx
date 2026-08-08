@@ -20,6 +20,7 @@ import {
     ChevronRight, Star, BookOpen, Award, RefreshCcw, FileText
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import ConfirmationModal from '../components/ConfirmationModal';
 import { invigilatorService, Invigilator, InvigilatorStats } from '../services/invigilatorService';
 import AddInvigilatorModal from '../components/invigilators/AddInvigilatorModal';
 import BulkImportModal from '../components/invigilators/BulkImportModal';
@@ -51,9 +52,9 @@ const resolveStatus = (inv: Invigilator): StatusKey => {
 };
 
 const STATUS_CFG = {
-    'active':   { label: 'Active',    dot: '#16a34a', bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0', glow: 'shadow-emerald-100' },
-    'on-leave': { label: 'On Leave',  dot: '#d97706', bg: '#fffbeb', text: '#b45309', border: '#fde68a', glow: 'shadow-amber-100'   },
-    'inactive': { label: 'Inactive',  dot: '#94a3b8', bg: '#f8fafc', text: '#475569', border: '#e2e8f0', glow: 'shadow-slate-100'   },
+    'active': { label: 'Active', dot: '#16a34a', bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0', glow: 'shadow-emerald-100' },
+    'on-leave': { label: 'On Leave', dot: '#d97706', bg: '#fffbeb', text: '#b45309', border: '#fde68a', glow: 'shadow-amber-100' },
+    'inactive': { label: 'Inactive', dot: '#94a3b8', bg: '#f8fafc', text: '#475569', border: '#e2e8f0', glow: 'shadow-slate-100' },
 } as const;
 
 const AVATAR_GRADIENTS = [
@@ -71,12 +72,12 @@ const CopyBtn: React.FC<{ text: string }> = ({ text }) => {
     const [copied, setCopied] = useState(false);
     const copy = (e: React.MouseEvent) => {
         e.stopPropagation();
-        navigator.clipboard.writeText(text).catch(() => {});
+        navigator.clipboard.writeText(text).catch(() => { });
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
     };
     return (
-        <button onClick={copy} title="Copy" className="ml-1 text-slate-300 hover:text-slate-600 transition-colors">
+        <button onClick={copy} title="Copy" aria-label="Copy to clipboard" className="ml-1 text-slate-400 hover:text-slate-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded">
             {copied ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
         </button>
     );
@@ -92,7 +93,7 @@ const KpiCard: React.FC<KpiProps> = ({ label, value, icon, accent, delta, loadin
             {icon}
         </div>
         <div className="relative">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">{label}</p>
             <p className="text-2xl font-bold text-slate-900">{loading ? <span className="text-slate-200 animate-pulse">—</span> : value}</p>
             {delta && <p className="text-[11px] text-emerald-600 font-semibold mt-0.5">{delta}</p>}
         </div>
@@ -132,7 +133,7 @@ const ActionMenu: React.FC<{ menuId: string; items: ActionMenuItem[] }> = ({ men
         const menuW = 240;
         const menuH = items.length * 68 + 16;
         const left = rect.right - menuW < 8 ? rect.left : rect.right - menuW;
-        const top  = rect.bottom + menuH > window.innerHeight - 8 ? rect.top - menuH - 4 : rect.bottom + 6;
+        const top = rect.bottom + menuH > window.innerHeight - 8 ? rect.top - menuH - 4 : rect.bottom + 6;
         setPos({ top, left });
         setActiveMenuId(menuId); // close all others
         setOpen(true);
@@ -158,32 +159,35 @@ const ActionMenu: React.FC<{ menuId: string; items: ActionMenuItem[] }> = ({ men
     return (
         <>
             <button ref={btnRef} onClick={openMenu}
-                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
-                    open ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
-                }`}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${open ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
+                    }`}
                 title="Actions"
+                aria-label="Open Actions"
+                aria-haspopup="menu"
+                aria-expanded={open}
+                aria-controls={`menu-${menuId}`}
             >
                 <MoreVertical size={15} />
             </button>
             {open && createPortal(
                 <div onClick={e => e.stopPropagation()}
+                    id={`menu-${menuId}`}
+                    role="menu"
                     style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 999999, width: 240, animation: 'amFadeScale .14s cubic-bezier(.16,1,.3,1)' }}
                     className="bg-white rounded-2xl shadow-2xl border border-slate-100/80 py-1.5 overflow-hidden"
                 >
                     <style>{`@keyframes amFadeScale{from{opacity:0;transform:scale(.94) translateY(-4px)}to{opacity:1;transform:scale(1) translateY(0)}}`}</style>
                     {items.map((item, i) => (
-                        <button key={item.key} onClick={() => { item.onClick(); closeMenu(); }}
-                            className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-left transition-all group/item ${
-                                item.danger  ? 'hover:bg-rose-50 text-rose-600'
-                              : item.warning ? 'hover:bg-amber-50 text-amber-700'
-                              : 'hover:bg-slate-50 text-slate-700'
-                            } ${i < items.length - 1 ? 'border-b border-slate-50' : ''}`}
+                        <button key={item.key} role="menuitem" onClick={() => { item.onClick(); closeMenu(); }}
+                            className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-left transition-all group/item ${item.danger ? 'hover:bg-rose-50 text-rose-600'
+                                    : item.warning ? 'hover:bg-amber-50 text-amber-700'
+                                        : 'hover:bg-slate-50 text-slate-700'
+                                } ${i < items.length - 1 ? 'border-b border-slate-50' : ''}`}
                         >
-                            <span className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-                                item.danger  ? 'bg-rose-50 text-rose-400 group-hover/item:bg-rose-100'
-                              : item.warning ? 'bg-amber-50 text-amber-500 group-hover/item:bg-amber-100'
-                              : 'bg-slate-100 text-slate-400 group-hover/item:bg-slate-200'
-                            }`}>{item.icon}</span>
+                            <span className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${item.danger ? 'bg-rose-50 text-rose-400 group-hover/item:bg-rose-100'
+                                    : item.warning ? 'bg-amber-50 text-amber-500 group-hover/item:bg-amber-100'
+                                        : 'bg-slate-100 text-slate-400 group-hover/item:bg-slate-200'
+                                }`}>{item.icon}</span>
                             <div className="min-w-0 flex-1">
                                 <p className="text-[13px] font-semibold leading-tight">{item.label}</p>
                                 <p className={`text-[11px] mt-0.5 ${item.danger ? 'text-rose-400' : item.warning ? 'text-amber-500' : 'text-slate-400'}`}>{item.description}</p>
@@ -224,7 +228,7 @@ const ProfileDrawer: React.FC<{
             {/* Backdrop */}
             <div onClick={onClose} className={`fixed inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity duration-300 ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} style={{ zIndex: 99990 }} />
             {/* Drawer */}
-            <div className={`fixed top-0 right-0 h-full w-[520px] bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-out ${open ? 'translate-x-0' : 'translate-x-full'}`}
+            <div className={`fixed top-0 right-0 h-full w-[100vw] sm:w-[520px] bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-out ${open ? 'translate-x-0' : 'translate-x-full'}`}
                 style={{ zIndex: 99991 }}>
                 {/* Drawer Header — gradient banner */}
                 <div className="relative shrink-0 overflow-hidden"
@@ -234,8 +238,8 @@ const ProfileDrawer: React.FC<{
                         style={{ backgroundImage: 'radial-gradient(circle at 20% 80%, rgba(99,102,241,0.35) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(6,182,212,0.25) 0%, transparent 45%)' }} />
                     {/* Close button */}
                     <div className="absolute top-4 right-4 z-10">
-                        <button onClick={onClose}
-                            className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 hover:text-white transition-all">
+                        <button onClick={onClose} aria-label="Close Profile"
+                            className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 hover:text-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">
                             <X size={15} />
                         </button>
                     </div>
@@ -296,7 +300,7 @@ const ProfileDrawer: React.FC<{
                             <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Eligibility</p>
                                 <p className={`text-sm font-bold flex items-center gap-1 ${inv.isEligible ? 'text-emerald-600' : 'text-rose-500'}`}>
-                                    {inv.isEligible ? <><CheckCircle2 size={13}/> Eligible</> : <><AlertTriangle size={13}/> Ineligible</>}
+                                    {inv.isEligible ? <><CheckCircle2 size={13} /> Eligible</> : <><AlertTriangle size={13} /> Ineligible</>}
                                 </p>
                             </div>
                         </div>
@@ -337,16 +341,14 @@ const ProfileDrawer: React.FC<{
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2.5">Account Controls</p>
                         <div className="space-y-2">
                             <button onClick={() => { onToggleEligibility(inv.InvigilatorID); onClose(); }}
-                                className={`w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all hover:shadow-sm ${
-                                    inv.isEligible ? 'border-rose-100 bg-rose-50 hover:bg-rose-100 text-rose-700' : 'border-emerald-100 bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
-                                }`}>
+                                className={`w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all hover:shadow-sm ${inv.isEligible ? 'border-rose-100 bg-rose-50 hover:bg-rose-100 text-rose-700' : 'border-emerald-100 bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
+                                    }`}>
                                 {inv.isEligible ? <UserMinus size={15} /> : <CheckCircle2 size={15} />}
                                 <span className="text-sm font-semibold">{inv.isEligible ? 'Mark Ineligible' : 'Mark Eligible'}</span>
                             </button>
                             <button onClick={() => { onToggleFlag(inv.InvigilatorID); onClose(); }}
-                                className={`w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all hover:shadow-sm ${
-                                    inv.isFlagged ? 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700' : 'border-amber-100 bg-amber-50 hover:bg-amber-100 text-amber-700'
-                                }`}>
+                                className={`w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all hover:shadow-sm ${inv.isFlagged ? 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700' : 'border-amber-100 bg-amber-50 hover:bg-amber-100 text-amber-700'
+                                    }`}>
                                 <Flag size={15} />
                                 <span className="text-sm font-semibold">{inv.isFlagged ? 'Remove Leave Flag' : 'Flag for Leave'}</span>
                             </button>
@@ -367,25 +369,26 @@ const ProfileDrawer: React.FC<{
 /* ═══════════════════════════════════════════════════════════ */
 
 const Invigilators: React.FC = () => {
-    const [invigilators,        setInvigilators]        = useState<Invigilator[]>([]);
-    const [stats,               setStats]               = useState<InvigilatorStats>({ total: 0, active: 0, eligible: 0, onDuty: 0, flagged: 0 });
-    const [pendingRequestsCount,setPendingRequestsCount] = useState(0);
-    const [pendingSwapsCount,   setPendingSwapsCount]   = useState(0);
-    const [isLoading,           setIsLoading]           = useState(true);
-    const [searchQuery,         setSearchQuery]         = useState('');
-    const [selectedDept,        setSelectedDept]        = useState('');
-    const [selectedStatus,      setSelectedStatus]      = useState('');
-    const [page,                setPage]                = useState(1);
+    const [invigilators, setInvigilators] = useState<Invigilator[]>([]);
+    const [stats, setStats] = useState<InvigilatorStats>({ total: 0, active: 0, eligible: 0, onDuty: 0, flagged: 0 });
+    const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+    const [pendingSwapsCount, setPendingSwapsCount] = useState(0);
+    const [isLoading, setIsLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedDept, setSelectedDept] = useState('');
+    const [selectedStatus, setSelectedStatus] = useState('');
+    const [page, setPage] = useState(1);
     const rowsPerPage = 10;
 
-    const { isOpen: isAddOpen,    onOpen: onAddOpen,    onClose: onAddClose    } = useDisclosure();
+    const { isOpen: isAddOpen, onOpen: onAddOpen, onClose: onAddClose } = useDisclosure();
     const { isOpen: isDeleteOpen, onOpen: onOpenDelete, onClose: onCloseDelete } = useDisclosure();
-    const { isOpen: isBulkOpen,   onOpen: onBulkOpen,   onClose: onBulkClose  } = useDisclosure();
-    const { isOpen: isReqOpen,    onOpen: onReqOpen,    onClose: onReqClose   } = useDisclosure();
-    const { isOpen: isSwapOpen,   onOpen: onSwapOpen,   onClose: onSwapClose  } = useDisclosure();
+    const [isDeleteAllOpen, setIsDeleteAllOpen] = useState(false);
+    const { isOpen: isBulkOpen, onOpen: onBulkOpen, onClose: onBulkClose } = useDisclosure();
+    const { isOpen: isReqOpen, onOpen: onReqOpen, onClose: onReqClose } = useDisclosure();
+    const { isOpen: isSwapOpen, onOpen: onSwapOpen, onClose: onSwapClose } = useDisclosure();
 
-    const [selected,     setSelected]     = useState<Invigilator | null>(null);
-    const [drawerOpen,   setDrawerOpen]   = useState(false);
+    const [selected, setSelected] = useState<Invigilator | null>(null);
+    const [drawerOpen, setDrawerOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     /* ── data ─────────────────────────────────────────────── */
@@ -418,15 +421,26 @@ const Invigilators: React.FC = () => {
 
     const handleDelete = async () => {
         if (!selected) return;
-        setIsSubmitting(true);
         try {
             await invigilatorService.delete(selected.InvigilatorID);
             toast.success('Invigilator removed successfully');
-            onCloseDelete();
             fetchData();
         } catch (e: any) {
-            toast.error(e.response?.data?.message || 'Failed to remove invigilator');
-        } finally { setIsSubmitting(false); }
+            const msg = e.response?.data?.message || 'Failed to remove invigilator';
+            toast.error(msg);
+            throw e;
+        }
+    };
+
+    const handleDeleteAll = async () => {
+        try {
+            await invigilatorService.clearAll();
+            toast.success('All invigilators deleted');
+            fetchData();
+        } catch (e) {
+            toast.error('Failed to delete all invigilators');
+            throw e;
+        }
     };
 
     const handleToggleEligibility = async (id: number) => {
@@ -455,13 +469,13 @@ const Invigilators: React.FC = () => {
             || inv.Designation?.toLowerCase()?.includes(q)
             || inv.Department?.toLowerCase()?.includes(q)
             || staffId(inv.InvigilatorID).includes(q);
-        const matchDept   = !selectedDept   || inv.Department === selectedDept;
-        const st          = resolveStatus(inv);
+        const matchDept = !selectedDept || inv.Department === selectedDept;
+        const st = resolveStatus(inv);
         const matchStatus = !selectedStatus || st === selectedStatus;
         return matchSearch && matchDept && matchStatus;
     });
 
-    const pages     = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
+    const pages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
     const pageItems = filtered.slice((page - 1) * rowsPerPage, page * rowsPerPage);
     const hasFilters = searchQuery || selectedDept || selectedStatus;
 
@@ -482,8 +496,8 @@ const Invigilators: React.FC = () => {
 
             {/* ── Page Header ───────────────────────────────── */}
             <div className="bg-white border-b border-slate-200/70 sticky top-0 z-30">
-                <div className="max-w-[1400px] mx-auto px-8 py-5">
-                    <div className="flex items-center justify-between gap-6">
+                <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-5">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 lg:gap-6">
                         <div className="flex items-center gap-4">
                             <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center shadow-lg shadow-slate-900/20">
                                 <Users size={18} className="text-white" />
@@ -496,9 +510,9 @@ const Invigilators: React.FC = () => {
                                 <p className="text-xs text-slate-400 mt-0.5">Staff Directory · Exam Duty Management</p>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2.5 shrink-0">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 shrink-0">
                             <button onClick={onReqOpen}
-                                className="relative h-10 px-5 rounded-[14px] border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 text-[13px] font-bold flex items-center gap-2.5 transition-all shadow-sm group">
+                                className="btn-secondary !text-sm !px-4 !py-2 group">
                                 <Activity size={16} className="text-rose-500 transition-transform group-hover:scale-110" />
                                 Review Requests
                                 {pendingRequestsCount > 0 && (
@@ -511,7 +525,7 @@ const Invigilators: React.FC = () => {
                                 )}
                             </button>
                             <button onClick={onSwapOpen}
-                                className="relative h-10 px-5 rounded-[14px] border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 text-[13px] font-bold flex items-center gap-2.5 transition-all shadow-sm group">
+                                className="btn-secondary !text-sm !px-4 !py-2 group">
                                 <RefreshCcw size={16} className="text-indigo-500 transition-transform group-hover:rotate-180 duration-500" />
                                 Swap Requests
                                 {pendingSwapsCount > 0 && (
@@ -523,32 +537,22 @@ const Invigilators: React.FC = () => {
                                     </span>
                                 )}
                             </button>
-                            <div className="w-px h-6 bg-slate-200 mx-1" />
+                            <div className="hidden sm:block w-px h-6 bg-slate-200 mx-1" />
                             <button onClick={onBulkOpen}
-                                className="h-10 px-4 rounded-[14px] border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 text-[13px] font-bold flex items-center gap-2 transition-all shadow-sm">
+                                className="btn-secondary !text-sm !px-4 !py-2">
                                 <Upload size={15} /> Import
                             </button>
                             <button
-                                onClick={async () => {
-                                    if (window.confirm('Are you sure you want to delete all invigilators? This cannot be undone.')) {
-                                        try {
-                                            await invigilatorService.clearAll();
-                                            toast.success('All invigilators deleted');
-                                            fetchData();
-                                        } catch (e) {
-                                            toast.error('Failed to delete all invigilators');
-                                        }
-                                    }
-                                }}
-                                className="h-10 px-4 rounded-[14px] border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 hover:border-rose-300 text-[13px] font-bold flex items-center gap-2 transition-all shadow-sm group">
+                                onClick={() => setIsDeleteAllOpen(true)}
+                                className="btn-secondary !text-sm !px-4 !py-2 !text-rose-600 !border-rose-200 hover:!bg-rose-50 group">
                                 <Trash2 size={15} className="transition-transform group-hover:rotate-12" /> Delete All
                             </button>
                             <button onClick={exportCSV}
-                                className="h-10 px-4 rounded-[14px] border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 text-[13px] font-bold flex items-center gap-2 transition-all shadow-sm">
+                                className="btn-secondary !text-sm !px-4 !py-2">
                                 <FileText size={15} /> Export
                             </button>
                             <button onClick={onAddOpen}
-                                className="h-10 px-6 rounded-[14px] bg-[#0F172A] hover:bg-slate-800 text-white text-[13px] font-black flex items-center gap-2.5 transition-all shadow-xl shadow-slate-900/10">
+                                className="btn-primary !text-sm !px-4 !py-2">
                                 <UserPlus size={16} /> Add Invigilator
                             </button>
                         </div>
@@ -556,20 +560,21 @@ const Invigilators: React.FC = () => {
                 </div>
             </div>
 
-            <div className="max-w-[1400px] mx-auto px-8 py-7 flex flex-col gap-6">
+            <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-6">
 
                 {/* ── KPI Row ─────────────────────────────────── */}
-                <div className="grid grid-cols-4 gap-4">
-                    <KpiCard loading={isLoading} label="Total Registered" value={stats.total}   icon={<Briefcase size={19} className="text-slate-600" />}   accent="bg-slate-100" delta="All time" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <KpiCard loading={isLoading} label="Total Registered" value={stats.total} icon={<Briefcase size={19} className="text-slate-600" />} accent="bg-slate-100" delta="All time" />
                     <KpiCard loading={isLoading} label="Active & Eligible" value={stats.eligible} icon={<ShieldCheck size={19} className="text-emerald-600" />} accent="bg-emerald-50" />
-                    <KpiCard loading={isLoading} label="On Leave / Flagged" value={stats.flagged}  icon={<Clock size={19} className="text-amber-500" />}       accent="bg-amber-50" />
-                    <KpiCard loading={isLoading} label="Departments" value={uniqueDepts.length} icon={<Building2 size={19} className="text-blue-600" />}     accent="bg-blue-50" />
+                    <KpiCard loading={isLoading} label="On Leave / Flagged" value={stats.flagged} icon={<Clock size={19} className="text-amber-500" />} accent="bg-amber-50" />
+                    <KpiCard loading={isLoading} label="Departments" value={uniqueDepts.length} icon={<Building2 size={19} className="text-blue-600" />} accent="bg-blue-50" />
                 </div>
 
                 {/* ── Search + Filter ──────────────────────────── */}
-                <div className="bg-white border border-slate-200/70 rounded-2xl px-5 py-3 flex items-center gap-4 shadow-sm">
-                    <div className="flex-1 flex items-center gap-2.5 min-w-0">
-                        <Search size={15} className="text-slate-400 shrink-0" />
+                <div className="bg-white border border-slate-200/70 rounded-2xl px-5 py-3 flex flex-col md:flex-row md:items-center gap-4 shadow-sm">
+                    <div className="flex-1 flex items-center gap-2.5 min-w-0 w-full">
+                        <Search size={15} className="text-slate-400 shrink-0" aria-hidden="true" />
+                        <label htmlFor="searchQuery" className="sr-only">Search invigilators</label>
                         <input
                             id="searchQuery" name="searchQuery" autoComplete="off"
                             className="flex-1 text-sm text-slate-800 placeholder-slate-400 bg-transparent outline-none min-w-0"
@@ -578,17 +583,18 @@ const Invigilators: React.FC = () => {
                             onChange={e => { setSearchQuery(e.target.value); setPage(1); }}
                         />
                         {searchQuery && (
-                            <button onClick={() => { setSearchQuery(''); setPage(1); }} className="text-slate-300 hover:text-slate-600 shrink-0 transition-colors">
+                            <button onClick={() => { setSearchQuery(''); setPage(1); }} className="text-slate-400 hover:text-slate-700 shrink-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded p-0.5" aria-label="Clear search">
                                 <X size={14} />
                             </button>
                         )}
                     </div>
-                    <div className="w-px h-5 bg-slate-200 shrink-0" />
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="hidden md:block w-px h-5 bg-slate-200 shrink-0" />
+                    <div className="flex items-center gap-2 shrink-0 justify-between md:justify-start w-full md:w-auto">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Dept</span>
                         <div className="relative">
+                            <label htmlFor="deptFilter" className="sr-only">Filter by department</label>
                             <select id="deptFilter" name="deptFilter"
-                                className="text-sm font-semibold text-slate-700 bg-transparent outline-none appearance-none pr-5 cursor-pointer"
+                                className="text-sm font-semibold text-slate-700 bg-transparent outline-none appearance-none pr-5 cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
                                 value={selectedDept} onChange={e => { setSelectedDept(e.target.value); setPage(1); }}>
                                 <option value="">All</option>
                                 {uniqueDepts.map(d => <option key={d} value={d}>{d}</option>)}
@@ -596,12 +602,13 @@ const Invigilators: React.FC = () => {
                             <ChevronDown size={11} className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                         </div>
                     </div>
-                    <div className="w-px h-5 bg-slate-200 shrink-0" />
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="hidden md:block w-px h-5 bg-slate-200 shrink-0" />
+                    <div className="flex items-center gap-2 shrink-0 justify-between md:justify-start w-full md:w-auto">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</span>
                         <div className="relative">
+                            <label htmlFor="statusFilter" className="sr-only">Filter by status</label>
                             <select id="statusFilter" name="statusFilter"
-                                className="text-sm font-semibold text-slate-700 bg-transparent outline-none appearance-none pr-5 cursor-pointer"
+                                className="text-sm font-semibold text-slate-700 bg-transparent outline-none appearance-none pr-5 cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
                                 value={selectedStatus} onChange={e => { setSelectedStatus(e.target.value); setPage(1); }}>
                                 <option value="">All</option>
                                 <option value="active">Active</option>
@@ -613,24 +620,25 @@ const Invigilators: React.FC = () => {
                     </div>
                     {hasFilters && (
                         <>
-                            <div className="w-px h-5 bg-slate-200 shrink-0" />
+                            <div className="hidden md:block w-px h-5 bg-slate-200 shrink-0" />
                             <button onClick={() => { setSearchQuery(''); setSelectedDept(''); setSelectedStatus(''); setPage(1); }}
                                 className="text-xs font-bold text-slate-400 hover:text-rose-500 transition-colors flex items-center gap-1 shrink-0">
                                 <X size={11} /> Clear
                             </button>
                         </>
                     )}
-                    <span className="ml-auto text-xs text-slate-400 font-semibold shrink-0 bg-slate-50 px-2.5 py-1 rounded-lg">
+                    <span className="md:ml-auto text-xs text-slate-400 font-semibold shrink-0 bg-slate-50 px-2.5 py-1 rounded-lg self-start md:self-auto">
                         {filtered.length} records
                     </span>
                 </div>
 
                 {/* ── Table ───────────────────────────────────── */}
                 <div className="bg-white border border-slate-200/70 rounded-2xl overflow-hidden shadow-sm">
+                    <div className="w-full">
+                        <div className="w-full">
 
                     {/* Table head */}
-                    <div className="grid items-center px-6 py-3.5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white"
-                        style={{ gridTemplateColumns: '2.2fr 0.9fr 1fr 1.8fr 0.9fr 1.1fr 56px' }}>
+                    <div className="hidden invigilator-grid px-6 py-3.5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
                         {['Invigilator', 'Staff ID', 'Department', 'Contact', 'Duty Load', 'Status', ''].map((h, i) => (
                             <span key={i} className="text-[10px] font-black text-slate-400 uppercase tracking-[0.1em]">{h}</span>
                         ))}
@@ -666,53 +674,90 @@ const Invigilators: React.FC = () => {
 
                             return (
                                 <div key={inv.InvigilatorID}
-                                    className={`grid items-center px-6 py-4 transition-all duration-150 hover:bg-slate-50/70 cursor-pointer group ${!isLast ? 'border-b border-slate-100' : ''}`}
-                                    style={{ gridTemplateColumns: '2.2fr 0.9fr 1fr 1.8fr 0.9fr 1.1fr 56px' }}
+                                    className={`flex flex-col invigilator-grid px-4 lg:px-6 py-4 gap-4 lg:gap-0 transition-all duration-150 hover:bg-slate-50/70 cursor-pointer group focus-visible:outline-none focus-visible:bg-slate-50 ${!isLast ? 'border-b border-slate-100' : ''}`}
                                     onClick={() => openProfile(inv)}
+                                    role="button"
+                                    tabIndex={0}
+                                    onKeyDown={(e) => e.key === 'Enter' && openProfile(inv)}
+                                    aria-label={`View profile of ${inv.Name}`}
                                 >
-                                    {/* Invigilator */}
-                                    <div className="flex items-center gap-3.5 min-w-0">
-                                        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${grad} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm group-hover:shadow-md transition-shadow`}>
-                                            {ini}
+                                    {/* Top Row for Mobile: Avatar/Name and Actions */}
+                                    <div className="flex items-center justify-between w-full lg:w-auto">
+                                        {/* Invigilator */}
+                                        <div className="flex items-center gap-3.5 min-w-0 w-full">
+                                            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${grad} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm group-hover:shadow-md transition-shadow`} aria-hidden="true">
+                                                {ini}
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-[13px] font-bold text-slate-900 truncate group-hover:text-slate-700 transition-colors">{inv.Name}</p>
+                                                <p className="text-[11px] text-slate-500 truncate mt-0.5">{inv.Designation || 'Faculty'}</p>
+                                            </div>
                                         </div>
-                                        <div className="min-w-0">
-                                            <p className="text-[13px] font-bold text-slate-900 truncate group-hover:text-slate-700 transition-colors">{inv.Name}</p>
-                                            <p className="text-[11px] text-slate-400 truncate mt-0.5">{inv.Designation || 'Faculty'}</p>
+                                        {/* Action menu on mobile */}
+                                        <div className="lg:hidden flex justify-center" onClick={e => e.stopPropagation()}>
+                                            <ActionMenu menuId={`inv-mob-${inv.InvigilatorID}`} items={[
+                                                {
+                                                    key: 'view', label: 'View Profile', description: 'Full details & history', icon: <Eye size={14} />,
+                                                    onClick: () => openProfile(inv)
+                                                },
+                                                {
+                                                    key: 'toggle', label: inv.isEligible ? 'Mark Ineligible' : 'Mark Eligible',
+                                                    description: inv.isEligible ? 'Disable duty access' : 'Enable duty access',
+                                                    icon: inv.isEligible ? <UserMinus size={14} /> : <CheckCircle2 size={14} />,
+                                                    warning: inv.isEligible,
+                                                    onClick: () => handleToggleEligibility(inv.InvigilatorID)
+                                                },
+                                                {
+                                                    key: 'flag', label: inv.isFlagged ? 'Remove Leave Flag' : 'Flag for Leave',
+                                                    description: inv.isFlagged ? 'Remove leave status' : 'Put on leave',
+                                                    icon: <Flag size={14} />, warning: !inv.isFlagged,
+                                                    onClick: () => handleToggleFlag(inv.InvigilatorID)
+                                                },
+                                                {
+                                                    key: 'delete', label: 'Remove Account', description: 'Permanently remove',
+                                                    icon: <Trash2 size={14} />, danger: true,
+                                                    onClick: () => { setSelected(inv); onOpenDelete(); }
+                                                },
+                                            ]} />
                                         </div>
                                     </div>
 
                                     {/* Staff ID */}
-                                    <div onClick={e => e.stopPropagation()}>
-                                        <span className="font-mono text-[11px] text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg flex items-center gap-1 w-fit">
+                                    <div onClick={e => e.stopPropagation()} className="flex items-center justify-between w-full lg:w-auto lg:block">
+                                        <span className="lg:hidden text-[10px] font-bold text-slate-400 uppercase tracking-widest">Staff ID</span>
+                                        <span className="font-mono text-[11px] text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg flex items-center gap-1 w-fit focus-within:ring-2 focus-within:ring-slate-300">
                                             {staffId(inv.InvigilatorID)}
                                             <CopyBtn text={staffId(inv.InvigilatorID)} />
                                         </span>
                                     </div>
 
                                     {/* Department */}
-                                    <div>
+                                    <div className="flex items-center justify-between w-full lg:w-auto lg:block">
+                                        <span className="lg:hidden text-[10px] font-bold text-slate-400 uppercase tracking-widest">Department</span>
                                         <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg">
-                                            <Building2 size={10} className="text-slate-400" />
+                                            <Building2 size={10} className="text-slate-400" aria-hidden="true" />
                                             {inv.Department || '—'}
                                         </span>
                                     </div>
 
                                     {/* Contact */}
-                                    <div className="min-w-0" onClick={e => e.stopPropagation()}>
-                                        <a href={`mailto:${mockEmail(inv.Name)}`} className="flex items-center gap-1 text-[11px] text-slate-600 hover:text-blue-600 transition-colors font-medium truncate">
-                                            <Mail size={10} className="text-slate-300 shrink-0" />
+                                    <div className="flex items-center justify-between w-full lg:w-auto lg:block min-w-0" onClick={e => e.stopPropagation()}>
+                                        <span className="lg:hidden text-[10px] font-bold text-slate-400 uppercase tracking-widest">Contact</span>
+                                        <a href={`mailto:${mockEmail(inv.Name)}`} className="flex items-center gap-1 text-[11px] text-slate-600 hover:text-blue-600 transition-colors font-medium truncate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded p-0.5">
+                                            <Mail size={10} className="text-slate-300 shrink-0" aria-hidden="true" />
                                             {mockEmail(inv.Name)}
                                         </a>
                                     </div>
 
                                     {/* Duty Load */}
-                                    <div className="pr-3">
-                                        <div className="flex flex-col gap-1.5">
+                                    <div className="flex items-center justify-between w-full lg:w-auto lg:block pr-0 lg:pr-3">
+                                        <span className="lg:hidden text-[10px] font-bold text-slate-400 uppercase tracking-widest">Duty Load</span>
+                                        <div className="flex flex-col gap-1.5 w-[120px] lg:w-auto">
                                             <div className="flex items-center justify-between">
                                                 <span className="text-[11px] font-bold text-slate-700">{inv.totalExams ?? 0}</span>
                                                 <span className="text-[9px] font-semibold text-slate-300">/ 10</span>
                                             </div>
-                                            <div className="h-1 w-full max-w-[80px] bg-slate-100 rounded-full overflow-hidden">
+                                            <div className="h-1 w-full max-w-[80px] bg-slate-100 rounded-full overflow-hidden" role="progressbar" aria-valuenow={inv.totalExams ?? 0} aria-valuemin={0} aria-valuemax={10}>
                                                 <div
                                                     className="h-full rounded-full transition-all duration-700"
                                                     style={{
@@ -722,12 +767,13 @@ const Invigilators: React.FC = () => {
                                                     }}
                                                 />
                                             </div>
-                                            <span className="text-[9px] text-slate-300 font-medium leading-none">duties assigned</span>
+                                            <span className="hidden lg:block text-[9px] text-slate-300 font-medium leading-none">duties assigned</span>
                                         </div>
                                     </div>
 
                                     {/* Status */}
-                                    <div>
+                                    <div className="flex items-center justify-between w-full lg:w-auto lg:block">
+                                        <span className="lg:hidden text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</span>
                                         <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-full border"
                                             style={{ background: cfg.bg, color: cfg.text, borderColor: cfg.border }}>
                                             <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: cfg.dot }} />
@@ -735,29 +781,39 @@ const Invigilators: React.FC = () => {
                                         </span>
                                     </div>
 
-                                    {/* Action menu */}
-                                    <div className="flex justify-center" onClick={e => e.stopPropagation()}>
-                                        <ActionMenu menuId={`inv-${inv.InvigilatorID}`} items={[
-                                            { key: 'view',   label: 'View Profile',   description: 'Full details & history',   icon: <Eye size={14} />,
-                                              onClick: () => openProfile(inv) },
-                                            { key: 'toggle', label: inv.isEligible ? 'Mark Ineligible' : 'Mark Eligible',
-                                              description: inv.isEligible ? 'Disable duty access' : 'Enable duty access',
-                                              icon: inv.isEligible ? <UserMinus size={14} /> : <CheckCircle2 size={14} />,
-                                              warning: inv.isEligible,
-                                              onClick: () => handleToggleEligibility(inv.InvigilatorID) },
-                                            { key: 'flag',   label: inv.isFlagged ? 'Remove Leave Flag' : 'Flag for Leave',
-                                              description: inv.isFlagged ? 'Remove leave status' : 'Put on leave',
-                                              icon: <Flag size={14} />, warning: !inv.isFlagged,
-                                              onClick: () => handleToggleFlag(inv.InvigilatorID) },
-                                            { key: 'delete', label: 'Remove Account', description: 'Permanently remove',
-                                              icon: <Trash2 size={14} />, danger: true,
-                                              onClick: () => { setSelected(inv); onOpenDelete(); } },
+                                    {/* Action menu on desktop */}
+                                    <div className="hidden lg:flex justify-center" onClick={e => e.stopPropagation()}>
+                                        <ActionMenu menuId={`inv-desk-${inv.InvigilatorID}`} items={[
+                                            {
+                                                key: 'view', label: 'View Profile', description: 'Full details & history', icon: <Eye size={14} />,
+                                                onClick: () => openProfile(inv)
+                                            },
+                                            {
+                                                key: 'toggle', label: inv.isEligible ? 'Mark Ineligible' : 'Mark Eligible',
+                                                description: inv.isEligible ? 'Disable duty access' : 'Enable duty access',
+                                                icon: inv.isEligible ? <UserMinus size={14} /> : <CheckCircle2 size={14} />,
+                                                warning: inv.isEligible,
+                                                onClick: () => handleToggleEligibility(inv.InvigilatorID)
+                                            },
+                                            {
+                                                key: 'flag', label: inv.isFlagged ? 'Remove Leave Flag' : 'Flag for Leave',
+                                                description: inv.isFlagged ? 'Remove leave status' : 'Put on leave',
+                                                icon: <Flag size={14} />, warning: !inv.isFlagged,
+                                                onClick: () => handleToggleFlag(inv.InvigilatorID)
+                                            },
+                                            {
+                                                key: 'delete', label: 'Remove Account', description: 'Permanently remove',
+                                                icon: <Trash2 size={14} />, danger: true,
+                                                onClick: () => { setSelected(inv); onOpenDelete(); }
+                                            },
                                         ]} />
                                     </div>
                                 </div>
                             );
                         })
                     )}
+                        </div>
+                    </div>
 
                     {/* Footer */}
                     <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/40">
@@ -793,43 +849,26 @@ const Invigilators: React.FC = () => {
             <AddInvigilatorModal isOpen={isAddOpen} onClose={onAddClose} onSuccess={fetchData} existingInvigilators={invigilators} />
             <SwapRequestsModal isOpen={isSwapOpen} onClose={onSwapClose} onSuccess={fetchData} />
 
-            {/* Delete Confirm */}
-            {isDeleteOpen && createPortal(
-                <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 999998 }}>
-                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCloseDelete} />
-                    <div className="relative bg-white rounded-3xl shadow-2xl w-[420px] p-8 flex flex-col items-center text-center"
-                        style={{ animation: 'amFadeScale .2s cubic-bezier(.16,1,.3,1)' }}>
-                        <style>{`@keyframes amFadeScale{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}`}</style>
-                        <div className="w-16 h-16 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center mb-5 shadow-lg shadow-rose-50">
-                            <Trash2 size={24} className="text-rose-500" />
-                        </div>
-                        <h3 className="text-xl font-bold text-slate-900 mb-2">Remove Invigilator?</h3>
-                        <div className="mb-5">
-                            <p className="text-sm text-slate-500 leading-relaxed">
-                                This will permanently remove{' '}
-                                <span className="font-bold text-slate-900">{selected?.Name}</span>{' '}
-                                from the system.
-                            </p>
-                            <div className="mt-3 flex items-center justify-center gap-2 text-xs text-rose-500 font-semibold bg-rose-50 rounded-xl px-4 py-2.5">
-                                <AlertTriangle size={12} />
-                                This action cannot be undone
-                            </div>
-                        </div>
-                        <div className="flex gap-3 w-full">
-                            <button onClick={onCloseDelete}
-                                className="flex-1 h-11 rounded-xl border border-slate-200 bg-white text-slate-600 font-bold text-sm hover:bg-slate-50 transition-all">
-                                Cancel
-                            </button>
-                            <button onClick={handleDelete} disabled={isSubmitting}
-                                className="flex-1 h-11 rounded-xl bg-gradient-to-br from-rose-500 to-rose-600 text-white font-bold text-sm shadow-lg shadow-rose-500/30 hover:from-rose-600 hover:to-rose-700 transition-all disabled:opacity-60 flex items-center justify-center gap-2">
-                                {isSubmitting ? <><Spinner size="sm" color="white" /> Removing…</> : <><Trash2 size={14} /> Remove Account</>}
-                            </button>
-                        </div>
-                    </div>
-                </div>,
-                document.body
-            )}
+            {/* Confirmation Modals */}
+            <ConfirmationModal
+                isOpen={isDeleteOpen}
+                onClose={onCloseDelete}
+                onConfirm={handleDelete}
+                title="Remove Invigilator?"
+                message={`This will permanently remove ${selected?.Name} from the system. This action cannot be undone.`}
+                confirmText="Remove Account"
+                type="danger"
+            />
 
+            <ConfirmationModal
+                isOpen={isDeleteAllOpen}
+                onClose={() => setIsDeleteAllOpen(false)}
+                onConfirm={handleDeleteAll}
+                title="Delete All Invigilators?"
+                message="Are you sure you want to delete all invigilators? This action will permanently remove all staff records and cannot be undone."
+                confirmText="Delete All"
+                type="danger"
+            />
 
             {/* Bulk Import */}
             <BulkImportModal isOpen={isBulkOpen} onClose={onBulkClose} onSuccess={fetchData} />

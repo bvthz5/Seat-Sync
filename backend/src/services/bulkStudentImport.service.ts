@@ -7,9 +7,9 @@ import { Department } from '../models/Department.js';
 import { Program } from '../models/Program.js';
 import { normalizeProgram, parseBatchString, mapProgramToDepartment, resolveOrCreateProgram, resolveOrCreateDepartment } from './academicNormalizer.service.js';
 import { Semester } from '../models/Semester.js';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { emailService } from './email.service.js';
-import { generateDefaultPassword } from '../utils/student.utils.js';
+import { generateDefaultPassword, generateStudentEmail, extractBatchYearFromRegisterNumber, extractProgramCodeFromRegisterNumber } from '../utils/student.utils.js';
 
 interface StudentCSVRow {
     FullName?: string;
@@ -103,13 +103,13 @@ export class BulkStudentImportService {
                 try {
                     // Extract and validate row data
                     const fullName = row.FullName?.trim();
-                    let registerNumber = row.RegisterNumber?.trim();
+                    let registerNumber = row.RegisterNumber?.trim()?.toUpperCase();
                     
                     if (!registerNumber) {
                         registerNumber = "AUTO_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
                     }
                     
-const rowProgramRaw = row.ProgramName?.trim() || '';        
+                    const rowProgramRaw = row.ProgramName?.trim() || '';        
                     const parseBatch = (batchText: string) => {
                         if (!batchText) return null;
                         const text = batchText.replace(/batch\s*:/i, '').trim();
@@ -259,7 +259,13 @@ const rowProgramRaw = row.ProgramName?.trim() || '';
                     }
 
                     // Create or Get User
-                    const userEmail = email || registerNumber;
+                    let userEmail = email?.trim()?.toLowerCase();
+                    if (!userEmail) {
+                        const joiningYear = extractBatchYearFromRegisterNumber(registerNumber) || new Date().getFullYear();
+                        const programCode = extractProgramCodeFromRegisterNumber(registerNumber) || 'student';
+                        userEmail = generateStudentEmail(fullName, joiningYear, programCode);
+                    }
+                    
                     let userId = this.userCache.get(userEmail.toLowerCase());
                     let plainPassword: string | null = null;
                     
@@ -291,6 +297,15 @@ const rowProgramRaw = row.ProgramName?.trim() || '';
 
                         userId = user.UserID;
                         this.userCache.set(userEmail.toLowerCase(), userId);
+                    } else {
+                        // User already exists, check if we should reset password to default
+                        const user = await User.findByPk(userId, { transaction });
+                        if (user && !user.IsPasswordChanged) {
+                            const plainPassword = generateDefaultPassword(fullName, registerNumber);
+                            const passwordHash = await bcrypt.hash(plainPassword, 12);
+                            await user.update({ PasswordHash: passwordHash }, { transaction });
+                            console.log(`[BulkImport] Updated default password for existing user: ${user.Email}`);
+                        }
                     }
 
                     // Create Student
@@ -376,6 +391,7 @@ const rowProgramRaw = row.ProgramName?.trim() || '';
         // 1. Get all seats in the room with status = 'Available'
         // 2. Allocate seats sequentially to newly created students
         // 3. Mark seats as 'Occupied' and update SeatAllocation records
+        // 4. Update the seat status to 'Occupied'
 
         return {
             ...result,

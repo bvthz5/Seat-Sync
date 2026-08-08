@@ -48,14 +48,14 @@ export const studentPortalApi = {
         return response.data.data;
     },
 
-    async getSeating(examId?: string | number): Promise<any> {
+    async getSeating(examId?: string | number, isInternal?: boolean): Promise<any> {
         const url = examId ? `/student/seating/${examId}` : '/student/seating';
-        const response = await api.get(url);
-        return response.data.data;
+        const response = await api.get(url, { params: { isInternal } });
+        return response.data;
     },
 
-    async getSeatLayout(examId: string | number): Promise<any[]> {
-        const response = await api.get(`/student/seating/layout/${examId}`);
+    async getSeatLayout(examId: string | number, isInternal?: boolean): Promise<any[]> {
+        const response = await api.get(`/student/seating/layout/${examId}`, { params: { isInternal } });
         return response.data.data;
     },
 

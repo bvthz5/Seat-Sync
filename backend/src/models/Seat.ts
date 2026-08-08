@@ -12,13 +12,12 @@ interface SeatAttributes {
   BenchIndex: number;
   SeatIndex: number;
   IsActive: boolean;
-  ZoneID: number | null;
 }
 
 /**
  * Attributes required when creating a seat
  */
-interface SeatCreationAttributes extends Optional<SeatAttributes, "SeatID" | "IsActive" | "ZoneID"> { }
+interface SeatCreationAttributes extends Optional<SeatAttributes, "SeatID" | "IsActive"> { }
 
 export class Seat extends Model<SeatAttributes, SeatCreationAttributes>
   implements SeatAttributes {
@@ -28,7 +27,6 @@ export class Seat extends Model<SeatAttributes, SeatCreationAttributes>
   declare BenchIndex: number;
   declare SeatIndex: number;
   declare IsActive: boolean;
-  declare ZoneID: number | null;
 }
 
 Seat.init(
@@ -66,23 +64,12 @@ Seat.init(
       allowNull: false,
       defaultValue: true,
     },
-    ZoneID: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      references: {
-        model: "Zones",
-        key: "ZoneID",
-      },
-    },
   },
   {
     sequelize,
     tableName: "Seats",
     timestamps: false,
     indexes: [
-      {
-        fields: ["RoomID", "ZoneID"], // Optimize query for room and zone seat filtering
-      },
       {
         fields: ["RoomID", "IsActive"], // Optimize active seats query
       },

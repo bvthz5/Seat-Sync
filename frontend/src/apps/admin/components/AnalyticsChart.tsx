@@ -103,7 +103,7 @@ export const AnalyticsChart: React.FC = () => {
                                 </span>
                                 <span className="text-[11px] font-bold text-slate-900">{allocated}</span>
                             </div>
-                            <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden"><div className="h-full w-[{Math.round(utilization)}%] rounded-full bg-indigo-500" /></div>
+                            <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden"><div className="h-full rounded-full bg-indigo-500" style={{ width: `${Math.round(utilization)}%` }} /></div>
                         </div>
                         <div>
                             <div className="flex justify-between items-center mb-1">
@@ -112,7 +112,7 @@ export const AnalyticsChart: React.FC = () => {
                                 </span>
                                 <span className="text-[11px] font-bold text-slate-900">{available}</span>
                             </div>
-                            <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden"><div className="h-full w-[100 - {Math.round(utilization)}%] rounded-full bg-slate-300" /></div>
+                            <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden"><div className="h-full rounded-full bg-slate-300" style={{ width: `${100 - Math.round(utilization)}%` }} /></div>
                         </div>
                     </div>
                 </div>

@@ -65,7 +65,7 @@ const CustomInput = ({
             </div>
             <div className={`
                 relative flex items-center w-full h-14 rounded-xl overflow-hidden bg-slate-50 border-none transition-all duration-300
-                ${error ? 'bg-red-50' : 'hover:bg-slate-100 focus-within:!bg-white focus-within:shadow-xl focus-within:shadow-blue-100'}
+                ${error ? 'bg-red-50' : 'hover:bg-slate-100 focus-within:!bg-white focus-within:shadow-xl focus-within:ring-2 focus-within:ring-indigo-500 focus-within:ring-offset-2'}
             `}>
                 {/* Icon Column - Completely separated */}
                 <div className={`
@@ -94,8 +94,9 @@ const CustomInput = ({
                 {isPassword && (
                     <button
                         type="button"
+                        aria-label={isVisible ? "Hide password" : "Show password"}
                         onClick={() => setIsVisible(!isVisible)}
-                        className="px-4 h-full flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors focus:outline-none"
+                        className="px-4 h-full flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
                     >
                         {isVisible ? <EyeIcon /> : <EyeOffIcon />}
                     </button>
@@ -354,10 +355,19 @@ const AdminLogin: React.FC = () => {
         setLoading(true);
         try {
             await login(email, password);
-            // Navigate to the "from" location
             navigate(from, { replace: true });
         } catch (error: any) {
-            setFormError("Authentication failed. Please verify your credentials.");
+            // Distinguish network/server errors from credential errors
+            const isNetworkError = !error.response || error.code === 'ERR_NETWORK' || error.code === 'ERR_CONNECTION_REFUSED';
+            if (isNetworkError) {
+                setFormError("Cannot connect to server. Please ensure the backend is running.");
+            } else if (error.response?.status === 401 || error.response?.status === 403) {
+                setFormError("Invalid email or password. Please try again.");
+            } else if (error.response?.status === 423) {
+                setFormError("Account is locked. Please contact your administrator.");
+            } else {
+                setFormError(error.response?.data?.message || "Login failed. Please try again.");
+            }
         } finally {
             setLoading(false);
         }
@@ -384,7 +394,7 @@ const AdminLogin: React.FC = () => {
         <div className="w-full min-h-screen flex text-slate-800 bg-white overflow-hidden">
 
             {/* --- LEFT PANEL (Updated with Animation & New Text) --- */}
-            <div className="hidden lg:flex w-1/2 bg-slate-900 relative flex-col justify-between p-16 text-white h-screen overflow-hidden">
+            <div className="hidden lg:flex w-1/2 bg-slate-900 relative flex-col justify-between p-16 text-white min-h-screen overflow-hidden">
                 <NeuralNetworkBackground />
                 <div className="relative z-10 flex items-center gap-3">
                     <SeatSyncLogo />
@@ -405,13 +415,13 @@ const AdminLogin: React.FC = () => {
                     </motion.div>
                 </div>
                 <div className="relative z-10 flex gap-8 text-xs font-semibold tracking-widest text-slate-500 uppercase">
-                    <span>© 2026 SeatSync Systems</span>
+                    <span> 2026 SeatSync Systems</span>
                     <span>v2.4.0 Stabilized</span>
                 </div>
             </div>
 
             {/* --- RIGHT PANEL (Rebuilt Perfectly) --- */}
-            <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white h-screen overflow-y-auto relative">
+            <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white min-h-screen relative py-12">
                 <RevealBackground />
                 <motion.div
                     variants={containerVariants}
@@ -425,7 +435,7 @@ const AdminLogin: React.FC = () => {
                             <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
                             Examination Control Portal
                         </div>
-                        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Admin Authentication</h2>
+                        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Admin Authentication</h1>
                     </motion.div>
 
                     {/* Global Error */}

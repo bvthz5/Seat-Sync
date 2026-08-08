@@ -142,228 +142,211 @@ const ExamDates: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-[#F8F9FA] pb-12">
+        <div className="min-h-screen bg-[#F8FAFC] pb-16">
             {/* Header Area */}
-            <div className="bg-white border-b border-slate-200/80 px-8 py-8 md:py-10 mb-8 shadow-sm relative overflow-hidden">
-                <div className="absolute right-0 top-0 w-64 h-64 bg-indigo-50 rounded-full blur-3xl opacity-60 -translate-y-1/2 translate-x-1/3"></div>
-                <div className="max-w-[1600px] mx-auto flex flex-col gap-6 relative z-10">
-                    {/* Top Row: Title */}
-                    <div className="flex items-center gap-5">
-                        <Button
-                            isIconOnly
-                            variant="light"
-                            className="bg-slate-50 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-2xl shadow-sm border border-slate-100 transition-all w-12 h-12 shrink-0"
-                            onPress={() => navigate(`/admin/exams/series/${seriesId}`)}
-                        >
-                            <ArrowLeft size={20} className="stroke-[2.5]" />
-                        </Button>
-                        <div>
-                            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
-                                Date-wise Schedule
-                            </h1>
-                            <p className="text-slate-500 mt-1.5 font-medium text-sm">Visually monitor your daily exam load and density.</p>
+            <div className="bg-white border-b border-slate-200/80 px-8 py-8 mb-8 shadow-xs relative overflow-hidden">
+                <div className="max-w-[1600px] mx-auto space-y-6 relative z-10">
+                    {/* Top Row: Title + Action Buttons */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                            <Button
+                                isIconOnly
+                                variant="light"
+                                className="bg-slate-50 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl shadow-xs border border-slate-200/80 transition-all w-11 h-11 shrink-0"
+                                onPress={() => navigate(`/admin/exams/series/${seriesId}`)}
+                            >
+                                <ArrowLeft size={18} className="stroke-[2.5]" />
+                            </Button>
+                            <div>
+                                <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+                                    Date-wise Schedule
+                                </h1>
+                                <p className="text-xs text-slate-500 font-medium mt-0.5">Visually monitor daily exam load, dates, and session density.</p>
+                            </div>
                         </div>
-                    </div>
 
-                    {/* Bottom Row: Actions & Filters */}
-                    <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 w-full">
+                        {/* Top Right Action Buttons */}
                         <div className="flex items-center gap-3 shrink-0">
                             <Button
-                                className="bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 font-bold rounded-xl px-5 hover:-translate-y-0.5 transition-all"
-                                startContent={<Trash2 size={16} className="stroke-[2.5]" />}
+                                className="bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200/80 font-bold rounded-xl h-10 px-4 text-xs transition-all"
+                                startContent={<Trash2 size={15} className="stroke-[2.5]" />}
                                 onPress={() => setIsClearConfirmOpen(true)}
                             >
                                 Clear Eligibility
                             </Button>
                             <Button
-                                className="bg-indigo-600 text-white font-bold rounded-xl shadow-md px-5 hover:-translate-y-0.5 transition-transform"
-                                startContent={<Upload size={16} className="stroke-[2.5]" />}
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl h-10 px-5 text-xs shadow-md shadow-indigo-200 transition-all"
+                                startContent={<Upload size={15} className="stroke-[2.5]" />}
                                 onPress={() => setIsBulkImportOpen(true)}
                             >
                                 Bulk Import
                             </Button>
                         </div>
-                        
-                        {/* UI Only Filters */}
-                        {!loading && dates.length > 0 && (
-                            <div className="flex flex-wrap items-center gap-3 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm shrink-0">
-                            <div className="hidden sm:flex items-center justify-center p-2 rounded-xl bg-slate-50 text-slate-400">
-                                <Filter size={18} className="stroke-[2.5]" />
-                            </div>
-                            
-                            {/* Subject Search */}
-                            <div className="w-full sm:w-56">
-                                <Input
-                                    aria-label="Search by course name or code"
-                                    placeholder="Search course name / code…"
-                                    value={subjectSearch}
-                                    onValueChange={(val) => setSubjectSearch(val)}
-                                    startContent={<Search size={14} className="text-slate-400 shrink-0" />}
-                                    isClearable
-                                    onClear={() => setSubjectSearch('')}
-                                    classNames={{
-                                        inputWrapper: "bg-slate-50 hover:bg-white border border-slate-200 shadow-none h-10 transition-colors"
-                                    }}
-                                />
-                            </div>
+                    </div>
 
-                            <div className="flex gap-2 w-full sm:w-auto">
-                                <div className="w-full sm:w-44">
-                                    <Input
+                    {/* Filter & Search Bar */}
+                    {!loading && dates.length > 0 && (
+                        <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50/70 p-3 rounded-2xl border border-slate-200/80">
+                            <div className="flex flex-wrap items-center gap-3 flex-1">
+                                {/* Search Input */}
+                                <div className="flex items-center flex-1 min-w-[240px] h-10 rounded-xl border border-slate-200/90 bg-white focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-100 transition-all overflow-hidden">
+                                    <div className="w-9 h-full flex items-center justify-center text-slate-400 shrink-0">
+                                        <Search size={15} />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder="Search course name or code..."
+                                        value={subjectSearch}
+                                        onChange={(e) => setSubjectSearch(e.target.value)}
+                                        className="w-full h-full pr-3 text-xs font-semibold text-slate-800 placeholder:text-slate-400 bg-transparent outline-none border-none ring-0 focus:ring-0"
+                                    />
+                                    {subjectSearch && (
+                                        <button onClick={() => setSubjectSearch('')} className="p-2 text-slate-400 hover:text-slate-600">
+                                            <X size={14} />
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Jump to Date */}
+                                <div className="flex items-center w-full sm:w-48 h-10 rounded-xl border border-slate-200/90 bg-white focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-100 transition-all overflow-hidden">
+                                    <div className="w-9 h-full flex items-center justify-center text-slate-400 shrink-0">
+                                        <CalendarDays size={15} />
+                                    </div>
+                                    <input
                                         type="date"
-                                        aria-label="Filter specific date"
-                                        placeholder="Jump to date"
                                         value={exactDate}
-                                        onValueChange={(val) => {
-                                            setExactDate(val);
-                                            if (val) setSelectedMonth('All');
+                                        onChange={(e) => {
+                                            setExactDate(e.target.value);
+                                            if (e.target.value) setSelectedMonth('All');
                                         }}
-                                        classNames={{
-                                            inputWrapper: "bg-white hover:bg-slate-50 border-slate-200 shadow-none h-10 transition-colors"
-                                        }}
+                                        className="w-full h-full pr-2 text-xs font-semibold text-slate-800 bg-transparent outline-none border-none ring-0 focus:ring-0 cursor-pointer"
                                     />
                                 </div>
-                                <div className="w-full sm:w-48 text-left">
-                                    <Select 
-                                        aria-label="Filter by month"
-                                        placeholder="Select Month"
-                                        classNames={{
-                                            trigger: "bg-white hover:bg-slate-50 border-slate-200 shadow-none h-10 min-h-10 transition-colors",
-                                            popoverContent: "bg-white border border-slate-100 shadow-xl rounded-xl p-1"
-                                        }}
-                                        selectedKeys={[selectedMonth]}
+
+                                {/* Select Month */}
+                                <div className="relative flex items-center w-full sm:w-48 h-10 rounded-xl border border-slate-200/90 bg-white focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-100 transition-all overflow-hidden">
+                                    <select
+                                        value={selectedMonth}
                                         onChange={(e) => {
                                             setSelectedMonth(e.target.value);
                                             if (e.target.value !== 'All') setExactDate('');
                                         }}
-                                        disallowEmptySelection
+                                        className="w-full h-full px-3.5 pr-8 text-xs font-semibold text-slate-800 bg-transparent outline-none border-none ring-0 focus:ring-0 cursor-pointer appearance-none"
                                     >
-                                        <SelectItem
-                                            key="All"
-                                            textValue="All Months"
-                                            classNames={{ base: "rounded-lg data-[hover=true]:bg-slate-50 mb-1", title: "text-sm font-bold text-slate-700" }}
-                                        >
-                                            All Months
-                                        </SelectItem>
+                                        <option value="All">All Months</option>
                                         {availableMonths.map((m) => (
-                                            <SelectItem
-                                                key={m}
-                                                textValue={m}
-                                                classNames={{ base: "rounded-lg data-[hover=true]:bg-slate-50 mb-1", title: "text-sm font-bold text-slate-700" }}
-                                            >
-                                                {m}
-                                            </SelectItem>
+                                            <option key={m} value={m}>{m}</option>
                                         ))}
-                                    </Select>
+                                    </select>
+                                    <Filter size={14} className="absolute right-3 text-slate-400 pointer-events-none" />
                                 </div>
                             </div>
 
-                            {/* Clear All Filters */}
+                            {/* Clear All Filters Button */}
                             {(subjectSearch.trim() || exactDate || selectedMonth !== 'All') && (
                                 <button
                                     onClick={() => { setSubjectSearch(''); setExactDate(''); setSelectedMonth('All'); }}
-                                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-500 bg-rose-50 hover:bg-rose-100 border border-rose-100 transition-all whitespace-nowrap shrink-0"
+                                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200/80 transition-all whitespace-nowrap"
                                 >
                                     <X size={13} className="stroke-[3]" />
-                                    Clear All
+                                    Clear Filters
                                 </button>
                             )}
                         </div>
                     )}
-                    </div>
                 </div>
             </div>
 
+            {/* Date Grid Cards */}
             <div className="px-8 max-w-[1600px] mx-auto">
                 {loading ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 animate-pulse">
-                         {[...Array(10)].map((_, i) => (
-                             <div key={i} className="h-56 bg-slate-200/60 rounded-[28px]"></div>
-                         ))}
+                        {[...Array(10)].map((_, i) => (
+                            <div key={i} className="h-48 bg-slate-200/60 rounded-3xl"></div>
+                        ))}
                     </div>
                 ) : dates.length === 0 ? (
-                    <div className="text-center py-24 bg-white border border-slate-200/60 rounded-[32px] shadow-sm max-w-3xl mx-auto">
-                        <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-5 text-indigo-400">
-                            <CalendarCheck size={32} />
+                    <div className="text-center py-20 bg-white border border-slate-200/80 rounded-3xl shadow-xs max-w-xl mx-auto p-8">
+                        <div className="w-16 h-16 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-center mx-auto mb-4 text-indigo-500">
+                            <CalendarCheck size={28} />
                         </div>
-                        <h2 className="text-slate-900 font-extrabold text-2xl mb-2 tracking-tight">No exams scheduled</h2>
-                        <p className="text-slate-500 font-medium text-sm">There are no dates allocated in your current series.</p>
+                        <h2 className="text-slate-900 font-extrabold text-xl mb-1 tracking-tight">No exams scheduled</h2>
+                        <p className="text-slate-500 font-medium text-xs">There are no dates allocated in your current series.</p>
                     </div>
                 ) : filteredDates.length === 0 ? (
-                    <div className="text-center py-24 bg-white border border-slate-200/60 rounded-[32px] shadow-sm max-w-3xl mx-auto">
-                        <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-5 text-slate-400">
-                            <Search size={28} />
+                    <div className="text-center py-20 bg-white border border-slate-200/80 rounded-3xl shadow-xs max-w-xl mx-auto p-8">
+                        <div className="w-16 h-16 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-center mx-auto mb-4 text-slate-400">
+                            <Search size={26} />
                         </div>
-                        <h2 className="text-slate-900 font-extrabold text-xl mb-2 tracking-tight">No matching dates</h2>
-                        <p className="text-slate-500 font-medium text-sm">Try clearing your filters or searching a different course name.</p>
+                        <h2 className="text-slate-900 font-extrabold text-lg mb-1 tracking-tight">No matching dates found</h2>
+                        <p className="text-slate-500 font-medium text-xs mb-4">Try adjusting your search criteria or month filter.</p>
                         <Button 
-                            color="primary" variant="flat" size="sm" className="mt-5 font-bold" 
+                            color="primary" variant="flat" size="sm" className="font-bold rounded-xl" 
                             onPress={() => { setSelectedMonth('All'); setExactDate(''); setSubjectSearch(''); }}
                         >
-                            Clear Filters
+                            Reset Filters
                         </Button>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
                         {filteredDates.map(d => {
                             const load = getLoadInfo(d.count);
                             const dateObj = new Date(d.date);
                             
                             return (
-                                <Card
+                                <div
                                     key={d.date}
-                                    className={`cursor-pointer bg-white shadow-[0_4px_12px_-4px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_40px_-8px_rgba(0,0,0,0.1)] hover:-translate-y-1.5 transition-all duration-400 rounded-[28px] overflow-hidden group w-full ring-0 outline-none border-2 border-transparent ${load.hoverBorder}`}
-                                    isPressable
-                                    onPress={() => navigate(`/admin/exams/series/${seriesId}/dates/${d.date}`)}
+                                    onClick={() => navigate(`/admin/exams/series/${seriesId}/dates/${d.date}`)}
+                                    className={`cursor-pointer bg-white border border-slate-200/90 hover:border-indigo-400 shadow-xs hover:shadow-md hover:-translate-y-1 transition-all duration-200 rounded-3xl p-6 group flex flex-col justify-between relative overflow-hidden`}
                                 >
-                                    <div className="flex flex-col h-full w-full">
-                                        <div className="p-7">
-                                            {/* Top Status & Arrow */}
-                                            <div className="flex justify-between items-center mb-6">
-                                                <div className="flex items-center gap-2">
-                                                    {d.hasRegistrations && (
-                                                        <div className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1 rounded-lg border border-green-100 shadow-sm" title="Eligibility Imported">
-                                                            <CalendarCheck size={13} className="stroke-[3]" />
-                                                            <span className="text-[10px] font-extrabold uppercase tracking-widest">Registered</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <div className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-300 opacity-0 group-hover:opacity-100 bg-white ${load.text} ${load.hoverBorder}`}>
-                                                    <ArrowRight size={14} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                                                </div>
+                                    {/* Top Info */}
+                                    <div className="flex justify-between items-center mb-4">
+                                        <div>
+                                            {d.hasRegistrations ? (
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/80 text-[10px] font-black tracking-wider uppercase">
+                                                    <CalendarCheck size={12} className="stroke-[2.5]" /> Registered
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-[10px] font-extrabold tracking-wider uppercase">
+                                                    Scheduled
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="w-7 h-7 rounded-full bg-slate-50 border border-slate-200/80 flex items-center justify-center text-slate-400 group-hover:text-indigo-600 group-hover:bg-indigo-50 group-hover:border-indigo-200 transition-all">
+                                            <ArrowRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
+                                        </div>
+                                    </div>
+
+                                    {/* Main Date Display */}
+                                    <div className="flex items-baseline gap-3 my-2">
+                                        <span className="text-5xl font-black text-slate-900 tracking-tight leading-none">
+                                            {String(dateObj.getDate()).padStart(2, '0')}
+                                        </span>
+                                        <div className="flex flex-col">
+                                            <span className="text-[11px] font-black uppercase text-indigo-600 tracking-wider leading-tight">
+                                                {dateObj.toLocaleDateString('en-US', { month: 'short' })}
+                                            </span>
+                                            <span className="text-xs font-bold text-slate-700 leading-tight">
+                                                {dateObj.toLocaleDateString('en-US', { weekday: 'long' })}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Bottom Metrics Bar */}
+                                    <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center border ${load.bg} ${load.border}`}>
+                                                <CalendarDays size={15} />
                                             </div>
-                                            
-                                            {/* Epic Typography Date Layout */}
-                                            <div className="mb-8 flex items-baseline gap-2">
-                                                <h2 className={`text-6xl font-black leading-none tracking-tighter transition-colors duration-400 ${load.text} group-hover:drop-shadow-sm`}>
-                                                    {String(dateObj.getDate()).padStart(2, '0')}
-                                                </h2>
-                                                <div className="flex flex-col mb-1.5">
-                                                    <p className="text-slate-400 font-extrabold uppercase tracking-[0.15em] text-xs leading-none mb-1">
-                                                        {dateObj.toLocaleDateString('en-US', { month: 'short' })}
-                                                    </p>
-                                                    <p className="text-slate-800 font-black text-sm leading-none">
-                                                        {dateObj.toLocaleDateString('en-US', { weekday: 'long' })}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            
-                                            {/* Bottom Metrics */}
-                                            <div className="pt-5 border-t border-slate-100 flex items-center gap-3">
-                                                <div className={`w-10 h-10 rounded-[12px] flex flex-shrink-0 items-center justify-center border bg-opacity-30 ${load.bg} ${load.border}`}>
-                                                    <CalendarDays size={18} className="stroke-[2.5]" />
-                                                </div>
-                                                <div className="flex flex-col justify-center translate-y-[2px]">
-                                                    <p className="text-[10px] uppercase tracking-widest text-slate-400 font-extrabold mb-0.5 leading-none shadow-none">Total Exams</p>
-                                                    <div className="flex items-baseline gap-1 leading-none shadow-none">
-                                                        <p className={`text-lg font-black leading-none ${load.text}`}>{d.count}</p>
-                                                        <span className="text-[11px] font-bold text-slate-400 leading-none">Scheduled</span>
-                                                    </div>
-                                                </div>
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider">Total Exams</span>
+                                                <span className="text-xs font-extrabold text-slate-800">
+                                                    {d.count} {d.count === 1 ? 'Exam' : 'Exams'}
+                                                </span>
                                             </div>
                                         </div>
                                     </div>
-                                </Card>
+                                </div>
                             );
                         })}
                     </div>

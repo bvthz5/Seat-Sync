@@ -7,7 +7,7 @@ import Exams from './pages/Exams';
 import SeriesSelection from './pages/SeriesSelection';
 import ExamSeriesList from './pages/ExamSeriesList';
 import SeatingPlans from './pages/SeatingPlans';
-import InternalSeatingPage from './pages/InternalSeatingPage';
+import InternalSeatingPlans from './pages/internal/InternalSeatingPlans';
 import Invigilators from './pages/Invigilators';
 import InvigilatorAssign from './pages/InvigilatorAssign';
 import Attendance from './pages/Attendance';
@@ -34,6 +34,8 @@ import ExamDateDetail from './pages/ExamDateDetail';
 import AuditLogs from './pages/AuditLogs';
 import DataCleanup from './pages/DataCleanup';
 import Profile from './pages/Profile';
+import InternalExamDetailPage from './pages/InternalExamDetailPage';
+import InternalStudents from './pages/InternalStudents';
 import NotFound from '../../pages/NotFound';
 const AdminApp: React.FC = () => {
     return (
@@ -42,20 +44,22 @@ const AdminApp: React.FC = () => {
             <Route path="forgot-password" element={<ForgotPassword />} />
             <Route path="reset-password" element={<ResetPassword />} />
 
-            <Route element={<RequireAuth />}>
+            <Route element={<RequireAuth allowedRoles={['exam_admin']} redirectTo="/admin/login" />}>
                 <Route element={<AdminLayout />}>
                     <Route index element={<Navigate to="dashboard" replace />} />
 
                     {/* PRIMARY OPERATIONS - All Exam Admins */}
                     <Route path="dashboard" element={<Dashboard />} />
                     <Route path="profile" element={<Profile />} />
-                    <Route path="students" element={<Students />} />
+                    <Route path="students/endsem" element={<Students />} />
+                    <Route path="students/internal" element={<InternalStudents />} />
                     <Route path="exams" element={<SeriesSelection />} />
                     <Route path="exams/series/:seriesId" element={<ExamSeriesList />} />
                     <Route path="exams/series/:seriesId/dates" element={<ExamDates />} />
                     <Route path="exams/series/:seriesId/dates/:date" element={<ExamDateDetail />} />
+                    <Route path="exams/series/:seriesId/internal/:examId" element={<InternalExamDetailPage />} />
                     <Route path="seating/endsem" element={<SeatingPlans />} />
-                    <Route path="seating/internal" element={<InternalSeatingPage />} />
+                    <Route path="seating/internal" element={<InternalSeatingPlans />} />
                     <Route path="invigilators" element={<Invigilators />} />
                     <Route path="invigilators/assign" element={<InvigilatorAssign />} />
                     <Route path="attendance" element={<Attendance />} />

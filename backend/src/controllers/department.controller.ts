@@ -61,10 +61,10 @@ export const createDepartment = async (req: Request, res: Response) => {
         if (!DepartmentCode || !DepartmentName) {
             return res.status(400).json({ message: "DepartmentCode and DepartmentName are required" });
         }
-        // Enforce csa001-style code: lowercase letters + digits, 3-10 chars
+        // Enforce alphanumeric code: 2-15 chars
         const codeNorm = DepartmentCode.toLowerCase().trim();
-        if (!/^[a-z]{2,6}\d{3,6}$/.test(codeNorm)) {
-            return res.status(400).json({ message: "Department code must be lowercase letters + digits, e.g. csa001" });
+        if (!/^[a-z0-9]{2,15}$/.test(codeNorm)) {
+            return res.status(400).json({ message: "Department code must be alphanumeric, e.g. cse, csa001" });
         }
         const existing = await Department.findOne({ where: { DepartmentCode: codeNorm } });
         if (existing) {
@@ -134,6 +134,7 @@ export const deleteDepartment = async (req: Request, res: Response) => {
                     const subList = subIds.join(',');
                     await sequelize.query(`DELETE FROM ExamRegistrations WHERE ExamID IN (SELECT ExamID FROM Exams WHERE SubjectID IN (${subList}))`, { transaction: t });
                     await sequelize.query(`DELETE FROM SeatAllocations WHERE ExamID IN (SELECT ExamID FROM Exams WHERE SubjectID IN (${subList}))`, { transaction: t });
+                    await sequelize.query(`DELETE FROM DutySwaps WHERE ExamID IN (SELECT ExamID FROM Exams WHERE SubjectID IN (${subList}))`, { transaction: t });
                     await sequelize.query(`DELETE FROM Exams WHERE SubjectID IN (${subList})`, { transaction: t });
                     await sequelize.query(`DELETE FROM StudentSubjects WHERE SubjectID IN (${subList})`, { transaction: t });
                     await sequelize.query(`DELETE FROM InvigilatorSubjects WHERE SubjectID IN (${subList})`, { transaction: t });
@@ -413,24 +414,48 @@ export const exportUnifiedDepartmentProgramTemplate = async (req: Request, res: 
 export const deleteAllDepartments = async (req: Request, res: Response) => {
     const t = await sequelize.transaction();
     try {
-        // Full cascade — same order as deleteProgram but for everything
-        await sequelize.query(`DELETE FROM Attendance WHERE ExamID IN (SELECT ExamID FROM Exams WHERE SubjectID IN (SELECT SubjectID FROM Subjects))`, { transaction: t });
-        await sequelize.query(`DELETE FROM InvigilatorAssignments WHERE ExamID IN (SELECT ExamID FROM Exams WHERE SubjectID IN (SELECT SubjectID FROM Subjects))`, { transaction: t });
-        await sequelize.query(`DELETE FROM ExamRegistrations WHERE ExamID IN (SELECT ExamID FROM Exams WHERE SubjectID IN (SELECT SubjectID FROM Subjects))`, { transaction: t });
-        await sequelize.query(`DELETE FROM SeatAllocations WHERE ExamID IN (SELECT ExamID FROM Exams WHERE SubjectID IN (SELECT SubjectID FROM Subjects))`, { transaction: t });
+        // 1. Clear Internal Ecosystem (Seating, Registrations, Exams)
+        // Correct order: Allocations -> Registrations -> Exams -> Snapshots -> Series
+        await sequelize.query(`DELETE FROM InternalSeatAllocations`, { transaction: t });
+        await sequelize.query(`DELETE FROM InternalExamRegistrations`, { transaction: t });
+        await sequelize.query(`DELETE FROM InternalExamDepartments`, { transaction: t });
+        await sequelize.query(`DELETE FROM InternalExams`, { transaction: t });
+        await sequelize.query(`DELETE FROM InternalSeatSnapshots`, { transaction: t });
+        await sequelize.query(`DELETE FROM InternalExamSeries`, { transaction: t });
+
+        // 2. Clear End-Semester Ecosystem (Attendance, Assignments, Registrations, Seating)
+        // Subquery to find Exam IDs that are linked to Subjects (which are linked to Departments)
+        const examSubQuery = `IN (SELECT ExamID FROM Exams WHERE SubjectID IN (SELECT SubjectID FROM Subjects))`;
+        
+        await sequelize.query(`DELETE FROM Attendance WHERE ExamID ${examSubQuery}`, { transaction: t });
+        await sequelize.query(`DELETE FROM InvigilatorAssignments WHERE ExamID ${examSubQuery}`, { transaction: t });
+        await sequelize.query(`DELETE FROM ExamRegistrations WHERE ExamID ${examSubQuery}`, { transaction: t });
+        await sequelize.query(`DELETE FROM SeatAllocations WHERE ExamID ${examSubQuery}`, { transaction: t });
+        await sequelize.query(`DELETE FROM DutySwaps WHERE ExamID ${examSubQuery}`, { transaction: t });
         await sequelize.query(`DELETE FROM Exams WHERE SubjectID IN (SELECT SubjectID FROM Subjects)`, { transaction: t });
+        
         await sequelize.query(`DELETE FROM StudentSubjects`, { transaction: t });
         await sequelize.query(`DELETE FROM InvigilatorSubjects`, { transaction: t });
         await sequelize.query(`DELETE FROM Subjects`, { transaction: t });
-        await sequelize.query(`DELETE FROM ExamSeries WHERE SemesterID IS NOT NULL`, { transaction: t });
-        await sequelize.query(`UPDATE Students SET SemesterID = NULL, ProgramID = NULL WHERE SemesterID IS NOT NULL`, { transaction: t });
+        
+        // Clear all ExamSeries (EndSem)
+        await sequelize.query(`DELETE FROM ExamSeries`, { transaction: t });
+
+        // 3. Clear Student & Faculty Associations
+        // Nullify academic links to prevent FK constraint errors during deletion of academic infrastructure
+        await sequelize.query(`UPDATE Students SET SemesterID = NULL, ProgramID = NULL, DepartmentID = NULL`, { transaction: t });
+        await sequelize.query(`UPDATE InternalStudents SET SemesterID = NULL, ProgramID = NULL, DepartmentID = NULL`, { transaction: t });
+        await sequelize.query(`UPDATE Invigilators SET DepartmentID = NULL`, { transaction: t });
+
+        // 4. Clear Academic Infrastructure
+        // Correct order: Semesters -> ProgramDepartments -> Programs -> Departments
         await sequelize.query(`DELETE FROM Semesters`, { transaction: t });
         await sequelize.query(`DELETE FROM ProgramDepartments`, { transaction: t });
         await sequelize.query(`DELETE FROM Programs`, { transaction: t });
-        await sequelize.query(`UPDATE Students SET DepartmentID = NULL WHERE DepartmentID IS NOT NULL`, { transaction: t });
         await sequelize.query(`DELETE FROM Departments`, { transaction: t });
+
         await t.commit();
-        res.json({ message: "All departments deleted successfully" });
+        res.json({ message: "All departments and related academic records deleted successfully" });
     } catch (error: any) {
         await t.rollback();
         console.error("Delete all departments error:", error);

@@ -5,7 +5,8 @@ import {
     RefreshCcw, Bell, UserCircle, LogOut, CheckCircle2,
     Clock, Calendar, DoorOpen, LayoutGrid, ClipboardCheck,
     AlertTriangle, ChevronRight, Eye, Menu, X,
-    Wifi, MapPin, Settings, Moon, Sun, User, ChevronDown, RefreshCw, Lock
+    Wifi, MapPin, Settings, Moon, Sun, User, ChevronDown, RefreshCw, Lock,
+    EyeOff, Shield, AlertCircle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -34,6 +35,7 @@ interface DashboardData {
         id: number;
         exam: string;
         session: string;
+        date: string;
         roomID: number;
         room: string;
         block: string;
@@ -57,13 +59,6 @@ const NAV_GROUPS = [
             { label: 'My Duties', icon: ClipboardList, path: '/invigilator/duties', id: 'duties' },
             { label: 'Seating View', icon: Grid3X3, path: '/invigilator/seating', id: 'seating' },
             { label: 'Attendance', icon: Users, path: '/invigilator/attendance', id: 'attendance' },
-        ]
-    },
-    {
-        title: 'OPERATIONS',
-        items: [
-            { label: 'Swap Requests', icon: RefreshCcw, path: '/invigilator/swaps', id: 'swaps' },
-            { label: 'Issue Reports', icon: AlertTriangle, path: '/invigilator/issues', id: 'issues' },
         ]
     }
 ];
@@ -99,7 +94,7 @@ export default function InvigilatorDashboard() {
     const [timeRemaining, setTimeRemaining] = useState("00:00:00");
     const [showIncidentModal, setShowIncidentModal] = useState(false);
     const [incidentText, setIncidentText] = useState("");
-    const [announcement, setAnnouncement] = useState<string | null>("🔔 BROADCAST: Please ensure all students have their ID cards visible before distributing question papers.");
+    const [announcement, setAnnouncement] = useState<string | null>(" BROADCAST: Please ensure all students have their ID cards visible before distributing question papers.");
     const [selectedDutyTab, setSelectedDutyTab] = useState<'scheduled' | 'history' | 'incidents'>('scheduled');
     const [showSwapModal, setShowSwapModal] = useState(false);
     const [swapReason, setSwapReason] = useState("");
@@ -115,7 +110,7 @@ export default function InvigilatorDashboard() {
                 type: "Malpractice",
                 description: incidentText
             });
-            toast.success("Incident reported to Exam Cell successfully.", { icon: '🚨' });
+            toast.success("Incident reported to Exam Cell successfully.", { icon: '' });
             setShowIncidentModal(false);
             setIncidentText("");
             fetchDashboardData();
@@ -314,8 +309,9 @@ export default function InvigilatorDashboard() {
                                             <button
                                                 key={item.id}
                                                 onClick={() => { 
+                                                    console.log('[NAV] Clicked item:', item.id);
                                                     setActiveNav(item.id); 
-                                                    if (item.path && item.path !== '/invigilator/dashboard' && item.id !== 'seating') {
+                                                    if (item.path && item.path !== '/invigilator/dashboard' && item.id !== 'seating' && item.id !== 'duties') {
                                                         // For attendance, try to find an active duty ID
                                                         if (item.id === 'attendance' && data?.duties && data.duties.length > 0) {
                                                             navigate(`${item.path}/${data.duties[0].id}`);
@@ -734,43 +730,13 @@ export default function InvigilatorDashboard() {
                                     </div>
                                 </div>
 
-                                {/* Swap Requests Cards Stack */}
-                                <div className={`rounded-2xl border shadow-sm p-5 flex-1 ${darkMode ? 'bg-[#1e293b] border-slate-700' : 'bg-white border-slate-200/80'}`}>
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h3 className={`text-[16px] font-black flex items-center gap-2 ${darkMode ? 'text-white' : 'text-[#0F172A]'}`}>
-                                            <RefreshCcw size={16} className="text-[#2F3FA5]" /> Swap Queue
-                                        </h3>
-                                        <button className="text-[9px] font-bold text-[#2F3FA5] hover:text-white uppercase tracking-widest bg-blue-50 hover:bg-[#2F3FA5] px-2.5 py-1 rounded-lg transition-colors">View All</button>
-                                    </div>
-                                    <div className="space-y-3">
-                                        {!data?.swaps || data.swaps.length === 0 ? (
-                                            <div className="py-8 text-center">
-                                                <p className="text-slate-400 text-[11px] font-bold uppercase tracking-widest">No active requests</p>
-                                            </div>
-                                        ) : data.swaps.map(swap => (
-                                            <div key={swap.id} className={`p-3 sm:p-4 rounded-xl border transition-all shadow-sm group ${darkMode ? 'bg-slate-800/50 border-slate-700 hover:border-slate-500' : 'bg-slate-50 border-slate-100 hover:bg-white hover:border-blue-200 hover:shadow-md'}`}>
-                                                <div className="flex justify-between items-start mb-2 pointer-events-none">
-                                                    <span className={`text-[13px] font-black tracking-wide transition-colors ${darkMode ? 'text-white' : 'text-slate-800 group-hover:text-[#2F3FA5]'}`}>{swap.duty}</span>
-                                                    <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${swap.status === "Approved" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"
-                                                        }`}>
-                                                        {swap.status}
-                                                    </span>
-                                                </div>
-                                                <div className="flex flex-col gap-1.5">
-                                                    <div className="flex items-center justify-between">
-                                                        <p className="text-[11px] text-slate-500 font-bold">With: <span className={`font-black ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>{swap.with}</span></p>
-                                                        <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-md border shadow-sm ${darkMode ? 'bg-slate-700 text-slate-300 border-slate-600' : 'bg-white text-slate-500 border-slate-200'}`}>{swap.type}</span>
-                                                    </div>
-                                                    <p className="text-[10px] text-slate-400 font-medium italic truncate">"{swap.reason}"</p>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
+
                             </motion.div>
                         </div>
                     </div>
                 </>
+                ) : activeNav === 'duties' ? (
+                    <InvigilatorDutiesView darkMode={darkMode} duties={data?.duties || []} />
                 ) : activeNav === 'seating' ? (
                     <InvigilatorSeatingView darkMode={darkMode} />
                 ) : (
@@ -882,6 +848,265 @@ export default function InvigilatorDashboard() {
             </main>
         </div>
     </div>
+    );
+}
+
+// ==========================================
+// DUTIES VIEW COMPONENT
+// ==========================================
+interface DutyItem {
+    id: number;
+    exam: string;
+    session: string;
+    date: string;
+    roomID: number;
+    room: string;
+    block: string;
+    time: string;
+    students: number;
+    presentCount: number;
+    status: string;
+    isHallRevealed?: boolean;
+    isAttendanceMarked?: boolean;
+    isReliefDuty?: boolean;
+}
+
+function InvigilatorDutiesView({ darkMode, duties }: { darkMode: boolean; duties: DutyItem[] }) {
+    const navigate = useNavigate();
+    const [filterStatus, setFilterStatus] = useState<'all' | 'upcoming' | 'inProgress' | 'completed'>('all');
+
+    console.log('[DUTIES VIEW] Rendering with duties:', duties);
+    console.log('[DUTIES VIEW] Dark mode:', darkMode);
+
+    const getStatusColor = (status: string) => {
+        switch (status?.toLowerCase()) {
+            case 'upcoming':
+                return darkMode ? 'bg-blue-900/20 border-blue-700 text-blue-100' : 'bg-blue-50 border-blue-200 text-blue-900';
+            case 'in progress':
+                return darkMode ? 'bg-amber-900/20 border-amber-700 text-amber-100' : 'bg-amber-50 border-amber-200 text-amber-900';
+            case 'completed':
+                return darkMode ? 'bg-green-900/20 border-green-700 text-green-100' : 'bg-green-50 border-green-200 text-green-900';
+            default:
+                return darkMode ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-gray-50 border-gray-200 text-gray-900';
+        }
+    };
+
+    const getStatusBadgeColor = (status: string) => {
+        switch (status?.toLowerCase()) {
+            case 'upcoming':
+                return darkMode ? 'bg-blue-900 text-blue-200' : 'bg-blue-100 text-blue-800';
+            case 'in progress':
+                return darkMode ? 'bg-amber-900 text-amber-200' : 'bg-amber-100 text-amber-800';
+            case 'completed':
+                return darkMode ? 'bg-green-900 text-green-200' : 'bg-green-100 text-green-800';
+            default:
+                return darkMode ? 'bg-slate-700 text-slate-200' : 'bg-gray-100 text-gray-800';
+        }
+    };
+
+    const getStatusIcon = (status: string) => {
+        switch (status?.toLowerCase()) {
+            case 'completed':
+                return <CheckCircle2 className="w-4 h-4" />;
+            case 'in progress':
+                return <AlertCircle className="w-4 h-4" />;
+            default:
+                return <Clock className="w-4 h-4" />;
+        }
+    };
+
+    const filteredDuties = duties.filter(duty => {
+        if (filterStatus === 'all') return true;
+        const status = duty.status?.toLowerCase();
+        if (filterStatus === 'upcoming') return status === 'upcoming';
+        if (filterStatus === 'inProgress') return status === 'in progress';
+        if (filterStatus === 'completed') return status === 'completed';
+        return true;
+    });
+
+    const dutyStats = {
+        total: duties.length,
+        upcoming: duties.filter(d => d.status?.toLowerCase() === 'upcoming').length,
+        inProgress: duties.filter(d => d.status?.toLowerCase() === 'in progress').length,
+        completed: duties.filter(d => d.status?.toLowerCase() === 'completed').length,
+    };
+
+    return (
+        <>
+            <div className={`px-4 sm:px-6 lg:px-8 py-6 space-y-6 w-full min-h-full ${darkMode ? 'bg-[#0f172a]' : 'bg-[#F4F7FB]'}`}>
+                {/* Header */}
+                <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
+                    <div className="mb-6">
+                        <h1 className={`text-3xl sm:text-4xl font-black tracking-tight mb-1 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+                            My Invigilator Duties
+                        </h1>
+                        <p className={`text-sm font-semibold ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                            View all your assigned examination duties and their details
+                        </p>
+                    </div>
+
+                    {/* Stats Cards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        {[
+                            { label: 'Total Duties', value: dutyStats.total, color: 'from-blue-600 to-blue-700' },
+                            { label: 'Upcoming', value: dutyStats.upcoming, color: 'from-purple-600 to-purple-700' },
+                            { label: 'In Progress', value: dutyStats.inProgress, color: 'from-amber-600 to-amber-700' },
+                            { label: 'Completed', value: dutyStats.completed, color: 'from-green-600 to-green-700' },
+                        ].map((stat, idx) => (
+                            <motion.div
+                                key={idx}
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ delay: idx * 0.1 }}
+                                className={`bg-gradient-to-br ${stat.color} rounded-xl p-4 text-white`}
+                            >
+                                <p className="text-xs font-medium opacity-90">{stat.label}</p>
+                                <p className="text-3xl font-black mt-2">{stat.value}</p>
+                            </motion.div>
+                        ))}
+                    </div>
+
+                    {/* Filter Tabs */}
+                    <div className="flex gap-2 flex-wrap">
+                        {['all', 'upcoming', 'inProgress', 'completed'].map((filter) => (
+                            <button
+                                key={filter}
+                                onClick={() => setFilterStatus(filter as any)}
+                                className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
+                                    filterStatus === filter
+                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                                        : darkMode ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                }`}
+                            >
+                                {filter === 'all' ? 'All' : filter === 'inProgress' ? 'In Progress' : filter.charAt(0).toUpperCase() + filter.slice(1)}
+                            </button>
+                        ))}
+                    </div>
+                </motion.div>
+
+                {/* Duties List */}
+                {filteredDuties.length === 0 ? (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className={`text-center py-12 rounded-2xl border-2 border-dashed ${darkMode ? 'border-slate-700 bg-slate-800/30' : 'border-slate-200 bg-slate-50'}`}
+                    >
+                        <AlertCircle className={`w-12 h-12 mx-auto mb-4 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`} />
+                        <p className={`text-lg font-semibold ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>No duties found</p>
+                    </motion.div>
+                ) : (
+                    <div className="grid gap-4">
+                        <AnimatePresence>
+                            {filteredDuties.map((duty, idx) => (
+                                <motion.div
+                                    key={duty.id}
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -20 }}
+                                    transition={{ delay: idx * 0.05 }}
+                                    className={`border rounded-xl p-6 transition-all cursor-pointer hover:shadow-lg ${getStatusColor(duty.status)} ${
+                                        darkMode ? 'hover:bg-opacity-80' : 'hover:shadow-blue-100/50'
+                                    }`}
+                                    onClick={() => {
+                                        if (duty.status?.toLowerCase() === 'in progress' && !duty.isAttendanceMarked) {
+                                            navigate(`/invigilator/attendance/${duty.id}`);
+                                        }
+                                    }}
+                                >
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                        {/* Exam Info */}
+                                        <div className="md:col-span-2">
+                                            <div className="flex items-start gap-3 mb-4">
+                                                <div className="flex-1">
+                                                    <h3 className={`text-lg font-bold mb-2 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+                                                        {duty.exam}
+                                                    </h3>
+                                                    <div className={`flex gap-3 text-sm flex-wrap ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                                                        <span className="flex items-center gap-1">
+                                                            <Calendar className="w-4 h-4" />
+                                                            {new Date(duty.date).toLocaleDateString('en-IN', {
+                                                                weekday: 'short',
+                                                                year: 'numeric',
+                                                                month: 'short',
+                                                                day: 'numeric'
+                                                            })}
+                                                        </span>
+                                                        <span className="flex items-center gap-1">
+                                                            <Clock className="w-4 h-4" />
+                                                            {duty.time} ({duty.session})
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <span className={`px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-2 whitespace-nowrap ${getStatusBadgeColor(duty.status)}`}>
+                                                    {getStatusIcon(duty.status)}
+                                                    {duty.status}
+                                                </span>
+                                            </div>
+
+                                            {/* Relief Duty Badge */}
+                                            {duty.isReliefDuty && (
+                                                <div className={`flex items-center gap-2 text-sm font-semibold ${darkMode ? 'text-orange-400' : 'text-orange-600'}`}>
+                                                    <Shield className="w-4 h-4" />
+                                                    <span>Relief Duty</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Room & Block Info */}
+                                        <div>
+                                            <p className={`text-xs font-black uppercase tracking-widest mb-2 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                                                Location
+                                            </p>
+                                            <div className="space-y-1">
+                                                <p className={`font-bold text-lg ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+                                                    {duty.isHallRevealed ? duty.room : <>
+                                                        <EyeOff className="w-4 h-4 inline mr-1" />
+                                                        Locked
+                                                    </>}
+                                                </p>
+                                                <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                                                    {duty.isHallRevealed ? duty.block : 'Reveals 1hr before'}
+                                                </p>
+                                                {duty.isHallRevealed && (
+                                                    <p className={`text-xs mt-2 ${darkMode ? 'text-slate-500' : 'text-slate-500'}`}>
+                                                        Room #{duty.roomID}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Students & Attendance */}
+                                        <div>
+                                            <p className={`text-xs font-black uppercase tracking-widest mb-2 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                                                Students
+                                            </p>
+                                            <div className="space-y-2">
+                                                <div className="flex items-center gap-2">
+                                                    <Users className={`w-4 h-4 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`} />
+                                                    <span className={`font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>{duty.students}</span>
+                                                    <span className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>allocated</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <CheckCircle2 className={`w-4 h-4 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`} />
+                                                    <span className={`font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>{duty.presentCount}</span>
+                                                    <span className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>present</span>
+                                                </div>
+                                                {duty.isAttendanceMarked && (
+                                                    <p className={`text-xs flex items-center gap-1 mt-2 font-semibold ${darkMode ? 'text-green-400' : 'text-green-600'}`}>
+                                                        <CheckCircle2 className="w-3 h-3" />
+                                                        Attendance marked
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            ))}
+                        </AnimatePresence>
+                    </div>
+                )}
+            </div>
+        </>
     );
 }
 

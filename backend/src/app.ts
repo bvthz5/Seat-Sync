@@ -37,14 +37,13 @@ import invigilatorRoutes from "./routes/invigilator.routes.js";
 import studentPortalRoutes from "./routes/student.portal.routes.js";
 import unifiedAcademicRoutes from "./routes/unified_academic.routes.js";
 import seriesRoutes from "./routes/series.routes.js";
+import internalSeatingRoutes from "./routes/internal/internalSeating.routes.js";
+import internalReportsRoutes from "./routes/internal/internalReports.routes.js";
+import { httpLogger } from "./middlewares/httpLogger.middleware.js";
 
 const app = express();
 
-// Request logger for debugging
-app.use((req, res, next) => {
-    console.log(`[Request] ${req.method} ${req.path} - Origin: ${req.get('Origin')}`);
-    next();
-});
+app.use(httpLogger);
 
 
 // --- CORS Configuration ---
@@ -53,51 +52,41 @@ app.use(cors({
         // Allow same-origin (origin is undefined)
         if (!origin) return callback(null, true);
 
-        console.log(`[CORS Check] Origin: ${origin}`);
-
-        // Allow localhost and loopback
+        // Allow any localhost or loopback origin during development
         if (
             origin.startsWith('http://localhost') ||
             origin.startsWith('http://127.0.0.1') ||
             origin.startsWith('http://[::1]') ||
-            origin.includes('ngrok') ||
-            origin.includes('ngrok-free') ||
-            origin.includes('trycloudflare.com')
+            origin.includes('serveousercontent.com') ||
+            origin.includes('serveo.net') ||
+            origin.includes('localtunnel.me')
         ) {
             return callback(null, true);
         }
 
-        callback(new Error(`Not allowed by CORS: ${origin}`));
+        callback(new Error('Not allowed by CORS'));
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "ngrok-skip-browser-warning"]
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"]
 }));
 
 // --- Security Middleware: Helmet ---
 app.use(helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow cross-origin resources
     contentSecurityPolicy: {
         directives: {
-            "default-src": ["*"],
-            "connect-src": ["'self'", "*", "https://*.trycloudflare.com", "https://*.ngrok-free.dev", "wss://*.trycloudflare.com", "wss://*.ngrok-free.dev"],
-            "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "*"],
-            "style-src": ["'self'", "'unsafe-inline'", "*"],
-            "img-src": ["*", "data:", "https:"],
-            "font-src": ["*", "https:", "data:"],
-            "object-src": ["'none'"],
-            "upgrade-insecure-requests": [],
+            ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+            "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+            "img-src": ["'self'", "data:", "validator.swagger.io"]
         },
-    },
-    crossOriginResourcePolicy: { policy: "cross-origin" } // Allow cross-origin resources
+    }
 }));
 
 // Accept JSON body & Cookies early
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 app.use(hpp());
-
-// Trust proxy so rate limiter can accurately identify users
-app.set('trust proxy', 1);
 
 // --- Static Files ---
 import path from "path";
@@ -167,7 +156,14 @@ const swaggerDefinition = {
 // Options for the swagger docs
 const options = {
     swaggerDefinition,
-    apis: ["src/**/*.ts"], // Paths to files containing OpenAPI definitions
+    apis: [
+        "./src/routes/**/*.ts",
+        "./src/routes/**/*.js",
+        "./dist/routes/**/*.js",
+        "./src/app.ts",
+        "./src/app.js",
+        "./dist/app.js"
+    ], // Paths to files containing OpenAPI definitions
 };
 
 // Initialize swagger-jsdoc
@@ -192,6 +188,12 @@ import facultyRoutes from "./routes/faculty.routes.js";
 import internalExamRoutes from "./routes/internalExam.routes.js";
 app.use("/api/internal-exams", internalExamRoutes);
 
+// ═══════════════════════════════════════════════════════════════
+// INTERNAL STUDENT ECOSYSTEM — Completely isolated from EndSem
+// ═══════════════════════════════════════════════════════════════
+import internalStudentRoutes from "./routes/internalStudent.routes.js";
+app.use("/api/internal", internalStudentRoutes);
+
 // New ERP Routes (Root Admin Only)
 app.use("/api/admin-management", adminManagementRoutes);
 app.use("/api/academic-setup", academicSetupRoutes);
@@ -211,6 +213,8 @@ app.use("/api/allocation", allocationRoutes);
 
 import seatingRoutes from "./routes/seating.routes.js";
 app.use("/api/seating", seatingRoutes);
+app.use("/api/internal/seating", internalSeatingRoutes);
+app.use("/api/internal/reports", internalReportsRoutes);
 
 import auditLogsRoutes from "./routes/auditLogs.routes.js";
 app.use("/api/audit", auditLogsRoutes);
@@ -220,33 +224,6 @@ app.use("/api/users", userManagementRoutes);
 
 import dashboardRoutes from "./routes/dashboard.routes.js";
 app.use("/api/dashboard", dashboardRoutes);
-
-// Serve Frontend (Production Build)
-const frontendDistPath = path.join(__dirname, "../../frontend/dist");
-app.use(express.static(frontendDistPath, {
-    maxAge: "1d",
-    etag: false,
-    setHeaders: (res, path) => {
-        if (path.endsWith('.html')) {
-            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-            res.setHeader('Pragma', 'no-cache');
-            res.setHeader('Expires', '0');
-        }
-    }
-}));
-
-// Catch-all route: Serve index.html for client-side routing (only for non-file requests)
-app.use((req: express.Request, res: express.Response) => {
-    // Don't serve index.html for API calls or file requests with extensions
-    if (req.path.startsWith('/api') || /\.\w+$/.test(req.path)) {
-        return res.status(404).json({ error: "Not found" });
-    }
-    // Prevent caching for index.html
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-    res.sendFile(path.join(frontendDistPath, "index.html"));
-});
 
 // --- Error Handling Middleware ---
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

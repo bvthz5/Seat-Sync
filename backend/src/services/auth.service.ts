@@ -1,9 +1,10 @@
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { User } from "../models/User.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../utils/jwt.js";
 import { generateRandomToken, hashToken } from "../utils/hash.js";
 import { PasswordReset } from "../models/PasswordReset.model.js";
-import { Op } from "sequelize";
+import { Op, QueryTypes } from "sequelize";
+import { sequelize } from "../config/database.js";
 import { emailService } from "./email.service.js";
 import type { LoginRequest, LoginResponse, JWTPayload } from "../interfaces/auth.interfaces.js";
 
@@ -23,14 +24,14 @@ export class AuthService {
     static async login(credentials: LoginRequest): Promise<LoginResponse> {
         const { email, password, role } = credentials;
         const whereClause: any = {
-            Email: email,
+            Email: email ? email.toLowerCase() : email,
             IsActive: true,
         };
         if (role) {
             whereClause.Role = role;
         } else {
-            // Admin portal login: support legacy admin role values as well.
-            whereClause.Role = { [Op.in]: ["exam_admin", "root_admin", "admin"] };
+            // Admin portal login: support all non-student roles by default
+            whereClause.Role = { [Op.in]: ["exam_admin", "root_admin", "admin", "invigilator"] };
         }
 
         // Find user by email
@@ -57,23 +58,35 @@ export class AuthService {
                 lockUntil = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes lockout
             }
             
-            await user.update({ 
-                FailedLoginAttempts: failedAttempts,
-                AccountLockedUntil: lockUntil
-            });
+            // Use a RAW query to bypass Sequelize's date-conversion logic which causes MSSQL errors
+            const lockUntilDate = lockUntil ? new Date(lockUntil) : null;
+            const formattedLockUntil = (lockUntilDate && !isNaN(lockUntilDate.getTime())) 
+                ? lockUntilDate.toISOString().replace('T', ' ').slice(0, 19) 
+                : null;
+
+            await sequelize.query(
+                "UPDATE Users SET FailedLoginAttempts = ?, AccountLockedUntil = ? WHERE UserID = ?",
+                {
+                    replacements: [failedAttempts, formattedLockUntil, user.UserID],
+                    type: QueryTypes.UPDATE
+                }
+            );
 
             throw new Error("Invalid credentials");
         }
 
         // Reset failed attempts on successful login
         if (user.FailedLoginAttempts > 0 || user.AccountLockedUntil) {
-            await user.update({ 
-                FailedLoginAttempts: 0,
-                AccountLockedUntil: null
-            });
+            await sequelize.query(
+                "UPDATE Users SET FailedLoginAttempts = 0, AccountLockedUntil = NULL WHERE UserID = ?",
+                {
+                    replacements: [user.UserID],
+                    type: QueryTypes.UPDATE
+                }
+            );
         }
 
-        const normalizedRole = this.normalizePortalRole(user.Role as string);
+        const normalizedRole = AuthService.normalizePortalRole(user.Role as string);
 
         // Generate tokens
         const payload: JWTPayload = {
@@ -113,12 +126,9 @@ export class AuthService {
             throw new Error("Invalid refresh token or user is inactive");
         }
 
-        // Strict role check for refresh: admin/root admin/invigilator only
-        if (!['exam_admin', 'root_admin', 'admin', 'invigilator'].includes(user.Role as string)) {
-            throw new Error("Invalid role for this portal");
-        }
 
-        const normalizedRole = this.normalizePortalRole(user.Role as string);
+
+        const normalizedRole = AuthService.normalizePortalRole(user.Role as string);
 
         // Generate new access token
         const accessPayload: JWTPayload = {

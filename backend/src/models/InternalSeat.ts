@@ -1,6 +1,5 @@
 import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from "../config/database.js";
-import { InternalRoom } from "./InternalRoom.js";
 
 interface InternalSeatAttributes {
   SeatID: number;
@@ -64,8 +63,5 @@ InternalSeat.init(
     ],
   }
 );
-
-InternalSeat.belongsTo(InternalRoom, { foreignKey: "RoomID" });
-InternalRoom.hasMany(InternalSeat, { foreignKey: "RoomID" });
 
 export default InternalSeat;

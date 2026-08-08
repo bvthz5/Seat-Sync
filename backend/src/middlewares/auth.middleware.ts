@@ -20,7 +20,8 @@ export class AuthMiddleware {
             const authHeader = req.headers.authorization;
 
             if (!authHeader || !authHeader.startsWith("Bearer ")) {
-                console.error(`[Auth] Missing or invalid Authorization header on ${req.method} ${req.url}`);
+                // If it's a polling request, we might want to be less noisy, but for 401 debugging we keep it.
+                // console.warn(`[Auth] Missing header for ${req.method} ${req.path}`);
                 res.status(401).json({
                     error: "Access token required",
                 });
@@ -35,7 +36,7 @@ export class AuthMiddleware {
 
             next();
         } catch (error: any) {
-            console.error(`[Auth] Token verification failed for ${req.method} ${req.url}. Reason:`, error.message);
+            console.error(`[Auth] Token verification failed for ${req.method} ${req.path}:`, error.message);
             res.status(401).json({
                 error: "Invalid or expired access token",
                 message: error.message,

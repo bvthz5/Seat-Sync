@@ -109,12 +109,12 @@ Notification.init(
             defaultValue: 0 // 0 = System
         },
         SentAt: {
-            type: "DATETIME2",
+            type: DataTypes.DATE,
             allowNull: false,
-            defaultValue: literal('GETDATE()'),
+            defaultValue: literal('CURRENT_TIMESTAMP'),
         },
         ExpiresAt: {
-            type: "DATETIME2",
+            type: DataTypes.DATE,
             allowNull: true,
         },
     },

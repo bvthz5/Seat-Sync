@@ -13,6 +13,10 @@ const allowedOrigins = new Set([
 
 export const initSocket = (httpServer: HTTPServer) => {
     io = new SocketIOServer(httpServer, {
+        pingTimeout: 60000,   // Wait up to 60s for pings (default is 20s)
+        pingInterval: 20000,  // Send keep-alive pings every 20s (default is 25s)
+        connectTimeout: 45000,
+        allowEIO3: true,
         cors: {
             origin: (origin, callback) => {
                 if (!origin) return callback(null, true);
@@ -21,18 +25,19 @@ export const initSocket = (httpServer: HTTPServer) => {
                     allowedOrigins.has(origin) ||
                     origin.startsWith("http://localhost:") ||
                     origin.startsWith("http://127.0.0.1:") ||
-                    origin.includes('ngrok') ||
-                    origin.includes('trycloudflare.com')
+                    origin.includes("serveousercontent.com") ||
+                    origin.includes("serveo.net") ||
+                    origin.includes("localtunnel.me")
                 ) {
                     return callback(null, true);
                 }
 
-                console.warn(`[Socket.IO CORS Blocked] Origin: ${origin}`);
                 callback(new Error("Socket.IO CORS blocked"));
             },
             credentials: true,
             methods: ["GET", "POST"],
-        }
+        },
+        transports: ["websocket", "polling"] // Enforce websocket support explicitly
     });
 
     io.on("connection", (socket) => {

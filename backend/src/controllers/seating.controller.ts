@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
-import { Room, Seat, Student, User, Department, Exam, SeatAllocation, ExamSeries, Subject, Semester, Program, Zone, ExamSchedule, ExamRegistration } from "../models/index.js";
+import { Room, Seat, Student, User, Department, Exam, SeatAllocation, ExamSeries, Subject, Semester, Program, ExamSchedule, ExamRegistration } from "../models/index.js";
 import { Op, QueryTypes } from "sequelize";
 import { sequelize } from "../config/database.js";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import * as XLSX from "xlsx";
 import { generateSeats } from "../services/seatEngine.js";
 
@@ -217,12 +217,7 @@ const getStudentsForExamSession = async (
 };
 
 const getDefaultZoneIdForRoom = async (roomId: number): Promise<number | null> => {
-    const zone = await Zone.findOne({
-        where: { RoomID: roomId },
-        attributes: ["ZoneID"],
-        order: [["ZoneID", "ASC"]],
-    }) as any;
-    return zone?.ZoneID ? Number(zone.ZoneID) : null;
+    return null;
 };
 
 const getSeatOrderBySchema = async (roomId: number, transaction?: any) => {
@@ -452,7 +447,7 @@ export const getExamDepartments = async (req: Request, res: Response) => {
                 d.DepartmentID,
                 d.DepartmentName,
                 d.DepartmentCode,
-                ISNULL(dt.deptCount, 0) AS studentCount
+                COALESCE(dt.deptCount, 0) AS studentCount
             FROM DayDepartments sd
             INNER JOIN Departments d ON d.DepartmentID = sd.DepartmentID
             LEFT JOIN DepartmentTotals dt ON dt.DepartmentID = sd.DepartmentID
@@ -1136,7 +1131,7 @@ const fetchEndSemStudentsBySubject = async (
         StudentID: number; ExamID: number; IsEligible: number;
     }>(`
         SELECT er.StudentID, er.ExamID,
-               CAST(ISNULL(er.IsEligible, 1) AS BIT) AS IsEligible
+               COALESCE(er.IsEligible, 1) AS IsEligible
         FROM   ExamRegistrations er
         WHERE  er.ExamID IN (${examIdsList.join(',')})
     `, {
@@ -1201,7 +1196,16 @@ export const bulkAssign = async (req: Request, res: Response) => {
     try {
         // Defensive check: Ensure Seats table exists and has data
         try {
-            const [results] = await sequelize.query("SELECT TOP 1 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Seats'");
+            const dialect = sequelize.getDialect();
+            let queryStr = "";
+            if (dialect === "sqlite") {
+                queryStr = "SELECT 1 FROM sqlite_master WHERE type='table' AND name='Seats' LIMIT 1";
+            } else if (dialect === "mysql") {
+                queryStr = "SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Seats' LIMIT 1";
+            } else {
+                queryStr = "SELECT TOP 1 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Seats'";
+            }
+            const [results] = await sequelize.query(queryStr);
             if (!results || results.length === 0) {
                 await transaction.rollback();
                 return res.status(500).json({ message: 'Seats table does not exist. Please run migrations/seeders.' });
@@ -2606,11 +2610,11 @@ export const searchStudent = async (req: Request, res: Response) => {
 
         // Find matching students by RegisterNumber or FullName
         const matchedStudents = await sequelize.query<{ StudentID: number; RegisterNumber: string; FullName: string }>(
-            `SELECT s.StudentID, s.RegisterNumber, ISNULL(u.FullName, s.RegisterNumber) AS FullName
+            `SELECT s.StudentID, s.RegisterNumber, COALESCE(u.FullName, s.RegisterNumber) AS FullName
              FROM Students s
              LEFT JOIN Users u ON s.UserID = u.UserID
-             WHERE s.RegisterNumber LIKE N'%${safeTerm}%'
-                OR ISNULL(u.FullName, '') LIKE N'%${safeTerm}%'`,
+             WHERE s.RegisterNumber LIKE '%${safeTerm}%'
+                OR COALESCE(u.FullName, '') LIKE '%${safeTerm}%'`,
             { type: QueryTypes.SELECT }
         );
 

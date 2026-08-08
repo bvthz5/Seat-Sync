@@ -1,6 +1,6 @@
 import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from "../config/database.js";
-import { InternalBlock } from "./InternalBlock.js";
+import InternalBlock from "./InternalBlock.js";
 
 interface InternalFloorAttributes {
   FloorID: number;
@@ -51,7 +51,6 @@ InternalFloor.init(
   }
 );
 
-InternalFloor.belongsTo(InternalBlock, { foreignKey: "BlockID" });
-InternalBlock.hasMany(InternalFloor, { foreignKey: "BlockID" });
+// Associations are managed in models/index.ts
 
 export default InternalFloor;

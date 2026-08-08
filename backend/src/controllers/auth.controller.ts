@@ -25,12 +25,13 @@ export class AuthController {
             // Authenticate user
             const result = await AuthService.login({ email, password, ...(role && { role }) });
 
-            // Set refresh token as HttpOnly session cookie
+            // Set refresh token as HttpOnly cookie
             res.cookie("refreshToken", result.refreshToken, {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === "production",
                 sameSite: "lax",
-                path: "/api/auth/refresh"
+                path: "/",
+                maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
             });
 
             res.status(200).json(result);
@@ -56,13 +57,13 @@ export class AuthController {
                     ip: req.ip || "",
                     userAgent: req.get('User-Agent') || ""
                 };
-                // Only log if user exists and is admin? Or log all failures?
-                // logActivity checks if user exists. If not, it skips. Perfect.
                 AdminService.logActivity(context, "Login Failure", `Failed login attempt: ${error.message}`);
             }
 
-            res.status(401).json({
-                error: "Authentication failed",
+            const statusCode = (error.message === "Invalid credentials" || error.message === "Invalid credentials or account is inactive") ? 401 : 500;
+
+            res.status(statusCode).json({
+                error: statusCode === 401 ? "Authentication failed" : "Internal server error",
                 message: error.message,
             });
         }
@@ -70,11 +71,11 @@ export class AuthController {
 
     /**
      * POST /api/auth/refresh
-     * Refresh access token using refresh token from cookie
+     * Refresh access token using refresh token from cookie, body, or header
      */
     static async refresh(req: Request, res: Response): Promise<void> {
         try {
-            const refreshToken = req.cookies.refreshToken;
+            const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken || (req.headers['x-refresh-token'] as string);
 
             if (!refreshToken) {
                 res.status(401).json({
@@ -91,10 +92,11 @@ export class AuthController {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === "production",
                 sameSite: "lax",
-                path: "/api/auth/refresh"
+                path: "/",
+                maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
             });
 
-            res.status(200).json({ accessToken });
+            res.status(200).json({ accessToken, refreshToken: newRefreshToken });
         } catch (error: any) {
             console.error("Refresh error:", error.message);
             res.status(401).json({
@@ -115,7 +117,7 @@ export class AuthController {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === "production",
                 sameSite: "lax",
-                path: "/api/auth/refresh",
+                path: "/",
             });
 
             res.status(200).json({

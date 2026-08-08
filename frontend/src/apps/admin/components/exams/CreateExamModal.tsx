@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { ExamService } from '../../services/examService';
 import { SubjectService } from '../../services/subjectService';
 import { academicService } from '../../services/academicService';
-import { Search, AlertTriangle, AlertCircle, Check, Info, Layers } from "lucide-react";
+import { BookOpen, Search, CalendarDays, Clock, Building2, ChevronDown, Check, AlertTriangle, AlertCircle, Info, Layers } from "lucide-react";
 
 interface CreateExamModalProps {
     isOpen: boolean;
@@ -77,13 +77,31 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
 
     const handleSearchChange = (val: string) => {
         setSubjectSearch(val);
-        if (val && subjects.length > 0) {
-            setFilteredSubjects(subjects.filter(s =>
-                s.SubjectName.toLowerCase().includes(val.toLowerCase()) ||
-                s.SubjectCode.toLowerCase().includes(val.toLowerCase())
-            ));
+        if (subjects.length > 0) {
+            if (val) {
+                setFilteredSubjects(subjects.filter(s =>
+                    s.SubjectName.toLowerCase().includes(val.toLowerCase()) ||
+                    s.SubjectCode.toLowerCase().includes(val.toLowerCase())
+                ));
+            } else {
+                setFilteredSubjects(subjects.slice(0, 20));
+            }
         } else {
             setFilteredSubjects([]);
+        }
+    };
+
+    const handleFocus = () => {
+        if (subjects.length > 0) {
+            if (!subjectSearch) {
+                setFilteredSubjects(subjects.slice(0, 20));
+            } else {
+                const searchVal = subjectSearch.includes(' - ') ? subjectSearch.split(' - ')[0] : subjectSearch;
+                setFilteredSubjects(subjects.filter(s =>
+                    s.SubjectName.toLowerCase().includes(searchVal.toLowerCase()) ||
+                    s.SubjectCode.toLowerCase().includes(searchVal.toLowerCase())
+                ).slice(0, 20));
+            }
         }
     };
 
@@ -99,23 +117,46 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
     };
 
     const handleSubmit = async () => {
-        if (!formData.ExamDate || !formData.SubjectID) {
-            toast.error("Please fill all required fields");
+        let resolvedSubjectID = formData.SubjectID;
+        let resolvedSubjectName = formData.SubjectName;
+
+        if (!resolvedSubjectID && subjectSearch) {
+            const cleanSearch = subjectSearch.includes(' - ') ? subjectSearch.split(' - ')[0].trim() : subjectSearch.trim();
+            const matched = subjects.find(s => 
+                s.SubjectCode?.toLowerCase() === cleanSearch.toLowerCase() ||
+                s.SubjectName?.toLowerCase() === cleanSearch.toLowerCase() ||
+                `${s.SubjectCode} - ${s.SubjectName}`.toLowerCase() === subjectSearch.trim().toLowerCase()
+            );
+            if (matched) {
+                resolvedSubjectID = String(matched.SubjectID);
+                resolvedSubjectName = matched.SubjectName;
+            }
+        }
+
+        if (!formData.ExamDate || !resolvedSubjectID) {
+            toast.error("Please select a valid Subject and Exam Date");
             return;
         }
 
+        const finalExamName = formData.ExamName || (resolvedSubjectName ? `${resolvedSubjectName} - ${formData.ExamType}` : subjectSearch || 'New Scheduled Exam');
+
         setLoading(true);
         try {
+            const deptId = formData.DepartmentID && !isNaN(parseInt(formData.DepartmentID)) ? parseInt(formData.DepartmentID) : undefined;
+
             const payload: any = {
-                ExamName: formData.ExamName,
-                SubjectID: parseInt(formData.SubjectID),
+                ExamName: finalExamName,
+                SubjectID: parseInt(resolvedSubjectID),
                 ExamDate: formData.ExamDate,
-                Session: formData.Session,
-                Duration: parseInt(formData.Duration),
-                DepartmentID: formData.DepartmentID ? parseInt(formData.DepartmentID) : undefined
+                Session: formData.Session || 'FN',
+                Duration: parseInt(formData.Duration || '180')
             };
 
-            if (seriesId) {
+            if (deptId !== undefined) {
+                payload.DepartmentID = deptId;
+            }
+
+            if (seriesId && !isNaN(parseInt(seriesId.toString()))) {
                 payload.ExamSeriesID = parseInt(seriesId.toString());
             }
 
@@ -124,7 +165,7 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
             onSuccess();
             onClose();
         } catch (error: any) {
-            toast.error(error.response?.data?.message || "Failed to create exam");
+            toast.error(error.response?.data?.message || error.message || "Failed to create exam");
         } finally {
             setLoading(false);
         }
@@ -138,302 +179,301 @@ const CreateExamModal: React.FC<CreateExamModalProps> = ({ isOpen, onClose, onSu
             backdrop="blur"
             scrollBehavior="inside"
             classNames={{
-                body: "p-0 bg-[#F8FAFC]",
-                backdrop: "bg-gray-900/40 backdrop-blur-sm",
-                base: "border border-gray-200 bg-white shadow-2xl rounded-2xl overflow-hidden !max-w-[1000px]",
-                header: "border-b border-gray-100 py-6 px-8 bg-white",
+                base: "border border-slate-200/80 bg-white shadow-2xl rounded-3xl overflow-hidden !max-w-[1050px]",
+                header: "p-0 border-b border-slate-100 bg-white",
+                body: "p-0 bg-white",
                 footer: "hidden",
-                closeButton: "top-6 right-6 hover:bg-gray-100 text-gray-500",
+                closeButton: "top-5 right-6 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-xl transition-all z-20",
             }}
         >
             <ModalContent>
-                <ModalHeader>
+                {/* Clean Header */}
+                <ModalHeader className="flex items-center gap-3 border-b border-slate-100 py-5 px-8 bg-white">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0 shadow-xs">
+                        <BookOpen size={18} />
+                    </div>
                     <div>
-                        <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Schedule New Exam</h2>
-                        <p className="text-sm text-gray-500 font-normal mt-1">Configure exam details and verify constraints before publishing.</p>
+                        <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">
+                            Schedule New Exam
+                        </h2>
+                        <p className="text-xs text-slate-500 font-medium mt-0.5">
+                            Configure paper details, session, and verify conflict constraints
+                        </p>
                     </div>
                 </ModalHeader>
-                <ModalBody>
-                    <div className="flex flex-col lg:flex-row h-full">
+
+                <ModalBody className="p-0">
+                    <div className="flex flex-col lg:flex-row min-h-[520px]">
 
                         {/* LEFT COLUMN: FORM */}
-                        <div className="flex-1 p-6 bg-white overflow-y-auto">
-                            <h3 className="text-base font-bold text-gray-800 mb-6 flex items-center gap-2">
-                                <Layers size={18} className="text-blue-600" /> Exam Details
-                            </h3>
+                        <div className="flex-1 p-8 bg-white overflow-y-auto space-y-6">
 
-                            <div className="space-y-6 w-full">
-
-                                {/* 1. Subject Search */}
-                                <div className="relative">
-                                    <div  id="subject-search-label" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Subject Name or Code</div>
-                                    <Input
+                            {/* 1. Subject Search */}
+                            <div className="space-y-1.5 relative">
+                                <label className="text-xs font-extrabold uppercase text-slate-700 tracking-wider">
+                                    Subject Code & Name <span className="text-rose-500">*</span>
+                                </label>
+                                <div className="flex items-center w-full h-11 rounded-xl border border-slate-200/90 bg-slate-50/70 focus-within:bg-white focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-100 transition-all overflow-hidden">
+                                    <div className="w-11 h-full bg-slate-100/80 border-r border-slate-200/90 flex items-center justify-center text-slate-400 shrink-0">
+                                        <Search size={16} />
+                                    </div>
+                                    <input
                                         id="subjectSearch"
-                                        name="subjectSearch"
-                                        autoComplete="off"
-                                        aria-label="Subject"
-                                        placeholder="e.g. CS101 - Intro to Comp Sci"
+                                        type="text"
+                                        placeholder="Search subject code or name..."
                                         value={subjectSearch}
-                                        onValueChange={handleSearchChange}
-                                        size="lg"
-                                        variant="flat"
-                                        radius="sm"
-                                        endContent={<Search className="text-gray-400" size={20} />}
-                                        classNames={{
-                                            inputWrapper: "!bg-gray-50 !border-none !shadow-none hover:!bg-gray-100 group-data-[focus=true]:!bg-white group-data-[focus=true]:!shadow-sm !ring-transparent group-data-[focus=true]:!ring-gray-200",
-                                            input: "font-medium text-gray-800 !border-0 !outline-none placeholder:text-gray-400"
+                                        onChange={(e) => handleSearchChange(e.target.value)}
+                                        onFocus={(e: any) => {
+                                            e.target.select();
+                                            handleFocus();
                                         }}
+                                        onBlur={() => setTimeout(() => setFilteredSubjects([]), 250)}
+                                        className="w-full h-full px-3.5 text-xs font-semibold text-slate-800 placeholder:text-slate-400 bg-transparent outline-none border-none ring-0 focus:ring-0"
                                     />
-                                    {filteredSubjects.length > 0 && (
-                                        <div className="absolute z-50 w-full bg-white border border-gray-100 rounded-lg shadow-xl mt-1 max-h-48 overflow-y-auto">
-                                            {filteredSubjects.map(sub => (
-                                                <div
-                                                    key={sub.SubjectID}
-                                                    className="px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-gray-50 last:border-0"
-                                                    onClick={() => selectSubject(sub)}
-                                                >
-                                                    <p className="text-sm font-medium text-gray-800">{sub.SubjectName}</p>
-                                                    <p className="text-xs text-blue-500">{sub.SubjectCode}</p>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
                                 </div>
+                                {filteredSubjects.length > 0 && (
+                                    <div className="absolute z-50 left-0 right-0 top-full bg-white border border-slate-200 rounded-xl shadow-xl mt-1 max-h-48 overflow-y-auto divide-y divide-slate-100">
+                                        {filteredSubjects.map(sub => (
+                                            <div
+                                                key={sub.SubjectID}
+                                                className="px-4 py-2.5 hover:bg-indigo-50/60 cursor-pointer transition-colors"
+                                                onClick={() => selectSubject(sub)}
+                                            >
+                                                <p className="text-xs font-bold text-slate-900">{sub.SubjectName}</p>
+                                                <p className="text-[11px] font-extrabold text-indigo-600">{sub.SubjectCode}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
 
-                                {/* 2. Exam Type */}
-                                <div>
-                                    <h4 className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Exam Type</h4>
-                                    <div className="flex gap-3">
+                            {/* 2. Exam Type & Department Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                {/* Exam Type */}
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-extrabold uppercase text-slate-700 tracking-wider">
+                                        Exam Type
+                                    </label>
+                                    <div className="grid grid-cols-3 gap-2">
                                         {['Internal Assessment', 'Semester End', 'Supplementary'].map((type) => (
                                             <button
                                                 key={type}
                                                 type="button"
-                                                className={`px-4 py-2 text-sm font-medium rounded-lg border transition-all ${formData.ExamType === type
-                                                    ? 'bg-blue-50 border-blue-500 text-blue-700 shadow-sm'
-                                                    : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
-                                                    }`}
+                                                className={`h-11 rounded-xl text-[11px] font-extrabold transition-all border ${
+                                                    formData.ExamType === type
+                                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200'
+                                                        : 'bg-slate-50/70 border-slate-200 text-slate-600 hover:bg-slate-100'
+                                                }`}
                                                 onClick={() => {
                                                     const newName = formData.SubjectName ? `${formData.SubjectName} - ${type}` : '';
                                                     setFormData({ ...formData, ExamType: type, ExamName: newName });
                                                 }}
                                             >
-                                                {type}
+                                                {type.split(' ')[0]}
                                             </button>
                                         ))}
                                     </div>
                                 </div>
 
-                                {/* Department */}
-                                <div>
-                                    <div className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Department</div>
-                                    <Select
-                                        id="department-select"
-                                        name="DepartmentID"
-                                        aria-label="Department"
-                                        placeholder="Select department (Optional)"
-                                        selectedKeys={formData.DepartmentID ? [formData.DepartmentID] : []}
-                                        onSelectionChange={(k) => handleSelectChange('DepartmentID', (Array.from(k)[0] as string) || '')}
-                                        variant="bordered"
-                                        classNames={{
-                                            trigger: "bg-white border-gray-200 h-11 rounded-lg",
-                                            value: "text-slate-800 font-semibold group-data-[has-value=false]:text-slate-500",
-                                            popoverContent: "bg-white border border-slate-200 text-slate-800 shadow-xl font-medium"
-                                        }}
-                                    >
-                                        {departments.map((d: any) => (
-                                            <SelectItem key={String(d.DepartmentID)} textValue={`${d.DepartmentCode} - ${d.DepartmentName}`}>
-                                                {d.DepartmentCode} - {d.DepartmentName}
-                                            </SelectItem>
-                                        ))}
-                                    </Select>
+                                {/* Department Selection */}
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-extrabold uppercase text-slate-700 tracking-wider">
+                                        Department
+                                    </label>
+                                    <div className="relative flex items-center w-full h-11 rounded-xl border border-slate-200/90 bg-slate-50/70 focus-within:bg-white focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-100 transition-all overflow-hidden">
+                                        <div className="w-11 h-full bg-slate-100/80 border-r border-slate-200/90 flex items-center justify-center text-slate-400 shrink-0">
+                                            <Building2 size={16} />
+                                        </div>
+                                        <select
+                                            id="department-select"
+                                            value={formData.DepartmentID}
+                                            onChange={(e) => handleSelectChange('DepartmentID', e.target.value)}
+                                            className="w-full h-full px-3.5 pr-8 text-xs font-bold text-slate-800 bg-transparent outline-none border-none ring-0 focus:ring-0 cursor-pointer appearance-none"
+                                        >
+                                            <option value="">Select Department (Optional)...</option>
+                                            {departments.map((d: any) => (
+                                                <option key={d.DepartmentID} value={String(d.DepartmentID)}>
+                                                    {d.DepartmentCode} — {d.DepartmentName}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <ChevronDown size={16} className="absolute right-3.5 text-slate-400 pointer-events-none" />
+                                    </div>
                                 </div>
+                            </div>
 
-                                {/* Exam Name */}
-                                <div>
-                                    <div className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Exam Name</div>
-                                    <Input
-                                        id="exam-name-input"
-                                        name="ExamName"
-                                        autoComplete="off"
-                                        aria-label="Exam Name"
-                                        placeholder="e.g. End Semester Exam"
-                                        value={formData.ExamName}
-                                        onChange={handleChange}
-                                        variant="flat"
-                                        radius="sm"
-                                        size="lg"
-                                        isRequired
-                                        classNames={{
-                                            inputWrapper: "!bg-gray-50 !border-none !shadow-none hover:!bg-gray-100 group-data-[focus=true]:!bg-white group-data-[focus=true]:!shadow-sm !ring-transparent group-data-[focus=true]:!ring-gray-200",
-                                            input: "font-medium text-gray-800 !border-0 !outline-none placeholder:text-gray-400"
-                                        }}
-                                    />
-                                </div>
-
-                                {/* 3. Date & Session */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div>
-                                        <div  id="exam-date-label" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Date</div>
-                                        <Input
+                            {/* 3. Date & Duration Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                {/* Exam Date */}
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-extrabold uppercase text-slate-700 tracking-wider">
+                                        Exam Date <span className="text-rose-500">*</span>
+                                    </label>
+                                    <div className="flex items-center w-full h-11 rounded-xl border border-slate-200/90 bg-slate-50/70 focus-within:bg-white focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-100 transition-all overflow-hidden">
+                                        <div className="w-11 h-full bg-slate-100/80 border-r border-slate-200/90 flex items-center justify-center text-slate-400 shrink-0">
+                                            <CalendarDays size={16} />
+                                        </div>
+                                        <input
                                             id="ExamDate"
                                             type="date"
                                             name="ExamDate"
-                                            autoComplete="off"
-                                            aria-label="Exam Date"
                                             value={formData.ExamDate}
                                             onChange={handleChange}
-                                            variant="flat"
-                                            radius="sm"
-                                            size="lg"
-                                            className="w-full"
-                                            classNames={{
-                                                inputWrapper: "!bg-gray-50 !border-none !shadow-none hover:!bg-gray-100 group-data-[focus=true]:!bg-white group-data-[focus=true]:!shadow-sm !ring-transparent group-data-[focus=true]:!ring-gray-200",
-                                                input: "font-medium text-gray-800 !border-0 !outline-none"
-                                            }}
+                                            className="w-full h-full px-3.5 text-xs font-bold text-slate-800 bg-transparent outline-none border-none ring-0 focus:ring-0"
                                         />
                                     </div>
-                                    <div>
-                                        <span className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-3">Session</span>
-                                        <div className="flex gap-6 h-[48px] items-center">
-                                            <div className="flex items-center gap-2 cursor-pointer group">
-                                                <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${formData.Session === 'FN' ? 'border-blue-600 bg-white' : 'border-gray-300 bg-white group-hover:border-gray-400'}`}>
-                                                    {formData.Session === 'FN' && <div className="w-2.5 h-2.5 bg-blue-600 rounded-full" />}
-                                                </div>
-                                                <input id="session-fn" type="radio" className="hidden" name="Session" value="FN" checked={formData.Session === 'FN'} onChange={handleChange} />
-                                                <div className="text-sm">
-                                                    <span className="font-bold text-gray-700 block">Forenoon</span>
-                                                    <span className="text-xs text-gray-400 font-medium">(FN)</span>
-                                                </div>
-                                            </div>
+                                </div>
 
-                                            <div className="flex items-center gap-2 cursor-pointer group">
-                                                <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${formData.Session === 'AN' ? 'border-blue-600 bg-white' : 'border-gray-300 bg-white group-hover:border-gray-400'}`}>
-                                                    {formData.Session === 'AN' && <div className="w-2.5 h-2.5 bg-blue-600 rounded-full" />}
-                                                </div>
-                                                <input id="session-an" type="radio" className="hidden" name="Session" value="AN" checked={formData.Session === 'AN'} onChange={handleChange} />
-                                                <div className="text-sm">
-                                                    <span className="font-bold text-gray-700 block">Afternoon</span>
-                                                    <span className="text-xs text-gray-400 font-medium">(AN)</span>
-                                                </div>
-                                            </div>
+                                {/* Duration with Presets */}
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-xs font-extrabold uppercase text-slate-700 tracking-wider">
+                                            Duration (Minutes)
+                                        </label>
+                                        <div className="flex gap-1">
+                                            {[90, 120, 180].map((mins) => (
+                                                <button
+                                                    key={mins}
+                                                    type="button"
+                                                    onClick={() => handleSelectChange('Duration', String(mins))}
+                                                    className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold border transition-all ${
+                                                        formData.Duration === String(mins)
+                                                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                                                            : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+                                                    }`}
+                                                >
+                                                    {mins}m
+                                                </button>
+                                            ))}
                                         </div>
                                     </div>
+                                    <div className="flex items-center w-full h-11 rounded-xl border border-slate-200/90 bg-slate-50/70 focus-within:bg-white focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-100 transition-all overflow-hidden">
+                                        <div className="w-11 h-full bg-slate-100/80 border-r border-slate-200/90 flex items-center justify-center text-slate-400 shrink-0">
+                                            <Clock size={16} />
+                                        </div>
+                                        <input
+                                            id="Duration"
+                                            type="number"
+                                            name="Duration"
+                                            placeholder="180"
+                                            value={formData.Duration}
+                                            onChange={handleChange}
+                                            className="w-full h-full px-3.5 text-xs font-bold text-slate-800 bg-transparent outline-none border-none ring-0 focus:ring-0"
+                                        />
+                                    </div>
                                 </div>
+                            </div>
 
-                                {/* 4. Duration - Fixed Overlap */}
-                                <div>
-                                    <div  id="duration-label" className="block text-xs font-bold uppercase text-gray-500 tracking-wide mb-2">Duration (Minutes)</div>
-                                    <Input
-                                        id="Duration"
-                                        type="number"
-                                        name="Duration"
-                                        autoComplete="off"
-                                        aria-label="Duration (Minutes)"
-                                        placeholder="180"
-                                        value={formData.Duration}
-                                        onChange={handleChange}
-                                        variant="flat"
-                                        radius="sm"
-                                        size="lg"
-                                        className="w-full"
-                                        classNames={{
-                                            inputWrapper: "!bg-gray-50 !border-none !shadow-none hover:!bg-gray-100 group-data-[focus=true]:!bg-white group-data-[focus=true]:!shadow-sm !ring-transparent group-data-[focus=true]:!ring-gray-200",
-                                            input: "font-medium text-gray-800 placeholder:text-gray-400 !border-0 !outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                        }}
-                                    />
-                                </div>
-
-                                {/* Divider */}
-                                <div className="h-px bg-gray-100 my-4"></div>
-
-                                {/* Action Buttons */}
-                                <div className="flex justify-end gap-3 pt-2">
-                                    <Button variant="bordered" className="border-gray-300 text-gray-700 font-medium px-6" onPress={onClose}>
-                                        Save Draft
-                                    </Button>
-                                    <Button
-                                        className="bg-blue-600 text-white font-semibold shadow-md px-6 hover:bg-blue-700"
-                                        onPress={handleSubmit}
-                                        isLoading={loading}
+                            {/* 4. Session Selector */}
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-extrabold uppercase text-slate-700 tracking-wider">
+                                    Exam Session
+                                </label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSelectChange('Session', 'FN')}
+                                        className={`flex items-center justify-center gap-2.5 h-11 rounded-xl border text-xs font-bold transition-all ${
+                                            formData.Session === 'FN'
+                                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200'
+                                                : 'bg-slate-50/70 border-slate-200 text-slate-700 hover:bg-slate-100'
+                                        }`}
                                     >
-                                        Publish Schedule
-                                    </Button>
+                                        <span className={`w-2 h-2 rounded-full ${formData.Session === 'FN' ? 'bg-white' : 'bg-slate-400'}`} />
+                                        Forenoon (FN)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSelectChange('Session', 'AN')}
+                                        className={`flex items-center justify-center gap-2.5 h-11 rounded-xl border text-xs font-bold transition-all ${
+                                            formData.Session === 'AN'
+                                                ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-200'
+                                                : 'bg-slate-50/70 border-slate-200 text-slate-700 hover:bg-slate-100'
+                                        }`}
+                                    >
+                                        <span className={`w-2 h-2 rounded-full ${formData.Session === 'AN' ? 'bg-white' : 'bg-slate-400'}`} />
+                                        Afternoon (AN)
+                                    </button>
                                 </div>
+                            </div>
 
+                            {/* Actions */}
+                            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                                <Button 
+                                    variant="flat" 
+                                    className="bg-slate-100 text-slate-600 hover:bg-slate-200 font-bold rounded-xl h-10 px-5 text-xs transition-all" 
+                                    onPress={onClose}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl h-10 px-6 text-xs shadow-md shadow-indigo-200 transition-all"
+                                    onPress={handleSubmit}
+                                    isLoading={loading}
+                                >
+                                    Publish Schedule
+                                </Button>
                             </div>
                         </div>
 
-                        {/* RIGHT COLUMN: SIDEBAR */}
-                        <div className="w-full lg:w-[280px] bg-[#F8FAFC] border-l border-gray-200 p-5 flex flex-col gap-6">
-
-                            <div className="flex items-center justify-between">
-                                <h3 className="font-bold text-gray-800 text-xs uppercase tracking-wide">Live Conflict Check</h3>
-                                <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold uppercase tracking-wider">
-                                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" /> Active
-                                </div>
-                            </div>
-
-                            <div className="space-y-4 overflow-y-auto pr-1">
-                                {/* Green Item */}
-                                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex gap-3 hover:shadow-md transition-shadow cursor-default">
-                                    <div className="mt-0.5 w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                                        <Check size={14} className="text-emerald-600" strokeWidth={3} />
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-bold text-gray-800">Student Clashes</p>
-                                        <p className="text-xs text-gray-500 mt-1 leading-relaxed">No overlap found for enrolled students in this time slot.</p>
-                                    </div>
+                        {/* RIGHT COLUMN: LIVE CONFLICT CHECK SIDEBAR */}
+                        <div className="w-full lg:w-[320px] bg-slate-50/60 border-t lg:border-t-0 lg:border-l border-slate-200/80 p-6 flex flex-col justify-between gap-6 shrink-0">
+                            <div>
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="font-extrabold text-slate-900 text-xs uppercase tracking-wider">Live Conflict Check</h3>
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-black tracking-wider uppercase">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Active
+                                    </span>
                                 </div>
 
-                                {/* Yellow Item */}
-                                <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 shadow-sm flex gap-3 hover:shadow-md transition-shadow cursor-default">
-                                    <div className="mt-0.5 w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                                        <AlertTriangle size={14} className="text-amber-600" strokeWidth={2} />
+                                <div className="space-y-3">
+                                    {/* Item 1 */}
+                                    <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-start gap-3">
+                                        <div className="w-7 h-7 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0 mt-0.5 text-emerald-600">
+                                            <Check size={14} strokeWidth={3} />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-slate-900">Student Clashes</p>
+                                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed font-medium">No overlap found for enrolled students in this time slot.</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="text-sm font-bold text-gray-800">Simultaneous Exams</p>
-                                        <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                                            Warning: 15 students have "Math 101" ending just 15 mins before this start time.
-                                        </p>
-                                    </div>
-                                </div>
 
-                                {/* Red Item */}
-                                <div className="bg-rose-50 p-4 rounded-xl border border-rose-100 shadow-sm flex gap-3 hover:shadow-md transition-shadow cursor-default">
-                                    <div className="mt-0.5 w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
-                                        <AlertCircle size={14} className="text-rose-600" strokeWidth={2} />
+                                    {/* Item 2 */}
+                                    <div className="bg-amber-50/80 p-4 rounded-2xl border border-amber-200/80 shadow-xs flex items-start gap-3">
+                                        <div className="w-7 h-7 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center shrink-0 mt-0.5 text-amber-700">
+                                            <AlertTriangle size={14} />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-amber-950">Simultaneous Exams</p>
+                                            <p className="text-[11px] text-amber-900 mt-0.5 leading-relaxed font-medium">
+                                                Warning: 15 students have another exam ending just 15 mins prior.
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="text-sm font-bold text-gray-800">Missing Registrations</p>
-                                        <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                                            <span className="font-medium text-gray-900">{subjectSearch.split('-')[0] || 'Subject'}</span> has 12 students pending registration approval. They will not be scheduled.
-                                        </p>
-                                    </div>
-                                </div>
 
-                                {/* Green Item */}
-                                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex gap-3 hover:shadow-md transition-shadow cursor-default">
-                                    <div className="mt-0.5 w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                                        <Check size={14} className="text-emerald-600" strokeWidth={3} />
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-bold text-gray-800">Room Availability</p>
-                                        <p className="text-xs text-gray-500 mt-1 leading-relaxed">Hall A and Hall B are available. Total Capacity: 150.</p>
+                                    {/* Item 3 */}
+                                    <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-start gap-3">
+                                        <div className="w-7 h-7 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0 mt-0.5 text-indigo-600">
+                                            <Check size={14} strokeWidth={3} />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-slate-900">Room Capacity</p>
+                                            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed font-medium">Hall A and Hall B available with total capacity of 150 seats.</p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Info Box */}
-                            <div className="mt-auto bg-blue-50 border border-blue-100 rounded-xl p-4 shadow-sm">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <Info size={16} className="text-blue-600" />
-                                    <span className="text-xs font-bold text-blue-800">Quick Tip</span>
+                            {/* Tip Box */}
+                            <div className="bg-indigo-50/80 border border-indigo-100 rounded-2xl p-4 shadow-xs">
+                                <div className="flex items-center gap-2 mb-1.5">
+                                    <Info size={15} className="text-indigo-600 shrink-0" />
+                                    <span className="text-xs font-extrabold text-indigo-900">Scheduling Tip</span>
                                 </div>
-                                <p className="text-xs text-blue-700 leading-relaxed">
-                                    Avoid scheduling exams during "University Sports Week" (Nov 12-15) to minimize rescheduling requests.
+                                <p className="text-[11px] text-indigo-800 font-medium leading-relaxed">
+                                    Check semester timetable overlap before publishing to optimize hall seating allocation.
                                 </p>
                             </div>
-
                         </div>
 
                     </div>

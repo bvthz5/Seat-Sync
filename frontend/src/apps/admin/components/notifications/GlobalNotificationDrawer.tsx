@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button, ScrollShadow } from "@heroui/react";
 import { X, Bell, AlertTriangle, Calendar, MessageSquare, RefreshCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getMyNotifications, Notification, initNotificationSocket, markAllAsRead, markAsRead } from '../../services/notificationService';
+import { getMyNotifications, Notification, initNotificationSocket, markAllAsRead, markAsRead, unsubscribeFromNotifications } from '../../services/notificationService';
 import { invigilatorService } from '../../services/invigilatorService';
 import { useAuth } from '../../../../hooks/useAuth';
 import { formatDistanceToNow } from 'date-fns';
@@ -15,10 +15,14 @@ export const GlobalNotificationDrawer: React.FC<{ isOpen: boolean; onClose: () =
     useEffect(() => {
         if (user) {
             loadNotifications();
-            // Connect to socket
-            initNotificationSocket(user.UserID, (newNotif) => {
+            // Connect to socket and listen
+            const handleNewNotification = (newNotif: Notification) => {
                 setNotifications(prev => [newNotif, ...prev]);
-            });
+            };
+            initNotificationSocket(user.UserID, handleNewNotification);
+            return () => {
+                unsubscribeFromNotifications(handleNewNotification);
+            };
         }
     }, [user, isOpen]);
 

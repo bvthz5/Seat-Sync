@@ -36,7 +36,7 @@ class NotificationService {
             Metadata,
             SentBy: senderId,
             ExpiresAt,
-            SentAt: sequelize.literal('GETDATE()') as any
+            SentAt: sequelize.literal('CURRENT_TIMESTAMP') as any
         });
 
         // 2. Identify Recipients
@@ -199,7 +199,7 @@ class NotificationService {
         const result = await NotificationRecipient.update(
             { 
                 IsRead: true, 
-                ReadAt: sequelize.literal('GETDATE()') 
+                ReadAt: sequelize.literal('CURRENT_TIMESTAMP') 
             },
             { 
                 where: { UserID: userId, NotificationID: notificationId } 
@@ -215,7 +215,7 @@ class NotificationService {
         await NotificationRecipient.update(
             { 
                 IsRead: true, 
-                ReadAt: sequelize.literal('GETDATE()') 
+                ReadAt: sequelize.literal('CURRENT_TIMESTAMP') 
             },
             { 
                 where: { UserID: userId, IsRead: false } 

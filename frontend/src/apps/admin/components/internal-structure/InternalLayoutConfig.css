@@ -61,7 +61,8 @@
 }
 
 /* ── Body: Sidebar + Classroom ── */
-.ilc-body {
+.ilc-body,
+.ilc-container {
     display: flex;
     flex-direction: column;
     gap: 2rem;
@@ -69,8 +70,10 @@
 }
 
 @media (min-width: 1280px) {
-    .ilc-body {
+    .ilc-body,
+    .ilc-container {
         flex-direction: row;
+        align-items: flex-start;
     }
 }
 
@@ -499,6 +502,42 @@
         0 4px 20px rgba(0,0,0,0.15);
 }
 
+/* ── Single Seat Node (center-aligned, no L/R) ── */
+.ilc-column--single .ilc-seat {
+    width: 100%;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ilc-column--single .ilc-seat--active {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.35), rgba(52, 211, 153, 0.2));
+    border-color: rgba(52, 211, 153, 0.3);
+    color: rgba(167, 243, 208, 0.95);
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
+}
+
+.ilc-column--single .ilc-seat--active:hover {
+    box-shadow: 0 0 14px rgba(16, 185, 129, 0.35);
+    border-color: rgba(52, 211, 153, 0.5);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.5), rgba(52, 211, 153, 0.3));
+}
+
+.ilc-column--single .ilc-seat--editable {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.25), rgba(52, 211, 153, 0.14));
+    border-color: rgba(52, 211, 153, 0.3);
+    color: rgba(167, 243, 208, 0.95);
+}
+
+.ilc-column--single .ilc-seat__label {
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    text-transform: lowercase;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    BENCH STYLES — Paired seat container
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -569,10 +608,7 @@
     padding: 0;
 }
 
-/* In single-column mode, seats take full width */
-.ilc-column--single .ilc-seat {
-    width: 100%;
-}
+
 
 /* In dual-bench mode, each seat takes ~half the bench */
 .ilc-bench--dual .ilc-seat {

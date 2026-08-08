@@ -38,7 +38,7 @@ const StudentLogin: React.FC = () => {
             return;
         }
 
-        if (loginMethod === 'email' && !trimmedIdentifier.toLowerCase().endsWith("sjcetpalai.ac.in")) {
+        if (loginMethod === 'email' && !/@([a-zA-Z0-9-]+\.)*sjcetpalai\.ac\.in$/i.test(trimmedIdentifier)) {
             toast.error("Please use your official @sjcetpalai.ac.in email");
             triggerShake();
             return;
@@ -46,7 +46,8 @@ const StudentLogin: React.FC = () => {
 
         setIsLoading(true);
         try {
-            const response = await fetch('/api/auth/student/login', {
+            const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+            const response = await fetch(`${apiBase}/auth/student/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ identifier: trimmedIdentifier, password }),
@@ -61,7 +62,7 @@ const StudentLogin: React.FC = () => {
             if (data.requirePasswordChange) {
                 // Store the temporary token so the change-password page can use it
                 sessionStorage.setItem("tempAccessToken", data.tempToken);
-                toast("Please change your password to continue", { icon: '🔒' });
+                toast("Please change your password to continue", { icon: '' });
                 
                 // Navigate to the change password page with the state
                 navigate('/student/change-password', { state: { isTemporary: true } });
@@ -211,7 +212,7 @@ const StudentLogin: React.FC = () => {
                             <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
                             <span className="text-[10px] font-bold tracking-widest text-blue-700 uppercase">Student Portal</span>
                         </div>
-                        <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">Student Sign In</h2>
+                        <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">Student Sign In</h1>
                         <p className="text-sm text-slate-500 font-medium">Enter your credentials to access your dashboard</p>
                     </div>
 
@@ -280,8 +281,9 @@ const StudentLogin: React.FC = () => {
                                     />
                                     <button
                                         type="button"
+                                        aria-label={showPassword ? "Hide password" : "Show password"}
                                         onClick={() => setShowPassword(!showPassword)}
-                                        className="absolute right-4 text-slate-400 hover:text-slate-600 focus:outline-none transition-colors"
+                                        className="absolute right-4 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:rounded transition-colors"
                                     >
                                         {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                     </button>
@@ -321,12 +323,6 @@ const StudentLogin: React.FC = () => {
                     <div className="mt-12 text-center flex flex-col gap-5">
                         <p className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">
                             Protected by SeatSync Identity Server
-                        </p>
-                        <p className="text-sm text-slate-500 font-medium">
-                            Don't have an account?{' '}
-                            <Link to="/student/register" className="font-bold text-[#0f172a] hover:text-blue-600 transition-colors">
-                                Register now
-                            </Link>
                         </p>
                     </div>
                 </div>

@@ -116,20 +116,3 @@ export const deleteRoom = async (req: Request, res: Response) => {
     }
 };
 
-export const autoZoneRoom = async (req: Request, res: Response) => {
-    try {
-        const roomId = Number(req.params.roomId);
-        const { zoneCount } = req.body;
-        
-        if (!zoneCount || isNaN(zoneCount) || zoneCount <= 0) {
-            res.status(400).json({ message: "Invalid zoneCount provided" });
-            return;
-        }
-        
-        await roomService.autoZoneRoom(roomId, Number(zoneCount));
-        res.json({ message: "Auto-zoning completed successfully" });
-    } catch (error: any) {
-        res.status(400).json({ message: error.message });
-    }
-};
-

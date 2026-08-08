@@ -1,4 +1,5 @@
 import { Sequelize, QueryTypes } from "sequelize";
+import mysql2 from "mysql2";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -32,28 +33,12 @@ loadDotenvSilently();
 /* Environment variables                          */
 /* ────────────────────────────────────────────── */
 
+const DB_DIALECT = process.env.DB_DIALECT || "mysql";
 const DB_NAME = process.env.DB_NAME || "";
 const DB_USER = process.env.DB_USER || "";
 const DB_PASS = process.env.DB_PASS || "";
 const DB_HOST = process.env.DB_HOST || "127.0.0.1";
-const DB_PORT = Number(process.env.DB_PORT || 1433);
-const DB_ENCRYPT = process.env.DB_ENCRYPT === "true";
-const DB_USE_WINDOWS_AUTH = process.env.DB_USE_WINDOWS_AUTH === "true";
-const DB_FALLBACK_TO_SQLITE = process.env.DB_FALLBACK_TO_SQLITE === "true";
-
-/* ────────────────────────────────────────────── */
-/* SQLite Config                                  */
-/* ────────────────────────────────────────────── */
-
-function createSQLite() {
-    console.warn("Using SQLite fallback (MSSQL not available or connection failed)");
-    const dbPath = path.resolve(process.cwd(), "database.sqlite");
-    return new Sequelize({
-        dialect: "sqlite",
-        storage: dbPath,
-        logging: false
-    });
-}
+const DB_PORT = Number(process.env.DB_PORT || 3306);
 
 /* ────────────────────────────────────────────── */
 /* Initialize Sequelize                           */
@@ -61,55 +46,43 @@ function createSQLite() {
 
 let sequelize: Sequelize;
 
-const hasMSSQLConfig =
-    DB_NAME.length > 0 &&
-    (DB_USE_WINDOWS_AUTH || (DB_USER.length > 0 && DB_PASS.length > 0)) &&
-    DB_HOST.length > 0;
-
-console.log(`MSSQL Config Check: Host=${DB_HOST}, Port=${DB_PORT}, Encrypt=${DB_ENCRYPT}, WindowsAuth=${DB_USE_WINDOWS_AUTH}`);
-
-if (hasMSSQLConfig) {
-    if (DB_USE_WINDOWS_AUTH) {
-        console.log("Initializing Sequelize with MSSQL Windows Authentication...");
-        sequelize = new Sequelize(DB_NAME, "", "", {
-            dialect: "mssql",
-            host: DB_HOST,
-            port: DB_PORT,
-            logging: false,
-            dialectOptions: {
-                driver: "msnodesqlv8",
-                connectionString: `Driver={ODBC Driver 17 for SQL Server};Server=${DB_HOST},${DB_PORT};Database=${DB_NAME};Trusted_Connection=yes;`,
-                options: {
-                    trustServerCertificate: true
-                }
-            },
-            pool: { max: 10, min: 0, acquire: 30000, idle: 10000 }
-        });
-    } else {
-        console.log("Initializing Sequelize with Standard MSSQL Config...");
-        sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASS, {
-            dialect: "mssql",
-            host: DB_HOST,
-            port: DB_PORT,
-            logging: false,
-            dialectOptions: {
-                options: {
-                    encrypt: DB_ENCRYPT,
-                    trustServerCertificate: true,
-                    connectTimeout: 30000
-                }
-            },
-            pool: {
-                max: 10,
-                min: 0,
-                acquire: 30000,
-                idle: 10000
-            }
-        });
-    }
+if (DB_DIALECT === "sqlite") {
+    console.log("Initializing Sequelize with SQLite Config...");
+    sequelize = new Sequelize({
+        dialect: "sqlite",
+        storage: path.resolve(process.cwd(), "database.sqlite"),
+        logging: false,
+    });
 } else {
-    console.warn("Missing MSSQL Config. Initializing SQLite DB.");
-    sequelize = createSQLite();
+    const hasMySQLConfig =
+        DB_NAME.length > 0 &&
+        DB_USER.length > 0 &&
+        DB_HOST.length > 0;
+
+    console.log(`MySQL/MariaDB Config Check: Host=${DB_HOST}, Port=${DB_PORT}, Database=${DB_NAME}, User=${DB_USER}`);
+
+    if (!hasMySQLConfig) {
+        throw new Error("Missing MySQL/MariaDB Config. Database name, user, and host are required.");
+    }
+
+    console.log("Initializing Sequelize with MySQL/MariaDB Config...");
+    sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASS, {
+        dialect: "mysql",
+        dialectModule: mysql2,
+        host: DB_HOST,
+        port: DB_PORT,
+        logging: false,
+        define: {
+            charset: "utf8mb4",
+            collate: "utf8mb4_unicode_ci"
+        },
+        pool: {
+            max: 10,
+            min: 0,
+            acquire: 30000,
+            idle: 10000
+        }
+    });
 }
 
 export { sequelize };
@@ -121,7 +94,7 @@ export { sequelize };
 async function ensureSchemaIntegrity() {
     try {
         const dialect = sequelize.getDialect();
-        if (dialect !== 'mssql') return;
+        if (dialect === 'mssql') {
 
         console.log("Checking schema integrity...");
 
@@ -307,6 +280,9 @@ async function ensureSchemaIntegrity() {
 
                 IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Invigilators]') AND name = 'DepartmentID')
                 ALTER TABLE [dbo].[Invigilators] ADD [DepartmentID] INT NULL;
+
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Invigilators]') AND name = 'FacultyID')
+                ALTER TABLE [dbo].[Invigilators] ADD [FacultyID] INT NULL;
             END
         `, { type: QueryTypes.RAW });
 
@@ -459,10 +435,29 @@ async function ensureSchemaIntegrity() {
                     [SemesterID]   INT NULL REFERENCES [dbo].[Semesters]([SemesterID]),
                     [Description]  NVARCHAR(255) NULL,
                     [IsActive]     BIT NOT NULL DEFAULT 1,
-                    [createdAt]    DATETIME NOT NULL DEFAULT GETDATE(),
-                    [updatedAt]    DATETIME NOT NULL DEFAULT GETDATE()
+                    [createdAt]    DATETIME2 NOT NULL DEFAULT GETDATE(),
+                    [updatedAt]    DATETIME2 NOT NULL DEFAULT GETDATE()
                 );
                 PRINT 'Created ExamSeries table';
+            END
+            ELSE
+            BEGIN
+                -- Upgrade to DATETIME2 if needed
+                IF (SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'ExamSeries' AND COLUMN_NAME = 'createdAt') = 'datetime'
+                BEGIN
+                    DECLARE @CName nvarchar(200);
+                    SELECT @CName = name FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID('ExamSeries') AND parent_column_id = (SELECT column_id FROM sys.columns WHERE name = 'createdAt' AND object_id = OBJECT_ID('ExamSeries'));
+                    IF @CName IS NOT NULL EXEC('ALTER TABLE ExamSeries DROP CONSTRAINT ' + @CName);
+                    
+                    SELECT @CName = name FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID('ExamSeries') AND parent_column_id = (SELECT column_id FROM sys.columns WHERE name = 'updatedAt' AND object_id = OBJECT_ID('ExamSeries'));
+                    IF @CName IS NOT NULL EXEC('ALTER TABLE ExamSeries DROP CONSTRAINT ' + @CName);
+                    
+                    ALTER TABLE [dbo].[ExamSeries] ALTER COLUMN [createdAt] DATETIME2 NOT NULL;
+                    ALTER TABLE [dbo].[ExamSeries] ALTER COLUMN [updatedAt] DATETIME2 NOT NULL;
+                    ALTER TABLE [dbo].[ExamSeries] ADD DEFAULT GETDATE() FOR [createdAt];
+                    ALTER TABLE [dbo].[ExamSeries] ADD DEFAULT GETDATE() FOR [updatedAt];
+                    PRINT 'Upgraded ExamSeries timestamps to DATETIME2';
+                END
             END
         `, { type: QueryTypes.RAW });
 
@@ -575,12 +570,6 @@ async function ensureSchemaIntegrity() {
                     PRINT 'Added IsActive to Seats';
                 END
 
-                -- Add ZoneID if not exists
-                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'ZoneID')
-                BEGIN
-                    ALTER TABLE [dbo].[Seats] ADD [ZoneID] INT NULL;
-                    PRINT 'Added ZoneID to Seats';
-                END
 
                 -- Handle Column Renames for Thaz branch compatibility
                 -- RowLabel -> RowIndex
@@ -631,17 +620,6 @@ async function ensureSchemaIntegrity() {
             END
         `, { type: QueryTypes.RAW });
 
-        // Add Color to Zones (Visualization Feature)
-        await sequelize.query(`
-            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Zones' AND TABLE_SCHEMA = 'dbo')
-            BEGIN
-                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Zones]') AND name = 'Color')
-                BEGIN
-                    ALTER TABLE [dbo].[Zones] ADD [Color] NVARCHAR(20) NULL;
-                    PRINT 'Added Color to Zones';
-                END
-            END
-        `, { type: QueryTypes.RAW });
 
         // Add Faculty Onboarding fields to Users
         await sequelize.query(`
@@ -925,12 +903,35 @@ async function ensureSchemaIntegrity() {
                     [SeatMode]     NVARCHAR(20)  NOT NULL DEFAULT 'Dual',
                     [Status]       NVARCHAR(20)  NOT NULL DEFAULT 'Active',
                     [ExamUsable]   BIT NOT NULL DEFAULT 1,
-                    [createdAt]    DATETIME NOT NULL DEFAULT GETDATE(),
-                    [updatedAt]    DATETIME NOT NULL DEFAULT GETDATE()
+                    [createdAt]    DATETIME2 NOT NULL DEFAULT GETDATE(),
+                    [updatedAt]    DATETIME2 NOT NULL DEFAULT GETDATE()
                 );
                 PRINT 'Created InternalRooms table';
             END
-            ELSE
+        `, { type: QueryTypes.RAW });
+
+        // Upgrade InternalRooms to DATETIME2
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalRooms' AND TABLE_SCHEMA = 'dbo')
+            AND (SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'InternalRooms' AND COLUMN_NAME = 'createdAt') = 'datetime'
+            BEGIN
+                DECLARE @CName nvarchar(200);
+                SELECT @CName = name FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID('InternalRooms') AND parent_column_id = (SELECT column_id FROM sys.columns WHERE name = 'createdAt' AND object_id = OBJECT_ID('InternalRooms'));
+                IF @CName IS NOT NULL EXEC('ALTER TABLE InternalRooms DROP CONSTRAINT ' + @CName);
+                
+                SELECT @CName = name FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID('InternalRooms') AND parent_column_id = (SELECT column_id FROM sys.columns WHERE name = 'updatedAt' AND object_id = OBJECT_ID('InternalRooms'));
+                IF @CName IS NOT NULL EXEC('ALTER TABLE InternalRooms DROP CONSTRAINT ' + @CName);
+                
+                ALTER TABLE [dbo].[InternalRooms] ALTER COLUMN [createdAt] DATETIME2 NOT NULL;
+                ALTER TABLE [dbo].[InternalRooms] ALTER COLUMN [updatedAt] DATETIME2 NOT NULL;
+                ALTER TABLE [dbo].[InternalRooms] ADD DEFAULT GETDATE() FOR [createdAt];
+                ALTER TABLE [dbo].[InternalRooms] ADD DEFAULT GETDATE() FOR [updatedAt];
+                PRINT 'Upgraded InternalRooms timestamps to DATETIME2';
+            END
+        `, { type: QueryTypes.RAW });
+
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalRooms' AND TABLE_SCHEMA = 'dbo')
             BEGIN
                 IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[InternalRooms]') AND name = 'RoomType')
                 BEGIN
@@ -972,9 +973,21 @@ async function ensureSchemaIntegrity() {
                     [Type]        NVARCHAR(50) NOT NULL,
                     [Description] NVARCHAR(MAX) NOT NULL,
                     [Status]      NVARCHAR(20) NOT NULL DEFAULT 'PENDING',
-                    [CreatedAt]   DATETIME NOT NULL DEFAULT GETDATE()
+                    [CreatedAt]   DATETIME2 NOT NULL DEFAULT GETDATE()
                 );
                 PRINT 'Created IncidentReports table';
+            END
+            ELSE
+            BEGIN
+                IF (SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'IncidentReports' AND COLUMN_NAME = 'CreatedAt') = 'datetime'
+                BEGIN
+                    DECLARE @CName nvarchar(200);
+                    SELECT @CName = name FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID('IncidentReports') AND parent_column_id = (SELECT column_id FROM sys.columns WHERE name = 'CreatedAt' AND object_id = OBJECT_ID('IncidentReports'));
+                    IF @CName IS NOT NULL EXEC('ALTER TABLE IncidentReports DROP CONSTRAINT ' + @CName);
+                    ALTER TABLE [dbo].[IncidentReports] ALTER COLUMN [CreatedAt] DATETIME2 NOT NULL;
+                    ALTER TABLE [dbo].[IncidentReports] ADD DEFAULT GETDATE() FOR [CreatedAt];
+                    PRINT 'Upgraded IncidentReports timestamps to DATETIME2';
+                END
             END
         `, { type: QueryTypes.RAW });
 
@@ -990,34 +1003,317 @@ async function ensureSchemaIntegrity() {
                     [SubstituteID] INT NULL REFERENCES [dbo].[Faculties]([FacultyID]),
                     [Reason]       NVARCHAR(MAX) NOT NULL,
                     [Status]       NVARCHAR(20) NOT NULL DEFAULT 'PENDING',
-                    [CreatedAt]    DATETIME NOT NULL DEFAULT GETDATE(),
-                    [UpdatedAt]    DATETIME NOT NULL DEFAULT GETDATE()
+                    [CreatedAt]    DATETIME2 NOT NULL DEFAULT GETDATE(),
+                    [UpdatedAt]    DATETIME2 NOT NULL DEFAULT GETDATE()
                 );
                 PRINT 'Created DutySwaps table';
             END
         `, { type: QueryTypes.RAW });
 
+        // Upgrade DutySwaps to DATETIME2
+        await sequelize.query(`
+            IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'DutySwaps' AND TABLE_SCHEMA = 'dbo')
+            AND (SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'DutySwaps' AND COLUMN_NAME = 'CreatedAt') = 'datetime'
+            BEGIN
+                DECLARE @CName nvarchar(200);
+                SELECT @CName = name FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID('DutySwaps') AND parent_column_id = (SELECT column_id FROM sys.columns WHERE name = 'CreatedAt' AND object_id = OBJECT_ID('DutySwaps'));
+                IF @CName IS NOT NULL EXEC('ALTER TABLE DutySwaps DROP CONSTRAINT ' + @CName);
+                
+                SELECT @CName = name FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID('DutySwaps') AND parent_column_id = (SELECT column_id FROM sys.columns WHERE name = 'UpdatedAt' AND object_id = OBJECT_ID('DutySwaps'));
+                IF @CName IS NOT NULL EXEC('ALTER TABLE DutySwaps DROP CONSTRAINT ' + @CName);
+                
+                ALTER TABLE [dbo].[DutySwaps] ALTER COLUMN [CreatedAt] DATETIME2 NOT NULL;
+                ALTER TABLE [dbo].[DutySwaps] ALTER COLUMN [UpdatedAt] DATETIME2 NOT NULL;
+                ALTER TABLE [dbo].[DutySwaps] ADD DEFAULT GETDATE() FOR [CreatedAt];
+                ALTER TABLE [dbo].[DutySwaps] ADD DEFAULT GETDATE() FOR [UpdatedAt];
+                PRINT 'Upgraded DutySwaps timestamps to DATETIME2';
+            END
+        `, { type: QueryTypes.RAW });
+
+        } // end if (dialect === 'mssql')
     } catch (error) {
         console.warn("Schema integrity check warning (non-fatal):", error);
+    }
+
+    // ── Internal Students / Exam Schema Migrations ──
+    try {
+        const dialect = sequelize.getDialect();
+
+        // ─── SQLite Column Migrations ───
+        if (dialect === 'sqlite') {
+            try {
+                // InternalStudents — add new class-based fields
+                const tableInfo: any[] = await sequelize.query("PRAGMA table_info('InternalStudents')", { type: QueryTypes.SELECT });
+                const existingCols = new Set(tableInfo.map(c => c.name));
+
+                const internalStudentCols = [
+                    { name: 'RollNumber', type: 'INTEGER' },
+                    { name: 'Batch', type: 'VARCHAR(100)' },
+                    { name: 'BatchStart', type: 'INTEGER' },
+                    { name: 'BatchEnd', type: 'INTEGER' },
+                    { name: 'Division', type: 'VARCHAR(10) DEFAULT "A"' },
+                    { name: 'Semester', type: 'VARCHAR(20)' },
+                ];
+
+                for (const col of internalStudentCols) {
+                    if (!existingCols.has(col.name)) {
+                        try {
+                            await sequelize.query(`ALTER TABLE InternalStudents ADD COLUMN ${col.name} ${col.type}`, { type: QueryTypes.RAW });
+                            console.log(`[SQLite Migration] Added column ${col.name} to InternalStudents`);
+                        } catch (e: any) {
+                            console.warn(`[SQLite Migration] Add column ${col.name} warning:`, e.message);
+                        }
+                    }
+                }
+
+                // InternalExamDepartments — add Division
+                const deptTableInfo: any[] = await sequelize.query("PRAGMA table_info('InternalExamDepartments')", { type: QueryTypes.SELECT });
+                const deptCols = new Set(deptTableInfo.map(c => c.name));
+                if (!deptCols.has('Division')) {
+                    try {
+                        await sequelize.query(`ALTER TABLE InternalExamDepartments ADD COLUMN Division VARCHAR(10) DEFAULT "ALL"`, { type: QueryTypes.RAW });
+                        console.log(`[SQLite Migration] Added column Division to InternalExamDepartments`);
+                    } catch (_) {}
+                }
+
+                // InternalExamRegistrations — add RegistrationMethod
+                const regTableInfo: any[] = await sequelize.query("PRAGMA table_info('InternalExamRegistrations')", { type: QueryTypes.SELECT });
+                const regCols = new Set(regTableInfo.map(c => c.name));
+                if (!regCols.has('RegistrationMethod')) {
+                    try {
+                        await sequelize.query(`ALTER TABLE InternalExamRegistrations ADD COLUMN RegistrationMethod VARCHAR(20) DEFAULT "AUTO"`, { type: QueryTypes.RAW });
+                        console.log(`[SQLite Migration] Added column RegistrationMethod to InternalExamRegistrations`);
+                    } catch (_) {}
+                }
+            } catch (sqErr: any) {
+                console.warn("[SQLite Migration] Schema check warning:", sqErr.message);
+            }
+        }
+
+        // ─── MSSQL Column Migrations ───
+        if (dialect === 'mssql') {
+            // InternalStudents — add missing columns (matches InternalStudent.ts model)
+            const internalStudentCols = [
+                { name: 'Source', type: 'NVARCHAR(30) NOT NULL DEFAULT \'Imported\' WITH VALUES' },
+                { name: 'Status', type: 'NVARCHAR(20) NOT NULL DEFAULT \'ACTIVE\' WITH VALUES' },
+                { name: 'RollNumber', type: 'INT NULL' },
+                { name: 'Batch', type: 'NVARCHAR(100) NULL' },
+                { name: 'BatchStart', type: 'INT NULL' },
+                { name: 'BatchEnd', type: 'INT NULL' },
+                { name: 'Division', type: 'NVARCHAR(10) NULL DEFAULT \'A\'' },
+                { name: 'Semester', type: 'NVARCHAR(20) NULL' },
+            ];
+
+            for (const col of internalStudentCols) {
+                await sequelize.query(`
+                    IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalStudents' AND TABLE_SCHEMA = 'dbo')
+                    BEGIN
+                        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[InternalStudents]') AND name = '${col.name}')
+                        BEGIN
+                            ALTER TABLE [dbo].[InternalStudents] ADD [${col.name}] ${col.type};
+                            PRINT 'Added ${col.name} to InternalStudents';
+                        END
+                    END
+                `, { type: QueryTypes.RAW });
+            }
+
+            // InternalExamDepartments — add Division
+            await sequelize.query(`
+                IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalExamDepartments' AND TABLE_SCHEMA = 'dbo')
+                BEGIN
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[InternalExamDepartments]') AND name = 'Division')
+                    BEGIN
+                        ALTER TABLE [dbo].[InternalExamDepartments] ADD [Division] NVARCHAR(10) NULL DEFAULT 'ALL';
+                        PRINT 'Added Division to InternalExamDepartments';
+                    END
+                END
+            `, { type: QueryTypes.RAW });
+
+            // InternalExamRegistrations — add RegistrationMethod
+            await sequelize.query(`
+                IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalExamRegistrations' AND TABLE_SCHEMA = 'dbo')
+                BEGIN
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[InternalExamRegistrations]') AND name = 'RegistrationMethod')
+                    BEGIN
+                        ALTER TABLE [dbo].[InternalExamRegistrations] ADD [RegistrationMethod] NVARCHAR(20) NOT NULL DEFAULT 'AUTO' WITH VALUES;
+                        PRINT 'Added RegistrationMethod to InternalExamRegistrations';
+                    END
+                END
+            `, { type: QueryTypes.RAW });
+
+            // Internal Seating System — SnapshotID on InternalSeatAllocations
+            await sequelize.query(`
+                IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalSeatAllocations' AND TABLE_SCHEMA = 'dbo')
+                BEGIN
+                    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[InternalSeatAllocations]') AND name = 'SnapshotID')
+                    BEGIN
+                        ALTER TABLE [dbo].[InternalSeatAllocations] ADD [SnapshotID] INT NULL;
+                        PRINT 'Added SnapshotID to InternalSeatAllocations';
+                    END
+                END
+            `, { type: QueryTypes.RAW });
+
+            // InternalSeatSnapshots table
+            await sequelize.query(`
+                IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalSeatSnapshots' AND TABLE_SCHEMA = 'dbo')
+                BEGIN
+                    CREATE TABLE [dbo].[InternalSeatSnapshots] (
+                        [SnapshotID] INT IDENTITY(1,1) PRIMARY KEY,
+                        [Title] NVARCHAR(100) NOT NULL,
+                        [Session] NVARCHAR(10) NOT NULL,
+                        [ExamDate] DATE NOT NULL,
+                        [SeriesID] INT NOT NULL REFERENCES [dbo].[InternalExamSeries]([InternalExamSeriesID]),
+                        [createdAt] DATETIME2 NOT NULL DEFAULT GETDATE(),
+                        [updatedAt] DATETIME2 NOT NULL DEFAULT GETDATE()
+                    );
+                    PRINT 'Created InternalSeatSnapshots table';
+                END
+            `, { type: QueryTypes.RAW });
+
+            await sequelize.query(`
+                IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalSeatSnapshots' AND TABLE_SCHEMA = 'dbo')
+                AND (SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'InternalSeatSnapshots' AND COLUMN_NAME = 'createdAt') = 'datetime'
+                BEGIN
+                    DECLARE @CName nvarchar(200);
+                    SELECT @CName = name FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID('InternalSeatSnapshots') AND parent_column_id = (SELECT column_id FROM sys.columns WHERE name = 'createdAt' AND object_id = OBJECT_ID('InternalSeatSnapshots'));
+                    IF @CName IS NOT NULL EXEC('ALTER TABLE InternalSeatSnapshots DROP CONSTRAINT ' + @CName);
+                    
+                    SELECT @CName = name FROM sys.default_constraints WHERE parent_object_id = OBJECT_ID('InternalSeatSnapshots') AND parent_column_id = (SELECT column_id FROM sys.columns WHERE name = 'updatedAt' AND object_id = OBJECT_ID('InternalSeatSnapshots'));
+                    IF @CName IS NOT NULL EXEC('ALTER TABLE InternalSeatSnapshots DROP CONSTRAINT ' + @CName);
+                    
+                    ALTER TABLE [dbo].[InternalSeatSnapshots] ALTER COLUMN [createdAt] DATETIME2 NOT NULL;
+                    ALTER TABLE [dbo].[InternalSeatSnapshots] ALTER COLUMN [updatedAt] DATETIME2 NOT NULL;
+                    ALTER TABLE [dbo].[InternalSeatSnapshots] ADD DEFAULT GETDATE() FOR [createdAt];
+                    ALTER TABLE [dbo].[InternalSeatSnapshots] ADD DEFAULT GETDATE() FOR [updatedAt];
+                    PRINT 'Upgraded InternalSeatSnapshots timestamps to DATETIME2';
+                END
+            `, { type: QueryTypes.RAW });
+
+            // InternalSeatLayouts table
+            await sequelize.query(`
+                IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalSeatLayouts' AND TABLE_SCHEMA = 'dbo')
+                BEGIN
+                    CREATE TABLE [dbo].[InternalSeatLayouts] (
+                        [LayoutID] INT IDENTITY(1,1) PRIMARY KEY,
+                        [RoomID] INT NOT NULL UNIQUE REFERENCES [dbo].[InternalRooms]([RoomID]),
+                        [LayoutVersion] INT NOT NULL DEFAULT 1,
+                        [TotalCapacity] INT NOT NULL DEFAULT 0,
+                        [ActiveCapacity] INT NOT NULL DEFAULT 0,
+                        [SeatingMode] NVARCHAR(20) NOT NULL DEFAULT 'Dual',
+                        [Pattern] NVARCHAR(100) NOT NULL DEFAULT 'standard',
+                        [UpdatedAt] DATETIME2 NOT NULL DEFAULT GETDATE()
+                    );
+                    PRINT 'Created InternalSeatLayouts table';
+                END
+            `, { type: QueryTypes.RAW });
+
+            // InternalSeatColumns table
+            await sequelize.query(`
+                IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'InternalSeatColumns' AND TABLE_SCHEMA = 'dbo')
+                BEGIN
+                    CREATE TABLE [dbo].[InternalSeatColumns] (
+                        [ColumnID] INT IDENTITY(1,1) PRIMARY KEY,
+                        [LayoutID] INT NOT NULL REFERENCES [dbo].[InternalSeatLayouts]([LayoutID]) ON DELETE CASCADE,
+                        [ColumnLabel] NVARCHAR(2) NOT NULL,
+                        [BenchesCount] INT NOT NULL DEFAULT 0
+                    );
+                    PRINT 'Created InternalSeatColumns table';
+                END
+            `, { type: QueryTypes.RAW });
+
+            // ─── LEGACY ZONE FEATURE CLEANUP ───
+            await sequelize.query(`
+                IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Seats]') AND name = 'ZoneID')
+                BEGIN
+                    IF EXISTS (SELECT * FROM sys.indexes WHERE name = 'seats__room_i_d__zone_i_d' AND object_id = OBJECT_ID(N'[dbo].[Seats]'))
+                    BEGIN
+                        DROP INDEX [seats__room_i_d__zone_i_d] ON [dbo].[Seats];
+                        PRINT 'Dropped index seats__room_i_d__zone_i_d';
+                    END
+
+                    DECLARE @FKName nvarchar(200);
+                    SELECT @FKName = f.name
+                    FROM sys.foreign_keys f
+                    WHERE f.parent_object_id = OBJECT_ID('Seats') AND f.referenced_object_id = OBJECT_ID('Zones');
+                    
+                    IF @FKName IS NOT NULL
+                        EXEC('ALTER TABLE [dbo].[Seats] DROP CONSTRAINT ' + @FKName);
+
+                    DECLARE @ConstraintName nvarchar(200);
+                    SELECT @ConstraintName = d.name
+                    FROM sys.default_constraints d
+                    INNER JOIN sys.columns c ON d.parent_object_id = c.object_id AND d.parent_column_id = c.column_id
+                    WHERE d.parent_object_id = OBJECT_ID(N'[dbo].[Seats]') AND c.name = 'ZoneID';
+                    
+                    IF @ConstraintName IS NOT NULL
+                        EXEC('ALTER TABLE [dbo].[Seats] DROP CONSTRAINT ' + @ConstraintName);
+
+                    ALTER TABLE [dbo].[Seats] DROP COLUMN [ZoneID];
+                    PRINT 'Dropped ZoneID from Seats';
+                END
+
+                IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Zones' AND TABLE_SCHEMA = 'dbo')
+                BEGIN
+                    DROP TABLE [dbo].[Zones];
+                    PRINT 'Dropped Zones table';
+                END
+            `, { type: QueryTypes.RAW });
+        }
+    } catch (error) {
+        console.warn("Internal exam schema migration warning:", error);
+    }
+}
+
+async function syncMissingColumns() {
+    try {
+        const queryInterface = sequelize.getQueryInterface();
+        const models = sequelize.models;
+
+        for (const [modelName, model] of Object.entries(models)) {
+            const rawTableName = model.getTableName();
+            const tableName = typeof rawTableName === "string" ? rawTableName : (rawTableName as any).tableName;
+            try {
+                const tableDesc = await queryInterface.describeTable(tableName);
+                const modelAttributes = model.getAttributes();
+
+                for (const [attrName, attr] of Object.entries(modelAttributes)) {
+                    const columnName = attr.field || attrName;
+                    if (!tableDesc[columnName]) {
+                        console.log(`[SchemaIntegrity] Auto-adding missing column '${columnName}' to table '${tableName}'...`);
+                        try {
+                            await queryInterface.addColumn(tableName, columnName, attr as any);
+                            console.log(`[SchemaIntegrity] Added column '${columnName}' to '${tableName}'.`);
+                        } catch (addErr: any) {
+                            console.warn(`[SchemaIntegrity] Column add note ('${columnName}' in '${tableName}'):`, addErr.message);
+                        }
+                    }
+                }
+            } catch (tableErr: any) {
+                // Table does not exist yet; sequelize.sync() will create it
+            }
+        }
+    } catch (e: any) {
+        console.warn("[SchemaIntegrity] Missing columns sync note:", e.message);
     }
 }
 
 export async function connectDB() {
+    if (DB_DIALECT !== "sqlite") {
+        try {
+            const { ensureServicesRunning, ensureDatabaseExists } = await import("../utils/serviceManager.js");
+            await ensureServicesRunning();
+            await ensureDatabaseExists(DB_NAME, DB_USER, DB_PASS, DB_HOST, DB_PORT);
+        } catch (srvErr: any) {
+            console.warn("[ServiceManager] Notice during auto-start:", srvErr.message);
+        }
+    }
+
     try {
         await sequelize.authenticate();
         console.log(`Connection Connected: ${sequelize.getDialect()} `);
     } catch (err: any) {
         console.error("Database Connection Failed:", err.message);
-
-        const isMSSQL = sequelize.getDialect() === 'mssql';
-        if (isMSSQL && DB_FALLBACK_TO_SQLITE) {
-            console.warn("MSSQL connection failed. Falling back to SQLite as configured...");
-            sequelize = createSQLite();
-            await sequelize.authenticate();
-            console.log("Connected to SQLite fallback database.");
-        } else {
-            throw err;
-        }
+        throw err;
     }
 
     try {
@@ -1025,10 +1321,12 @@ export async function connectDB() {
 
         await import("../models/index.js");
 
+        await syncMissingColumns();
+
         const dialect = sequelize.getDialect();
-        if (dialect === 'mssql') {
+        if (dialect === 'mssql' || process.env.DB_ALTER_SYNC !== 'true') {
             await sequelize.sync();
-            console.log("Database synchronized (standard, alter skipped for MSSQL)");
+            console.log(`Database synchronized (standard sync, dialect: ${dialect})`);
         } else {
             try {
                 await sequelize.sync({ alter: true });

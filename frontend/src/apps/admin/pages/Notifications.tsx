@@ -11,7 +11,8 @@ import {
     markAllAsRead,
     deleteNotification,
     getNotificationStats,
-    initNotificationSocket
+    initNotificationSocket,
+    unsubscribeFromNotifications
 } from '../services/notificationService';
 import { useAuth } from '../../../hooks/useAuth';
 import toast from 'react-hot-toast';
@@ -32,10 +33,16 @@ const Notifications: React.FC = () => {
             fetchStats();
 
             // Socket Listener
-            initNotificationSocket(user.UserID, (newNotification) => {
+            const handleNewNotification = (newNotification: any) => {
                 setNotifications(prev => [newNotification, ...prev]);
                 fetchStats(); // Update stats
-            });
+            };
+
+            initNotificationSocket(user.UserID, handleNewNotification);
+
+            return () => {
+                unsubscribeFromNotifications(handleNewNotification);
+            };
         }
     }, [user, activeTab]);
 
