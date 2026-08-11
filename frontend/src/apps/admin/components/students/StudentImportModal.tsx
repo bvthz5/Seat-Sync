@@ -68,17 +68,18 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
             clearInterval(progressInterval);
             setProgress(100);
 
-            const errorCount = response.failedCount || response.errorCount || 0;
+            const errorCount = response.failedCount ?? response.errorCount ?? (response.errors ? response.errors.length : 0);
+            const successCount = response.studentsImported ?? response.successCount ?? 0;
 
             setUploadStats({
-                success: response.successCount || 0,
+                success: successCount,
                 errors: errorCount,
                 active: true,
                 errorList: response.errors || []
             });
 
             if (errorCount === 0) {
-                toast.success(`Successfully imported ${response.successCount} students!`);
+                toast.success(`Successfully imported ${successCount} students!`);
                 setFile(null);
                 if (fileInputRef.current) fileInputRef.current.value = '';
                 setTimeout(() => {
@@ -86,7 +87,7 @@ const StudentImportModal: React.FC<StudentImportModalProps> = ({ isOpen, onClose
                     onClose();
                 }, 2000);
             } else {
-                toast.error(`Imported ${response.successCount} students with ${errorCount} errors.`);
+                toast.error(`Imported ${successCount} students with ${errorCount} errors.`);
                 setFile(null);
                 if (fileInputRef.current) fileInputRef.current.value = '';
             }

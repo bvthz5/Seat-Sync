@@ -101,21 +101,39 @@ export class InternalExamController {
         if (!text) return null;
         text = text.toUpperCase();
         
-        let match = text.match(/\bS([1-8])\b/);
+        // 1. Remove series references like "FIRST INTERNAL", "1ST INTERNAL", "SECOND INTERNAL"
+        const cleanText = text.replace(/\b(?:FIRST|SECOND|THIRD|FOURTH|1ST|2ND|3RD|4TH)\s+(?:INTERNAL|TEST|EVALUATION|EXAM|EXAMINATION|SERIES)\b/gi, '');
+
+        // 2. Direct S1..S8 match
+        let match = cleanText.match(/\bS([1-8])\b/);
         if (match) return `S${match[1]}`;
 
-        match = text.match(/\bSEM(?:ESTER)?\s*([1-8])\b/);
+        // 3. SEM 1..8 or SEMESTER 1..8 match
+        match = cleanText.match(/\bSEM(?:ESTER)?\s*([1-8])\b/);
         if (match) return `S${match[1]}`;
 
-        const romanMap: Record<string, string> = {
+        // 4. Word semester match (e.g. THIRD SEMESTER, FIFTH SEMESTER, S3 BTECH)
+        const wordMap: Record<string, string> = {
             FIRST: 'S1', SECOND: 'S2', THIRD: 'S3', FOURTH: 'S4',
-            FIFTH: 'S5', SIXTH: 'S6', SEVENTH: 'S7', EIGHTH: 'S8',
+            FIFTH: 'S5', SIXTH: 'S6', SEVENTH: 'S7', EIGHTH: 'S8'
+        };
+
+        for (const [key, val] of Object.entries(wordMap)) {
+            if (cleanText.match(new RegExp(`\\b${key}\\s+(?:SEM|SEMESTER|YEAR|BTECH|B\\.TECH|MCA|DEGREE)\\b`))) {
+                return val;
+            }
+        }
+
+        // 5. Roman numeral semester match (e.g. III SEMESTER, V SEMESTER)
+        const romanMap: Record<string, string> = {
             I: 'S1', II: 'S2', III: 'S3', IV: 'S4',
             V: 'S5', VI: 'S6', VII: 'S7', VIII: 'S8'
         };
 
         for (const [key, val] of Object.entries(romanMap)) {
-            if (text.match(new RegExp(`\\b${key}\\b`))) return val;
+            if (cleanText.match(new RegExp(`\\b${key}\\s+(?:SEM|SEMESTER)\\b`))) {
+                return val;
+            }
         }
 
         return null;
@@ -275,6 +293,18 @@ export class InternalExamController {
         return InternalExamController.extractRowsFromLines(InternalExamController.normalizeLines(text));
     }
 
+    static isSemesterHeaderLine(line: string): string | null {
+        if (!line) return null;
+        const upper = line.toUpperCase().trim();
+
+        // Must look like a section/header line (e.g. "S5 BTech", "First Internal Exam August 2026- S5 BTech (2024 Scheme)", "Semester 3")
+        const isHeaderContext = upper.includes('INTERNAL') || upper.includes('EXAM') || upper.includes('SCHEME') || upper.includes('SEMESTER') || upper.includes('TIMETABLE') || upper.includes('BTECH') || upper.includes('DEGREE') || upper.match(/^(?:SEM(?:ESTER)?\s*|S)[1-8](?:\s+BTECH|\s+DEGREE)?$/);
+
+        if (!isHeaderContext) return null;
+
+        return InternalExamController.extractSemester(upper);
+    }
+
     static extractRowsFromLines(lines: string[]) {
         const rows: any[] = [];
         let currentDate: string | null = null;
@@ -283,8 +313,11 @@ export class InternalExamController {
         let currentSemester: string | null = null;
 
         for (const line of lines) {
-            const semMatch = InternalExamController.extractSemester(line);
-            if (semMatch) currentSemester = semMatch;
+            // Only update currentSemester if the line is a section header line
+            const headerSem = InternalExamController.isSemesterHeaderLine(line);
+            if (headerSem) {
+                currentSemester = headerSem;
+            }
 
             const dateMatch = line.match(/\b(?:\d{4}-\d{2}-\d{2}|\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{1,2}\s*[A-Za-z]{3,9}\.?\s*\d{4})\b/);
             if (dateMatch) currentDate = dateMatch[0];
@@ -293,18 +326,38 @@ export class InternalExamController {
             if (timeMatch) currentTime = timeMatch[0];
 
             const slotMatch = line.match(/\b(?:Slot\s+)?([A-Z])\b/i);
-            if (slotMatch) currentSlot = slotMatch[1] || null;
+            if (slotMatch && line.toLowerCase().includes('slot')) currentSlot = slotMatch[1] || null;
 
-            const courseMatch = line.match(/\b(?:2\d[A-Z]{2,}[A-Z0-9]*\d{2,}|[A-Z]{2,}[0-9]{2,}[A-Z0-9-]*)\b/);
-            if (courseMatch) {
-                rows.push({
-                    _inheritedDate: currentDate,
-                    _inheritedTime: currentTime,
-                    _inheritedSlot: currentSlot,
-                    _semester: currentSemester,
-                    Course: line,
-                    Branch: 'ALL_BRANCHES'
-                });
+            // Match genuine course code (e.g. 24SIPCMETS01, 24SIPCCSTS01, MAT201, CST302)
+            // Must NOT match dates like 18/08/2026 or 2026-08-18
+            const courseCodeMatch = line.match(/\b(2[0-9][A-Z0-9]{5,12}|[A-Z]{2,6}[0-9]{3,6}[A-Z0-9]*)\b/);
+            
+            if (courseCodeMatch) {
+                const matchedCode = courseCodeMatch[1];
+                // Verify matchedCode is not a pure date or year like 2026
+                if (matchedCode && !/^\d+$/.test(matchedCode) && !/^\d{1,2}[\/.-]\d{1,2}/.test(matchedCode)) {
+                    // Extract Branch scope if present on line (e.g. "AD, CA, CC, CS" or "CE, EE, EC, ER, ME")
+                    const branchMatch = line.match(/\b(?:[A-Z]{2,4}\s*[,&/]\s*)+[A-Z]{2,4}\b|\bALL\s+BRANCHES\b|\bALL\b/i);
+                    const branchStr = branchMatch ? branchMatch[0] : 'ALL_BRANCHES';
+
+                    // Clean course line: remove date, session, pipes
+                    let cleanCourse = line
+                        .replace(/\b(?:\d{4}-\d{2}-\d{2}|\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})\b/g, '')
+                        .replace(/\b\d{1,2}(?::|\.)\d{2}\s*(?:am|pm)\b/gi, '')
+                        .replace(/\b(?:FN|AN)\b/gi, '')
+                        .replace(/\|/g, ' ')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+
+                    rows.push({
+                        _inheritedDate: currentDate,
+                        _inheritedTime: currentTime,
+                        _inheritedSlot: currentSlot,
+                        _semester: currentSemester || 'S3',
+                        Course: cleanCourse,
+                        Branch: branchStr
+                    });
+                }
             }
         }
         return rows;
@@ -423,6 +476,27 @@ export class InternalExamController {
                     const deptCodes = InternalExamController.parseDepartmentCodes(branchesRaw);
                     const targetDeptIds: number[] = [];
 
+                    const courseStr = String(courseRaw).trim();
+                    const courseUpper = courseStr.toUpperCase();
+                    const slotUpper = String(slotRaw || '').toUpperCase();
+                    const branchUpper = String(branchesRaw || '').toUpperCase();
+
+                    let subjectType = 'CORE';
+                    let scopeType = 'BRANCH_SCOPE';
+
+                    if (courseUpper.includes('MINOR') || slotUpper.includes('MINOR') || branchUpper.includes('MINOR')) {
+                        subjectType = 'MINOR';
+                        scopeType = 'ELECTIVE_REGISTRATION_REQUIRED';
+                    } else if (courseUpper.includes('HONOUR') || slotUpper.includes('HONOUR') || branchUpper.includes('HONOUR')) {
+                        subjectType = 'HONOURS';
+                        scopeType = 'ELECTIVE_REGISTRATION_REQUIRED';
+                    } else if (courseUpper.includes('ELECTIVE') || slotUpper.includes('ELECTIVE') || branchUpper.includes('ELECTIVE')) {
+                        subjectType = 'ELECTIVE';
+                        scopeType = 'ELECTIVE_REGISTRATION_REQUIRED';
+                    } else if (deptCodes.includes('ALL_BRANCHES')) {
+                        scopeType = 'ALL_BRANCHES';
+                    }
+
                     if (deptCodes.includes('ALL_BRANCHES')) {
                         targetDeptIds.push(...allDeptIds);
                     } else {
@@ -433,17 +507,29 @@ export class InternalExamController {
                         }
                     }
 
-                    const courseStr = String(courseRaw).trim();
-                    const codeMatch = courseStr.match(/^([A-Z0-9]+)\s+(.*)$/i);
-                    let subjectCode = courseStr;
-                    let subjectName = courseStr;
+                    let cleanCourseStr = String(courseRaw).replace(/^["'“”`]+/, '').trim();
+                    // Strip leading table serial number e.g. "1 24SIMCA263..." -> "24SIMCA263..."
+                    cleanCourseStr = cleanCourseStr.replace(/^\d+[\s.-]+(?=[A-Z0-9])/i, '').trim();
 
-                    if (codeMatch && codeMatch[1] && codeMatch[2]) {
-                        subjectCode = codeMatch[1].trim();
-                        subjectName = codeMatch[2].trim();
+                    let subjectCode = cleanCourseStr;
+                    let subjectName = cleanCourseStr;
+
+                    const hyphenSplit = cleanCourseStr.split(/[-–—]\s*/);
+                    const firstPart = (hyphenSplit[0] || '').trim();
+                    if (hyphenSplit.length >= 2 && firstPart.length > 0) {
+                        subjectCode = firstPart;
+                        subjectName = hyphenSplit.slice(1).join(' - ').trim();
                     } else {
-                        subjectCode = courseStr.split(' ')[0] || courseStr;
+                        const codeMatch = cleanCourseStr.match(/^([A-Z0-9]+)\s+(.*)$/i);
+                        if (codeMatch && codeMatch[1] && codeMatch[2]) {
+                            subjectCode = codeMatch[1].trim();
+                            subjectName = codeMatch[2].trim();
+                        } else {
+                            subjectCode = cleanCourseStr.split(' ')[0] || cleanCourseStr;
+                        }
                     }
+
+                    const branchScopeStr = deptCodes.join(',');
 
                     // For the preview payload
                     parsedItems.push({
@@ -451,9 +537,11 @@ export class InternalExamController {
                         date: formattedDate,
                         session: session,
                         slot: slotRaw || '-',
-                        branch: deptCodes.join(', '),
+                        branch: branchScopeStr,
                         subjectCode: subjectCode,
-                        subjectName: subjectName
+                        subjectName: subjectName,
+                        subjectType,
+                        scopeType
                     });
 
                     if (req.body.previewOnly === 'true' || req.body.previewOnly === true) {
@@ -463,6 +551,7 @@ export class InternalExamController {
                     const [exam, created] = await InternalExam.findOrCreate({
                         where: {
                             InternalExamSeriesID: seriesId,
+                            Semester: semesterRaw,
                             ExamDate: formattedDate as any,
                             Session: session,
                             SubjectCode: subjectCode
@@ -477,7 +566,10 @@ export class InternalExamController {
                             Slot: slotRaw ? String(slotRaw).trim() : null,
                             Duration: duration,
                             StartTime: startTime || null,
-                            EndTime: endTime || null
+                            EndTime: endTime || null,
+                            BranchScope: branchScopeStr,
+                            ScopeType: scopeType,
+                            SubjectType: subjectType
                         } as any
                     });
 
@@ -490,7 +582,10 @@ export class InternalExamController {
                             Slot: slotRaw ? String(slotRaw).trim() : null,
                             Duration: duration,
                             StartTime: startTime || null,
-                            EndTime: endTime || null
+                            EndTime: endTime || null,
+                            BranchScope: branchScopeStr,
+                            ScopeType: scopeType,
+                            SubjectType: subjectType
                         } as any);
                         updatedCount++;
                     }

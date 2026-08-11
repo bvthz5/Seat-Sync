@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { Card, CardBody, Button } from "@heroui/react";
-import { BookOpen, Plus, Clock, FileText, AlertCircle, ArrowLeft, CheckCircle, CalendarDays, Upload, Pencil, Trash2, Users, UserCheck } from "lucide-react";
+import { Card, CardBody, Button, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/react";
+import { motion, AnimatePresence } from 'framer-motion';
+import { BookOpen, Plus, Clock, FileText, AlertCircle, ArrowLeft, CheckCircle, CalendarDays, Upload, Pencil, Trash2, Users, UserCheck, GraduationCap, ChevronDown, ChevronRight, FolderOpen, UserPlus } from "lucide-react";
 import { toast } from 'react-hot-toast';
 import { ExamService } from '../services/examService';
 import { SeriesService } from '../services/seriesService';
@@ -10,6 +11,7 @@ import { AccessTokenStore } from '../../../services/api';
 import CreateExamModal from '../components/exams/CreateExamModal';
 import ExamImportModal from '../components/exams/ExamImportModal';
 import { InternalExamImportModal } from '../components/internal-structure/InternalExamImportModal';
+import { SemesterStudentImportModal } from '../components/internal-structure/SemesterStudentImportModal';
 import EditExamModal from '../components/exams/EditExamModal';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { BulkAutoRegisterModal } from '../components/exams/BulkAutoRegisterModal';
@@ -33,6 +35,7 @@ type GroupedExam = {
     status: string;
     duration: number;
     subjectCode: string;
+    semester: string;
     branches: BranchOption[];
     hasRegistrations: boolean;
 };
@@ -45,9 +48,11 @@ const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
         const examName = String(exam?.ExamName || '').trim();
         const session = String(exam?.Session || '').trim().toUpperCase();
         const duration = Number(exam?.Duration || 0);
+        const semRaw = String(exam?.Semester || exam?.Subject?.Semester || 'S3').toUpperCase().trim();
+        const semester = semRaw.startsWith('S') ? semRaw : (semRaw ? `S${semRaw}` : 'S3');
         // Stable grouping by date, session, and subject code (fallback to name)
         const paperId = String(exam?.Subject?.SubjectCode || examName).trim();
-        const groupKey = `${date}::${session}::${paperId}::${duration}`;
+        const groupKey = `${date}::${session}::${paperId}::${duration}::${semester}`;
         const department = exam?.Subject?.Department || {};
         const branchKey = String(department.DepartmentID || department.DepartmentCode || exam.ExamID);
 
@@ -60,6 +65,7 @@ const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
                 status: String(exam?.Status || 'Scheduled'),
                 duration,
                 subjectCode: String(exam?.Subject?.SubjectCode || ''),
+                semester,
                 branches: [],
                 branchKeys: new Set<string>(),
                 hasRegistrations: false
@@ -112,6 +118,7 @@ const ExamSeriesList: React.FC = () => {
     const [deleteExamIds, setDeleteExamIds] = useState<number[] | null>(null);
     const [isDeleteAllOpen, setIsDeleteAllOpen] = useState(false);
     const [selectedExam, setSelectedExam] = useState<any>(null);
+    const [activeImportSemester, setActiveImportSemester] = useState<string | null>(null);
     const [seriesName, setSeriesName] = useState<string>(locationState?.seriesName || '');
     const [examType, setExamType] = useState<'Internal' | 'EndSemester'>(locationState?.examType || 'Internal');
 
@@ -195,10 +202,67 @@ const ExamSeriesList: React.FC = () => {
     };
 
     const [isBulkAutoRegisterOpen, setIsBulkAutoRegisterOpen] = useState(false);
+    const [clearSemesterTarget, setClearSemesterTarget] = useState<string | null>(null);
+    const [isClearingSemester, setIsClearingSemester] = useState(false);
 
     const handleBulkAutoMap = () => {
         if (!seriesId) return;
         setIsBulkAutoRegisterOpen(true);
+    };
+
+    const handleConfirmClearSemester = async (targetSem: string) => {
+        if (!seriesId) return;
+        setIsClearingSemester(true);
+        try {
+            const result = await InternalStudentService.clearSeriesStudentMappings(parseInt(seriesId), targetSem);
+            toast.success(result.message || `Cleared student mappings for Semester ${targetSem}`);
+            setClearSemesterTarget(null);
+            await fetchExams();
+        } catch (error: any) {
+            toast.error(error.response?.data?.message || `Failed to clear student mappings for Semester ${targetSem}`);
+        } finally {
+            setIsClearingSemester(false);
+        }
+    };
+
+    const examsBySemester = useMemo(() => {
+        const groupedList = groupExamsByPaper(exams);
+        const map = new Map<string, GroupedExam[]>();
+
+        groupedList.forEach(item => {
+            let semKey = String(item.semester || 'S3').toUpperCase().trim();
+            if (!semKey.startsWith('S') && /^\d+$/.test(semKey)) semKey = `S${semKey}`;
+            if (!semKey.startsWith('S')) semKey = `S${semKey}`;
+
+            if (!map.has(semKey)) map.set(semKey, []);
+            map.get(semKey)!.push(item);
+        });
+
+        return Array.from(map.entries()).sort(([a], [b]) => {
+            const numA = parseInt(a.replace(/\D/g, '')) || 99;
+            const numB = parseInt(b.replace(/\D/g, '')) || 99;
+            return numA - numB;
+        });
+    }, [exams]);
+
+    const [openSemesters, setOpenSemesters] = useState<Record<string, boolean>>({});
+
+    // Auto-expand all detected semesters when exams load
+    useEffect(() => {
+        if (examsBySemester.length > 0) {
+            const initial: Record<string, boolean> = {};
+            examsBySemester.forEach(([sem]) => {
+                initial[sem] = true;
+            });
+            setOpenSemesters(initial);
+        }
+    }, [examsBySemester]);
+
+    const toggleSemesterOpen = (semKey: string) => {
+        setOpenSemesters(prev => ({
+            ...prev,
+            [semKey]: !prev[semKey]
+        }));
     };
 
     return (
@@ -280,14 +344,6 @@ const ExamSeriesList: React.FC = () => {
                         >
                             Import Timetable
                         </Button>
-                        <Button
-                            onPress={handleBulkAutoMap}
-                            isLoading={isBulkMapping}
-                            className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold shadow-md shadow-emerald-500/20 hover:scale-[1.02] active:scale-98 transition-all px-5 rounded-2xl h-12 w-full sm:w-auto"
-                            startContent={<UserCheck size={17} />}
-                        >
-                            Bulk Auto Register
-                        </Button>
                         {examType !== 'Internal' && (
                             <Button
                                 onPress={() => navigate(`/admin/exams/series/${seriesId}/dates`)}
@@ -316,7 +372,7 @@ const ExamSeriesList: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Exams Grid or Empty State */}
+                {/* Exams Grid grouped by Semester Cards */}
                 {loading ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
@@ -349,112 +405,247 @@ const ExamSeriesList: React.FC = () => {
                         </div>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {groupExamsByPaper(exams).map((examGroup) => {
-                            const hasMissingDept = examGroup.branches.some(b => isMissingDepartment(b.departmentCode, b.departmentName));
-                            const cardBorderClass = hasMissingDept 
-                                ? 'border-amber-300/80 shadow-amber-100/50 ring-1 ring-amber-200/50' 
-                                : 'border-slate-200/80 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-500/5';
-                            
-                            // Standardize title format for aesthetic neatness
-                            const formattedTitle = examGroup.examName
-                                .toLowerCase()
-                                .split(' ')
-                                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-                                .join(' ');
+                    <div className="space-y-10">
+                        {/* ── TOP SEMESTER HUB CARDS ── */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                            {examsBySemester.map(([semKey, semExams]) => {
+                                const isOpen = openSemesters[semKey] ?? true;
+                                const branchSet = new Set<string>();
+                                semExams.forEach(e => e.branches.forEach(b => branchSet.add(b.departmentCode)));
+                                const branchesStr = Array.from(branchSet).slice(0, 5).join(', ');
 
-                            return (
-                                <Card
-                                    key={examGroup.groupKey}
-                                    className={`bg-white border text-left hover:-translate-y-1 transition-all duration-200 group rounded-2xl overflow-hidden shadow-sm ${cardBorderClass}`}
-                                >
-                                    <CardBody className="p-5 flex flex-col justify-between h-full space-y-4">
-                                        {/* Top Meta Bar: Subject Code + Status Chip */}
-                                        <div>
-                                            <div className="flex items-center justify-between gap-2 mb-3">
-                                                <span className="font-extrabold text-[11px] tracking-wider text-indigo-700 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-lg uppercase truncate max-w-[140px]" title={examGroup.subjectCode || examGroup.examName}>
-                                                    {examGroup.subjectCode || "NO CODE"}
-                                                </span>
-                                                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
-                                                    examGroup.status === 'Scheduled' ? 'bg-blue-50 text-blue-700 border-blue-200/60' :
-                                                    examGroup.status === 'Completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60' :
-                                                    'bg-purple-50 text-purple-700 border-purple-200/60'
+                                return (
+                                    <div
+                                        key={semKey}
+                                        onClick={() => toggleSemesterOpen(semKey)}
+                                        className={`relative cursor-pointer rounded-3xl p-6 transition-all duration-300 border text-left ${
+                                            isOpen 
+                                                ? 'bg-gradient-to-br from-indigo-500/10 via-white to-white border-indigo-500 shadow-xl ring-2 ring-indigo-500/20' 
+                                                : 'bg-white/90 hover:bg-white border-slate-200/80 shadow-sm hover:shadow-md hover:border-indigo-300'
+                                        }`}
+                                    >
+                                        <div className="flex items-start justify-between">
+                                            <div className="flex items-center gap-3.5">
+                                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black shadow-xs transition-all ${
+                                                    isOpen ? 'bg-indigo-600 text-white shadow-indigo-200' : 'bg-indigo-50 text-indigo-600 border border-indigo-100'
                                                 }`}>
-                                                    {examGroup.status}
-                                                </span>
-                                            </div>
-
-                                            {/* Subject Title */}
-                                            <h3 className="text-base font-bold text-slate-900 leading-snug group-hover:text-indigo-600 transition-colors line-clamp-2 min-h-[2.75rem]">
-                                                {formattedTitle}
-                                            </h3>
-
-                                            {/* Department Badges */}
-                                            <div className="flex flex-wrap gap-1.5 mt-3">
-                                                {examGroup.branches.map((branch) => (
-                                                    <span 
-                                                        key={branch.examId} 
-                                                        className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase border ${
-                                                            isMissingDepartment(branch.departmentCode, branch.departmentName)
-                                                                ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                                                : 'bg-slate-100 text-slate-600 border-slate-200/60'
-                                                        }`}
-                                                    >
-                                                        Dept: {branch.departmentCode}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-3 pt-2 border-t border-slate-100">
-                                            {/* Date & Session Box */}
-                                            <div className="bg-slate-50/80 rounded-xl p-2.5 border border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-600">
-                                                <div className="flex items-center gap-1.5 text-slate-700">
-                                                    <CalendarDays size={14} className="text-slate-400 shrink-0" />
-                                                    <span>{new Date(examGroup.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                                    <GraduationCap size={22} />
                                                 </div>
-                                                <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-500 shrink-0">
-                                                    {examGroup.session === 'FN' ? 'Morning (FN)' : 'Afternoon (AN)'}
-                                                </span>
+                                                <div>
+                                                    <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                                                        Semester {semKey}
+                                                    </h3>
+                                                    <p className="text-xs text-slate-500 font-semibold mt-0.5">
+                                                        {semExams.length} Subjects Configured
+                                                    </p>
+                                                </div>
                                             </div>
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-transform duration-300 ${
+                                                isOpen ? 'bg-indigo-100 text-indigo-700 rotate-180' : 'bg-slate-100 text-slate-400'
+                                            }`}>
+                                                <ChevronDown size={16} />
+                                            </div>
+                                        </div>
 
-                                            {/* Action Buttons Row */}
-                                            <div className="flex items-center gap-2 pt-1">
-                                                {examType === 'Internal' && (
-                                                    <Button
-                                                        size="sm"
-                                                        variant="flat"
-                                                        className="flex-1 bg-indigo-50 hover:bg-indigo-600 text-indigo-600 hover:text-white font-bold rounded-xl text-xs h-9 transition-all border border-indigo-100 flex items-center justify-center gap-1"
-                                                        startContent={<Users size={13} />}
-                                                        onPress={() => navigate(`/admin/exams/series/${seriesId}/internal/${examGroup.branches[0]?.examId}`)}
-                                                    >
-                                                        Students
-                                                    </Button>
-                                                )}
+                                        <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between gap-2 text-xs font-bold text-slate-600">
+                                            <span className="truncate max-w-[130px] bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg border border-slate-200/60 text-[11px]">
+                                                Dept: {branchesStr || 'All'}
+                                            </span>
+                                            <div className="flex items-center gap-1.5">
                                                 <Button
                                                     size="sm"
-                                                    variant="flat"
-                                                    className="flex-1 bg-slate-100 hover:bg-slate-800 text-slate-700 hover:text-white font-bold rounded-xl text-xs h-9 transition-all border border-slate-200 flex items-center justify-center gap-1"
-                                                    startContent={<Pencil size={13} />}
-                                                    onPress={() => handleEdit(exams.find(e => e.ExamID === examGroup.branches[0].examId))}
+                                                    onPress={(e) => {
+                                                        e.stopPropagation();
+                                                        setActiveImportSemester(semKey);
+                                                    }}
+                                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[11px] h-8 px-2.5 rounded-xl shadow-xs transition-all flex items-center gap-1"
                                                 >
-                                                    Edit
+                                                    <UserPlus size={13} />
+                                                    Import
                                                 </Button>
                                                 <Button
                                                     size="sm"
                                                     variant="flat"
-                                                    className="flex-1 bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white font-bold rounded-xl text-xs h-9 transition-all border border-rose-200/70 flex items-center justify-center gap-1"
-                                                    startContent={<Trash2 size={13} />}
-                                                    onPress={() => handleDeleteClick(examGroup.branches.map(b => b.examId))}
+                                                    onPress={(e) => {
+                                                        e.stopPropagation();
+                                                        setClearSemesterTarget(semKey);
+                                                    }}
+                                                    className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/60 font-extrabold text-[11px] h-8 px-2 rounded-xl transition-all flex items-center gap-1"
+                                                    title={`Clear all student mappings for Semester ${semKey}`}
                                                 >
-                                                    Delete
+                                                    <Trash2 size={13} />
+                                                    Clear
+                                                </Button>
+                                                <span className={`px-2.5 py-1 rounded-xl font-extrabold text-[11px] transition-colors ${
+                                                    isOpen ? 'bg-indigo-600 text-white shadow-xs' : 'bg-indigo-50 text-indigo-700'
+                                                }`}>
+                                                    {isOpen ? 'Close' : 'Open →'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* ── EXPANDED SEMESTER SUBJECTS CONTAINERS ── */}
+                        <AnimatePresence>
+                            {examsBySemester.map(([semesterKey, semesterExams]) => {
+                                const isOpen = openSemesters[semesterKey] ?? true;
+                                if (!isOpen) return null;
+
+                                return (
+                                    <motion.div 
+                                        key={semesterKey}
+                                        initial={{ opacity: 0, y: 15 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -15 }}
+                                        transition={{ duration: 0.25 }}
+                                        className="bg-white/80 border border-slate-200/80 rounded-[2.5rem] p-6 sm:p-8 shadow-sm space-y-6"
+                                    >
+                                        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                                            <div className="flex items-center gap-3.5">
+                                                <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-black shadow-xs">
+                                                    <BookOpen size={22} />
+                                                </div>
+                                                <div>
+                                                    <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
+                                                        Semester {semesterKey} Subjects
+                                                        <span className="px-3 py-0.5 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 font-extrabold text-xs">
+                                                            {semesterExams.length} Subjects
+                                                        </span>
+                                                    </h2>
+                                                    <p className="text-xs text-slate-400 font-medium mt-0.5">
+                                                        Active subject schedule and course patterns for Semester {semesterKey}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Button
+                                                    size="sm"
+                                                    onPress={() => setActiveImportSemester(semesterKey)}
+                                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs h-9 px-4 rounded-xl shadow-sm transition-all flex items-center gap-2"
+                                                >
+                                                    <UserPlus size={15} />
+                                                    Import {semesterKey} Student List
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="flat"
+                                                    onPress={() => setClearSemesterTarget(semesterKey)}
+                                                    className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/70 font-extrabold text-xs h-9 px-3.5 rounded-xl transition-all flex items-center gap-1.5"
+                                                >
+                                                    <Trash2 size={15} />
+                                                    Clear {semesterKey} Mappings
                                                 </Button>
                                             </div>
                                         </div>
-                                    </CardBody>
-                                </Card>
-                            );
-                        })}
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                            {semesterExams.map((examGroup) => {
+                                                const hasMissingDept = examGroup.branches.some(b => isMissingDepartment(b.departmentCode, b.departmentName));
+                                                const cardBorderClass = hasMissingDept 
+                                                    ? 'border-amber-300/80 shadow-amber-100/50 ring-1 ring-amber-200/50' 
+                                                    : 'border-slate-200/80 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-500/5';
+                                                
+                                                const formattedTitle = examGroup.examName
+                                                    .toLowerCase()
+                                                    .split(' ')
+                                                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                                                    .join(' ');
+
+                                                return (
+                                                    <Card
+                                                        key={examGroup.groupKey}
+                                                        className={`bg-white border text-left hover:-translate-y-1 transition-all duration-200 group rounded-2xl overflow-hidden shadow-sm ${cardBorderClass}`}
+                                                    >
+                                                        <CardBody className="p-5 flex flex-col justify-between h-full space-y-4">
+                                                            <div>
+                                                                <div className="flex items-center justify-between gap-2 mb-3">
+                                                                    <span className="font-extrabold text-[11px] tracking-wider text-indigo-700 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-lg uppercase truncate max-w-[140px]" title={examGroup.subjectCode || examGroup.examName}>
+                                                                        {examGroup.subjectCode || "NO CODE"}
+                                                                    </span>
+                                                                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
+                                                                        examGroup.status === 'Scheduled' ? 'bg-blue-50 text-blue-700 border-blue-200/60' :
+                                                                        examGroup.status === 'Completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60' :
+                                                                        'bg-purple-50 text-purple-700 border-purple-200/60'
+                                                                    }`}>
+                                                                        {examGroup.status}
+                                                                    </span>
+                                                                </div>
+
+                                                                <h3 className="text-base font-bold text-slate-900 leading-snug group-hover:text-indigo-600 transition-colors line-clamp-2 min-h-[2.75rem]">
+                                                                    {formattedTitle}
+                                                                </h3>
+
+                                                                <div className="flex flex-wrap gap-1.5 mt-3">
+                                                                    {examGroup.branches.map((branch) => (
+                                                                        <span 
+                                                                            key={branch.examId} 
+                                                                            className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase border ${
+                                                                                isMissingDepartment(branch.departmentCode, branch.departmentName)
+                                                                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                                                    : 'bg-slate-100 text-slate-600 border-slate-200/60'
+                                                                            }`}
+                                                                        >
+                                                                            Dept: {branch.departmentCode}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="space-y-3 pt-2 border-t border-slate-100">
+                                                                <div className="bg-slate-50/80 rounded-xl p-2.5 border border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-600">
+                                                                    <div className="flex items-center gap-1.5 text-slate-700">
+                                                                        <CalendarDays size={14} className="text-slate-400 shrink-0" />
+                                                                        <span>{new Date(examGroup.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                                                    </div>
+                                                                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-500 shrink-0">
+                                                                        {examGroup.session === 'FN' ? 'Morning (FN)' : 'Afternoon (AN)'}
+                                                                    </span>
+                                                                </div>
+
+                                                                <div className="flex items-center gap-2 pt-1">
+                                                                    {examType === 'Internal' && (
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="flat"
+                                                                            className="flex-1 bg-indigo-50 hover:bg-indigo-600 text-indigo-600 hover:text-white font-bold rounded-xl text-xs h-9 transition-all border border-indigo-100 flex items-center justify-center gap-1"
+                                                                            startContent={<Users size={13} />}
+                                                                            onPress={() => navigate(`/admin/exams/series/${seriesId}/internal/${examGroup.branches[0]?.examId}`)}
+                                                                        >
+                                                                            Students
+                                                                        </Button>
+                                                                    )}
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="flat"
+                                                                        className="flex-1 bg-slate-100 hover:bg-slate-800 text-slate-700 hover:text-white font-bold rounded-xl text-xs h-9 transition-all border border-slate-200 flex items-center justify-center gap-1"
+                                                                        startContent={<Pencil size={13} />}
+                                                                        onPress={() => handleEdit(exams.find(e => e.ExamID === examGroup.branches[0].examId))}
+                                                                    >
+                                                                        Edit
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="flat"
+                                                                        className="flex-1 bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white font-bold rounded-xl text-xs h-9 transition-all border border-rose-200/70 flex items-center justify-center gap-1"
+                                                                        startContent={<Trash2 size={13} />}
+                                                                        onPress={() => handleDeleteClick(examGroup.branches.map(b => b.examId))}
+                                                                    >
+                                                                        Delete
+                                                                    </Button>
+                                                                </div>
+                                                            </div>
+                                                        </CardBody>
+                                                    </Card>
+                                                );
+                                            })}
+                                        </div>
+                                    </motion.div>
+                                );
+                            })}
+                        </AnimatePresence>
                     </div>
                 )}
             </div>
@@ -524,6 +715,20 @@ const ExamSeriesList: React.FC = () => {
                 type="danger"
             />
 
+            {/* Semester Student Import Modal */}
+            {activeImportSemester && (
+                <SemesterStudentImportModal
+                    isOpen={!!activeImportSemester}
+                    onClose={() => setActiveImportSemester(null)}
+                    onSuccess={() => {
+                        setActiveImportSemester(null);
+                        fetchExams();
+                    }}
+                    seriesId={seriesId}
+                    semesterKey={activeImportSemester}
+                />
+            )}
+
             <BulkAutoRegisterModal
                 isOpen={isBulkAutoRegisterOpen}
                 onClose={() => setIsBulkAutoRegisterOpen(false)}
@@ -535,6 +740,54 @@ const ExamSeriesList: React.FC = () => {
                     fetchExams();
                 }}
             />
+
+            {/* Clear Semester Mapping Confirmation Modal */}
+            {clearSemesterTarget && (
+                <Modal 
+                    isOpen={Boolean(clearSemesterTarget)} 
+                    onClose={() => setClearSemesterTarget(null)} 
+                    size="md"
+                    classNames={{
+                        base: 'rounded-3xl bg-white p-2 border border-slate-200/80 shadow-2xl',
+                        header: 'border-b border-slate-100 pb-3',
+                        footer: 'border-t border-slate-100 pt-3'
+                    }}
+                >
+                    <ModalContent>
+                        <ModalHeader className="flex items-center gap-2 font-black text-slate-900 text-lg">
+                            <div className="w-9 h-9 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600">
+                                <Trash2 size={18} />
+                            </div>
+                            Clear Semester {clearSemesterTarget} Student Mappings
+                        </ModalHeader>
+                        <ModalBody className="py-4 space-y-2">
+                            <p className="text-slate-700 text-sm font-medium">
+                                Are you sure you want to clear all student registrations for all subjects in <strong className="text-slate-900 font-extrabold">Semester {clearSemesterTarget}</strong>?
+                            </p>
+                            <div className="p-3 bg-rose-50/70 rounded-2xl border border-rose-100 text-xs text-rose-700 font-semibold flex items-start gap-2">
+                                <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                                <span>This will unregister all mapped students from these exams. You can re-register them anytime via "Import Students" or "Auto Register".</span>
+                            </div>
+                        </ModalBody>
+                        <ModalFooter>
+                            <Button 
+                                variant="flat" 
+                                onPress={() => setClearSemesterTarget(null)} 
+                                className="font-bold rounded-xl h-10 px-4 text-xs"
+                            >
+                                Cancel
+                            </Button>
+                            <Button 
+                                isLoading={isClearingSemester}
+                                onPress={() => handleConfirmClearSemester(clearSemesterTarget)} 
+                                className="font-extrabold bg-rose-600 hover:bg-rose-700 text-white rounded-xl h-10 px-4 text-xs shadow-sm transition-all"
+                            >
+                                Confirm & Clear Mappings
+                            </Button>
+                        </ModalFooter>
+                    </ModalContent>
+                </Modal>
+            )}
         </div>
     );
 };

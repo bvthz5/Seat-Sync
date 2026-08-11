@@ -75,20 +75,46 @@ export const InternalExamImportModal: React.FC<Props> = ({ isOpen, onClose, onSu
         }
     };
 
+    const [importProgress, setImportProgress] = useState<number>(0);
+    const [importStage, setImportStage] = useState<string>('');
+
     const handleImport = async () => {
         if (!file || !seriesId) return;
 
         setLoading(true);
         setResult(null);
+        setImportProgress(10);
+        setImportStage('Reading timetable file...');
+
+        const timer = setInterval(() => {
+            setImportProgress(prev => {
+                if (prev < 35) {
+                    setImportStage('Parsing semester schedules (S3, S5)...');
+                    return prev + 12;
+                } else if (prev < 70) {
+                    setImportStage('Building exam patterns & branch scopes...');
+                    return prev + 10;
+                } else if (prev < 90) {
+                    setImportStage('Saving database records & department links...');
+                    return prev + 5;
+                }
+                return prev;
+            });
+        }, 300);
 
         try {
             // Import for real
             const res = await InternalExamService.importTimetable(file, seriesId, false);
+            clearInterval(timer);
+            setImportProgress(100);
+            setImportStage('Import Completed Successfully!');
             setResult(res);
             if (res.success && (!res.errors || res.errors.length === 0)) {
                 onSuccess();
             }
         } catch (error: any) {
+            clearInterval(timer);
+            setImportProgress(0);
             setResult({
                 success: false,
                 message: error.response?.data?.message || error.message || 'Import failed',
@@ -105,9 +131,13 @@ export const InternalExamImportModal: React.FC<Props> = ({ isOpen, onClose, onSu
 
     // Grouping Logic: Semester -> Slot
     const groupedPreview = previewData.reduce((acc: any, item: any) => {
-        if (!acc[item.semester]) acc[item.semester] = {};
-        if (!acc[item.semester][item.slot]) acc[item.semester][item.slot] = [];
-        acc[item.semester][item.slot].push(item);
+        let semRaw = String(item.semester || 'S3').toUpperCase().trim();
+        if (!semRaw.startsWith('S') && /^\d+$/.test(semRaw)) semRaw = `S${semRaw}`;
+        if (!semRaw.startsWith('S')) semRaw = `S${semRaw}`;
+
+        if (!acc[semRaw]) acc[semRaw] = {};
+        if (!acc[semRaw][item.slot]) acc[semRaw][item.slot] = [];
+        acc[semRaw][item.slot].push(item);
         return acc;
     }, {});
 
@@ -280,6 +310,42 @@ export const InternalExamImportModal: React.FC<Props> = ({ isOpen, onClose, onSu
                                 </table>
                             </div>
                         </div>
+                    )}
+
+                    {/* Animated Import Progress Bar */}
+                    {loading && (
+                        <motion.div 
+                            initial={{ opacity: 0, scale: 0.98 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="bg-white rounded-3xl p-6 shadow-xl shadow-indigo-100/60 border border-indigo-100 space-y-4 relative overflow-hidden"
+                        >
+                            <div className="flex items-center justify-between relative z-10">
+                                <div className="flex items-center gap-3.5">
+                                    <div className="w-11 h-11 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 shrink-0 shadow-xs">
+                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                    </div>
+                                    <div>
+                                        <h4 className="text-sm font-black text-slate-900 tracking-tight">Importing Timetable...</h4>
+                                        <p className="text-xs text-indigo-700 font-extrabold mt-0.5 animate-pulse">{importStage}</p>
+                                    </div>
+                                </div>
+                                <span className="text-2xl font-black text-indigo-600 font-mono tracking-tight">{importProgress}%</span>
+                            </div>
+
+                            {/* Animated Gradient Progress Bar Track */}
+                            <div className="w-full bg-slate-100 rounded-full h-3.5 p-0.5 border border-slate-200 shadow-inner relative z-10 overflow-hidden">
+                                <motion.div 
+                                    className="h-full bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-500 rounded-full transition-all duration-300 shadow-sm"
+                                    style={{ width: `${importProgress}%` }}
+                                />
+                            </div>
+
+                            <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-wider text-slate-500 relative z-10 pt-1">
+                                <span className={importProgress >= 10 ? "text-indigo-700 font-black" : ""}>Step 1: Reading File</span>
+                                <span className={importProgress >= 50 ? "text-indigo-700 font-black" : ""}>Step 2: Sorting Semesters</span>
+                                <span className={importProgress >= 80 ? "text-indigo-700 font-black" : ""}>Step 3: Creating Exams</span>
+                            </div>
+                        </motion.div>
                     )}
 
                     {/* Results / Feedback */}

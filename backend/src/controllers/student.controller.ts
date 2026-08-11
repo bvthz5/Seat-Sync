@@ -318,7 +318,8 @@ export const importStudents = async (req: Request, res: Response) => {
 
             // Detect headers (checking if it contains typical header keywords)
             const rowStr = row.map(c => String(c || '').toLowerCase()).join('|');
-            if (rowStr.includes('name') && (rowStr.includes('batch') || rowStr.includes('reg') || rowStr.includes('sl no'))) {
+            const rowStrClean = row.map(c => String(c || '').toLowerCase().replace(/[^a-z0-9]/g, '')).join('|');
+            if ((rowStr.includes('name') || rowStrClean.includes('name')) && (rowStr.includes('batch') || rowStr.includes('reg') || rowStr.includes('sl') || rowStr.includes('register') || rowStr.includes('roll') || rowStrClean.includes('regno') || rowStrClean.includes('slno') || rowStrClean.includes('sno') || rowStrClean.includes('admno') || rowStrClean.includes('usn') || rowStrClean.includes('urn'))) {
                 currentHeaders = row.map(h => String(h || '').trim());
                 isCollecting = true;
                 continue;
@@ -335,12 +336,16 @@ export const importStudents = async (req: Request, res: Response) => {
                     if (val !== undefined && val !== null && String(val).trim() !== '') {
                         hasData = true;
                     }
-                    if (header.toLowerCase() === 'sl no') continue; // Ignore Sl No
-                    if (header.toLowerCase() === 'university regno' || header.toLowerCase().includes('regno') || header.toLowerCase().includes('reg no') || header.toLowerCase().includes('register')) {
+                    const h = header.toLowerCase().trim();
+                    const hClean = h.replace(/[^a-z0-9]/g, '');
+
+                    if (hClean === 'slno' || hClean === 'sno' || hClean === 'sino' || hClean === 'slino') continue;
+
+                    if (hClean.includes('regno') || hClean.includes('regnumber') || hClean.includes('register') || hClean.includes('registration') || hClean.includes('admno') || hClean.includes('admission') || hClean === 'reg' || hClean === 'usn' || hClean === 'urn' || hClean === 'prn' || hClean === 'studentid' || hClean === 'idno') {
                         record['Register Number'] = val;
-                    } else if (header.toLowerCase() === 'name' || header.toLowerCase() === 'student name') {
+                    } else if (hClean === 'name' || hClean === 'studentname' || hClean === 'fullname' || hClean === 'nameofstudent' || hClean === 'nameofthestudent' || hClean === 'candidatename') {
                         record['Name'] = val;
-                    } else if (header.toLowerCase() === 'batch') {
+                    } else if (hClean.includes('batch') || hClean === 'class' || hClean.includes('academicyear')) {
                         record['Batch'] = val;
                     } else {
                         record[header] = val;
@@ -370,6 +375,45 @@ export const importStudents = async (req: Request, res: Response) => {
                 } else if (hasData) {
                     console.warn("Skipped row (missing Name):", record);
                     errors.push({ row: rowIdx + 1, reason: "Missing Name" });
+                }
+            }
+        }
+
+        // Fallback for flat Excel files without section headers
+        if (data.length === 0 && rawRows.length > 1 && rawRows[0]) {
+            currentHeaders = rawRows[0].map(h => String(h || '').trim());
+            for (let rowIdx = 1; rowIdx < rawRows.length; rowIdx++) {
+                const row = rawRows[rowIdx];
+                if (!row || row.length === 0) continue;
+                const record: any = {};
+                let hasData = false;
+                for (let colIdx = 0; colIdx < currentHeaders.length; colIdx++) {
+                    const header = currentHeaders[colIdx];
+                    if (!header) continue;
+                    const val = row[colIdx];
+                    if (val !== undefined && val !== null && String(val).trim() !== '') hasData = true;
+
+                    const h = header.toLowerCase().trim();
+                    const hClean = h.replace(/[^a-z0-9]/g, '');
+
+                    if (hClean === 'slno' || hClean === 'sno' || hClean === 'sino' || hClean === 'slino') continue;
+
+                    if (hClean.includes('regno') || hClean.includes('regnumber') || hClean.includes('register') || hClean.includes('registration') || hClean.includes('admno') || hClean.includes('admission') || hClean === 'reg' || hClean === 'usn' || hClean === 'urn' || hClean === 'prn' || hClean === 'studentid' || hClean === 'idno') {
+                        record['Register Number'] = val;
+                    } else if (hClean === 'name' || hClean === 'studentname' || hClean === 'fullname' || hClean === 'nameofstudent' || hClean === 'nameofthestudent' || hClean === 'candidatename') {
+                        record['Name'] = val;
+                    } else if (hClean.includes('batch') || hClean === 'class' || hClean.includes('academicyear')) {
+                        record['Batch'] = val;
+                    } else {
+                        record[header] = val;
+                    }
+                }
+                if (hasData && record['Name']) {
+                    if (!record['Register Number']) {
+                        record['Register Number'] = 'AUTO_' + Date.now() + '_' + Math.floor(Math.random() * 1000000) + '_' + rowIdx;
+                    }
+                    record['_sourceRowIdx'] = rowIdx + 1;
+                    data.push(record);
                 }
             }
         }

@@ -661,6 +661,7 @@ export class ExamController {
                     return {
                         ExamID: data.InternalExamID,
                         ExamName: data.SubjectName,
+                        Semester: data.Semester,
                         ExamDate: data.ExamDate,
                         Session: data.Session,
                         Duration: data.Duration || 150,
@@ -669,6 +670,7 @@ export class ExamController {
                         Subject: {
                             SubjectName: data.SubjectName,
                             SubjectCode: data.SubjectCode,
+                            Semester: data.Semester,
                             DepartmentID: mainDeptID,
                             Department: {
                                 DepartmentID: mainDeptID,

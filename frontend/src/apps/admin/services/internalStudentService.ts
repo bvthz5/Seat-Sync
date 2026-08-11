@@ -46,12 +46,19 @@ export interface MappedStudent {
 }
 
 export const InternalStudentService = {
-    // Import students and optionally map to an internal exam
-    importStudents: async (file: File, internalExamId?: number | null): Promise<InternalStudentImportResult> => {
+    // Import students and optionally map to an internal exam or auto-map across a semester/series
+    importStudents: async (
+        file: File, 
+        params?: number | null | { internalExamId?: number | null; seriesId?: number | string; semester?: string }
+    ): Promise<InternalStudentImportResult> => {
         const formData = new FormData();
         formData.append('file', file);
-        if (internalExamId) {
-            formData.append('internalExamId', internalExamId.toString());
+        if (typeof params === 'number') {
+            formData.append('internalExamId', params.toString());
+        } else if (params) {
+            if (params.internalExamId) formData.append('internalExamId', params.internalExamId.toString());
+            if (params.seriesId) formData.append('seriesId', params.seriesId.toString());
+            if (params.semester) formData.append('semester', params.semester.toString());
         }
         const response = await api.post('/internal/students/import', formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
@@ -92,6 +99,14 @@ export const InternalStudentService = {
     // Bulk auto map existing matching students for all exams in an exam series
     bulkAutoMapSeries: async (seriesId: number): Promise<{ success: boolean; message: string; totalMapped: number; totalMatched: number; examsProcessed: number }> => {
         const response = await api.post(`/internal/series/${seriesId}/auto-map-all`);
+        return response.data;
+    },
+
+    // Clear student mappings across a semester or entire series
+    clearSeriesStudentMappings: async (seriesId: number, semester?: string): Promise<{ success: boolean; message: string; clearedCount: number; examsCount: number }> => {
+        const response = await api.delete(`/internal/series/${seriesId}/clear-mappings`, {
+            params: { semester }
+        });
         return response.data;
     },
 
@@ -137,6 +152,24 @@ export const InternalStudentService = {
     // Sync semesters for internal students
     syncSemesters: async () => {
         const response = await api.post('/internal/students/sync-semesters');
+        return response.data;
+    },
+
+    // Get exam reconciliation (expected vs registered breakdown)
+    getExamReconciliation: async (examId: number) => {
+        const response = await api.get(`/internal/exams/${examId}/reconciliation`);
+        return response.data;
+    },
+
+    // Get series-level reconciliation report
+    getSeriesReconciliation: async (seriesId: number) => {
+        const response = await api.get(`/internal/series/${seriesId}/reconciliation`);
+        return response.data;
+    },
+
+    // Upload / Add student subject enrollments (for Electives/Minor/Honours)
+    uploadSubjectEnrollments: async (enrollments: Array<{ registerNumber: string; subjectCode: string; semester?: string; enrollmentType?: string }>) => {
+        const response = await api.post('/internal/students/subject-enrollments', { enrollments });
         return response.data;
     }
 };

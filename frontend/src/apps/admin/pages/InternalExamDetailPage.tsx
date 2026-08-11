@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, CardBody, Button, Input, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Chip, Tooltip } from '@heroui/react';
+import { Card, CardBody, Button, Input, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Chip, Tooltip, Switch } from '@heroui/react';
 import { ArrowLeft, Upload, Users, Trash2, Search, BookOpen, Clock, CalendarDays, Building2, GraduationCap, FileSpreadsheet, CheckCircle, AlertTriangle, X, Download, RefreshCcw } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { InternalStudentService, MappedStudent, InternalExamDetail } from '../services/internalStudentService';
@@ -22,13 +22,20 @@ const InternalExamDetailPage: React.FC = () => {
     const [showClearConfirm, setShowClearConfirm] = useState(false);
     const [clearing, setClearing] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [reconciliation, setReconciliation] = useState<any>(null);
+    const [showReconciliationModal, setShowReconciliationModal] = useState(false);
+    const [importFromExams, setImportFromExams] = useState(true);
 
-    // Load exam detail
+    // Load exam detail & reconciliation
     const loadExamDetail = useCallback(async () => {
         if (!examId) return;
         try {
-            const data = await InternalStudentService.getExamDetail(parseInt(examId));
+            const [data, reconData] = await Promise.all([
+                InternalStudentService.getExamDetail(parseInt(examId)),
+                InternalStudentService.getExamReconciliation(parseInt(examId)).catch(() => null)
+            ]);
             setExamDetail(data);
+            setReconciliation(reconData);
         } catch (error: any) {
             toast.error(error.response?.data?.message || 'Failed to load exam detail');
         }
@@ -203,6 +210,14 @@ const InternalExamDetailPage: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
                         <Button
+                            variant="flat"
+                            className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl h-10 px-4 text-xs border border-indigo-200/60 shadow-xs transition-all"
+                            startContent={<CheckCircle size={15} />}
+                            onPress={() => setShowReconciliationModal(true)}
+                        >
+                            Reconciliation & Audit
+                        </Button>
+                        <Button
                             className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl h-10 px-4 text-xs shadow-sm transition-all"
                             startContent={<RefreshCcw size={15} className={isAutoMapping ? "animate-spin" : ""} />}
                             isLoading={isAutoMapping}
@@ -211,11 +226,12 @@ const InternalExamDetailPage: React.FC = () => {
                             Auto Register Students
                         </Button>
                         <Button
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl h-10 px-4 text-xs shadow-sm transition-all"
-                            startContent={<Upload size={15} />}
-                            onPress={() => { setShowImportModal(true); setImportResult(null); setSelectedFile(null); }}
+                            variant="flat"
+                            className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold rounded-xl h-10 px-4 text-xs border border-rose-200/60 shadow-xs transition-all"
+                            startContent={<Trash2 size={15} />}
+                            onPress={() => setShowClearConfirm(true)}
                         >
-                            Import Students
+                            Clear Mapping
                         </Button>
                     </div>
                 </div>
@@ -269,7 +285,9 @@ const InternalExamDetailPage: React.FC = () => {
                             </div>
                             <div className="min-w-0">
                                 <p className="text-slate-400 text-[11px] font-extrabold uppercase tracking-wider">Semester</p>
-                                <p className="text-base font-extrabold text-slate-900 truncate mt-0.5">S{exam?.Semester || '-'}</p>
+                                <p className="text-base font-extrabold text-slate-900 truncate mt-0.5">
+                                    {exam?.Semester ? (exam.Semester.toUpperCase().startsWith('S') ? exam.Semester.toUpperCase() : `S${exam.Semester}`) : '-'}
+                                </p>
                             </div>
                         </CardBody>
                     </Card>
@@ -379,15 +397,16 @@ const InternalExamDetailPage: React.FC = () => {
                                     {searchQuery ? 'No matching students found' : 'No Students Mapped'}
                                 </h3>
                                 <p className="text-slate-400 text-xs mb-5 max-w-sm mx-auto">
-                                    {searchQuery ? 'Try clearing or updating your search query.' : 'Use Auto Register or Import Students to add students.'}
+                                    {searchQuery ? 'Try clearing or updating your search query.' : 'Use Auto Register Students to automatically map eligible students.'}
                                 </p>
                                 {!searchQuery && (
                                     <Button
-                                        className="bg-indigo-600 text-white font-bold rounded-xl h-10 px-5 text-xs shadow-xs"
-                                        startContent={<Upload size={15} />}
-                                        onPress={() => { setShowImportModal(true); setImportResult(null); setSelectedFile(null); }}
+                                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl h-10 px-5 text-xs shadow-xs transition-all"
+                                        startContent={<RefreshCcw size={15} className={isAutoMapping ? "animate-spin" : ""} />}
+                                        isLoading={isAutoMapping}
+                                        onPress={handleAutoMap}
                                     >
-                                        Import Students
+                                        Auto Register Students
                                     </Button>
                                 )}
                             </div>
@@ -623,6 +642,141 @@ const InternalExamDetailPage: React.FC = () => {
                             <Button color="danger" onPress={handleClearAll} isLoading={clearing} className="flex-1 font-bold">Clear All</Button>
                         </div>
                     </ModalBody>
+                </ModalContent>
+            </Modal>
+
+            {/* ── Reconciliation Audit Modal ── */}
+            <Modal isOpen={showReconciliationModal} onClose={() => setShowReconciliationModal(false)} size="3xl" backdrop="blur"
+                classNames={{ base: 'bg-white shadow-2xl rounded-3xl overflow-hidden' }}
+            >
+                <ModalContent>
+                    <ModalHeader className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                                <CheckCircle size={20} />
+                            </div>
+                            <div>
+                                <h3 className="text-base font-extrabold text-slate-900">Reconciliation & Eligibility Audit</h3>
+                                <p className="text-xs text-slate-400 font-medium">{exam?.SubjectCode} — {exam?.SubjectName}</p>
+                            </div>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+                        {reconciliation ? (
+                            <>
+                                {/* Status Banner */}
+                                <div className={`p-4 rounded-2xl border flex items-center justify-between ${
+                                    reconciliation.status === 'VALIDATED'
+                                        ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
+                                        : reconciliation.status === 'MISSING_STUDENTS'
+                                        ? 'bg-amber-50/70 border-amber-200 text-amber-900'
+                                        : 'bg-indigo-50/70 border-indigo-200 text-indigo-900'
+                                }`}>
+                                    <div className="flex items-center gap-3">
+                                        {reconciliation.status === 'VALIDATED' ? (
+                                            <CheckCircle size={22} className="text-emerald-600 shrink-0" />
+                                        ) : (
+                                            <AlertTriangle size={22} className="text-amber-600 shrink-0" />
+                                        )}
+                                        <div>
+                                            <p className="text-sm font-black uppercase tracking-wider">
+                                                Status: {reconciliation.status}
+                                            </p>
+                                            <p className="text-xs font-medium opacity-90 mt-0.5">{reconciliation.message}</p>
+                                        </div>
+                                    </div>
+                                    <Chip className="font-extrabold text-xs" color={reconciliation.status === 'VALIDATED' ? 'success' : 'warning'}>
+                                        {reconciliation.registeredCount} / {reconciliation.expectedCount} Registered
+                                    </Chip>
+                                </div>
+
+                                {/* Summary Grid */}
+                                <div className="grid grid-cols-4 gap-3 text-center">
+                                    <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-xl">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase">Expected</p>
+                                        <p className="text-lg font-black text-slate-800">{reconciliation.expectedCount}</p>
+                                    </div>
+                                    <div className="bg-emerald-50 border border-emerald-200/80 p-3 rounded-xl">
+                                        <p className="text-[10px] font-black text-emerald-600 uppercase">Registered</p>
+                                        <p className="text-lg font-black text-emerald-800">{reconciliation.registeredCount}</p>
+                                    </div>
+                                    <div className="bg-red-50 border border-red-200/80 p-3 rounded-xl">
+                                        <p className="text-[10px] font-black text-red-500 uppercase">Missing</p>
+                                        <p className="text-lg font-black text-red-700">{reconciliation.missingCount}</p>
+                                    </div>
+                                    <div className="bg-indigo-50 border border-indigo-200/80 p-3 rounded-xl">
+                                        <p className="text-[10px] font-black text-indigo-600 uppercase">Scope</p>
+                                        <p className="text-xs font-black text-indigo-800 truncate" title={reconciliation.branchScope?.join(', ')}>
+                                            {reconciliation.branchScope?.join(', ') || 'None'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Branch Breakdown Table */}
+                                <div>
+                                    <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider mb-2.5">Branch Reconciliation</h4>
+                                    <div className="border border-slate-200/80 rounded-2xl overflow-hidden">
+                                        <table className="w-full text-left text-xs">
+                                            <thead className="bg-slate-50 border-b border-slate-200/80 text-slate-400 font-extrabold uppercase">
+                                                <tr>
+                                                    <th className="p-3">Department</th>
+                                                    <th className="p-3">Expected</th>
+                                                    <th className="p-3">Registered</th>
+                                                    <th className="p-3">Missing</th>
+                                                    <th className="p-3 text-right">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {reconciliation.branchBreakdown?.map((b: any, i: number) => (
+                                                    <tr key={i} className="hover:bg-slate-50/50">
+                                                        <td className="p-3 font-bold text-slate-900">{b.departmentCode} — {b.departmentName}</td>
+                                                        <td className="p-3 font-semibold text-slate-700">{b.expected}</td>
+                                                        <td className="p-3 font-semibold text-emerald-700">{b.registered}</td>
+                                                        <td className="p-3 font-semibold text-red-600">{b.missing}</td>
+                                                        <td className="p-3 text-right">
+                                                            <Chip size="sm" color={b.status === 'OK' ? 'success' : 'danger'} variant="flat" className="font-extrabold text-[10px]">
+                                                                {b.status}
+                                                            </Chip>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                {/* Missing Students Detail */}
+                                {reconciliation.missingStudents?.length > 0 && (
+                                    <div>
+                                        <h4 className="text-xs font-black text-red-600 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                                            <AlertTriangle size={14} /> Missing Registered Students ({reconciliation.missingStudents.length})
+                                        </h4>
+                                        <div className="border border-red-200 bg-red-50/30 rounded-2xl max-h-48 overflow-y-auto p-3 space-y-1.5">
+                                            {reconciliation.missingStudents.map((s: any, idx: number) => (
+                                                <div key={idx} className="flex items-center justify-between text-xs bg-white p-2.5 rounded-xl border border-red-100 shadow-xs">
+                                                    <div>
+                                                        <span className="font-extrabold text-slate-900">{s.fullName}</span>
+                                                        <span className="text-slate-400 text-[11px] ml-2">({s.registerNumber})</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md font-bold text-[10px]">{s.departmentCode} Div {s.division}</span>
+                                                        <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-md font-bold text-[10px]">{s.reason}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            <div className="py-8 text-center text-slate-400 text-sm">Loading reconciliation metrics...</div>
+                        )}
+                    </ModalBody>
+                    <ModalFooter className="border-t border-slate-100 px-6 py-3">
+                        <Button className="bg-slate-900 text-white font-bold rounded-xl px-6" onPress={() => setShowReconciliationModal(false)}>
+                            Close Audit
+                        </Button>
+                    </ModalFooter>
                 </ModalContent>
             </Modal>
         </div>

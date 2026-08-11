@@ -170,13 +170,19 @@ import InternalStudent from './InternalStudent.js';
 import InternalExamRegistration from './InternalExamRegistration.js';
 import InternalSeatAllocation from './InternalSeatAllocation.js';
 import { InternalSeatSnapshot } from './InternalSeatSnapshot.js';
+import InternalStudentSubject from './InternalStudentSubject.js';
 
 export { 
     InternalStudent, 
     InternalExamRegistration, 
     InternalSeatAllocation,
-    InternalSeatSnapshot
+    InternalSeatSnapshot,
+    InternalStudentSubject
 };
+
+InternalStudentSubject.belongsTo(InternalStudent, { foreignKey: 'InternalStudentID', as: 'Student', onDelete: 'CASCADE' });
+InternalStudent.hasMany(InternalStudentSubject, { foreignKey: 'InternalStudentID', as: 'Subjects', onDelete: 'CASCADE' });
+
 import Semester from './Semester.js';
 
 // InternalStudent  User (shared auth layer)

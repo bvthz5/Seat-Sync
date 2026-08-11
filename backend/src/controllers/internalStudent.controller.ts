@@ -7,6 +7,7 @@ import {
     InternalExamRegistration,
     InternalExam,
     InternalExamDepartment,
+    InternalStudentSubject,
     Department,
     Program,
     Semester,
@@ -14,6 +15,8 @@ import {
 } from '../models/index.js';
 import { generateDefaultPassword, generateStudentEmail, extractBatchYearFromRegisterNumber } from '../utils/student.utils.js';
 import { normalizeProgram, parseBatchString, resolveOrCreateProgram, resolveOrCreateDepartment } from '../services/academicNormalizer.service.js';
+import { InternalExamEligibilityService } from '../services/internal/internalExamEligibility.service.js';
+import { InternalReconciliationService } from '../services/internal/internalReconciliation.service.js';
 
 /* ════════════════════════════════════════════════════════════════
  *  GET /api/internal/students
@@ -211,9 +214,10 @@ export const importInternalStudents = async (req: Request, res: Response) => {
                 continue;
             }
 
-            // Enhanced header detection logic from end-sem
+            // ── Adaptive multi-section parser (Enhanced to match end-sem & all Excel headers) ──
             const rowStr = row.map((c: any) => String(c || '').toLowerCase()).join('|');
-            if (rowStr.includes('name') && (rowStr.includes('batch') || rowStr.includes('reg') || rowStr.includes('sl no') || rowStr.includes('register') || rowStr.includes('roll'))) {
+            const rowStrClean = row.map((c: any) => String(c || '').toLowerCase().replace(/[^a-z0-9]/g, '')).join('|');
+            if ((rowStr.includes('name') || rowStrClean.includes('name')) && (rowStr.includes('batch') || rowStr.includes('reg') || rowStr.includes('sl') || rowStr.includes('register') || rowStr.includes('roll') || rowStrClean.includes('regno') || rowStrClean.includes('slno') || rowStrClean.includes('sno') || rowStrClean.includes('admno') || rowStrClean.includes('usn') || rowStrClean.includes('urn'))) {
                 currentHeaders = row.map((h: any) => String(h || '').trim());
                 isCollecting = true;
                 continue;
@@ -229,23 +233,25 @@ export const importInternalStudents = async (req: Request, res: Response) => {
                     if (val !== undefined && val !== null && String(val).trim() !== '') hasData = true;
 
                     const h = header.toLowerCase().trim();
-                    if (h === 'roll' || h === 'rollno' || h === 'roll no' || h === 'class roll' || h === 'class roll no' || h === 'roll number' || h === 'sl no' || h === 'slno' || h === 'sno' || h === 'sl.no' || h === 'si no') {
-                        record['RollNumber'] = val;
-                    } else if (h === 'university regno' || h === 'university reg no' || h.includes('regno') || h.includes('reg no') || h.includes('register') || h.includes('registration') || h === 'reg_no' || h === 'reg') {
+                    const hClean = h.replace(/[^a-z0-9]/g, '');
+
+                    if (hClean.includes('regno') || hClean.includes('regnumber') || hClean.includes('register') || hClean.includes('registration') || hClean.includes('admno') || hClean.includes('admission') || hClean === 'reg' || hClean === 'usn' || hClean === 'urn' || hClean === 'prn' || hClean === 'studentid' || hClean === 'idno') {
                         record['RegisterNumber'] = val;
-                    } else if (h === 'name' || h === 'student name' || h === 'full name' || h === 'name of student') {
+                    } else if (hClean === 'name' || hClean === 'studentname' || hClean === 'fullname' || hClean === 'nameofstudent' || hClean === 'nameofthestudent' || hClean === 'candidatename') {
                         record['Name'] = val;
-                    } else if (h === 'batch' || h === 'class' || h.includes('batch')) {
+                    } else if (hClean === 'roll' || hClean === 'rollno' || hClean === 'classroll' || hClean === 'classrollno' || hClean === 'rollnumber' || hClean === 'slno' || hClean === 'sno' || hClean === 'sino' || hClean === 'slino' || hClean === 'serialno') {
+                        record['RollNumber'] = val;
+                    } else if (hClean.includes('batch') || hClean === 'class' || hClean.includes('academicyear')) {
                         record['Batch'] = val;
-                    } else if (h === 'dept' || h === 'branch' || h === 'department') {
+                    } else if (hClean === 'dept' || hClean === 'branch' || hClean === 'department' || hClean === 'stream' || hClean === 'deptname') {
                         record['Department'] = val;
-                    } else if (h === 'sem' || h === 'semester') {
+                    } else if (hClean === 'sem' || hClean === 'semester' || hClean === 'term') {
                         record['Semester'] = val;
-                    } else if (h === 'prog' || h === 'program' || h === 'course') {
+                    } else if (hClean === 'prog' || hClean === 'program' || hClean === 'programme' || hClean === 'course' || hClean === 'degree') {
                         record['Program'] = val;
-                    } else if (h === 'div' || h === 'division' || h === 'sec' || h === 'section') {
+                    } else if (hClean === 'div' || hClean === 'division' || hClean === 'sec' || hClean === 'section') {
                         record['Division'] = val;
-                    } else if (h.includes('email') || h.includes('mail')) {
+                    } else if (hClean.includes('email') || hClean.includes('mail')) {
                         record['Email'] = val;
                     } else {
                         record[header] = val;
@@ -257,8 +263,54 @@ export const importInternalStudents = async (req: Request, res: Response) => {
                 // Skip duplicated header rows inside data
                 const nameVal = String(record['Name'] || '').toLowerCase();
                 const regVal = String(record['RegisterNumber'] || record['RollNumber'] || '').toLowerCase();
-                if (nameVal.includes('name') && (regVal.includes('reg') || regVal.includes('roll') || regVal === '')) continue;
+                if (nameVal.includes('name') && (regVal.includes('reg') || regVal.includes('roll') || regVal.includes('sl') || regVal === '')) continue;
 
+                if (hasData && record['Name']) {
+                    record._row = rowIdx + 1;
+                    data.push(record);
+                }
+            }
+        }
+
+        // Fallback for simple flat Excel/CSV files without section headers
+        if (data.length === 0 && rawRows.length > 1 && rawRows[0]) {
+            currentHeaders = rawRows[0].map((h: any) => String(h || '').trim());
+            for (let rowIdx = 1; rowIdx < rawRows.length; rowIdx++) {
+                const row = rawRows[rowIdx];
+                if (!row || row.length === 0) continue;
+                const record: any = {};
+                let hasData = false;
+                for (let colIdx = 0; colIdx < currentHeaders.length; colIdx++) {
+                    const header = currentHeaders[colIdx];
+                    if (!header) continue;
+                    const val = row[colIdx];
+                    if (val !== undefined && val !== null && String(val).trim() !== '') hasData = true;
+
+                    const h = header.toLowerCase().trim();
+                    const hClean = h.replace(/[^a-z0-9]/g, '');
+
+                    if (hClean.includes('regno') || hClean.includes('regnumber') || hClean.includes('register') || hClean.includes('registration') || hClean.includes('admno') || hClean.includes('admission') || hClean === 'reg' || hClean === 'usn' || hClean === 'urn' || hClean === 'prn' || hClean === 'studentid' || hClean === 'idno') {
+                        record['RegisterNumber'] = val;
+                    } else if (hClean === 'name' || hClean === 'studentname' || hClean === 'fullname' || hClean === 'nameofstudent' || hClean === 'nameofthestudent' || hClean === 'candidatename') {
+                        record['Name'] = val;
+                    } else if (hClean === 'roll' || hClean === 'rollno' || hClean === 'classroll' || hClean === 'classrollno' || hClean === 'rollnumber' || hClean === 'slno' || hClean === 'sno' || hClean === 'sino' || hClean === 'slino' || hClean === 'serialno') {
+                        record['RollNumber'] = val;
+                    } else if (hClean.includes('batch') || hClean === 'class' || hClean.includes('academicyear')) {
+                        record['Batch'] = val;
+                    } else if (hClean === 'dept' || hClean === 'branch' || hClean === 'department' || hClean === 'stream' || hClean === 'deptname') {
+                        record['Department'] = val;
+                    } else if (hClean === 'sem' || hClean === 'semester' || hClean === 'term') {
+                        record['Semester'] = val;
+                    } else if (hClean === 'prog' || hClean === 'program' || hClean === 'programme' || hClean === 'course' || hClean === 'degree') {
+                        record['Program'] = val;
+                    } else if (hClean === 'div' || hClean === 'division' || hClean === 'sec' || hClean === 'section') {
+                        record['Division'] = val;
+                    } else if (hClean.includes('email') || hClean.includes('mail')) {
+                        record['Email'] = val;
+                    } else {
+                        record[header] = val;
+                    }
+                }
                 if (hasData && record['Name']) {
                     record._row = rowIdx + 1;
                     data.push(record);
@@ -311,7 +363,11 @@ export const importInternalStudents = async (req: Request, res: Response) => {
                 : (parsed.division || null);
 
             if (!regNo && rollNumber !== null && !isNaN(rollNumber)) {
-                regNo = `${programCode}${batchYear || ''}${division || ''}${String(rollNumber).padStart(2, '0')}`;
+                regNo = `${programCode !== 'UNKNOWN' ? programCode : 'STU'}${batchYear || ''}${division || ''}${String(rollNumber).padStart(2, '0')}`;
+            }
+
+            if (!regNo && name) {
+                regNo = `AUTO_${Date.now()}_${Math.floor(Math.random() * 10000)}_${row._row}`;
             }
 
             if (!regNo || !name) { errors.push({ row: row._row, reason: 'Missing name or register number' }); continue; }
@@ -450,10 +506,31 @@ export const importInternalStudents = async (req: Request, res: Response) => {
 
         await t.commit();
 
+        const seriesId = req.body.seriesId ? parseInt(req.body.seriesId) : null;
+        const targetSemester = req.body.semester ? String(req.body.semester).trim() : null;
+        let mappedExamsCount = 0;
+
         // If no specific examId was provided, auto-map newly imported students to all matching internal exams
         if (!internalExamId) {
             try {
-                const activeExams = await InternalExam.findAll({ attributes: ['InternalExamID'] });
+                const examWhere: any = {};
+                if (seriesId) examWhere.InternalExamSeriesID = seriesId;
+
+                let activeExams = await InternalExam.findAll({
+                    where: Object.keys(examWhere).length > 0 ? examWhere : undefined,
+                    attributes: ['InternalExamID', 'Semester']
+                });
+
+                if (targetSemester) {
+                    const semDigits = targetSemester.match(/\d+/);
+                    const semNumStr = semDigits ? semDigits[0] : targetSemester;
+                    activeExams = activeExams.filter(e => {
+                        const eSem = String(e.Semester || '').toUpperCase();
+                        return eSem.includes(`S${semNumStr}`) || eSem.includes(`SEM ${semNumStr}`) || eSem.includes(semNumStr);
+                    });
+                }
+
+                mappedExamsCount = activeExams.length;
                 for (const ae of activeExams) {
                     await autoMapStudentsForExamCore(ae.InternalExamID);
                 }
@@ -462,13 +539,15 @@ export const importInternalStudents = async (req: Request, res: Response) => {
             }
         }
 
+        const semLabel = targetSemester ? `for Semester ${targetSemester}` : '';
         res.json({
-            message: 'Internal student import complete',
+            message: `Imported ${successCount} student(s) ${semLabel}. Automatically registered students to ${mappedExamsCount} exam(s).`,
             importType: 'INTERNAL',
             examId: internalExamId,
-            examName: exam ? `${exam.SubjectCode} - ${exam.SubjectName}` : 'Global Import',
+            examName: exam ? `${exam.SubjectCode} - ${exam.SubjectName}` : (targetSemester ? `Semester ${targetSemester} Import` : 'Global Import'),
             studentsImported: successCount,
             studentsMapped: mappedCount,
+            examsMappedCount: mappedExamsCount,
             errorCount: errors.length,
             errors: errors.slice(0, 50),
         });
@@ -896,109 +975,55 @@ export const syncInternalSemesters = async (req: Request, res: Response) => {
 /* ════════════════════════════════════════════════════════════════
  *  Core Auto Mapping Helper (Shared by API, Timetable, and Student Import)
  * ════════════════════════════════════════════════════════════════ */
-export const autoMapStudentsForExamCore = async (examId: number): Promise<{ mappedCount: number; totalMatched: number; message: string }> => {
-    const exam = await InternalExam.findByPk(examId, {
-        include: [
-            { model: InternalExamDepartment, include: [{ model: Department }] },
-        ],
-    });
-    if (!exam) throw new Error(`Internal exam #${examId} not found`);
+/* ════════════════════════════════════════════════════════════════
+ *  Core Auto Mapping Helper (Shared by API, Timetable, and Student Import)
+ * ════════════════════════════════════════════════════════════════ */
+export const autoMapStudentsForExamCore = async (examId: number): Promise<{ mappedCount: number; totalMatched: number; message: string; reconciliation?: any }> => {
+    const t = await sequelize.transaction();
+    try {
+        const eligibility = await InternalExamEligibilityService.calculateExamEligibility(examId, { transaction: t });
 
-    // 1. Extract Semester Number (e.g. "S5", "Sem 5", "5" -> 5)
-    const semRaw = String(exam.Semester || '').toUpperCase().trim();
-    const match = semRaw.match(/\d+/);
-    const semNum = match ? parseInt(match[0], 10) : null;
-
-    if (!semNum) {
-        return { mappedCount: 0, totalMatched: 0, message: `Cannot resolve semester number from exam semester "${exam.Semester}"` };
-    }
-
-    // 2. Extract mapped departments & division filters
-    const deptEntries = (exam as any).InternalExamDepartments || [];
-    let deptIds: number[] = deptEntries.map((d: any) => d.DepartmentID).filter(Boolean);
-
-    // If no department explicitly linked, fetch all active department IDs as fallback
-    if (deptIds.length === 0) {
-        const allDepts = await Department.findAll({ attributes: ['DepartmentID'] });
-        deptIds = allDepts.map((d: any) => d.DepartmentID);
-    }
-
-    if (deptIds.length === 0) {
-        return { mappedCount: 0, totalMatched: 0, message: 'No active departments found in system' };
-    }
-
-    // 3. Find matching Semester IDs from Semesters table (if any exist)
-    const matchingSemesters = await Semester.findAll({
-        where: {
-            [Op.or]: [
-                { SemesterNumber: semNum },
-                { SemesterName: semRaw },
-                { SemesterName: `S${semNum}` },
-                { SemesterName: `Sem ${semNum}` }
-            ]
+        if (eligibility.status === 'SUBJECT_ENROLLMENT_REQUIRED') {
+            await t.rollback();
+            return {
+                mappedCount: 0,
+                totalMatched: 0,
+                message: eligibility.message,
+                reconciliation: eligibility
+            };
         }
-    });
-    const semIds = matchingSemesters.map((s: any) => s.SemesterID);
 
-    // 4. Construct flexible semester conditions for InternalStudent
-    const semesterOrConditions: any[] = [
-        { Semester: `S${semNum}` },
-        { Semester: `${semNum}` },
-        { Semester: `Sem ${semNum}` },
-        { Semester: `Sem${semNum}` },
-        { Semester: `S-${semNum}` },
-        { Semester: semRaw }
-    ];
-    if (semIds.length > 0) {
-        semesterOrConditions.push({ SemesterID: { [Op.in]: semIds } });
-    }
-
-    // 5. Query active internal students
-    const students = await InternalStudent.findAll({
-        where: {
-            DepartmentID: { [Op.in]: deptIds },
-            Status: 'ACTIVE',
-            [Op.or]: semesterOrConditions
+        let mappedCount = 0;
+        for (const studentDetail of eligibility.eligibleStudents) {
+            const [_, created] = await InternalExamRegistration.findOrCreate({
+                where: {
+                    InternalExamID: examId,
+                    InternalStudentID: studentDetail.internalStudentId
+                },
+                defaults: {
+                    InternalExamID: examId,
+                    InternalStudentID: studentDetail.internalStudentId,
+                    RegistrationMethod: 'AUTO',
+                } as any,
+                transaction: t
+            });
+            if (created) mappedCount++;
         }
-    });
 
-    if (students.length === 0) {
+        await t.commit();
+
+        const postReconciliation = await InternalExamEligibilityService.calculateExamEligibility(examId);
+
         return {
-            mappedCount: 0,
-            totalMatched: 0,
-            message: `No active internal students found for Semester S${semNum} in mapped departments.`
+            mappedCount,
+            totalMatched: postReconciliation.registeredCount,
+            message: postReconciliation.message,
+            reconciliation: postReconciliation
         };
+    } catch (err: any) {
+        try { await t.rollback(); } catch (_) {}
+        throw err;
     }
-
-    // 6. Map students to InternalExamRegistration
-    let mappedCount = 0;
-    for (const student of students) {
-        // Apply division filter if specified on InternalExamDepartment
-        const deptEntry = deptEntries.find((d: any) => d.DepartmentID === student.DepartmentID);
-        const deptDiv = deptEntry?.Division ? String(deptEntry.Division).toUpperCase().trim() : 'ALL';
-        if (deptDiv !== 'ALL' && deptDiv !== '' && student.Division && String(student.Division).toUpperCase().trim() !== deptDiv) {
-            continue; // Skip student if division doesn't match department division filter
-        }
-
-        const [_, created] = await InternalExamRegistration.findOrCreate({
-            where: {
-                InternalExamID: examId,
-                InternalStudentID: student.InternalStudentID
-            },
-            defaults: {
-                InternalExamID: examId,
-                InternalStudentID: student.InternalStudentID,
-                RegistrationMethod: 'AUTO',
-            } as any
-        });
-        if (created) mappedCount++;
-    }
-
-    return {
-        mappedCount,
-        totalMatched: students.length,
-        message: `Successfully mapped ${mappedCount} student(s) to this exam.`
-    };
 };
 
 /* ════════════════════════════════════════════════════════════════
@@ -1016,7 +1041,8 @@ export const autoMapStudentsForInternalExam = async (req: Request, res: Response
             success: true,
             message: result.message,
             mappedCount: result.mappedCount,
-            totalMatched: result.totalMatched
+            totalMatched: result.totalMatched,
+            reconciliation: result.reconciliation
         });
     } catch (error: any) {
         console.error('Auto Map Internal Students Error:', error);
@@ -1048,19 +1074,22 @@ export const bulkAutoMapStudentsForSeries = async (req: Request, res: Response) 
 
         for (const exam of exams) {
             try {
-                const res = await autoMapStudentsForExamCore(exam.InternalExamID);
-                totalMapped += res.mappedCount;
-                totalMatched += res.totalMatched;
+                const resObj = await autoMapStudentsForExamCore(exam.InternalExamID);
+                totalMapped += resObj.mappedCount;
+                totalMatched += resObj.totalMatched;
                 results.push({
                     examId: exam.InternalExamID,
                     subjectCode: exam.SubjectCode,
-                    mappedCount: res.mappedCount,
-                    totalMatched: res.totalMatched
+                    mappedCount: resObj.mappedCount,
+                    totalMatched: resObj.totalMatched,
+                    reconciliationStatus: resObj.reconciliation?.status || 'UNKNOWN'
                 });
             } catch (err: any) {
                 console.warn(`[BulkAutoMap Warning] Exam #${exam.InternalExamID} error:`, err.message);
             }
         }
+
+        const seriesReconciliation = await InternalReconciliationService.reconcileSeries(seriesId);
 
         res.json({
             success: true,
@@ -1068,6 +1097,7 @@ export const bulkAutoMapStudentsForSeries = async (req: Request, res: Response) 
             examsProcessed: exams.length,
             totalMapped,
             totalMatched,
+            seriesReconciliation,
             details: results
         });
     } catch (error: any) {
@@ -1075,3 +1105,154 @@ export const bulkAutoMapStudentsForSeries = async (req: Request, res: Response) 
         res.status(500).json({ message: error.message });
     }
 };
+
+/* ════════════════════════════════════════════════════════════════
+ *  DELETE /api/internal/series/:seriesId/clear-mappings
+ *  Clear student mappings across all exams (or specific semester) in a series
+ * ════════════════════════════════════════════════════════════════ */
+export const clearSemesterStudentMappings = async (req: Request, res: Response) => {
+    try {
+        const seriesId = parseInt(req.params.seriesId as string);
+        if (!seriesId || isNaN(seriesId)) return res.status(400).json({ message: 'seriesId is required' });
+
+        const semester = req.query.semester ? String(req.query.semester).trim() : null;
+
+        const exams = await InternalExam.findAll({
+            where: { InternalExamSeriesID: seriesId },
+            attributes: ['InternalExamID', 'Semester']
+        });
+
+        if (exams.length === 0) {
+            return res.status(404).json({ message: 'No internal exams found in this series' });
+        }
+
+        let targetExamIds: number[] = [];
+        if (semester) {
+            const semDigits = semester.match(/\d+/);
+            const semNumStr = semDigits ? semDigits[0] : semester;
+            targetExamIds = exams.filter(e => {
+                const eSem = String(e.Semester || '').toUpperCase();
+                return eSem.includes(`S${semNumStr}`) || eSem.includes(`SEM ${semNumStr}`) || eSem.includes(semNumStr);
+            }).map(e => e.InternalExamID);
+        } else {
+            targetExamIds = exams.map(e => e.InternalExamID);
+        }
+
+        if (targetExamIds.length === 0) {
+            return res.json({ message: `No exams found matching semester ${semester}`, clearedCount: 0, examsCount: 0 });
+        }
+
+        const deleted = await InternalExamRegistration.destroy({
+            where: { InternalExamID: { [Op.in]: targetExamIds } }
+        });
+
+        res.json({
+            success: true,
+            message: `Cleared ${deleted} student mapping(s) across ${targetExamIds.length} exam(s)${semester ? ` for Semester ${semester}` : ''}.`,
+            clearedCount: deleted,
+            examsCount: targetExamIds.length
+        });
+    } catch (error: any) {
+        console.error('Clear Semester Student Mappings Error:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+/* ════════════════════════════════════════════════════════════════
+ *  GET /api/internal/exams/:examId/reconciliation
+ *  Get detailed expected vs registered student reconciliation for an exam
+ * ════════════════════════════════════════════════════════════════ */
+export const getInternalExamReconciliation = async (req: Request, res: Response) => {
+    try {
+        const examId = parseInt(req.params.examId as string);
+        if (!examId || isNaN(examId)) return res.status(400).json({ message: 'examId is required' });
+
+        const reconciliation = await InternalReconciliationService.reconcileExam(examId);
+        res.json(reconciliation);
+    } catch (error: any) {
+        console.error('Get Internal Exam Reconciliation Error:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+/* ════════════════════════════════════════════════════════════════
+ *  GET /api/internal/series/:seriesId/reconciliation
+ *  Get full series-level reconciliation report
+ * ════════════════════════════════════════════════════════════════ */
+export const getInternalSeriesReconciliation = async (req: Request, res: Response) => {
+    try {
+        const seriesId = parseInt(req.params.seriesId as string);
+        if (!seriesId || isNaN(seriesId)) return res.status(400).json({ message: 'seriesId is required' });
+
+        const seriesReconciliation = await InternalReconciliationService.reconcileSeries(seriesId);
+        res.json(seriesReconciliation);
+    } catch (error: any) {
+        console.error('Get Internal Series Reconciliation Error:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+/* ════════════════════════════════════════════════════════════════
+ *  POST /api/internal/students/subject-enrollments
+ *  Upload / Add explicit student subject enrollments (for Electives/Minor/Honours)
+ * ════════════════════════════════════════════════════════════════ */
+export const createInternalSubjectEnrollment = async (req: Request, res: Response) => {
+    try {
+        const { enrollments } = req.body; // Array of { registerNumber, subjectCode, semester, enrollmentType }
+        if (!Array.isArray(enrollments) || enrollments.length === 0) {
+            return res.status(400).json({ message: 'enrollments array is required' });
+        }
+
+        const t = await sequelize.transaction();
+        let createdCount = 0;
+        const errors: any[] = [];
+
+        try {
+            for (const item of enrollments) {
+                const regNo = String(item.registerNumber || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+                const subjCode = String(item.subjectCode || '').trim().toUpperCase();
+
+                if (!regNo || !subjCode) {
+                    errors.push({ item, reason: 'Missing registerNumber or subjectCode' });
+                    continue;
+                }
+
+                const student = await InternalStudent.findOne({ where: { RegisterNumber: regNo }, transaction: t });
+                if (!student) {
+                    errors.push({ item, reason: `Student ${regNo} not found` });
+                    continue;
+                }
+
+                const [_, created] = await InternalStudentSubject.findOrCreate({
+                    where: {
+                        InternalStudentID: student.InternalStudentID,
+                        SubjectCode: subjCode
+                    },
+                    defaults: {
+                        InternalStudentID: student.InternalStudentID,
+                        SubjectCode: subjCode,
+                        Semester: item.semester || student.Semester || null,
+                        EnrollmentType: item.enrollmentType || 'ELECTIVE'
+                    },
+                    transaction: t
+                });
+                if (created) createdCount++;
+            }
+
+            await t.commit();
+            res.json({
+                success: true,
+                message: `Processed ${enrollments.length} subject enrollments. ${createdCount} new entries added.`,
+                createdCount,
+                errors
+            });
+        } catch (err: any) {
+            await t.rollback();
+            throw err;
+        }
+    } catch (error: any) {
+        console.error('Create Internal Subject Enrollment Error:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+

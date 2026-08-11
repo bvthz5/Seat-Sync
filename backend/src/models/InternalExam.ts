@@ -13,6 +13,9 @@ export class InternalExam extends Model {
     declare public Duration: number;
     declare public StartTime: string;
     declare public EndTime: string;
+    declare public BranchScope: string | null;
+    declare public ScopeType: string; // 'BRANCH_SCOPE' | 'ALL_BRANCHES' | 'ELECTIVE_REGISTRATION_REQUIRED'
+    declare public SubjectType: string; // 'CORE' | 'ELECTIVE' | 'MINOR' | 'HONOURS'
     declare public createdAt: Date;
     declare public updatedAt: Date;
 }
@@ -63,6 +66,20 @@ InternalExam.init({
     EndTime: {
         type: DataTypes.STRING(15),
         allowNull: true,
+    },
+    BranchScope: {
+        type: DataTypes.STRING(500),
+        allowNull: true,
+    },
+    ScopeType: {
+        type: DataTypes.STRING(40),
+        allowNull: false,
+        defaultValue: 'BRANCH_SCOPE',
+    },
+    SubjectType: {
+        type: DataTypes.STRING(30),
+        allowNull: false,
+        defaultValue: 'CORE',
     },
     createdAt: {
         type: DataTypes.DATE,

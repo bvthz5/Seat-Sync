@@ -17,6 +17,10 @@ import {
     syncInternalSemesters,
     autoMapStudentsForInternalExam,
     bulkAutoMapStudentsForSeries,
+    clearSemesterStudentMappings,
+    getInternalExamReconciliation,
+    getInternalSeriesReconciliation,
+    createInternalSubjectEnrollment,
 } from '../controllers/internalStudent.controller.js';
 
 const router = Router();
@@ -33,14 +37,18 @@ router.post('/students/sync-semesters', syncInternalSemesters);
 router.delete('/students/:id', deleteInternalStudent);
 router.delete('/students', deleteAllInternalStudents);
 
-// ── Student Import (maps to specific exam) ──
+// ── Student Import (maps to specific exam) & Subject Enrollments ──
 router.post('/students/import', upload.single('file'), importInternalStudents);
+router.post('/students/subject-enrollments', createInternalSubjectEnrollment);
 
-// ── Exam Detail + Mapped Students ──
+// ── Exam Detail + Mapped Students + Reconciliation ──
 router.get('/exams/:examId/detail', getInternalExamDetail);
 router.get('/exams/:examId/students', getStudentsForInternalExam);
+router.get('/exams/:examId/reconciliation', getInternalExamReconciliation);
+router.get('/series/:seriesId/reconciliation', getInternalSeriesReconciliation);
 router.post('/exams/:examId/students/auto-map', autoMapStudentsForInternalExam);
 router.post('/series/:seriesId/auto-map-all', bulkAutoMapStudentsForSeries);
+router.delete('/series/:seriesId/clear-mappings', clearSemesterStudentMappings);
 router.delete('/exams/:examId/students/:studentId', removeStudentFromInternalExam);
 router.delete('/exams/:examId/students', clearStudentsFromInternalExam);
 

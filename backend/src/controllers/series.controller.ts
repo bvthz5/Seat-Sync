@@ -137,7 +137,8 @@ export const getAllSeries = async (req: Request, res: Response): Promise<void> =
             allExams.forEach(ex => {
                 if (ex.semester) {
                     let semName = String(ex.semester).trim();
-                    if (/^\d+$/.test(semName)) semName = `Sem ${semName}`;
+                    if (/^\d+$/.test(semName)) semName = `Sem S${semName}`;
+                    else if (/^S\d+$/i.test(semName)) semName = `Sem ${semName.toUpperCase()}`;
                     semesterSet.add(semName);
                 }
             });

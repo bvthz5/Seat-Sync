@@ -11,6 +11,7 @@ import {
     Subject,
     Semester
 } from '../../models/index.js';
+import { InternalReconciliationService } from '../../services/internal/internalReconciliation.service.js';
 
 export interface InternalAllocationRequest {
     examDate: string;
@@ -56,7 +57,14 @@ export class InternalSeatAllocator {
         const examIds = exams.map(e => e.InternalExamID);
         console.log(`[InternalSeatAllocator] Exam IDs: ${examIds.join(', ')}`);
 
-        // 2. Fetch registered students grouped by exam (subject)
+        // 2. Perform Pre-Seating Reconciliation Check (ensure 0 missing students)
+        const validation = await InternalReconciliationService.validatePreSeating(req.seriesId, req.examDate, req.session, { transaction });
+        if (!validation.isValid) {
+            const errSummary = validation.errors.map(e => `${e.subjectCode} (${e.subjectName}): ${e.missingCount} student(s) missing registration`).join('; ');
+            throw new Error(`Seating generation blocked: Unregistered students detected in exam slot. ${errSummary}. Run student auto-registration or reconciliation resolution before seating allocation.`);
+        }
+
+        // Fetch registered students grouped by exam (subject) as single source of truth
         const registrations = await InternalExamRegistration.findAll({
             where: { InternalExamID: { [Op.in]: examIds } },
             include: [{
@@ -75,72 +83,6 @@ export class InternalSeatAllocator {
 
         // Strict Session-Level Student Deduplication Set
         const processedStudentIds = new Set<number>();
-
-        // If no registrations exist yet, auto-generate registrations into InternalExamRegistration table first
-        if (registrations.length === 0) {
-            console.log(`[InternalSeatAllocator] No registrations found in database. Generating registrations before seating...`);
-            for (const exam of exams) {
-                const semStr = String(exam.Semester || '').toUpperCase();
-                const match = semStr.match(/\d+/);
-                const semNum = match ? parseInt(match[0]) : null;
-
-                const examDepts = await InternalExamDepartment.findAll({
-                    where: { InternalExamID: exam.InternalExamID },
-                    transaction
-                });
-                const deptIds = examDepts.map(d => d.DepartmentID);
-
-                if (semNum && deptIds.length > 0) {
-                    const matchingSemesters = await Semester.findAll({
-                        where: {
-                            [Op.or]: [
-                                { SemesterNumber: semNum },
-                                { SemesterName: semStr },
-                                { SemesterName: `S${semNum}` }
-                            ]
-                        },
-                        transaction
-                    });
-                    const semIds = matchingSemesters.map((s: any) => s.SemesterID);
-
-                    const students = await InternalStudent.findAll({
-                        where: {
-                            DepartmentID: { [Op.in]: deptIds },
-                            SemesterID: { [Op.in]: semIds },
-                            Status: 'ACTIVE'
-                        },
-                        transaction
-                    });
-
-                    for (const s of students) {
-                        await InternalExamRegistration.findOrCreate({
-                            where: {
-                                InternalExamID: exam.InternalExamID,
-                                InternalStudentID: s.InternalStudentID
-                            },
-                            defaults: {
-                                InternalExamID: exam.InternalExamID,
-                                InternalStudentID: s.InternalStudentID,
-                                RegistrationMethod: 'AUTO'
-                            } as any,
-                            transaction
-                        });
-                    }
-                }
-            }
-
-            // Re-query registrations as the single source of truth
-            const reQueried = await InternalExamRegistration.findAll({
-                where: { InternalExamID: { [Op.in]: examIds } },
-                include: [{
-                    model: InternalStudent,
-                    as: 'Student',
-                    include: [{ model: Department, as: 'Department' }]
-                }],
-                transaction
-            });
-            registrations.push(...reQueried);
-        }
 
         for (const reg of registrations) {
             if (processedStudentIds.has(reg.InternalStudentID)) continue;

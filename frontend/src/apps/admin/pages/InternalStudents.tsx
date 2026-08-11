@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
     Button, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, 
     Chip, Pagination, Input, Tooltip, Select, SelectItem,
     Modal, ModalContent, ModalHeader, ModalBody, ModalFooter,
-    Dropdown, DropdownTrigger, DropdownMenu, DropdownItem
+    Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Switch
 } from '@heroui/react';
 import { 
     Search, FileSpreadsheet, Pencil, Trash2, AlertTriangle, 
@@ -20,12 +21,14 @@ import { EditStudentModal } from '../components/students/EditStudentModal';
 import StudentQuickViewDrawer from '../components/students/StudentQuickViewDrawer';
 
 const InternalStudents: React.FC = () => {
+    const navigate = useNavigate();
     const [students, setStudents] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalCount, setTotalCount] = useState(0);
     const [isSyncing, setIsSyncing] = useState(false);
+    const [importFromExams, setImportFromExams] = useState(true);
     
     const [searchQuery, setSearchQuery] = useState("");
     const debouncedSearch = useDebounce(searchQuery, 500);
@@ -245,16 +248,20 @@ const InternalStudents: React.FC = () => {
                         Add Student
                     </Button>
 
-                    {/* 2. Import Data */}
-                    <Button 
-                        color="primary" 
-                        variant="shadow" 
-                        startContent={<FileSpreadsheet size={18}/>} 
-                        onPress={() => setIsImportOpen(true)} 
-                        className="font-black rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-200 h-10 px-4 text-xs hover:scale-[1.02] active:scale-[0.98] transition-all"
-                    >
-                        Import Data
-                    </Button>
+                    {/* 2. Import Data (Disabled: Student registration is automated via Timetable import in Exams Page) */}
+                    <Tooltip content="Student registration is automatically managed via Timetable Import in the Exams Page.">
+                        <div>
+                            <Button 
+                                color="primary" 
+                                variant="shadow" 
+                                isDisabled={true}
+                                startContent={<FileSpreadsheet size={18}/>} 
+                                className="font-black rounded-xl h-10 px-4 text-xs transition-all bg-slate-200 text-slate-400 border border-slate-300/80 shadow-none opacity-60 cursor-not-allowed"
+                            >
+                                Import Data
+                            </Button>
+                        </div>
+                    </Tooltip>
 
                     {/* 3. Passwords */}
                     <Button 
