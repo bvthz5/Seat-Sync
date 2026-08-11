@@ -574,7 +574,7 @@ export const getStudentsForInternalExam = async (req: Request, res: Response) =>
         });
         if (!exam) return res.status(404).json({ message: 'Internal exam not found' });
 
-        const registrations = await InternalExamRegistration.findAll({
+        let registrations = await InternalExamRegistration.findAll({
             where: { InternalExamID: examId },
             include: [{
                 model: InternalStudent,
@@ -590,6 +590,30 @@ export const getStudentsForInternalExam = async (req: Request, res: Response) =>
                 [{ model: InternalStudent, as: 'Student' }, 'RegisterNumber', 'ASC']
             ],
         });
+
+        if (registrations.length === 0) {
+            try {
+                await autoMapStudentsForExamCore(examId);
+                registrations = await InternalExamRegistration.findAll({
+                    where: { InternalExamID: examId },
+                    include: [{
+                        model: InternalStudent,
+                        as: 'Student',
+                        include: [
+                            { model: Department, as: 'Department', attributes: ['DepartmentID', 'DepartmentCode', 'DepartmentName'] },
+                            { model: Program, attributes: ['ProgramID', 'ProgramName'] },
+                            { model: Semester, as: 'SemesterModel', attributes: ['SemesterID', 'SemesterNumber'] },
+                        ],
+                    }],
+                    order: [
+                        [{ model: InternalStudent, as: 'Student' }, 'RollNumber', 'ASC'],
+                        [{ model: InternalStudent, as: 'Student' }, 'RegisterNumber', 'ASC']
+                    ],
+                });
+            } catch (autoErr: any) {
+                console.warn(`[getStudentsForInternalExam] Auto-map fallback warning for exam #${examId}:`, autoErr.message);
+            }
+        }
 
         const students = registrations.map((reg: any) => ({
             registrationId: reg.InternalExamRegistrationID,
@@ -993,21 +1017,20 @@ export const autoMapStudentsForExamCore = async (examId: number): Promise<{ mapp
             };
         }
 
+        const targetStudents = [...eligibility.eligibleStudents, ...eligibility.missingStudents];
+        const newRegs = targetStudents.map(s => ({
+            InternalExamID: examId,
+            InternalStudentID: s.internalStudentId,
+            RegistrationMethod: 'AUTO'
+        }));
+
         let mappedCount = 0;
-        for (const studentDetail of eligibility.eligibleStudents) {
-            const [_, created] = await InternalExamRegistration.findOrCreate({
-                where: {
-                    InternalExamID: examId,
-                    InternalStudentID: studentDetail.internalStudentId
-                },
-                defaults: {
-                    InternalExamID: examId,
-                    InternalStudentID: studentDetail.internalStudentId,
-                    RegistrationMethod: 'AUTO',
-                } as any,
+        if (newRegs.length > 0) {
+            const result = await InternalExamRegistration.bulkCreate(newRegs as any[], {
+                ignoreDuplicates: true,
                 transaction: t
             });
-            if (created) mappedCount++;
+            mappedCount = result.length;
         }
 
         await t.commit();

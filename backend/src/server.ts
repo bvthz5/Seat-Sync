@@ -30,6 +30,12 @@ const startServer = async () => {
         if (process.env.NODE_ENV !== "production") {
             await seedTestUsers();
         }
+        try {
+            const { InternalExamController } = await import("./controllers/internalExam.controller.js");
+            await InternalExamController.repairAllInternalExams();
+        } catch (repairErr: any) {
+            console.warn("[DB Repair Warning]:", repairErr.message);
+        }
     } catch (error) {
         console.error("Database connection failed:", error);
         if (process.env.NODE_ENV === "production") {

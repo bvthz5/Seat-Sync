@@ -12,6 +12,7 @@ import {
     Semester
 } from '../../models/index.js';
 import { InternalReconciliationService } from '../../services/internal/internalReconciliation.service.js';
+import { autoMapStudentsForExamCore } from '../../controllers/internalStudent.controller.js';
 
 export interface InternalAllocationRequest {
     examDate: string;
@@ -56,6 +57,15 @@ export class InternalSeatAllocator {
 
         const examIds = exams.map(e => e.InternalExamID);
         console.log(`[InternalSeatAllocator] Exam IDs: ${examIds.join(', ')}`);
+
+        // 1b. Auto-register any eligible students missing registration for this slot
+        for (const exam of exams) {
+            try {
+                await autoMapStudentsForExamCore(exam.InternalExamID);
+            } catch (autoErr: any) {
+                console.warn(`[InternalSeatAllocator] Auto-map skipped for exam #${exam.InternalExamID}:`, autoErr.message);
+            }
+        }
 
         // 2. Perform Pre-Seating Reconciliation Check (ensure 0 missing students)
         const validation = await InternalReconciliationService.validatePreSeating(req.seriesId, req.examDate, req.session, { transaction });

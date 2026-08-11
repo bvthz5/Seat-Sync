@@ -16,6 +16,8 @@ import {
     Subject
 } from '../../models/index.js';
 import { InternalSeatAllocator } from '../../engines/internal/internalSeatAllocator.engine.js';
+import { autoMapStudentsForExamCore } from '../internalStudent.controller.js';
+import { InternalExamController } from '../internalExam.controller.js';
 
 export const internalSeatingController = {
     /** Get all active halls for internal exams */
@@ -689,18 +691,12 @@ export const internalSeatingController = {
         }
     },
 
-    /** Auto-register students for internal exams based on department matching */
+    /** Auto-register students for internal exams based on eligibility service and department matching */
     autoRegisterStudents: async (req: Request, res: Response) => {
-        const transaction = await sequelize.transaction();
         try {
             let { examDate, session, seriesId } = req.body;
             if (!examDate || examDate === 'undefined' || !session || session === 'undefined' || !seriesId || seriesId === 'undefined') {
                 return res.status(400).json({ message: "Exam series, date, and session are required" });
-            }
-            
-            if (!examDate || !session || !seriesId) {
-                await transaction.rollback();
-                return res.status(400).json({ message: "examDate, session, and seriesId are required" });
             }
 
             // Clean date if it contains session suffix
@@ -717,99 +713,66 @@ export const internalSeatingController = {
                 },
                 include: [{
                     model: InternalExamDepartment,
-                    as: 'InternalExamDepartments',
-                    attributes: ['DepartmentID']
-                }],
-                transaction
+                    as: 'InternalExamDepartments'
+                }]
             });
 
             if (exams.length === 0) {
-                await transaction.rollback();
                 return res.status(404).json({ message: "No exams found for this date/session/series" });
             }
 
             console.log(`[autoRegisterStudents] Found ${exams.length} exams for ${examDate} ${session}`);
 
-            // 2. Build a map: departmentId -> list of examIds
-            const deptToExams = new Map<number, number[]>();
-            const examIds = new Set<number>();
-            
+            const allDepts = await Department.findAll();
+            const deptIdMap = new Map<string, number>();
+            allDepts.forEach(d => deptIdMap.set(d.DepartmentCode.toUpperCase(), d.DepartmentID));
+            const allDeptIds = allDepts.map(d => d.DepartmentID);
+
+            let newRegistrationsCount = 0;
+            let totalMatchedCount = 0;
+
             for (const exam of exams) {
-                examIds.add(exam.InternalExamID);
                 const depts = (exam as any).InternalExamDepartments || [];
-                
                 if (depts.length === 0) {
-                    console.log(`[autoRegisterStudents] Exam ${exam.InternalExamID} (${exam.SubjectCode}) has no departments configured`);
-                } else {
-                    for (const dept of depts) {
-                        if (!deptToExams.has(dept.DepartmentID)) {
-                            deptToExams.set(dept.DepartmentID, []);
+                    const deptCodes = InternalExamController.parseDepartmentCodes(exam.BranchScope || 'ALL_BRANCHES');
+                    let targetDeptIds: number[] = [];
+                    if (deptCodes.includes('ALL_BRANCHES') || deptCodes.includes('ALL') || deptCodes.length === 0) {
+                        targetDeptIds = [...allDeptIds];
+                    } else {
+                        for (const code of deptCodes) {
+                            if (deptIdMap.has(code)) {
+                                targetDeptIds.push(deptIdMap.get(code)!);
+                            }
                         }
-                        deptToExams.get(dept.DepartmentID)!.push(exam.InternalExamID);
                     }
-                }
-            }
+                    if (targetDeptIds.length === 0) targetDeptIds = [...allDeptIds];
 
-            console.log(`[autoRegisterStudents] Department to Exams mapping:`, Array.from(deptToExams.entries()));
-
-            // 3. Fetch all active internal students grouped by department
-            const students = await InternalStudent.findAll({
-                where: { Status: 'ACTIVE' },
-                attributes: ['InternalStudentID', 'DepartmentID'],
-                transaction
-            });
-
-            console.log(`[autoRegisterStudents] Found ${students.length} active students`);
-
-            // 4. Get existing registrations to avoid duplicates
-            const existingRegs = await InternalExamRegistration.findAll({
-                where: { InternalExamID: { [Op.in]: Array.from(examIds) } },
-                attributes: ['InternalExamID', 'InternalStudentID'],
-                raw: true,
-                transaction
-            });
-
-            const existingSet = new Set<string>();
-            for (const reg of existingRegs) {
-                existingSet.add(`${reg.InternalExamID}-${reg.InternalStudentID}`);
-            }
-
-            console.log(`[autoRegisterStudents] Found ${existingRegs.length} existing registrations`);
-
-            // 5. Create new registrations
-            const newRegistrations: any[] = [];
-            
-            for (const student of students) {
-                const deptId = student.DepartmentID || 0;
-                const examIdsForDept = deptToExams.get(deptId) || [];
-                for (const examId of examIdsForDept) {
-                    const key = `${examId}-${student.InternalStudentID}`;
-                    if (!existingSet.has(key)) {
-                        newRegistrations.push({
-                            InternalExamID: examId,
-                            InternalStudentID: student.InternalStudentID
+                    for (const deptId of targetDeptIds) {
+                        await InternalExamDepartment.findOrCreate({
+                            where: {
+                                InternalExamID: exam.InternalExamID,
+                                DepartmentID: deptId
+                            }
                         });
                     }
                 }
+
+                try {
+                    const mappedResult = await autoMapStudentsForExamCore(exam.InternalExamID);
+                    newRegistrationsCount += mappedResult.mappedCount;
+                    totalMatchedCount += mappedResult.totalMatched;
+                } catch (mapErr: any) {
+                    console.warn(`[autoRegisterStudents] Mapping warning for exam #${exam.InternalExamID}:`, mapErr.message);
+                }
             }
 
-            console.log(`[autoRegisterStudents] Creating ${newRegistrations.length} new registrations`);
-
-            if (newRegistrations.length > 0) {
-                await InternalExamRegistration.bulkCreate(newRegistrations, { transaction });
-            }
-
-            await transaction.commit();
-            
             return res.json({
                 message: `Auto-registered students successfully`,
                 examCount: exams.length,
-                studentCount: students.length,
-                newRegistrations: newRegistrations.length,
-                totalRegistrations: existingRegs.length + newRegistrations.length
+                newRegistrations: newRegistrationsCount,
+                totalRegistrations: totalMatchedCount
             });
         } catch (error: any) {
-            await transaction.rollback();
             console.error('[autoRegisterStudents] Error:', error);
             return res.status(500).json({ message: error.message });
         }

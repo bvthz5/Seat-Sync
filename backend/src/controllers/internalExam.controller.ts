@@ -23,10 +23,16 @@ export class InternalExamController {
         if (!raw) return '';
 
         const aliases: Record<string, string> = {
-            INMCA: 'IMCA', ITCS: 'CS', ITCE: 'CE', ITEC: 'EC', ITEE: 'EE',
-            EE: 'EE', EC: 'EC', CS: 'CS', CSE: 'CS', ECE: 'EC', EEE: 'EE',
-            MECH: 'ME', CIVIL: 'CE', AD: 'AD', CA: 'CA', CC: 'CC', RA: 'RA',
-            ER: 'ER', EEEWP: 'EEEWP', CSEWP: 'CSEWP', ECEWP: 'ECEWP', CEWP: 'CEWP', MEWP: 'MEWP'
+            CS: 'CSE', CSE: 'CSE', ITCS: 'CSE', CSEPGR: 'CSE', CSEWP: 'CSE',
+            EC: 'ECE', ECE: 'ECE', ITEC: 'ECE', ECEPGL: 'ECE', ECEWP: 'ECE',
+            EE: 'EEE', EEE: 'EEE', ITEE: 'EEE', EEEWP: 'EEE',
+            ME: 'ME', MECH: 'ME', MEWP: 'ME', MEAMPM: 'ME',
+            CE: 'CE', CIVIL: 'CE', ITCE: 'CE', CEWP: 'CE',
+            AD: 'AD', AIDS: 'AD', 'AI&DS': 'AD',
+            CA: 'CA', MCA: 'CA', INT_MCA: 'CA', IMCA: 'CA', INMCA: 'CA',
+            CC: 'CC',
+            ER: 'ER', RA: 'ER',
+            BHM: 'BHM', MBA: 'MBA', PHD: 'PHD', INT: 'INT'
         };
 
         if (raw.startsWith('IT') && raw.length > 2 && !aliases[raw]) {
@@ -42,16 +48,22 @@ export class InternalExamController {
         let text = String(raw ?? '').trim().toUpperCase();
         if (!text) return [];
         
-        if (text.includes('ALL BRANCHES') || text === 'ALL') {
+        if (text.includes('ALL BRANCHES') || text === 'ALL' || text === 'ALL_BRANCHES') {
             return ['ALL_BRANCHES'];
         }
 
         text = text.replace(/\s*\(.*?\)/g, '');
-        return [...new Set(
-            text.split(/[,&/;|]+/)
-                .map((s) => InternalExamController.normalizeDepartmentCode(s.trim()))
-                .filter(Boolean)
-        )];
+        const tokens = text.split(/[\s,/;&|.\-_]+/);
+        const results = new Set<string>();
+
+        for (const token of tokens) {
+            const norm = InternalExamController.normalizeDepartmentCode(token);
+            if (norm && norm !== 'A' && norm !== 'B' && norm !== 'C' && norm !== 'D' && norm !== 'E') {
+                results.add(norm);
+            }
+        }
+
+        return Array.from(results);
     }
 
     static excelSerialToDate(serial: number): Date | null {
@@ -626,6 +638,69 @@ export class InternalExamController {
         } catch (error: any) {
             console.error("Internal Exam Import Error:", error);
             res.status(500).json({ message: "Fatal error during import", error: error.message });
+        }
+    }
+
+    static async repairAllInternalExams(): Promise<{ totalExams: number; repairedDepts: number; totalMappedStudents: number }> {
+        try {
+            const allDepts = await Department.findAll();
+            const deptIdMap = new Map<string, number>();
+            allDepts.forEach(d => {
+                deptIdMap.set(d.DepartmentCode.toUpperCase(), d.DepartmentID);
+            });
+            const allDeptIds = allDepts.map(d => d.DepartmentID);
+
+            const exams = await InternalExam.findAll({
+                include: [{ model: InternalExamDepartment }]
+            });
+
+            let repairedDepts = 0;
+            let totalMappedStudents = 0;
+
+            for (const exam of exams) {
+                const depts = (exam as any).InternalExamDepartments || [];
+                let targetDeptIds: number[] = depts.map((d: any) => d.DepartmentID);
+
+                if (targetDeptIds.length === 0) {
+                    const deptCodes = InternalExamController.parseDepartmentCodes(exam.BranchScope || 'ALL_BRANCHES');
+                    if (deptCodes.includes('ALL_BRANCHES') || deptCodes.includes('ALL') || deptCodes.length === 0) {
+                        targetDeptIds = [...allDeptIds];
+                    } else {
+                        for (const code of deptCodes) {
+                            if (deptIdMap.has(code)) {
+                                targetDeptIds.push(deptIdMap.get(code)!);
+                            }
+                        }
+                    }
+
+                    if (targetDeptIds.length === 0) {
+                        targetDeptIds = [...allDeptIds];
+                    }
+
+                    for (const deptId of targetDeptIds) {
+                        const [_, created] = await InternalExamDepartment.findOrCreate({
+                            where: {
+                                InternalExamID: exam.InternalExamID,
+                                DepartmentID: deptId
+                            }
+                        });
+                        if (created) repairedDepts++;
+                    }
+                }
+
+                try {
+                    const res = await autoMapStudentsForExamCore(exam.InternalExamID);
+                    totalMappedStudents += res.mappedCount;
+                } catch (e: any) {
+                    console.warn(`[repairAllInternalExams] Auto-map skipped for exam #${exam.InternalExamID}:`, e.message);
+                }
+            }
+
+            console.log(`[repairAllInternalExams] Done: ${exams.length} exams processed, ${repairedDepts} dept mappings created, ${totalMappedStudents} new student registrations.`);
+            return { totalExams: exams.length, repairedDepts, totalMappedStudents };
+        } catch (error: any) {
+            console.error('[repairAllInternalExams] Error:', error);
+            throw error;
         }
     }
 }

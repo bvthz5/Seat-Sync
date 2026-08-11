@@ -105,53 +105,11 @@ const formatDateForDb = (date: Date): string => {
     return `${y}-${m}-${d}`;
 };
 
-const parseDepartmentCodes = (raw: unknown): string[] => {
-    let text = String(raw ?? '').trim();
-    if (!text) return [];
-
-    // Pre-process: if it contains " (", strip everything after it for individual codes
-    // e.g. "EEE (WP), CSE" -> "EEE, CSE"
-    text = text.replace(/\s*\(.*?\)/g, '');
-
-    return [...new Set(
-        text
-            .split(/[,&/;|]+/)
-            .map((s) => normalizeDepartmentCode(s.trim()))
-            .filter(Boolean)
-    )];
-};
-
-const DEPARTMENT_CODE_ALIASES: Record<string, string> = {
-    INMCA: 'IMCA',
-    ITCS: 'CS',
-    ITCE: 'CE',
-    ITEC: 'EC',
-    ITEE: 'EE',
-    EE: 'EE',
-    EC: 'EC',
-    CS: 'CS',
-    CSE: 'CS',
-    ECE: 'EC',
-    EEE: 'EE',
-    MECH: 'ME',
-    CIVIL: 'CE',
-    AD: 'AD',
-    CA: 'CA',
-    CC: 'CC',
-    RA: 'RA',
-    ER: 'ER',
-    EEEWP: 'EEEWP',
-    CSEWP: 'CSEWP',
-    ECEWP: 'ECEWP',
-    CEWP: 'CEWP',
-    MEWP: 'MEWP',
-};
-
 const DEPARTMENT_CODE_DISPLAY_NAMES: Record<string, string> = {
     IMCA: 'Integrated MCA',
-    EE: 'Electrical & Electronics Engineering',
-    CS: 'Computer Science & Engineering',
-    EC: 'Electronics & Communication Engineering',
+    EEE: 'Electrical & Electronics Engineering',
+    CSE: 'Computer Science & Engineering',
+    ECE: 'Electronics & Communication Engineering',
     CE: 'Civil Engineering',
     ME: 'Mechanical Engineering',
     AD: 'Artificial Intelligence & Data Science',
@@ -163,26 +121,53 @@ const DEPARTMENT_CODE_DISPLAY_NAMES: Record<string, string> = {
 
 const normalizeDepartmentCode = (value: unknown): string => {
     let text = String(value ?? '').toUpperCase().trim();
-
-    // Strip everything in parentheses (e.g., "EEE (WP)" -> "EEE")
     text = text.replace(/\(.*\)/g, '').trim();
-
-    // Strip everything after a space or underscore if it looks like a suffix (e.g., "EEE_WP" -> "EEE", "CSE BATCH 1" -> "CSE")
-    // But keep it if the whole thing is a known alias
     const parts = text.split(/[\s_]+/);
     let raw = parts[0] ? parts[0].replace(/[^A-Z0-9]/g, '') : '';
-
     if (!raw) return '';
 
-    // If the first part is IT prefix (e.g. ITEE), handle it
-    if (raw.startsWith('IT') && raw.length > 2 && !DEPARTMENT_CODE_ALIASES[raw]) {
+    const aliases: Record<string, string> = {
+        CS: 'CSE', CSE: 'CSE', ITCS: 'CSE', CSEPGR: 'CSE', CSEWP: 'CSE',
+        EC: 'ECE', ECE: 'ECE', ITEC: 'ECE', ECEPGL: 'ECE', ECEWP: 'ECE',
+        EE: 'EEE', EEE: 'EEE', ITEE: 'EEE', EEEWP: 'EEE',
+        ME: 'ME', MECH: 'ME', MEWP: 'ME', MEAMPM: 'ME',
+        CE: 'CE', CIVIL: 'CE', ITCE: 'CE', CEWP: 'CE',
+        AD: 'AD', AIDS: 'AD', 'AI&DS': 'AD',
+        CA: 'CA', MCA: 'CA', INT_MCA: 'CA', IMCA: 'CA', INMCA: 'CA',
+        CC: 'CC',
+        ER: 'ER', RA: 'ER',
+        BHM: 'BHM', MBA: 'MBA', PHD: 'PHD', INT: 'INT'
+    };
+
+    if (raw.startsWith('IT') && raw.length > 2 && !aliases[raw]) {
         const withoutIT = raw.slice(2);
-        if (DEPARTMENT_CODE_ALIASES[withoutIT] || withoutIT.length >= 2) {
+        if (aliases[withoutIT] || withoutIT.length >= 2) {
             raw = withoutIT;
         }
     }
+    return aliases[raw] || raw;
+};
 
-    return DEPARTMENT_CODE_ALIASES[raw] || raw;
+const parseDepartmentCodes = (raw: unknown): string[] => {
+    let text = String(raw ?? '').trim().toUpperCase();
+    if (!text) return [];
+
+    if (text.includes('ALL BRANCHES') || text === 'ALL' || text === 'ALL_BRANCHES') {
+        return ['ALL_BRANCHES'];
+    }
+
+    text = text.replace(/\s*\(.*?\)/g, '');
+    const tokens = text.split(/[\s,/;&|.\-_]+/);
+    const results = new Set<string>();
+
+    for (const token of tokens) {
+        const norm = normalizeDepartmentCode(token);
+        if (norm && norm !== 'A' && norm !== 'B' && norm !== 'C' && norm !== 'D' && norm !== 'E') {
+            results.add(norm);
+        }
+    }
+
+    return Array.from(results);
 };
 
 const getDepartmentCodeCandidates = (value: unknown): string[] => {
@@ -642,8 +627,8 @@ export class ExamController {
                     const data = ie.toJSON() as any;
 
                     const depts = data.InternalExamDepartments || [];
-                    const deptName = depts.length > 0 ? depts.map((d: any) => d.Department?.DepartmentCode).join(', ') : 'ALL_BRANCHES';
-                    const fullDeptName = depts.length > 0 ? depts.map((d: any) => d.Department?.DepartmentName).join(', ') : 'All Branches';
+                    const deptName = depts.length > 0 ? depts.map((d: any) => d.Department?.DepartmentCode).filter(Boolean).join(', ') : (data.BranchScope || 'ALL_BRANCHES');
+                    const fullDeptName = depts.length > 0 ? depts.map((d: any) => d.Department?.DepartmentName).filter(Boolean).join(', ') : (data.BranchScope || 'All Branches');
                     const mainDeptID = depts[0]?.Department?.DepartmentID || depts[0]?.DepartmentID || undefined;
 
                     const examDate = new Date(data.ExamDate);
