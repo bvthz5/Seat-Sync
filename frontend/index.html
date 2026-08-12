@@ -103,6 +103,12 @@
       <div class="orbital-core"></div>
     </div>
   </div>
+  <script>
+    setTimeout(function() {
+      var loader = document.getElementById('boot-loader');
+      if (loader) loader.remove();
+    }, 2500);
+  </script>
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
 </body>

@@ -44,8 +44,10 @@
   },
   "scripts": {
     "dev": "vite",
+    "tunnel": "\"C:\\Program Files (x86)\\cloudflared\\cloudflared.exe\" tunnel --url http://127.0.0.1:5173",
+    "tunnel:5000": "\"C:\\Program Files (x86)\\cloudflared\\cloudflared.exe\" tunnel --url http://127.0.0.1:5000",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview --host 0.0.0.0 --port 5173"
   },
   "devDependencies": {
     "@applitools/eyes-playwright": "^1.47.10",

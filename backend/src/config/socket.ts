@@ -25,6 +25,9 @@ export const initSocket = (httpServer: HTTPServer) => {
                     allowedOrigins.has(origin) ||
                     origin.startsWith("http://localhost:") ||
                     origin.startsWith("http://127.0.0.1:") ||
+                    origin.includes("trycloudflare.com") ||
+                    origin.includes("cloudflare.com") ||
+                    origin.includes("cfargotunnel.com") ||
                     origin.includes("serveousercontent.com") ||
                     origin.includes("serveo.net") ||
                     origin.includes("localtunnel.me")

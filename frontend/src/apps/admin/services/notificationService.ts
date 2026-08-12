@@ -31,7 +31,7 @@ export interface NotificationStats {
 
 // --- Socket Service ---
 let socket: Socket | null = null;
-const SOCKET_URL = 'http://localhost:5000'; // Adjust for production
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || '';
 const listeners = new Set<(n: Notification) => void>();
 
 // Helper to ensure socket is connected proactively

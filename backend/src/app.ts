@@ -6,6 +6,12 @@ import swaggerUi from "swagger-ui-express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import hpp from "hpp";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+
+const appFilename = fileURLToPath(import.meta.url);
+const appDirname = path.dirname(appFilename);
 import { sequelize } from "./config/database.js";
 import authRoutes from "./routes/auth.routes.js";
 import studentRoutes from "./routes/student.routes.js";
@@ -57,6 +63,9 @@ app.use(cors({
             origin.startsWith('http://localhost') ||
             origin.startsWith('http://127.0.0.1') ||
             origin.startsWith('http://[::1]') ||
+            origin.includes('trycloudflare.com') ||
+            origin.includes('cloudflare.com') ||
+            origin.includes('cfargotunnel.com') ||
             origin.includes('serveousercontent.com') ||
             origin.includes('serveo.net') ||
             origin.includes('localtunnel.me')
@@ -74,13 +83,7 @@ app.use(cors({
 // --- Security Middleware: Helmet ---
 app.use(helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow cross-origin resources
-    contentSecurityPolicy: {
-        directives: {
-            ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-            "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-            "img-src": ["'self'", "data:", "validator.swagger.io"]
-        },
-    }
+    contentSecurityPolicy: false,
 }));
 
 // Accept JSON body & Cookies early
@@ -89,11 +92,7 @@ app.use(cookieParser());
 app.use(hpp());
 
 // --- Static Files ---
-import path from "path";
-import { fileURLToPath } from "url";
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+app.use("/uploads", express.static(path.join(appDirname, "../uploads")));
 
 // --- Security Middleware: Rate Limiter ---
 const limiter = rateLimit({
@@ -234,10 +233,23 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
     });
 });
 
-// Health check route
-app.get("/", (req: express.Request, res: express.Response) => {
-    res.send("SeatSync Backend Running");
-});
+// --- Static Frontend Serving for Production / Tunneling ---
+const frontendDistPath = path.resolve(appDirname, "../../frontend/dist");
+
+if (fs.existsSync(frontendDistPath)) {
+    app.use(express.static(frontendDistPath));
+    app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+        if (req.path.startsWith("/api") || req.path.startsWith("/socket.io") || req.path === "/health") {
+            return next();
+        }
+        res.sendFile(path.join(frontendDistPath, "index.html"));
+    });
+} else {
+    // Health check fallback route when dist is not built
+    app.get("/", (req: express.Request, res: express.Response) => {
+        res.send("SeatSync Backend Running");
+    });
+}
 
 app.get("/health", async (req: express.Request, res: express.Response) => {
     try {
@@ -250,3 +262,4 @@ app.get("/health", async (req: express.Request, res: express.Response) => {
 });
 
 export default app;
+

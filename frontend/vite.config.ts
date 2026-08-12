@@ -5,7 +5,7 @@ import { nodePolyfills } from 'vite-plugin-node-polyfills'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  base: './',
+  base: '/',
   plugins: [
     react(),
     nodePolyfills({
@@ -25,13 +25,15 @@ export default defineConfig({
     },
   },
   server: {
-    hmr: {
-      timeout: 30000,
+    host: '0.0.0.0',
+    port: 5173,
+    watch: {
+      ignored: ['**/package.json', '**/package-lock.json', '**/node_modules/**']
     },
     allowedHosts: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'http://127.0.0.1:5000',
         changeOrigin: true,
         secure: false,
         configure: (proxy, _options) => {
@@ -46,7 +48,7 @@ export default defineConfig({
               // Log refusal warning at most once every 15 seconds to prevent spamming
               if (now - lastRefusalLoggedAt > 15000) {
                 console.log(
-                  `\x1b[90m[${time}]\x1b[0m \x1b[36m[vite:proxy]\x1b[0m \x1b[33mWARN\x1b[0m Backend offline at \x1b[36mhttp://localhost:5000\x1b[0m (ECONNREFUSED) [Throttled]`
+                  `\x1b[90m[${time}]\x1b[0m \x1b[36m[vite:proxy]\x1b[0m \x1b[33mWARN\x1b[0m Backend offline at \x1b[36mhttp://127.0.0.1:5000\x1b[0m (ECONNREFUSED) [Throttled]`
                 );
                 lastRefusalLoggedAt = now;
               }
@@ -65,6 +67,12 @@ export default defineConfig({
             }
           });
         }
+      },
+      '/socket.io': {
+        target: 'http://127.0.0.1:5000',
+        ws: true,
+        changeOrigin: true,
+        secure: false,
       },
     },
   },
