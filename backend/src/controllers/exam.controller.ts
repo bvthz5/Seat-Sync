@@ -615,6 +615,18 @@ export class ExamController {
 
                 const internalExams = await InternalExam.findAll({
                     where: ieWhere,
+                    attributes: {
+                        include: [
+                            [
+                                sequelize.literal(`(
+                                    SELECT COUNT(*)
+                                    FROM InternalExamRegistrations AS ier
+                                    WHERE ier.InternalExamID = InternalExam.InternalExamID
+                                )`),
+                                'registrationCount'
+                            ]
+                        ]
+                    },
                     include: [{
                         model: InternalExamDepartment,
                         include: [{ model: Department, attributes: ['DepartmentID', 'DepartmentName', 'DepartmentCode'] }]
@@ -652,6 +664,7 @@ export class ExamController {
                         Duration: data.Duration || 150,
                         Status: calcStatus,
                         DepartmentID: mainDeptID,
+                        registrationCount: Number(data.registrationCount || 0),
                         Subject: {
                             SubjectName: data.SubjectName,
                             SubjectCode: data.SubjectCode,

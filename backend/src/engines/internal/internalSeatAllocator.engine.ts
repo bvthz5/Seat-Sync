@@ -67,11 +67,21 @@ export class InternalSeatAllocator {
             }
         }
 
-        // 2. Perform Pre-Seating Reconciliation Check (ensure 0 missing students)
-        const validation = await InternalReconciliationService.validatePreSeating(req.seriesId, req.examDate, req.session, { transaction });
-        if (!validation.isValid) {
-            const errSummary = validation.errors.map(e => `${e.subjectCode} (${e.subjectName}): ${e.missingCount} student(s) missing registration`).join('; ');
-            throw new Error(`Seating generation blocked: Unregistered students detected in exam slot. ${errSummary}. Run student auto-registration or reconciliation resolution before seating allocation.`);
+        // 2. Pre-Seating Reconciliation Check (informational — does NOT block seating)
+        // Seating uses only InternalExamRegistrations as the source of truth.
+        // Students eligible but not yet registered are simply skipped (they won't get a seat).
+        // This is intentional: admins may have deliberately excluded certain departments.
+        try {
+            const validation = await InternalReconciliationService.validatePreSeating(req.seriesId, req.examDate, req.session, { transaction });
+            if (!validation.isValid) {
+                const warnSummary = validation.errors
+                    .map(e => `${e.subjectCode} (${e.subjectName}): ${e.missingCount} unregistered eligible student(s) will not receive a seat`)
+                    .join('; ');
+                console.warn(`[InternalSeatAllocator] Pre-seating advisory (non-blocking): ${warnSummary}`);
+            }
+        } catch (validationErr: any) {
+            // Non-fatal — reconciliation check failure should not block seating
+            console.warn(`[InternalSeatAllocator] Pre-seating validation skipped:`, validationErr.message);
         }
 
         // Fetch registered students grouped by exam (subject) as single source of truth

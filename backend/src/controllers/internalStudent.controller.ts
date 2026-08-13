@@ -709,6 +709,104 @@ export const clearStudentsFromInternalExam = async (req: Request, res: Response)
 };
 
 /* ════════════════════════════════════════════════════════════════
+ *  DELETE /api/internal/exams/:examId/departments/:deptCode
+ *  Remove a specific department and unmap all its students from an internal exam
+ * ════════════════════════════════════════════════════════════════ */
+export const removeDepartmentFromInternalExam = async (req: Request, res: Response) => {
+    try {
+        const examId = parseInt(req.params.examId as string);
+        const deptCodeParam = req.params.deptCode || req.body?.deptCodes || req.query?.deptCodes;
+
+        if (!examId || isNaN(examId) || !deptCodeParam) {
+            return res.status(400).json({ message: 'Valid examId and deptCode(s) are required' });
+        }
+
+        const deptCodes: string[] = Array.isArray(deptCodeParam)
+            ? deptCodeParam.map(s => String(s).trim())
+            : String(deptCodeParam).split(',').map(s => s.trim()).filter(Boolean);
+
+        if (deptCodes.length === 0) {
+            return res.status(400).json({ message: 'No department codes provided' });
+        }
+
+        // Find all department records
+        const depts = await Department.findAll({
+            where: sequelize.where(
+                sequelize.fn('LOWER', sequelize.col('DepartmentCode')),
+                { [Op.in]: deptCodes.map(c => c.toLowerCase()) }
+            )
+        });
+
+        const deptIds = depts.map(d => d.DepartmentID);
+
+        // 1. Find all student IDs belonging to these departments
+        let studentIds: number[] = [];
+        if (deptIds.length > 0) {
+            const students = await InternalStudent.findAll({
+                where: { DepartmentID: { [Op.in]: deptIds } },
+                attributes: ['InternalStudentID']
+            });
+            studentIds = students.map(s => s.InternalStudentID);
+        }
+
+        let deletedCount = 0;
+        if (studentIds.length > 0) {
+            deletedCount = await InternalExamRegistration.destroy({
+                where: {
+                    InternalExamID: examId,
+                    InternalStudentID: { [Op.in]: studentIds }
+                }
+            });
+        }
+
+        // 2. Fallback SQL delete by department IDs
+        if (deptIds.length > 0) {
+            await sequelize.query(`
+                DELETE FROM InternalExamRegistrations 
+                WHERE InternalExamID = :examId 
+                AND InternalStudentID IN (
+                    SELECT InternalStudentID FROM InternalStudents WHERE DepartmentID IN (:deptIds)
+                )
+            `, {
+                replacements: { examId, deptIds },
+                type: 'DELETE' as any
+            });
+
+            // Remove entries from InternalExamDepartments
+            await InternalExamDepartment.destroy({
+                where: {
+                    InternalExamID: examId,
+                    DepartmentID: { [Op.in]: deptIds }
+                }
+            });
+        }
+
+        // 3. Update exam.BranchScope if present
+        const exam = await InternalExam.findByPk(examId);
+        if (exam && exam.BranchScope) {
+            const existingScopes = exam.BranchScope.split(',').map(s => s.trim());
+            const deptCodesLower = deptCodes.map(c => c.toLowerCase());
+            const updatedScopes = existingScopes.filter(s => !deptCodesLower.includes(s.toLowerCase()));
+            if (existingScopes.length !== updatedScopes.length) {
+                exam.BranchScope = updatedScopes.join(',');
+                await exam.save();
+            }
+        }
+
+        const deptLabels = deptCodes.map(c => c.toUpperCase()).join(', ');
+        res.json({
+            success: true,
+            message: `Removed department(s) ${deptLabels} and unmapped corresponding students from exam`,
+            deptCodes: deptCodes.map(c => c.toUpperCase()),
+            deletedCount
+        });
+    } catch (error: any) {
+        console.error('Remove Department from Internal Exam Error:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+/* ════════════════════════════════════════════════════════════════
  *  GET /api/internal/exams/:examId/detail
  *  Full detail view of an internal exam including mapped students count
  * ════════════════════════════════════════════════════════════════ */
@@ -1177,6 +1275,181 @@ export const clearSemesterStudentMappings = async (req: Request, res: Response) 
         });
     } catch (error: any) {
         console.error('Clear Semester Student Mappings Error:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+/* ════════════════════════════════════════════════════════════════
+ *  GET /api/internal/series/:seriesId/semester-departments
+ *  Returns distinct departments with per-dept unique student counts
+ *  for a series, optionally filtered by ?semester=S5
+ * ════════════════════════════════════════════════════════════════ */
+export const getSeriesSemesterDepartments = async (req: Request, res: Response) => {
+    try {
+        const seriesId = parseInt(req.params.seriesId as string);
+        if (!seriesId || isNaN(seriesId)) return res.status(400).json({ message: 'seriesId required' });
+
+        const semester = req.query.semester ? String(req.query.semester).trim() : null;
+
+        const allExams = await InternalExam.findAll({
+            where: { InternalExamSeriesID: seriesId },
+            attributes: ['InternalExamID', 'Semester']
+        });
+
+        let targetExams = allExams;
+        if (semester) {
+            const semDigits = semester.match(/\d+/);
+            const semNumStr = semDigits ? semDigits[0] : semester;
+            targetExams = allExams.filter(e => {
+                const eSem = String(e.Semester || '').toUpperCase();
+                return eSem.includes(`S${semNumStr}`) || eSem.includes(`SEM ${semNumStr}`) || eSem.includes(semNumStr);
+            });
+        }
+
+        if (targetExams.length === 0) {
+            return res.json({ departments: [], totalExams: 0, semester: semester || null });
+        }
+
+        const targetExamIds = targetExams.map(e => e.InternalExamID);
+
+        const rows = await sequelize.query(`
+            SELECT 
+                d.DepartmentID,
+                d.DepartmentCode,
+                d.DepartmentName,
+                COUNT(DISTINCT ier.InternalStudentID) AS studentCount
+            FROM InternalExamRegistrations ier
+            JOIN InternalStudents ist ON ier.InternalStudentID = ist.InternalStudentID
+            JOIN Departments d ON ist.DepartmentID = d.DepartmentID
+            WHERE ier.InternalExamID IN (:examIds)
+            GROUP BY d.DepartmentID, d.DepartmentCode, d.DepartmentName
+            ORDER BY d.DepartmentCode ASC
+        `, {
+            replacements: { examIds: targetExamIds },
+            type: 'SELECT' as any
+        }) as any[];
+
+        const departments = rows.map((r: any) => ({
+            departmentId: Number(r.DepartmentID),
+            departmentCode: String(r.DepartmentCode),
+            departmentName: String(r.DepartmentName),
+            studentCount: Number(r.studentCount || 0)
+        }));
+
+        res.json({ departments, totalExams: targetExamIds.length, semester: semester || null });
+    } catch (error: any) {
+        console.error('Get Series Semester Departments Error:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+/* ════════════════════════════════════════════════════════════════
+ *  DELETE /api/internal/series/:seriesId/departments/:deptCode
+ *  Remove selected department(s) and all their students from every exam
+ *  in the series, optionally scoped to a specific semester via ?semester=S3
+ * ════════════════════════════════════════════════════════════════ */
+export const removeDepartmentsFromSeries = async (req: Request, res: Response) => {
+    try {
+        const seriesId = parseInt(req.params.seriesId as string);
+        const deptCodeParam = req.params.deptCode || req.body?.deptCodes || req.query?.deptCodes;
+        const semester = req.query.semester ? String(req.query.semester).trim() : null;
+
+        if (!seriesId || isNaN(seriesId) || !deptCodeParam) {
+            return res.status(400).json({ message: 'Valid seriesId and deptCode(s) are required' });
+        }
+
+        const deptCodes: string[] = Array.isArray(deptCodeParam)
+            ? deptCodeParam.map(s => String(s).trim())
+            : String(deptCodeParam).split(',').map(s => s.trim()).filter(Boolean);
+
+        if (deptCodes.length === 0) {
+            return res.status(400).json({ message: 'No department codes provided' });
+        }
+
+        // 1. Get all exams in series (optionally filtered by semester)
+        const allExams = await InternalExam.findAll({
+            where: { InternalExamSeriesID: seriesId },
+            attributes: ['InternalExamID', 'Semester', 'BranchScope']
+        });
+
+        let targetExams = allExams;
+        if (semester) {
+            const semDigits = semester.match(/\d+/);
+            const semNumStr = semDigits ? semDigits[0] : semester;
+            targetExams = allExams.filter(e => {
+                const eSem = String(e.Semester || '').toUpperCase();
+                return eSem.includes(`S${semNumStr}`) || eSem.includes(`SEM ${semNumStr}`) || eSem.includes(semNumStr);
+            });
+        }
+
+        if (targetExams.length === 0) {
+            return res.json({ success: true, message: 'No exams found in scope', deletedCount: 0, examsAffected: 0 });
+        }
+
+        const targetExamIds = targetExams.map(e => e.InternalExamID);
+
+        // 2. Find all department records matching provided codes
+        const depts = await Department.findAll({
+            where: sequelize.where(
+                sequelize.fn('LOWER', sequelize.col('DepartmentCode')),
+                { [Op.in]: deptCodes.map(c => c.toLowerCase()) }
+            )
+        });
+
+        const deptIds = depts.map(d => d.DepartmentID);
+
+        if (deptIds.length === 0) {
+            return res.status(404).json({ message: `No matching departments found for codes: ${deptCodes.join(', ')}` });
+        }
+
+        // 3. Find all internal student IDs belonging to those departments
+        const students = await InternalStudent.findAll({
+            where: { DepartmentID: { [Op.in]: deptIds } },
+            attributes: ['InternalStudentID']
+        });
+        const studentIds = students.map(s => s.InternalStudentID);
+
+        let deletedCount = 0;
+        if (studentIds.length > 0) {
+            deletedCount = await InternalExamRegistration.destroy({
+                where: {
+                    InternalExamID: { [Op.in]: targetExamIds },
+                    InternalStudentID: { [Op.in]: studentIds }
+                }
+            });
+        }
+
+        // 4. Remove InternalExamDepartments entries for affected exams & departments
+        await InternalExamDepartment.destroy({
+            where: {
+                InternalExamID: { [Op.in]: targetExamIds },
+                DepartmentID: { [Op.in]: deptIds }
+            }
+        });
+
+        // 5. Update BranchScope on each affected exam
+        const deptCodesLower = deptCodes.map(c => c.toLowerCase());
+        for (const exam of targetExams) {
+            if (exam.BranchScope) {
+                const existing = exam.BranchScope.split(',').map(s => s.trim());
+                const updated = existing.filter(s => !deptCodesLower.includes(s.toLowerCase()));
+                if (existing.length !== updated.length) {
+                    exam.BranchScope = updated.join(',');
+                    await exam.save();
+                }
+            }
+        }
+
+        const deptLabels = deptCodes.map(c => c.toUpperCase()).join(', ');
+        res.json({
+            success: true,
+            message: `Removed department(s) ${deptLabels} and unmapped ${deletedCount} student registration(s) across ${targetExamIds.length} exam(s)${semester ? ` in Semester ${semester}` : ''}.`,
+            deptCodes: deptCodes.map(c => c.toUpperCase()),
+            deletedCount,
+            examsAffected: targetExamIds.length
+        });
+    } catch (error: any) {
+        console.error('Remove Departments From Series Error:', error);
         res.status(500).json({ message: error.message });
     }
 };

@@ -1609,6 +1609,24 @@ const InternalSeatingPlans: React.FC = () => {
     const hasAllocation = totalFilled > 0;
     const selectionComplete = !!selectedSeries && !!selectedSession && !!selectedDate;
 
+    // Department breakdown of unassigned students
+    const unassignedByDept = useMemo(() => {
+        if (!hasAllocation || registeredStudents.length === 0) return [];
+        const deptMap = new Map<string, { code: string; name: string; count: number }>();
+        for (const reg of registeredStudents) {
+            if (reg.isSeated) continue;
+            const deptCode = reg.Student?.Department?.DepartmentCode || reg.Student?.departmentCode || 'UNKNOWN';
+            const deptName = reg.Student?.Department?.DepartmentName || reg.Student?.departmentName || deptCode;
+            const existing = deptMap.get(deptCode);
+            if (existing) {
+                existing.count++;
+            } else {
+                deptMap.set(deptCode, { code: deptCode, name: deptName, count: 1 });
+            }
+        }
+        return Array.from(deptMap.values()).sort((a, b) => b.count - a.count);
+    }, [registeredStudents, hasAllocation, totalFilled]);
+
     // --- Render ---
     return (
         <div className="min-h-[calc(100vh-3.5rem)] bg-[#f5f7ff] font-sans text-slate-700 antialiased relative overflow-x-hidden">
@@ -2127,6 +2145,38 @@ const InternalSeatingPlans: React.FC = () => {
                                                         <div className="bg-rose-50 border border-rose-100 rounded-2xl px-3 py-3 text-center">
                                                             <p className="text-[22px] font-black text-rose-500 leading-none">{Math.max(0, registeredStudents.length - totalFilled)}</p>
                                                             <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest mt-1">Unassigned</p>
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+
+                                            {/* Unassigned Department Breakdown */}
+                                            <AnimatePresence>
+                                                {hasAllocation && unassignedByDept.length > 0 && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, height: 0 }}
+                                                        animate={{ opacity: 1, height: 'auto' }}
+                                                        exit={{ opacity: 0, height: 0 }}
+                                                        className="col-span-2 overflow-hidden"
+                                                    >
+                                                        <div className="bg-rose-50/60 border border-rose-100 rounded-2xl px-3 py-2.5">
+                                                            <p className="text-[8px] font-black text-rose-400 uppercase tracking-widest mb-1.5">
+                                                                Unassigned Departments
+                                                            </p>
+                                                            <div className="flex flex-wrap gap-1.5">
+                                                                {unassignedByDept.map(dept => (
+                                                                    <span
+                                                                        key={dept.code}
+                                                                        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-rose-200/80 text-[10px] font-bold"
+                                                                        title={dept.name}
+                                                                    >
+                                                                        <span className="text-rose-600">{dept.code}</span>
+                                                                        {unassignedByDept.length > 1 && (
+                                                                            <span className="text-rose-400 font-extrabold">{dept.count}</span>
+                                                                        )}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
                                                         </div>
                                                     </motion.div>
                                                 )}

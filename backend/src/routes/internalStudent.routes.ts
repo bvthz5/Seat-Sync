@@ -7,6 +7,7 @@ import {
     getStudentsForInternalExam,
     removeStudentFromInternalExam,
     clearStudentsFromInternalExam,
+    removeDepartmentFromInternalExam,
     getInternalExamDetail,
     deleteInternalStudent,
     updateInternalStudent,
@@ -18,6 +19,8 @@ import {
     autoMapStudentsForInternalExam,
     bulkAutoMapStudentsForSeries,
     clearSemesterStudentMappings,
+    removeDepartmentsFromSeries,
+    getSeriesSemesterDepartments,
     getInternalExamReconciliation,
     getInternalSeriesReconciliation,
     createInternalSubjectEnrollment,
@@ -48,8 +51,11 @@ router.get('/exams/:examId/reconciliation', getInternalExamReconciliation);
 router.get('/series/:seriesId/reconciliation', getInternalSeriesReconciliation);
 router.post('/exams/:examId/students/auto-map', autoMapStudentsForInternalExam);
 router.post('/series/:seriesId/auto-map-all', bulkAutoMapStudentsForSeries);
+router.get('/series/:seriesId/semester-departments', getSeriesSemesterDepartments);
 router.delete('/series/:seriesId/clear-mappings', clearSemesterStudentMappings);
+router.delete('/series/:seriesId/departments/:deptCode', removeDepartmentsFromSeries);
 router.delete('/exams/:examId/students/:studentId', removeStudentFromInternalExam);
 router.delete('/exams/:examId/students', clearStudentsFromInternalExam);
+router.delete('/exams/:examId/departments/:deptCode', removeDepartmentFromInternalExam);
 
 export default router;

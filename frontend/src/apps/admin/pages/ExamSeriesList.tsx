@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Card, CardBody, Button, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/react";
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, Plus, Clock, FileText, AlertCircle, ArrowLeft, CheckCircle, CalendarDays, Upload, Pencil, Trash2, Users, UserCheck, GraduationCap, ChevronDown, ChevronRight, FolderOpen, UserPlus } from "lucide-react";
+import { BookOpen, Plus, Clock, FileText, AlertCircle, ArrowLeft, CheckCircle, CalendarDays, Upload, Pencil, Trash2, Users, UserCheck, GraduationCap, ChevronDown, ChevronRight, FolderOpen, UserPlus, Building2 } from "lucide-react";
 import { toast } from 'react-hot-toast';
 import { ExamService } from '../services/examService';
 import { SeriesService } from '../services/seriesService';
@@ -204,6 +204,15 @@ const ExamSeriesList: React.FC = () => {
     const [isBulkAutoRegisterOpen, setIsBulkAutoRegisterOpen] = useState(false);
     const [clearSemesterTarget, setClearSemesterTarget] = useState<string | null>(null);
     const [isClearingSemester, setIsClearingSemester] = useState(false);
+    // Bulk dept removal: tracks the open modal with semester key + fetched dept list
+    const [bulkDeptRemove, setBulkDeptRemove] = useState<{
+        semKey: string;
+        depts: { departmentId: number; departmentCode: string; departmentName: string; studentCount: number }[];
+        totalExams: number;
+        loading: boolean;
+    } | null>(null);
+    const [selectedBulkDepts, setSelectedBulkDepts] = useState<string[]>([]);
+    const [isBulkDeptRemoving, setIsBulkDeptRemoving] = useState(false);
 
     const handleBulkAutoMap = () => {
         if (!seriesId) return;
@@ -222,6 +231,40 @@ const ExamSeriesList: React.FC = () => {
             toast.error(error.response?.data?.message || `Failed to clear student mappings for Semester ${targetSem}`);
         } finally {
             setIsClearingSemester(false);
+        }
+    };
+
+    // Open modal and fetch real dept+studentCount data from API
+    const openBulkDeptRemove = async (semKey: string) => {
+        if (!seriesId) return;
+        setBulkDeptRemove({ semKey, depts: [], totalExams: 0, loading: true });
+        setSelectedBulkDepts([]);
+        try {
+            const data = await InternalStudentService.getSeriesSemesterDepartments(parseInt(seriesId), semKey);
+            setBulkDeptRemove({ semKey, depts: data.departments, totalExams: data.totalExams, loading: false });
+        } catch (error: any) {
+            toast.error('Failed to load department list');
+            setBulkDeptRemove(null);
+        }
+    };
+
+    const handleConfirmBulkDeptRemove = async () => {
+        if (!bulkDeptRemove || selectedBulkDepts.length === 0 || !seriesId) return;
+        setIsBulkDeptRemoving(true);
+        try {
+            const result = await InternalStudentService.removeDepartmentsFromSeries(
+                parseInt(seriesId),
+                selectedBulkDepts,
+                bulkDeptRemove.semKey
+            );
+            toast.success(result.message || `Removed departments from Semester ${bulkDeptRemove.semKey}`);
+            setBulkDeptRemove(null);
+            setSelectedBulkDepts([]);
+            await fetchExams();
+        } catch (error: any) {
+            toast.error(error.response?.data?.message || 'Failed to remove departments');
+        } finally {
+            setIsBulkDeptRemoving(false);
         }
     };
 
@@ -463,19 +506,36 @@ const ExamSeriesList: React.FC = () => {
                                                     <UserPlus size={13} />
                                                     Import
                                                 </Button>
-                                                <Button
-                                                    size="sm"
-                                                    variant="flat"
-                                                    onPress={(e) => {
-                                                        e.stopPropagation();
-                                                        setClearSemesterTarget(semKey);
-                                                    }}
-                                                    className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/60 font-extrabold text-[11px] h-8 px-2 rounded-xl transition-all flex items-center gap-1"
-                                                    title={`Clear all student mappings for Semester ${semKey}`}
-                                                >
-                                                    <Trash2 size={13} />
-                                                    Clear
-                                                </Button>
+                                                {semExams.some(e => e.hasRegistrations) && (
+                                                    <>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="flat"
+                                                            onPress={(e) => {
+                                                                e.stopPropagation();
+                                                                openBulkDeptRemove(semKey);
+                                                            }}
+                                                            className="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/70 font-extrabold text-[11px] h-8 px-2 rounded-xl transition-all flex items-center gap-1"
+                                                            title={`Remove specific departments from Semester ${semKey}`}
+                                                        >
+                                                            <Building2 size={12} />
+                                                            Dept
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="flat"
+                                                            onPress={(e) => {
+                                                                e.stopPropagation();
+                                                                setClearSemesterTarget(semKey);
+                                                            }}
+                                                            className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/60 font-extrabold text-[11px] h-8 px-2 rounded-xl transition-all flex items-center gap-1"
+                                                            title={`Clear all student mappings for Semester ${semKey}`}
+                                                        >
+                                                            <Trash2 size={13} />
+                                                            Clear
+                                                        </Button>
+                                                    </>
+                                                )}
                                                 <span className={`px-2.5 py-1 rounded-xl font-extrabold text-[11px] transition-colors ${
                                                     isOpen ? 'bg-indigo-600 text-white shadow-xs' : 'bg-indigo-50 text-indigo-700'
                                                 }`}>
@@ -493,6 +553,7 @@ const ExamSeriesList: React.FC = () => {
                             {examsBySemester.map(([semesterKey, semesterExams]) => {
                                 const isOpen = openSemesters[semesterKey] ?? true;
                                 if (!isOpen) return null;
+                                const hasSemesterMappings = semesterExams.some(e => e.hasRegistrations);
 
                                 return (
                                     <motion.div 
@@ -529,15 +590,28 @@ const ExamSeriesList: React.FC = () => {
                                                     <UserPlus size={15} />
                                                     Import {semesterKey} Student List
                                                 </Button>
-                                                <Button
-                                                    size="sm"
-                                                    variant="flat"
-                                                    onPress={() => setClearSemesterTarget(semesterKey)}
-                                                    className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/70 font-extrabold text-xs h-9 px-3.5 rounded-xl transition-all flex items-center gap-1.5"
-                                                >
-                                                    <Trash2 size={15} />
-                                                    Clear {semesterKey} Mappings
-                                                </Button>
+                                                {hasSemesterMappings && (
+                                                    <>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="flat"
+                                                            onPress={() => openBulkDeptRemove(semesterKey)}
+                                                            className="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/70 font-extrabold text-xs h-9 px-3.5 rounded-xl transition-all flex items-center gap-1.5"
+                                                        >
+                                                            <Building2 size={15} />
+                                                            Remove Dept
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="flat"
+                                                            onPress={() => setClearSemesterTarget(semesterKey)}
+                                                            className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/70 font-extrabold text-xs h-9 px-3.5 rounded-xl transition-all flex items-center gap-1.5"
+                                                        >
+                                                            <Trash2 size={15} />
+                                                            Clear {semesterKey} Mappings
+                                                        </Button>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
 
@@ -783,6 +857,171 @@ const ExamSeriesList: React.FC = () => {
                                 className="font-extrabold bg-rose-600 hover:bg-rose-700 text-white rounded-xl h-10 px-4 text-xs shadow-sm transition-all"
                             >
                                 Confirm & Clear Mappings
+                            </Button>
+                        </ModalFooter>
+                    </ModalContent>
+                </Modal>
+            )}
+
+            {/* ═══ Bulk Department Removal Modal ═══ */}
+            {bulkDeptRemove && (
+                <Modal
+                    isOpen={Boolean(bulkDeptRemove)}
+                    onClose={() => { setBulkDeptRemove(null); setSelectedBulkDepts([]); }}
+                    size="lg"
+                    classNames={{
+                        base: 'rounded-3xl bg-white border border-slate-200/80 shadow-2xl',
+                        header: 'border-b border-slate-100 pb-3 px-6 pt-5',
+                        body: 'px-6 py-5',
+                        footer: 'border-t border-slate-100 pt-3 px-6 pb-5'
+                    }}
+                >
+                    <ModalContent>
+                        <ModalHeader>
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                                    <Building2 size={20} />
+                                </div>
+                                <div>
+                                    <p className="text-lg font-black text-slate-900 leading-tight">
+                                        Remove Departments
+                                    </p>
+                                    <p className="text-xs text-slate-400 font-medium mt-0.5">
+                                        Semester {bulkDeptRemove.semKey} · {bulkDeptRemove.totalExams} subject{bulkDeptRemove.totalExams !== 1 ? 's' : ''} affected
+                                    </p>
+                                </div>
+                            </div>
+                        </ModalHeader>
+                        <ModalBody>
+                            <p className="text-slate-500 text-sm mb-4">
+                                Select one or more departments to remove from <strong className="text-slate-800">all {bulkDeptRemove.totalExams} subjects in Semester {bulkDeptRemove.semKey}</strong>. All their mapped students will be unregistered.
+                            </p>
+
+                            {bulkDeptRemove.loading ? (
+                                <div className="flex items-center justify-center py-12">
+                                    <div className="flex flex-col items-center gap-3 text-slate-400">
+                                        <div className="w-8 h-8 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+                                        <span className="text-sm font-semibold">Loading departments...</span>
+                                    </div>
+                                </div>
+                            ) : bulkDeptRemove.depts.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-10 text-slate-400">
+                                    <Building2 size={32} className="mb-3 opacity-30" />
+                                    <p className="text-sm font-semibold">No departments found with mapped students</p>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Select All / Clear controls */}
+                                    <div className="flex items-center justify-between mb-3">
+                                        <span className="text-xs font-extrabold text-slate-400 uppercase tracking-widest">
+                                            {bulkDeptRemove.depts.length} Departments
+                                        </span>
+                                        <div className="flex items-center gap-3">
+                                            <button
+                                                onClick={() => setSelectedBulkDepts(bulkDeptRemove.depts.map(d => d.departmentCode))}
+                                                className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                                            >
+                                                Select All
+                                            </button>
+                                            <span className="text-slate-200 text-sm">|</span>
+                                            <button
+                                                onClick={() => setSelectedBulkDepts([])}
+                                                className="text-xs font-bold text-slate-400 hover:text-slate-700 transition-colors"
+                                            >
+                                                Clear
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Department card grid — 2 columns */}
+                                    <div className="grid grid-cols-2 gap-2.5 max-h-72 overflow-y-auto pr-1">
+                                        {bulkDeptRemove.depts.map(dept => {
+                                            const isSelected = selectedBulkDepts.includes(dept.departmentCode);
+                                            return (
+                                                <label
+                                                    key={dept.departmentCode}
+                                                    className={`relative flex items-start gap-3 p-3.5 rounded-2xl border-2 cursor-pointer transition-all select-none ${
+                                                        isSelected
+                                                            ? 'bg-rose-50 border-rose-400 shadow-sm'
+                                                            : 'bg-slate-50 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/40'
+                                                    }`}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        className="sr-only"
+                                                        checked={isSelected}
+                                                        onChange={e => {
+                                                            if (e.target.checked) {
+                                                                setSelectedBulkDepts(prev => [...prev, dept.departmentCode]);
+                                                            } else {
+                                                                setSelectedBulkDepts(prev => prev.filter(c => c !== dept.departmentCode));
+                                                            }
+                                                        }}
+                                                    />
+                                                    {/* Custom checkbox */}
+                                                    <div className={`mt-0.5 w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all ${
+                                                        isSelected ? 'bg-rose-500 border-rose-500' : 'bg-white border-slate-300'
+                                                    }`}>
+                                                        {isSelected && (
+                                                            <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 8" fill="none">
+                                                                <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                                                            </svg>
+                                                        )}
+                                                    </div>
+                                                    {/* Info */}
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center justify-between gap-1">
+                                                            <span className={`font-extrabold text-sm tracking-wide uppercase ${isSelected ? 'text-rose-700' : 'text-indigo-700'}`}>
+                                                                {dept.departmentCode}
+                                                            </span>
+                                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
+                                                                isSelected ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500'
+                                                            }`}>
+                                                                {dept.studentCount} Students
+                                                            </span>
+                                                        </div>
+                                                        <p className={`text-xs font-medium truncate mt-0.5 ${
+                                                            isSelected ? 'text-rose-600/80' : 'text-slate-500'
+                                                        }`}>
+                                                            {dept.departmentName}
+                                                        </p>
+                                                    </div>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Warning banner */}
+                                    {selectedBulkDepts.length > 0 && (
+                                        <div className="mt-4 p-3.5 bg-rose-50 rounded-2xl border border-rose-200 text-xs text-rose-700 font-semibold flex items-start gap-2">
+                                            <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                                            <span>
+                                                <strong>{selectedBulkDepts.join(', ')}</strong> will be removed from all {bulkDeptRemove.totalExams} subjects in Semester {bulkDeptRemove.semKey}. This cannot be undone.
+                                            </span>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </ModalBody>
+                        <ModalFooter>
+                            <Button
+                                variant="flat"
+                                onPress={() => { setBulkDeptRemove(null); setSelectedBulkDepts([]); }}
+                                className="font-bold rounded-xl h-10 px-5 text-xs text-slate-600"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                isLoading={isBulkDeptRemoving}
+                                isDisabled={selectedBulkDepts.length === 0 || bulkDeptRemove.loading}
+                                onPress={handleConfirmBulkDeptRemove}
+                                className={`font-extrabold rounded-xl h-10 px-5 text-xs shadow-sm transition-all ${
+                                    selectedBulkDepts.length === 0 || bulkDeptRemove.loading
+                                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                        : 'bg-rose-600 hover:bg-rose-700 text-white'
+                                }`}
+                            >
+                                Remove {selectedBulkDepts.length > 0 ? `${selectedBulkDepts.length} Dept${selectedBulkDepts.length > 1 ? 's' : ''}` : 'Departments'}
                             </Button>
                         </ModalFooter>
                     </ModalContent>

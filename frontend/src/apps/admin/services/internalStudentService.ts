@@ -90,6 +90,13 @@ export const InternalStudentService = {
         return response.data;
     },
 
+    // Remove specific department(s) and all their mapped students from an exam
+    removeDepartmentFromExam: async (examId: number, deptCodes: string | string[]): Promise<{ success: boolean; message: string; deptCodes: string[]; deletedCount: number }> => {
+        const codeParam = Array.isArray(deptCodes) ? deptCodes.join(',') : deptCodes;
+        const response = await api.delete(`/internal/exams/${examId}/departments/${encodeURIComponent(codeParam)}`);
+        return response.data;
+    },
+
     // Auto map existing matching students in system database to an exam
     autoMapStudents: async (examId: number): Promise<{ success: boolean; message: string; mappedCount: number }> => {
         const response = await api.post(`/internal/exams/${examId}/students/auto-map`);
@@ -106,6 +113,30 @@ export const InternalStudentService = {
     clearSeriesStudentMappings: async (seriesId: number, semester?: string): Promise<{ success: boolean; message: string; clearedCount: number; examsCount: number }> => {
         const response = await api.delete(`/internal/series/${seriesId}/clear-mappings`, {
             params: { semester }
+        });
+        return response.data;
+    },
+
+    // Remove selected department(s) and all their students from all exams in a series semester
+    removeDepartmentsFromSeries: async (
+        seriesId: number,
+        deptCodes: string | string[],
+        semester?: string
+    ): Promise<{ success: boolean; message: string; deptCodes: string[]; deletedCount: number; examsAffected: number }> => {
+        const codeParam = Array.isArray(deptCodes) ? deptCodes.join(',') : deptCodes;
+        const response = await api.delete(`/internal/series/${seriesId}/departments/${encodeURIComponent(codeParam)}`, {
+            params: semester ? { semester } : {}
+        });
+        return response.data;
+    },
+
+    // Get distinct departments with student counts for a series+semester (for Remove Dept modal)
+    getSeriesSemesterDepartments: async (
+        seriesId: number,
+        semester?: string
+    ): Promise<{ departments: { departmentId: number; departmentCode: string; departmentName: string; studentCount: number }[]; totalExams: number; semester: string | null }> => {
+        const response = await api.get(`/internal/series/${seriesId}/semester-departments`, {
+            params: semester ? { semester } : {}
         });
         return response.data;
     },
