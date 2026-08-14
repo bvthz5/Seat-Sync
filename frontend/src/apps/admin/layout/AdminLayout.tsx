@@ -130,15 +130,15 @@ const AdminLayout: React.FC = () => {
                                 base: "gap-3 h-11 data-[hover=true]:bg-indigo-50 rounded-xl transition-all duration-200",
                             }}
                         >
-                            <DropdownItem key="profile_header" className="h-auto opacity-100 cursor-default hover:!bg-transparent mb-2 p-0" isReadOnly textValue="Profile Header">
-                                <div className="flex gap-4 items-center p-4 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 border border-white/20 m-1 shadow-lg shadow-indigo-100">
-                                    <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-xl flex items-center justify-center text-white text-xl font-black border border-white/30 shrink-0">
+                            <DropdownItem key="profile_header" className="h-auto opacity-100 cursor-default hover:!bg-transparent focus:!bg-transparent data-[hover=true]:!bg-transparent mb-2 p-0 select-none" isReadOnly textValue="Profile Header">
+                                <div className="flex gap-4 items-center p-4 rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800 border border-indigo-400/30 m-1 shadow-xl shadow-indigo-200/50">
+                                    <div className="w-13 h-13 rounded-2xl bg-white/25 backdrop-blur-xl flex items-center justify-center text-white !text-white text-xl font-black border border-white/30 shrink-0 shadow-inner" style={{ color: '#ffffff' }}>
                                         {user?.Email?.[0].toUpperCase() || 'A'}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="font-bold text-white text-base truncate">{user?.FullName || 'User'}</p>
-                                        <p className="text-xs text-indigo-100 truncate mt-0.5 font-medium opacity-80">{user?.Email}</p>
-                                        <div className="mt-2 inline-flex items-center px-2 py-0.5 rounded-lg bg-white/20 text-white text-[9px] font-black tracking-widest uppercase border border-white/10 backdrop-blur-sm">
+                                        <p className="font-black text-white !text-white text-base truncate leading-snug tracking-tight" style={{ color: '#ffffff' }}>{user?.FullName || 'User'}</p>
+                                        <p className="text-xs text-indigo-100 !text-indigo-100 truncate mt-0.5 font-medium opacity-90" style={{ color: '#e0e7ff' }}>{user?.Email}</p>
+                                        <div className="mt-2.5 inline-flex items-center px-2.5 py-0.5 rounded-lg bg-white/20 text-white !text-white text-[9px] font-black tracking-widest uppercase border border-white/20 backdrop-blur-md shadow-sm" style={{ color: '#ffffff' }}>
                                             {user?.Role === 'exam_admin' ? 'Administrator' : user?.IsRootAdmin ? 'Root Access' : user?.Role}
                                         </div>
                                     </div>
