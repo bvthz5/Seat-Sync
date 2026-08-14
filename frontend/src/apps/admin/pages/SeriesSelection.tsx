@@ -675,7 +675,7 @@ const SeriesSelection: React.FC = () => {
                                                 <span className="text-xs font-extrabold text-slate-700">{item.subjectCode}</span>
                                             </div>
                                             <span className="text-xs font-bold text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-200">
-                                                📅 {item.date} ({item.session})
+                                                {item.date} ({item.session})
                                             </span>
                                         </div>
                                         <h4 className="text-sm font-bold text-slate-900">{item.examName}</h4>

@@ -6,6 +6,7 @@ import {
     InternalRoom, 
     InternalSeat, 
     Department,
+    Program,
     Subject
 } from '../../models/index.js';
 import { Op } from 'sequelize';
@@ -26,7 +27,10 @@ export const internalReportsController = {
                     {
                         model: InternalStudent,
                         as: 'Student',
-                        include: [{ model: Department, as: 'Department' }]
+                        include: [
+                            { model: Department, as: 'Department' },
+                            { model: Program }
+                        ]
                     },
                     {
                         model: InternalSeat,
@@ -64,7 +68,10 @@ export const internalReportsController = {
                     {
                         model: InternalStudent,
                         as: 'Student',
-                        include: [{ model: Department, as: 'Department' }]
+                        include: [
+                            { model: Department, as: 'Department' },
+                            { model: Program }
+                        ]
                     },
                     {
                         model: InternalSeat,

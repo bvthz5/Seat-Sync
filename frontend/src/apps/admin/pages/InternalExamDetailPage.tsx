@@ -357,7 +357,7 @@ const InternalExamDetailPage: React.FC = () => {
                                         <Building2 size={15} className="text-indigo-600" /> Department Breakdown
                                     </h3>
                                     <Tooltip 
-                                        content="Use Case: Click the ✕ on any department tag to remove that department and unmap all its corresponding students from this exam (e.g. BHM, M.Tech, or PhD students who do not take this exam)."
+                                        content="Use Case: Click the remove icon on any department tag to remove that department and unmap all its corresponding students from this exam (e.g. BHM, M.Tech, or PhD students who do not take this exam)."
                                         placement="top"
                                         classNames={{
                                             content: "bg-slate-900 text-white font-medium text-xs px-3.5 py-2.5 rounded-xl max-w-sm shadow-xl leading-relaxed"
@@ -380,7 +380,7 @@ const InternalExamDetailPage: React.FC = () => {
                             <div className="bg-indigo-50/60 border border-indigo-100/80 rounded-xl px-3.5 py-2 flex items-center gap-2 text-xs text-indigo-900">
                                 <Info size={14} className="text-indigo-600 shrink-0" />
                                 <p className="font-medium">
-                                    <span className="font-bold">Tip for users:</span> Click the red <span className="inline-flex items-center justify-center w-4 h-4 rounded bg-rose-100 text-rose-600 font-extrabold text-[10px]">✕</span> button on any department tag below to remove that department and unmap its students.
+                                    <span className="font-bold">Tip for users:</span> Click the remove button on any department tag below to remove that department and unmap its students.
                                 </p>
                             </div>
 
@@ -910,7 +910,7 @@ const InternalExamDetailPage: React.FC = () => {
                         </div>
 
                         <div className="bg-slate-50 border border-slate-200/70 rounded-xl p-3 text-xs text-slate-500">
-                            <span className="font-bold text-slate-700">💡 Note:</span> Student records in the main database will remain unaffected. Only their mapping to this specific internal exam will be removed.
+                            <span className="font-bold text-slate-700">Note:</span> Student records in the main database will remain unaffected. Only their mapping to this specific internal exam will be removed.
                         </div>
                     </ModalBody>
                     <ModalFooter>

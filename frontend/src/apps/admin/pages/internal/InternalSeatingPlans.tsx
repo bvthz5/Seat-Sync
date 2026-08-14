@@ -321,10 +321,121 @@ const InternalSeatingPlans: React.FC = () => {
         }
     };
 
+    // --- Academic Normalization & Batch Formatting for Seating Reports ---
+    const SEATING_DEPT_NAMES: Record<string, string> = {
+        'AD': 'Artificial Intelligence & Data Science',
+        'AIDS': 'Artificial Intelligence & Data Science',
+        'CA': 'Computer Applications',
+        'CC': 'Computer Science (Cyber Security)',
+        'CE': 'Civil Engineering',
+        'CIVIL': 'Civil Engineering',
+        'CSE': 'Computer Science & Engineering',
+        'CS': 'Computer Science & Engineering',
+        'ECE': 'Electronics & Communication Engineering',
+        'EC': 'Electronics & Communication Engineering',
+        'EEE': 'Electrical & Electronics Engineering',
+        'EE': 'Electrical & Electronics Engineering',
+        'ER': 'Electronics & Robotics',
+        'RA': 'Robotics & Automation',
+        'ME': 'Mechanical Engineering',
+        'MECH': 'Mechanical Engineering',
+        'MCA': 'Computer Applications',
+        'INT_MCA': 'Integrated Computer Applications',
+        'INT MCA': 'Integrated Computer Applications',
+        'INMCA': 'Integrated Computer Applications',
+        'MBA': 'Management Studies',
+        'BHM': 'Hotel Management',
+        'MTECH': 'Master of Technology'
+    };
 
+    const getMultiDivisionBranches = (data: any[]): Set<string> => {
+        const branchDivMap = new Map<string, Set<string>>();
+
+        data.forEach((alloc: any) => {
+            const student = alloc.Student;
+            let sem = String(student?.Semester || 'S3').toUpperCase().trim();
+            if (!sem.startsWith('S') && /^\d+$/.test(sem)) sem = `S${sem}`;
+            if (!sem.startsWith('S')) sem = `S${sem}`;
+
+            let rawCode = String(student?.Department?.DeptCode || student?.Department?.DepartmentCode || student?.Branch || 'GEN').toUpperCase().trim();
+            if (rawCode === 'CS') rawCode = 'CSE';
+            if (rawCode === 'EC') rawCode = 'ECE';
+            if (rawCode === 'EE') rawCode = 'EEE';
+
+            const key = `${sem}_${rawCode}`;
+            if (!branchDivMap.has(key)) branchDivMap.set(key, new Set<string>());
+
+            const divRaw = String(student?.Division || '').toUpperCase().trim();
+            if (divRaw && !['ALL', 'NONE', 'NULL', 'UNDEFINED', ''].includes(divRaw)) {
+                branchDivMap.get(key)!.add(divRaw);
+            }
+        });
+
+        const multiDivSet = new Set<string>();
+        branchDivMap.forEach((divs, key) => {
+            if (divs.size > 1 || divs.has('B') || divs.has('C') || divs.has('D')) {
+                multiDivSet.add(key);
+            }
+        });
+        return multiDivSet;
+    };
+
+    const formatSeatingBatchLabel = (student: any, multiDivBranches: Set<string>): string => {
+        let sem = String(student?.Semester || 'S3').toUpperCase().trim();
+        if (!sem.startsWith('S') && /^\d+$/.test(sem)) sem = `S${sem}`;
+        if (!sem.startsWith('S')) sem = `S${sem}`;
+
+        const rawDeptCode = String(student?.Department?.DeptCode || student?.Department?.DepartmentCode || student?.Branch || '').toUpperCase().trim();
+
+        let normDeptCode = rawDeptCode;
+        if (rawDeptCode === 'CS') normDeptCode = 'CSE';
+        else if (rawDeptCode === 'EC') normDeptCode = 'ECE';
+        else if (rawDeptCode === 'EE') normDeptCode = 'EEE';
+        else if (rawDeptCode === 'INT_MCA' || rawDeptCode === 'INMCA' || rawDeptCode === 'IMCA') normDeptCode = 'INT MCA';
+
+        const progCode = String(student?.Program?.ProgramCode || '').toUpperCase();
+        const progName = String(student?.Program?.ProgramName || '').toUpperCase();
+
+        const isIntMca = normDeptCode === 'INT MCA' || progCode === 'INT_MCA' || progName.includes('INTEGRATED');
+        const isMca = !isIntMca && (normDeptCode === 'MCA' || progCode === 'MCA' || progName.includes('MCA'));
+
+        let deptFullName = student?.Department?.DepartmentName || student?.Department?.DeptName;
+        if (!deptFullName || deptFullName.toUpperCase() === normDeptCode || deptFullName.includes('Department')) {
+            deptFullName = SEATING_DEPT_NAMES[normDeptCode] || SEATING_DEPT_NAMES[rawDeptCode] || normDeptCode;
+        }
+        deptFullName = deptFullName.replace(/\s+Department$/i, '').trim();
+
+        let topLine = '';
+        if (isIntMca) {
+            topLine = `${sem} INT MCA (Integrated Computer Applications)`;
+        } else if (isMca) {
+            topLine = `${sem} MCA (Computer Applications)`;
+        } else {
+            topLine = `${sem} ${normDeptCode} (${deptFullName})`.trim();
+        }
+
+        const key = `${sem}_${normDeptCode}`;
+        const isMultiDiv = multiDivBranches.has(key) || multiDivBranches.has(`${sem}_${rawDeptCode}`);
+
+        const divRaw = String(student?.Division || '').toUpperCase().trim();
+        let batchDetail = '';
+        if (isMultiDiv && divRaw && !['ALL', 'NONE', 'NULL', 'UNDEFINED', ''].includes(divRaw)) {
+            batchDetail = `Batch ${divRaw}`;
+        }
+
+        return batchDetail ? `${topLine}\n${batchDetail}` : topLine;
+    };
+
+    const sortBatchLabels = (a: string, b: string): number => {
+        const semA = a.match(/^S(\d+)/i)?.[1] || '0';
+        const semB = b.match(/^S(\d+)/i)?.[1] || '0';
+        if (Number(semA) !== Number(semB)) return Number(semA) - Number(semB);
+        return a.localeCompare(b, undefined, { numeric: true });
+    };
 
     /** Build Subject Wise Groups from raw seating allocations */
     const buildSubjectWiseData = (data: any[]) => {
+        const multiDivBranches = getMultiDivisionBranches(data);
         const subjectMap: Record<string, {
             subjectCode: string;
             subjectName: string;
@@ -334,37 +445,7 @@ const InternalSeatingPlans: React.FC = () => {
         data.forEach((alloc: any) => {
             const subjectCode = alloc.Exam?.SubjectCode || alloc.SubjectCode || 'N/A';
             const subjectName = alloc.Exam?.SubjectName || alloc.SubjectName || subjectCode;
-
-            const student = alloc.Student;
-            let sem = student?.Semester || '';
-            if (sem && !String(sem).toUpperCase().startsWith('S')) {
-                sem = `S${sem}`;
-            } else {
-                sem = String(sem).toUpperCase();
-            }
-            const deptCode = student?.Department?.DeptCode || student?.Department?.DepartmentCode || '';
-            let deptName = student?.Department?.DepartmentName || student?.Department?.DeptName || deptCode;
-
-            let batchDetail = '';
-            const match = deptName.match(/^(.*?)\s*[-–]\s*(Batch.*)$/i);
-            if (match) {
-                deptName = match[1].trim();
-                batchDetail = match[2].trim();
-            }
-
-            const divRaw = student?.Division || '';
-            if (!batchDetail) {
-                if (divRaw && String(divRaw).trim() !== '' && !['ALL', 'NONE', 'NULL', 'UNDEFINED'].includes(String(divRaw).trim().toUpperCase())) {
-                    const div = String(divRaw).trim();
-                    batchDetail = (div.toLowerCase().includes('batch') || div.toLowerCase().includes('div')) ? div : `Batch ${div}`;
-                } else if (student?.Batch && String(student?.Batch).trim() !== '' && isNaN(Number(student?.Batch))) {
-                    const bStr = String(student.Batch).trim();
-                    batchDetail = (bStr.toLowerCase().includes('batch') || bStr.toLowerCase().includes('div')) ? bStr : `Batch ${bStr}`;
-                }
-            }
-
-            const topLine = `${sem} ${deptCode} (${deptName})`.trim();
-            const batchLabel = batchDetail ? `${topLine}\n${batchDetail}` : topLine;
+            const batchLabel = formatSeatingBatchLabel(alloc.Student, multiDivBranches);
 
             const subjKey = `${subjectCode}_${subjectName}`;
             if (!subjectMap[subjKey]) {
@@ -392,7 +473,7 @@ const InternalSeatingPlans: React.FC = () => {
                 count: number;
             }[] = [];
 
-            const sortedBatches = Object.keys(subj.batchMap).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+            const sortedBatches = Object.keys(subj.batchMap).sort(sortBatchLabels);
 
             sortedBatches.forEach(batchLabel => {
                 const roomMap = subj.batchMap[batchLabel];
@@ -454,19 +535,20 @@ const InternalSeatingPlans: React.FC = () => {
             const sessionName = selectedSession === 'FN' ? 'Forenoon (FN)' : 'Afternoon (AN)';
             const fullDateStr = `${dateFormatted} – ${dayName} – ${sessionName}`;
 
-            const titleStyle = { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center' } };
-            const subStyle = { font: { sz: 10, bold: true }, alignment: { horizontal: 'center' } };
+            const titleStyle = { font: { bold: true, sz: 13, color: { rgb: '0F172A' } }, alignment: { horizontal: 'center', vertical: 'center' } };
+            const subTitleStyle = { font: { bold: true, sz: 11, color: { rgb: '4338CA' } }, alignment: { horizontal: 'center', vertical: 'center' } };
+            const subStyle = { font: { sz: 10, bold: true, color: { rgb: '334155' } }, alignment: { horizontal: 'center', vertical: 'center' } };
             const headerFill = { patternType: 'solid', fgColor: { rgb: '0F172A' } };
             const headerFont = { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 };
-            const thinBorder = { style: 'thin', color: { rgb: 'B4C3D7' } };
+            const thinBorder = { style: 'thin', color: { rgb: 'CBD5E1' } };
             const allThin = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder };
-            const bodyFont = { sz: 9, color: { rgb: '1E293B' } };
-            const boldFont = { sz: 9, bold: true, color: { rgb: '1E293B' } };
-            const regFont = { sz: 10, bold: true, color: { rgb: '0F172A' } };
+            const bodyFont = { sz: 9.5, color: { rgb: '1E293B' } };
+            const boldFont = { sz: 9.5, bold: true, color: { rgb: '1E293B' } };
+            const regFont = { sz: 9.5, bold: true, color: { rgb: '0F172A' } };
 
             const DATA: any[][] = [];
             DATA.push([{ v: "ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI", s: titleStyle }, '', '', '', '', '', '']);
-            DATA.push([{ v: 'SUBJECT WISE CONSOLIDATED SEATING ARRANGEMENT', s: { font: { bold: true, sz: 11 }, alignment: { horizontal: 'center' } } }, '', '', '', '', '', '']);
+            DATA.push([{ v: 'SUBJECT WISE CONSOLIDATED SEATING ARRANGEMENT', s: subTitleStyle }, '', '', '', '', '', '']);
             DATA.push([{ v: `Exam: ${examTitle}`, s: subStyle }, '', '', '', '', '', '']);
             DATA.push([{ v: `Date: ${fullDateStr}`, s: subStyle }, '', '', '', '', '', '']);
             DATA.push(['', '', '', '', '', '', '']);
@@ -482,13 +564,13 @@ const InternalSeatingPlans: React.FC = () => {
             ]);
 
             const merges: any[] = [];
-            for (let i = 0; i < 5; i++) merges.push({ s: { r: i, c: 0 }, e: { r: i, c: 6 } });
+            for (let i = 0; i < 4; i++) merges.push({ s: { r: i, c: 0 }, e: { r: i, c: 6 } });
 
             subjects.forEach((subj, sIdx) => {
                 const subjectStartRow = DATA.length;
                 const fill = sIdx % 2 === 0 
-                    ? { patternType: 'solid', fgColor: { rgb: 'F8FAFC' } } 
-                    : { patternType: 'solid', fgColor: { rgb: 'F3E8FF' } };
+                    ? { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } } 
+                    : { patternType: 'solid', fgColor: { rgb: 'F1F5F9' } };
 
                 let currentBatchStartRow = -1;
 
@@ -532,14 +614,25 @@ const InternalSeatingPlans: React.FC = () => {
 
             const ws = XLSXStyle.utils.aoa_to_sheet(DATA);
             ws['!cols'] = [
-                { wch: 32 },
-                { wch: 18 },
-                { wch: 35 },
-                { wch: 48 },
+                { wch: 42 },
                 { wch: 20 },
-                { wch: 10 },
-                { wch: 10 }
+                { wch: 38 },
+                { wch: 55 },
+                { wch: 22 },
+                { wch: 12 },
+                { wch: 12 }
             ];
+
+            const rowHeights: any[] = [];
+            for (let i = 0; i < DATA.length; i++) {
+                if (i === 0) rowHeights.push({ hpt: 26 });
+                else if (i === 1) rowHeights.push({ hpt: 20 });
+                else if (i === 2 || i === 3) rowHeights.push({ hpt: 18 });
+                else if (i === 4) rowHeights.push({ hpt: 10 });
+                else if (i === 5) rowHeights.push({ hpt: 28 });
+                else rowHeights.push({ hpt: 22 });
+            }
+            ws['!rows'] = rowHeights;
             ws['!merges'] = merges;
 
             const wb = XLSXStyle.utils.book_new();
@@ -584,13 +677,13 @@ const InternalSeatingPlans: React.FC = () => {
 
             // ── Header Band ──
             doc.setFillColor(15, 23, 42); // Dark Navy
-            doc.rect(0, 0, pageW, 38, 'F');
+            doc.rect(0, 0, pageW, 36, 'F');
 
             doc.setTextColor(255, 255, 255);
             doc.setFontSize(13); doc.setFont('helvetica', 'bold');
             doc.text("ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI", pageW / 2, 9, { align: 'center' });
 
-            doc.setFontSize(11);
+            doc.setFontSize(11); doc.setTextColor(165, 180, 252);
             doc.text("SUBJECT WISE CONSOLIDATED SEATING ARRANGEMENT", pageW / 2, 16, { align: 'center' });
 
             doc.setFillColor(99, 102, 241); // Indigo accent line
@@ -601,7 +694,7 @@ const InternalSeatingPlans: React.FC = () => {
 
             const bodyRows: any[] = [];
             subjects.forEach((subj, sIdx) => {
-                const fill = sIdx % 2 === 0 ? [248, 250, 252] : [243, 232, 255];
+                const fill = sIdx % 2 === 0 ? [255, 255, 255] : [240, 244, 255];
                 const totalSubjRows = subj.rows.length;
 
                 subj.rows.forEach((row, rIdx) => {
@@ -619,20 +712,20 @@ const InternalSeatingPlans: React.FC = () => {
             });
 
             autoTable(doc, {
-                startY: 42,
+                startY: 40,
                 head: [['Batch', 'Subject Code', 'Subject Name', 'Roll Numbers', 'Hall / Room No', 'Count', 'Total']],
                 body: bodyRows,
                 theme: 'grid',
                 styles: { fontSize: 8, cellPadding: 2.5, lineColor: [203, 213, 225], lineWidth: 0.2, valign: 'middle' },
                 headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
                 columnStyles: {
-                    0: { cellWidth: 42, halign: 'center', fontStyle: 'bold' },
-                    1: { cellWidth: 26, halign: 'center', fontStyle: 'bold' },
-                    2: { cellWidth: 55, halign: 'left' },
-                    3: { cellWidth: 85, halign: 'left' },
-                    4: { cellWidth: 32, halign: 'center', fontStyle: 'bold' },
-                    5: { cellWidth: 15, halign: 'center' },
-                    6: { cellWidth: 15, halign: 'center', fontStyle: 'bold' }
+                    0: { cellWidth: 46, halign: 'center', fontStyle: 'bold' },
+                    1: { cellWidth: 24, halign: 'center', fontStyle: 'bold' },
+                    2: { cellWidth: 48, halign: 'left' },
+                    3: { cellWidth: 80, halign: 'left' },
+                    4: { cellWidth: 28, halign: 'center', fontStyle: 'bold' },
+                    5: { cellWidth: 13, halign: 'center' },
+                    6: { cellWidth: 13, halign: 'center', fontStyle: 'bold' }
                 },
                 didDrawPage: (dataInfo: any) => {
                     doc.setFontSize(7.5); doc.setTextColor(148, 163, 184);
@@ -757,40 +850,11 @@ const InternalSeatingPlans: React.FC = () => {
 
     /** Build Batch Wise Groups from raw seating allocations */
     const buildBatchWiseData = (data: any[]) => {
+        const multiDivBranches = getMultiDivisionBranches(data);
         const classMap: Record<string, { classLabel: string; roomAllocations: Record<string, any[]> }> = {};
 
         data.forEach((alloc: any) => {
-            const student = alloc.Student;
-            let sem = student?.Semester || '';
-            if (sem && !String(sem).toUpperCase().startsWith('S')) {
-                sem = `S${sem}`;
-            } else {
-                sem = String(sem).toUpperCase();
-            }
-
-            const deptCode = student?.Department?.DeptCode || student?.Department?.DepartmentCode || '';
-            let deptName = student?.Department?.DepartmentName || student?.Department?.DeptName || deptCode;
-
-            let batchDetail = '';
-            const match = deptName.match(/^(.*?)\s*[-–]\s*(Batch.*)$/i);
-            if (match) {
-                deptName = match[1].trim();
-                batchDetail = match[2].trim();
-            }
-
-            const divRaw = student?.Division || '';
-            if (!batchDetail) {
-                if (divRaw && String(divRaw).trim() !== '' && !['ALL', 'NONE', 'NULL', 'UNDEFINED'].includes(String(divRaw).trim().toUpperCase())) {
-                    const div = String(divRaw).trim();
-                    batchDetail = (div.toLowerCase().includes('batch') || div.toLowerCase().includes('div')) ? div : `Batch ${div}`;
-                } else if (student?.Batch && String(student?.Batch).trim() !== '' && isNaN(Number(student?.Batch))) {
-                    const bStr = String(student.Batch).trim();
-                    batchDetail = (bStr.toLowerCase().includes('batch') || bStr.toLowerCase().includes('div')) ? bStr : `Batch ${bStr}`;
-                }
-            }
-
-            const topLine = `${sem} ${deptCode} (${deptName})`.trim();
-            const classLabel = batchDetail ? `${topLine}\n${batchDetail}` : topLine;
+            const classLabel = formatSeatingBatchLabel(alloc.Student, multiDivBranches);
 
             if (!classMap[classLabel]) {
                 classMap[classLabel] = { classLabel, roomAllocations: {} };
@@ -833,7 +897,7 @@ const InternalSeatingPlans: React.FC = () => {
             };
         });
 
-        classes.sort((a, b) => a.classLabel.localeCompare(b.classLabel, undefined, { numeric: true }));
+        classes.sort((a, b) => sortBatchLabels(a.classLabel, b.classLabel));
         return classes;
     };
 
@@ -859,24 +923,26 @@ const InternalSeatingPlans: React.FC = () => {
             const sessionName = selectedSession === 'FN' ? 'Forenoon (FN)' : 'Afternoon (AN)';
             const fullDateStr = `${dateFormatted} – ${dayName} – ${sessionName}`;
 
-            const subjectCodes = Array.from(new Set(data.map((a: any) => a.Exam?.SubjectCode).filter(Boolean))).join(', ');
+            const subjectCodes = Array.from(new Set(data.map((a: any) => a.Exam?.SubjectCode).filter(Boolean))).sort().join(', ');
 
-            const titleStyle = { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center' } };
-            const subStyle = { font: { sz: 10, bold: true }, alignment: { horizontal: 'center' } };
+            const titleStyle = { font: { bold: true, sz: 13, color: { rgb: '0F172A' } }, alignment: { horizontal: 'center', vertical: 'center' } };
+            const subTitleStyle = { font: { bold: true, sz: 11, color: { rgb: '4338CA' } }, alignment: { horizontal: 'center', vertical: 'center' } };
+            const subStyle = { font: { sz: 10, bold: true, color: { rgb: '334155' } }, alignment: { horizontal: 'center', vertical: 'center' } };
+            const courseStyle = { font: { sz: 9, bold: true, color: { rgb: '475569' } }, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } };
             const headerFill = { patternType: 'solid', fgColor: { rgb: '0F172A' } };
             const headerFont = { bold: true, color: { rgb: 'FFFFFF' }, sz: 10 };
-            const thinBorder = { style: 'thin', color: { rgb: 'B4C3D7' } };
+            const thinBorder = { style: 'thin', color: { rgb: 'CBD5E1' } };
             const allThin = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder };
-            const bodyFont = { sz: 9, color: { rgb: '1E293B' } };
-            const boldFont = { sz: 9, bold: true, color: { rgb: '1E293B' } };
-            const regFont = { sz: 10, bold: true, color: { rgb: '0F172A' } };
+            const bodyFont = { sz: 9.5, color: { rgb: '1E293B' } };
+            const boldFont = { sz: 9.5, bold: true, color: { rgb: '1E293B' } };
+            const regFont = { sz: 9.5, bold: true, color: { rgb: '0F172A' } };
 
             const DATA: any[][] = [];
             DATA.push([{ v: "ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI", s: titleStyle }, '', '', '', '']);
-            DATA.push([{ v: 'CONSOLIDATED SEATING ARRANGEMENT', s: { font: { bold: true, sz: 11 }, alignment: { horizontal: 'center' } } }, '', '', '', '']);
+            DATA.push([{ v: 'CONSOLIDATED SEATING ARRANGEMENT', s: subTitleStyle }, '', '', '', '']);
             DATA.push([{ v: `Exam: ${examTitle}`, s: subStyle }, '', '', '', '']);
             DATA.push([{ v: `Date: ${fullDateStr}`, s: subStyle }, '', '', '', '']);
-            DATA.push([{ v: `Subjects: ${subjectCodes || 'N/A'}`, s: subStyle }, '', '', '', '']);
+            DATA.push([{ v: `Courses: ${subjectCodes || 'N/A'}`, s: courseStyle }, '', '', '', '']);
             DATA.push(['', '', '', '', '']);
 
             DATA.push([
@@ -893,8 +959,8 @@ const InternalSeatingPlans: React.FC = () => {
             classes.forEach((cls, cIdx) => {
                 const classStartRow = DATA.length;
                 const fill = cIdx % 2 === 0
-                    ? { patternType: 'solid', fgColor: { rgb: 'F8FAFC' } }
-                    : { patternType: 'solid', fgColor: { rgb: 'F3E8FF' } };
+                    ? { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } }
+                    : { patternType: 'solid', fgColor: { rgb: 'F1F5F9' } };
 
                 cls.blocks.forEach((block) => {
                     DATA.push([
@@ -920,12 +986,24 @@ const InternalSeatingPlans: React.FC = () => {
 
             const ws = XLSXStyle.utils.aoa_to_sheet(DATA);
             ws['!cols'] = [
-                { wch: 38 },
-                { wch: 48 },
+                { wch: 46 },
+                { wch: 58 },
                 { wch: 22 },
-                { wch: 10 },
-                { wch: 10 }
+                { wch: 12 },
+                { wch: 12 }
             ];
+
+            const rowHeights: any[] = [];
+            for (let i = 0; i < DATA.length; i++) {
+                if (i === 0) rowHeights.push({ hpt: 26 });
+                else if (i === 1) rowHeights.push({ hpt: 20 });
+                else if (i === 2 || i === 3) rowHeights.push({ hpt: 18 });
+                else if (i === 4) rowHeights.push({ hpt: Math.max(22, Math.ceil((subjectCodes?.length || 0) / 75) * 15) });
+                else if (i === 5) rowHeights.push({ hpt: 10 });
+                else if (i === 6) rowHeights.push({ hpt: 28 });
+                else rowHeights.push({ hpt: 22 });
+            }
+            ws['!rows'] = rowHeights;
             ws['!merges'] = merges;
 
             const wb = XLSXStyle.utils.book_new();
@@ -967,7 +1045,7 @@ const InternalSeatingPlans: React.FC = () => {
             const dateFormatted = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
             const sessionName = selectedSession === 'FN' ? 'Forenoon (09:30 AM)' : 'Afternoon (01:30 PM)';
             const fullDateStr = `${dateFormatted} – ${dayName} – ${sessionName}`;
-            const subjectCodes = Array.from(new Set(data.map((a: any) => a.Exam?.SubjectCode).filter(Boolean))).join(', ');
+            const subjectCodes = Array.from(new Set(data.map((a: any) => a.Exam?.SubjectCode).filter(Boolean))).sort().join(', ');
 
             // ── Header Band ──
             doc.setFillColor(15, 23, 42); // Dark Navy
@@ -977,7 +1055,7 @@ const InternalSeatingPlans: React.FC = () => {
             doc.setFontSize(13); doc.setFont('helvetica', 'bold');
             doc.text("ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI", pageW / 2, 9, { align: 'center' });
 
-            doc.setFontSize(11);
+            doc.setFontSize(11); doc.setTextColor(165, 180, 252);
             doc.text("CONSOLIDATED SEATING ARRANGEMENT", pageW / 2, 16, { align: 'center' });
 
             doc.setFillColor(99, 102, 241); // Indigo accent line
@@ -987,11 +1065,11 @@ const InternalSeatingPlans: React.FC = () => {
             doc.text(`Exam: ${examTitle}  ·  Date: ${fullDateStr}`, pageW / 2, 26, { align: 'center' });
 
             doc.setFontSize(8); doc.setTextColor(203, 213, 225);
-            doc.text(`Subjects: ${subjectCodes || 'N/A'}`, pageW / 2, 32, { align: 'center' });
+            doc.text(`Courses: ${subjectCodes || 'N/A'}`, pageW / 2, 32, { align: 'center', maxWidth: pageW - 28 });
 
             const bodyRows: any[] = [];
             classes.forEach((cls, cIdx) => {
-                const fill = cIdx % 2 === 0 ? [248, 250, 252] : [243, 232, 255];
+                const fill = cIdx % 2 === 0 ? [255, 255, 255] : [240, 244, 255];
                 const totalClassRows = cls.blocks.length;
 
                 cls.blocks.forEach((block, bi) => {
@@ -1014,11 +1092,11 @@ const InternalSeatingPlans: React.FC = () => {
                 styles: { fontSize: 8.5, cellPadding: 2.8, lineColor: [203, 213, 225], lineWidth: 0.2, valign: 'middle' },
                 headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
                 columnStyles: {
-                    0: { cellWidth: 65, halign: 'center', fontStyle: 'bold' },
-                    1: { cellWidth: 120, halign: 'left' },
-                    2: { cellWidth: 38, halign: 'center', fontStyle: 'bold' },
-                    3: { cellWidth: 18, halign: 'center' },
-                    4: { cellWidth: 18, halign: 'center', fontStyle: 'bold' }
+                    0: { cellWidth: 68, halign: 'center', fontStyle: 'bold' },
+                    1: { cellWidth: 116, halign: 'left' },
+                    2: { cellWidth: 35, halign: 'center', fontStyle: 'bold' },
+                    3: { cellWidth: 16, halign: 'center' },
+                    4: { cellWidth: 16, halign: 'center', fontStyle: 'bold' }
                 },
                 didDrawPage: (dataInfo: any) => {
                     doc.setFontSize(7.5); doc.setTextColor(148, 163, 184);
@@ -1111,6 +1189,15 @@ const InternalSeatingPlans: React.FC = () => {
                 
                 const subjectCounts = new Map<string, number>();
                 const roomSubjectCodes = new Set<string>();
+                const subjectNamesMap = new Map<string, string>();
+
+                data.forEach((alloc: any) => {
+                    const sCode = alloc.Exam?.SubjectCode || alloc.SubjectCode;
+                    const sName = alloc.Exam?.SubjectName || alloc.SubjectName;
+                    if (sCode && sName && !subjectNamesMap.has(sCode)) {
+                        subjectNamesMap.set(sCode, sName);
+                    }
+                });
 
                 rowsData.forEach(row => {
                     row.benches.forEach((bench: any) => {
@@ -1118,6 +1205,9 @@ const InternalSeatingPlans: React.FC = () => {
                             if (seat?.subjectCode) {
                                 subjectCounts.set(seat.subjectCode, (subjectCounts.get(seat.subjectCode) || 0) + 1);
                                 roomSubjectCodes.add(seat.subjectCode);
+                                if (seat.subjectName && !subjectNamesMap.has(seat.subjectCode)) {
+                                    subjectNamesMap.set(seat.subjectCode, seat.subjectName);
+                                }
                             }
                         });
                     });
@@ -1149,29 +1239,54 @@ const InternalSeatingPlans: React.FC = () => {
                     merges.push({ s: { r: 7, c: cBase }, e: { r: 7, c: cBase + 1 } });
 
                     const rowObj = rowsData.find(r => r.rowLabel === label);
-                    const colSubjects = new Set<string>();
+                    const isSingle = layoutDetail?.seatMode === 'Single';
+
+                    let leftSubjCode: string | null = null;
+                    let rightSubjCode: string | null = null;
                     if (rowObj) {
-                        rowObj.benches.forEach((b: any) => {
-                            [b.left, b.right].forEach(s => {
-                                if (s?.subjectCode) colSubjects.add(s.subjectCode);
-                            });
-                        });
+                        for (const b of rowObj.benches) {
+                            if (!leftSubjCode && b.left?.subjectCode) leftSubjCode = b.left.subjectCode;
+                            if (!rightSubjCode && b.right?.subjectCode) rightSubjCode = b.right.subjectCode;
+                            if (leftSubjCode && rightSubjCode) break;
+                        }
                     }
 
-                    const subjArr = Array.from(colSubjects).sort();
-                    if (subjArr.length > 0) {
-                        const sCode = subjArr[0];
-                        const color = subjectColors.get(sCode) || subjectColorPalette[0];
+                    if (!isSingle && leftSubjCode && rightSubjCode && leftSubjCode !== rightSubjCode) {
+                        const colorL = subjectColors.get(leftSubjCode) || subjectColorPalette[0];
                         DATA[8][cBase] = {
-                            v: sCode,
+                            v: leftSubjCode,
                             s: {
                                 ...subTitleStyle,
-                                font: { bold: true, sz: 8, color: { rgb: color.text } },
-                                fill: { patternType: 'solid', fgColor: { rgb: color.fill } },
+                                font: { bold: true, sz: 8, color: { rgb: colorL.text } },
+                                fill: { patternType: 'solid', fgColor: { rgb: colorL.fill } },
                                 border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
                             }
                         };
-                        merges.push({ s: { r: 8, c: cBase }, e: { r: 8, c: cBase + 1 } });
+                        const colorR = subjectColors.get(rightSubjCode) || subjectColorPalette[1];
+                        DATA[8][cBase + 1] = {
+                            v: rightSubjCode,
+                            s: {
+                                ...subTitleStyle,
+                                font: { bold: true, sz: 8, color: { rgb: colorR.text } },
+                                fill: { patternType: 'solid', fgColor: { rgb: colorR.fill } },
+                                border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+                            }
+                        };
+                    } else {
+                        const sCode = leftSubjCode || rightSubjCode;
+                        if (sCode) {
+                            const color = subjectColors.get(sCode) || subjectColorPalette[0];
+                            DATA[8][cBase] = {
+                                v: sCode,
+                                s: {
+                                    ...subTitleStyle,
+                                    font: { bold: true, sz: 8, color: { rgb: color.text } },
+                                    fill: { patternType: 'solid', fgColor: { rgb: color.fill } },
+                                    border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+                                }
+                            };
+                            merges.push({ s: { r: 8, c: cBase }, e: { r: 8, c: cBase + 1 } });
+                        }
                     }
                 });
 
@@ -1220,20 +1335,25 @@ const InternalSeatingPlans: React.FC = () => {
                 });
 
                 let currentY = gridStartRow + maxBenches * 2 + 2;
-                DATA[currentY][4] = { v: "Subjects", s: summaryHeadStyle };
+                DATA[currentY][3] = { v: "Subjects", s: summaryHeadStyle };
                 DATA[currentY][5] = { v: "Count", s: summaryHeadStyle };
+                merges.push({ s: { r: currentY, c: 3 }, e: { r: currentY, c: 4 } });
 
                 const subjEntries = Array.from(subjectCounts.entries());
                 subjEntries.forEach(([code, count], idx) => {
                     const row = currentY + 1 + idx;
-                    DATA[row][4] = { v: code, s: summaryBodyStyle };
+                    const name = subjectNamesMap.get(code) || '';
+                    const displayLabel = name ? `${code} - ${name}` : code;
+                    DATA[row][3] = { v: displayLabel, s: { ...summaryBodyStyle, alignment: { horizontal: 'left', vertical: 'center', wrapText: true } } };
                     DATA[row][5] = { v: count, s: summaryBodyStyle };
+                    merges.push({ s: { r: row, c: 3 }, e: { r: row, c: 4 } });
                 });
 
                 const totalRow = currentY + 1 + subjEntries.length;
                 const totalCount = Array.from(subjectCounts.values()).reduce((a, b) => a + b, 0);
-                DATA[totalRow][4] = { v: "Total", s: { ...summaryBodyStyle, font: { bold: true } } };
+                DATA[totalRow][3] = { v: "Total", s: { ...summaryBodyStyle, font: { bold: true }, alignment: { horizontal: 'right', vertical: 'center' } } };
                 DATA[totalRow][5] = { v: totalCount, s: { ...summaryBodyStyle, font: { bold: true } } };
+                merges.push({ s: { r: totalRow, c: 3 }, e: { r: totalRow, c: 4 } });
 
                 const ws = XLSXStyle.utils.aoa_to_sheet(DATA);
                 ws['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }];
@@ -1329,6 +1449,15 @@ const InternalSeatingPlans: React.FC = () => {
 
                 const subjectCounts = new Map<string, number>();
                 const roomSubjectCodes = new Set<string>();
+                const subjectNamesMap = new Map<string, string>();
+
+                data.forEach((alloc: any) => {
+                    const sCode = alloc.Exam?.SubjectCode || alloc.SubjectCode;
+                    const sName = alloc.Exam?.SubjectName || alloc.SubjectName;
+                    if (sCode && sName && !subjectNamesMap.has(sCode)) {
+                        subjectNamesMap.set(sCode, sName);
+                    }
+                });
 
                 rowsData.forEach(row => {
                     row.benches.forEach((bench: any) => {
@@ -1336,6 +1465,9 @@ const InternalSeatingPlans: React.FC = () => {
                             if (seat?.subjectCode) {
                                 subjectCounts.set(seat.subjectCode, (subjectCounts.get(seat.subjectCode) || 0) + 1);
                                 roomSubjectCodes.add(seat.subjectCode);
+                                if (seat.subjectName && !subjectNamesMap.has(seat.subjectCode)) {
+                                    subjectNamesMap.set(seat.subjectCode, seat.subjectName);
+                                }
                             }
                         });
                     });
@@ -1350,24 +1482,24 @@ const InternalSeatingPlans: React.FC = () => {
                 doc.setFont('helvetica', 'bold');
                 doc.setFontSize(14);
                 doc.setTextColor(0, 0, 0);
-                doc.text("ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI", pageW / 2, 15, { align: 'center' });
+                doc.text("ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI", pageW / 2, 14, { align: 'center' });
 
                 doc.setFontSize(12);
-                doc.text("SEATING ARRANGEMENT", pageW / 2, 21, { align: 'center' });
+                doc.text("SEATING ARRANGEMENT", pageW / 2, 20, { align: 'center' });
 
                 doc.setFont('helvetica', 'normal');
-                doc.setFontSize(10);
+                doc.setFontSize(9.5);
                 doc.setTextColor(60, 60, 60);
-                doc.text(`Exam: ${examTitle}`, pageW / 2, 28, { align: 'center' });
-                doc.text(`Date: ${dateFormatted} - ${selectedSession === 'FN' ? 'Forenoon' : 'Afternoon'}`, pageW / 2, 33, { align: 'center' });
+                doc.text(`Exam: ${examTitle}`, pageW / 2, 26.5, { align: 'center' });
+                doc.text(`Date: ${dateFormatted} - ${selectedSession === 'FN' ? 'Forenoon' : 'Afternoon'}`, pageW / 2, 31.5, { align: 'center' });
 
                 doc.setFont('helvetica', 'bold');
-                doc.setFontSize(10);
+                doc.setFontSize(9.5);
                 doc.setTextColor(40, 40, 40);
-                doc.text(`Subjects: ${subjectCodesString}`, pageW / 2, 39, { align: 'center' });
+                doc.text(`Subjects: ${subjectCodesString}`, pageW / 2, 37, { align: 'center' });
 
                 doc.setFontSize(11);
-                doc.text(`Hall / Room: ${hallCode}`, pageW / 2, 45, { align: 'center' });
+                doc.text(`Hall / Room: ${hallCode}`, pageW / 2, 43, { align: 'center' });
 
                 const cols = Math.max(rowLabels.length, 1);
                 const rowsNeeded = Math.max(benchNumbers.length, 1);
@@ -1419,40 +1551,60 @@ const InternalSeatingPlans: React.FC = () => {
 
                 rowLabels.forEach((rowLabel, colIdx) => {
                     const x = marginX + colIdx * (cardW + gapX);
+                    const rowObj = rowsData.find(r => r.rowLabel === rowLabel);
+                    const isSingle = layoutDetail?.seatMode === 'Single';
 
                     doc.setFontSize(13);
                     doc.setFont('helvetica', 'bold');
                     doc.setTextColor(0, 0, 0);
                     doc.text(`${rowLabel}`, x + cardW / 2, startY - 8.5, { align: 'center' });
 
-                    const rowObj = rowsData.find(r => r.rowLabel === rowLabel);
-                    const rowSubjects = new Set<string>();
+                    let leftSubjCode: string | null = null;
+                    let rightSubjCode: string | null = null;
                     if (rowObj) {
-                        rowObj.benches.forEach((b: any) => {
-                            [b.left, b.right].forEach(s => {
-                                if (s?.subjectCode) rowSubjects.add(s.subjectCode);
-                            });
-                        });
+                        for (const b of rowObj.benches) {
+                            if (!leftSubjCode && b.left?.subjectCode) leftSubjCode = b.left.subjectCode;
+                            if (!rightSubjCode && b.right?.subjectCode) rightSubjCode = b.right.subjectCode;
+                            if (leftSubjCode && rightSubjCode) break;
+                        }
                     }
 
-                    const subjArr = Array.from(rowSubjects).sort();
-                    if (subjArr.length > 0) {
-                        const badgeH = 4;
-                        const badgeW = cardW * 0.9;
-                        const badgeX = x + (cardW - badgeW) / 2;
-                        const badgeY = startY - 7;
+                    const badgeY = startY - 5.5;
+                    const badgeH = 3.6;
 
-                        subjArr.forEach((sCode, sIdx) => {
+                    if (!isSingle && leftSubjCode && rightSubjCode && leftSubjCode !== rightSubjCode) {
+                        const colorL = subjectColors.get(leftSubjCode) || subjectColorPalette[0];
+                        const bxL = x + 0.5;
+                        const bwL = (cardW / 2) - 1;
+                        doc.setFillColor(colorL.fill[0], colorL.fill[1], colorL.fill[2]);
+                        doc.roundedRect(bxL, badgeY, bwL, badgeH, 0.8, 0.8, 'F');
+                        doc.setFontSize(6.5);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(colorL.text[0], colorL.text[1], colorL.text[2]);
+                        doc.text(leftSubjCode, bxL + bwL / 2, badgeY + 2.6, { align: 'center' });
+
+                        const colorR = subjectColors.get(rightSubjCode) || subjectColorPalette[1];
+                        const bxR = x + (cardW / 2) + 0.5;
+                        const bwR = (cardW / 2) - 1;
+                        doc.setFillColor(colorR.fill[0], colorR.fill[1], colorR.fill[2]);
+                        doc.roundedRect(bxR, badgeY, bwR, badgeH, 0.8, 0.8, 'F');
+                        doc.setFontSize(6.5);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(colorR.text[0], colorR.text[1], colorR.text[2]);
+                        doc.text(rightSubjCode, bxR + bwR / 2, badgeY + 2.6, { align: 'center' });
+                    } else {
+                        const sCode = leftSubjCode || rightSubjCode;
+                        if (sCode) {
                             const color = subjectColors.get(sCode) || subjectColorPalette[0];
-                            const sy = badgeY + (sIdx * (badgeH + 1));
-
+                            const bw = Math.min(cardW * 0.85, 34);
+                            const bx = x + (cardW - bw) / 2;
                             doc.setFillColor(color.fill[0], color.fill[1], color.fill[2]);
-                            doc.roundedRect(badgeX, sy, badgeW, badgeH, 1, 1, 'F');
-
+                            doc.roundedRect(bx, badgeY, bw, badgeH, 0.8, 0.8, 'F');
                             doc.setFontSize(7);
+                            doc.setFont('helvetica', 'bold');
                             doc.setTextColor(color.text[0], color.text[1], color.text[2]);
-                            doc.text(sCode, badgeX + badgeW / 2, sy + 3, { align: 'center' });
-                        });
+                            doc.text(sCode, bx + bw / 2, badgeY + 2.6, { align: 'center' });
+                        }
                     }
                 });
 
@@ -1527,19 +1679,30 @@ const InternalSeatingPlans: React.FC = () => {
                 });
 
                 let currentY = startY + rowsNeeded * (cardH + gapY) + gridTableGap;
-                const subjData: any[][] = Array.from(subjectCounts.entries()).map(([code, count]) => [code, count]);
+                const subjData: any[][] = Array.from(subjectCounts.entries()).map(([code, count]) => {
+                    const name = subjectNamesMap.get(code) || '';
+                    const displayLabel = name ? `${code} - ${name}` : code;
+                    return [displayLabel, count];
+                });
                 const totalStudents = Array.from(subjectCounts.values()).reduce((a, b) => a + b, 0);
-                subjData.push([{ content: 'Total', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }, { content: totalStudents, styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }]);
+                subjData.push([
+                    { content: 'Total', styles: { fontStyle: 'bold', fillColor: [245, 245, 245], halign: 'right' } },
+                    { content: totalStudents, styles: { fontStyle: 'bold', fillColor: [245, 245, 245], halign: 'center' } }
+                ]);
 
-                const tableW = 80;
+                const tableW = Math.min(pageW - 40, 130);
                 autoTable(doc, {
                     startY: currentY,
                     head: [['Subjects', 'Count']],
                     body: subjData,
                     theme: 'grid',
-                    styles: { fontSize: tableFontSize, cellPadding: tablePadding, textColor: [40, 40, 40], font: 'helvetica' },
-                    headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
-                    bodyStyles: { lineWidth: 0.1, lineColor: [200, 200, 200] },
+                    styles: { fontSize: tableFontSize, cellPadding: tablePadding + 0.5, textColor: [30, 41, 59], font: 'helvetica', valign: 'middle' },
+                    headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, halign: 'center' },
+                    bodyStyles: { lineWidth: 0.15, lineColor: [203, 213, 225] },
+                    columnStyles: {
+                        0: { cellWidth: tableW - 25, halign: 'left' },
+                        1: { cellWidth: 25, halign: 'center', fontStyle: 'bold' }
+                    },
                     margin: { left: (pageW - tableW) / 2 },
                     tableWidth: tableW
                 });
@@ -2357,7 +2520,7 @@ const InternalSeatingPlans: React.FC = () => {
                                                                                     ? 'bg-indigo-100 text-indigo-700'
                                                                                     : 'bg-slate-100 text-slate-400'
                                                                             }`}>
-                                                                            {isFull ? '✓ Fully Seated' : isPartial ? '⬤ Partial' : '○ Unassigned'}
+                                                                            {isFull ? 'Fully Seated' : isPartial ? 'Partial' : 'Unassigned'}
                                                                         </span>
                                                                     </div>
                                                                 </div>

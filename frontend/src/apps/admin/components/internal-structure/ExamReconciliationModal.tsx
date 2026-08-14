@@ -160,7 +160,7 @@ export const ExamReconciliationModal: React.FC<Props> = ({
                                     <div className="bg-indigo-50/60 p-3.5 rounded-2xl border border-indigo-200 text-center col-span-2 md:col-span-1">
                                         <p className="text-[10px] font-black uppercase text-indigo-700">Seating Ready</p>
                                         <p className={`text-base font-black mt-2 uppercase ${isVerified ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                            {isVerified ? '✓ READY' : '✕ BLOCKED'}
+                                            {isVerified ? 'READY' : 'BLOCKED'}
                                         </p>
                                     </div>
                                 </div>
@@ -291,7 +291,7 @@ export const ExamReconciliationModal: React.FC<Props> = ({
                                                         <div className="text-right">
                                                             <span className="text-slate-800 font-black">{b.registered} / {b.expected}</span>
                                                             <span className={`block text-[10px] ${b.missing === 0 ? 'text-emerald-600 font-extrabold' : 'text-rose-600 font-extrabold'}`}>
-                                                                {b.missing === 0 ? '✓ Complete' : `${b.missing} missing`}
+                                                                {b.missing === 0 ? 'Complete' : `${b.missing} missing`}
                                                             </span>
                                                         </div>
                                                     </div>

@@ -4,14 +4,13 @@ import {
     InternalExamDepartment,
     InternalExamRegistration,
     InternalStudent,
-    InternalStudentSubject,
     InternalSubjectEligibility,
     Department,
     Program,
     Semester
 } from '../../models/index.js';
 import { SubjectEligibilityImportService } from './subjectEligibilityImport.service.js';
-import { normalizeProgramme, normalizeBranch } from '../academicNormalizer.service.js';
+import { normalizeProgramme, normalizeBranchCode, parseBatchString, getProgrammeLabel } from '../academicNormalizer.service.js';
 
 export interface BranchBreakdownItem {
     departmentCode: string;
@@ -51,6 +50,8 @@ export interface ExamEligibilityResult {
     subjectType: string;
     scopeType: string;
     branchScope: string[];
+    normalizedBranchScope: string[];
+    programme: string;
     eligibilitySource: 'SUBJECT_LIST' | 'MASTER_BATCH_RULE' | 'AUTO_FALLBACK';
     expectedCount: number;
     eligibleCount: number;
@@ -75,29 +76,49 @@ export interface ExamEligibilityResult {
 export class InternalExamEligibilityService {
 
     /**
-     * Helper to parse batch label (e.g. "CSE 2024-2028 C (S5)")
+     * Parses raw branch scope string (e.g. "AD, CA, CC, CS", "CE, EE, EC, ER, ME", "Int. MCA")
+     * into a Set of normalized canonical branch codes.
      */
-    static parseBatchString(batchStr: string): {
-        branch: string | null;
-        startYear: number | null;
-        endYear: number | null;
-        division: string | null;
-        semester: string | null;
+    static parseScopeToNormalizedBranches(rawScope: string | null | undefined): {
+        rawBranches: string[];
+        normalizedBranches: Set<string>;
+        isAllBranches: boolean;
     } {
-        if (!batchStr) return { branch: null, startYear: null, endYear: null, division: null, semester: null };
-        const clean = batchStr.trim();
-        const branchMatch = clean.match(/^([A-Za-z]+)\b/);
-        const yearsMatch = clean.match(/(\d{4})[-–](\d{4})/);
-        const divMatch = clean.match(/\b([A-Z])\b/);
-        const semMatch = clean.match(/\((S\d+|SEM\s*\d+)\)/i);
+        if (!rawScope) {
+            return { rawBranches: [], normalizedBranches: new Set(), isAllBranches: true };
+        }
 
-        return {
-            branch: branchMatch && branchMatch[1] ? branchMatch[1].toUpperCase() : null,
-            startYear: yearsMatch && yearsMatch[1] ? parseInt(yearsMatch[1], 10) : null,
-            endYear: yearsMatch && yearsMatch[2] ? parseInt(yearsMatch[2], 10) : null,
-            division: divMatch && divMatch[1] ? divMatch[1].toUpperCase() : null,
-            semester: semMatch && semMatch[1] ? semMatch[1].toUpperCase() : null
-        };
+        const text = String(rawScope).trim().toUpperCase();
+        if (text.includes('ALL BRANCHES') || text === 'ALL' || text === 'ALL_BRANCHES') {
+            return { rawBranches: ['ALL_BRANCHES'], normalizedBranches: new Set(['ALL_BRANCHES']), isAllBranches: true };
+        }
+
+        const tokens = text.split(/[\s,/;&|.\-_]+/).filter(Boolean);
+        const rawBranches: string[] = [];
+        const normalizedBranches = new Set<string>();
+
+        // Also check comma-separated chunks first to preserve multi-word codes like "INT MCA"
+        const commaChunks = text.split(/[,;&|]+/).map(s => s.trim()).filter(Boolean);
+        for (const chunk of commaChunks) {
+            const norm = normalizeBranchCode(chunk);
+            if (norm && norm !== 'UNKNOWN') {
+                rawBranches.push(chunk);
+                normalizedBranches.add(norm);
+            }
+        }
+
+        if (normalizedBranches.size === 0) {
+            for (const token of tokens) {
+                const norm = normalizeBranchCode(token);
+                if (norm && norm !== 'UNKNOWN' && !['A', 'B', 'C', 'D', 'E', 'S'].includes(norm)) {
+                    rawBranches.push(token);
+                    normalizedBranches.add(norm);
+                }
+            }
+        }
+
+        const isAllBranches = normalizedBranches.has('ALL_BRANCHES') || normalizedBranches.size === 0;
+        return { rawBranches, normalizedBranches, isAllBranches };
     }
 
     /**
@@ -105,7 +126,6 @@ export class InternalExamEligibilityService {
      * Level 1: Subject-Wise Student Roster (InternalSubjectEligibility)
      * Level 2: Explicit Registrations
      * Level 3: Curriculum / Batch / Division / Branch Rule
-     * Level 4: Department + Semester Fallback
      */
     static async calculateExamEligibility(examId: number, options?: { transaction?: any }): Promise<ExamEligibilityResult> {
         const transaction = options?.transaction;
@@ -133,6 +153,8 @@ export class InternalExamEligibilityService {
                 subjectType: exam.SubjectType || 'CORE',
                 scopeType: exam.ScopeType || 'BRANCH_SCOPE',
                 branchScope: [],
+                normalizedBranchScope: [],
+                programme: exam.Programme || 'B.Tech',
                 eligibilitySource: 'AUTO_FALLBACK',
                 expectedCount: 0,
                 eligibleCount: 0,
@@ -150,43 +172,28 @@ export class InternalExamEligibilityService {
             };
         }
 
-        // 1. Resolve Branch Scope
+        // 1. Resolve Exam Programme & Canonical Branch Scope
+        const examProgNorm = normalizeProgramme(exam.Programme || (
+            (exam.SubjectCode || '').includes('INMCA') || (exam.SubjectCode || '').includes('IMCA') ? 'INT_MCA' :
+            (exam.SubjectCode || '').startsWith('24SJMCA') || (exam.SubjectCode || '').includes('MCA') ? 'MCA' : 'BTECH'
+        ));
+        const examProgLabel = getProgrammeLabel(examProgNorm);
+
         const deptEntries = (exam as any).InternalExamDepartments || [];
-        const scopeCodesSet = new Set<string>();
+        const rawScopeParts: string[] = [];
 
         if (exam.BranchScope) {
-            exam.BranchScope.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).forEach(c => scopeCodesSet.add(c));
+            rawScopeParts.push(exam.BranchScope);
         }
         deptEntries.forEach((d: any) => {
             if (d.Department?.DepartmentCode) {
-                scopeCodesSet.add(d.Department.DepartmentCode.toUpperCase());
+                rawScopeParts.push(d.Department.DepartmentCode);
             }
         });
 
-        const branchScope = Array.from(scopeCodesSet);
-        const isAllBranches = exam.ScopeType === 'ALL_BRANCHES' || branchScope.includes('ALL_BRANCHES') || branchScope.includes('ALL') || branchScope.length === 0;
-
-        // Fetch Departments in scope (outer scope for breakdown calculation)
-        const allDepts = await Department.findAll({ transaction });
-        const deptMapById = new Map<number, Department>();
-        allDepts.forEach(d => deptMapById.set(d.DepartmentID, d));
-        const targetDeptIds: number[] = [];
-
-        if (isAllBranches) {
-            allDepts.forEach(d => targetDeptIds.push(d.DepartmentID));
-        } else {
-            branchScope.forEach(code => {
-                const cleanCode = code.toUpperCase().trim();
-                allDepts.forEach(d => {
-                    const dCode = (d.DepartmentCode || '').toUpperCase().trim();
-                    const dName = (d.DepartmentName || '').toUpperCase().trim();
-                    if (dCode === cleanCode || dName === cleanCode || cleanCode.includes(dCode) || dCode.includes(cleanCode)) {
-                        targetDeptIds.push(d.DepartmentID);
-                    }
-                });
-            });
-        }
-        if (targetDeptIds.length === 0) allDepts.forEach(d => targetDeptIds.push(d.DepartmentID));
+        const combinedScopeStr = rawScopeParts.join(', ');
+        const { rawBranches, normalizedBranches, isAllBranches } = InternalExamEligibilityService.parseScopeToNormalizedBranches(combinedScopeStr);
+        const normalizedBranchList = Array.from(normalizedBranches);
 
         // 2. LEVEL 1 CHECK: Is there a Subject-Wise Student Roster for this SubjectCode?
         const subjectEligibilityRows = await InternalSubjectEligibility.findAll({
@@ -234,7 +241,7 @@ export class InternalExamEligibilityService {
                 }
             }
         } else {
-            // Level 3: Curriculum / Batch / Department Scope rule
+            // Level 3: Curriculum / Master Student rule
             const semesterOrConditions: any[] = [
                 { Semester: `S${semNum}` },
                 { Semester: `${semNum}` },
@@ -246,34 +253,11 @@ export class InternalExamEligibilityService {
                 { Semester: semRaw }
             ];
 
-            const scopeList = Array.from(scopeCodesSet);
-            const batchLikeConds = scopeList.map(code => ({ Batch: { [Op.like]: `%${code}%` } }));
-            const regLikeConds = scopeList.map(code => ({ RegisterNumber: { [Op.like]: `%${code}%` } }));
-
-            const isScopeRestricted = !isAllBranches && (targetDeptIds.length > 0 || scopeList.length > 0);
-
-            const studentWhere: any = {
-                Status: 'ACTIVE'
-            };
-
-            if (isScopeRestricted) {
-                studentWhere[Op.and] = [
-                    { [Op.or]: semesterOrConditions },
-                    {
-                        [Op.or]: [
-                            { DepartmentID: { [Op.in]: targetDeptIds } },
-                            { DepartmentID: null },
-                            ...batchLikeConds,
-                            ...regLikeConds
-                        ]
-                    }
-                ];
-            } else {
-                studentWhere[Op.or] = semesterOrConditions;
-            }
-
             eligibleStudentsRaw = await InternalStudent.findAll({
-                where: studentWhere,
+                where: {
+                    Status: 'ACTIVE',
+                    [Op.or]: semesterOrConditions
+                },
                 include: [
                     { model: Department, as: 'Department' },
                     { model: Program }
@@ -282,46 +266,42 @@ export class InternalExamEligibilityService {
             });
         }
 
-        // Apply strict 2-step Programme & Branch filter + Division filter
+        // 3. Apply Strict 2-Step Matching (Programme -> Branch -> Division)
         const finalEligibleStudents: InternalStudent[] = [];
+        let progMismatchCount = 0;
+        let branchMismatchCount = 0;
         let divMismatchCount = 0;
 
-        const examProgNorm = normalizeProgramme(exam.Programme || (
-            (exam.SubjectCode || '').includes('INMCA') ? 'INT_MCA' :
-            (exam.SubjectCode || '').startsWith('24SJMCA') ? 'MCA' : 'BTECH'
-        ));
-
         for (const student of eligibleStudentsRaw) {
-            const studentBatch = String(student.Batch || '').toUpperCase();
-            const studentProgCode = (student.Program?.ProgramCode || '').toUpperCase();
+            const studentBatch = String(student.Batch || '').trim();
+            const studentParsed = parseBatchString(studentBatch);
             
-            const studentProgNorm = normalizeProgramme(
-                studentBatch.includes('INT MCA') || studentBatch.includes('INT_MCA') ? 'INT_MCA' :
-                studentBatch.includes('MCA') ? 'MCA' :
-                studentProgCode
-            );
+            // Extract Student Programme
+            let studentProgNorm = studentParsed.programCode;
+            if (studentProgNorm === 'UNKNOWN' || !studentProgNorm) {
+                studentProgNorm = normalizeProgramme(student.Program?.ProgramCode || student.Program?.ProgramName || studentBatch);
+            }
 
-            // STEP 1: Programme match check (BTECH vs MCA vs INT_MCA)
-            if (examProgNorm !== studentProgNorm) {
+            // STEP 1: Programme match check (BTECH vs MCA vs INT_MCA vs MTECH vs MBA)
+            if (studentProgNorm !== examProgNorm) {
+                progMismatchCount++;
                 continue;
             }
 
-            // STEP 2: Branch scope match check (CA vs MCA vs INT_MCA vs AD vs CSE...)
-            if (!isAllBranches && branchScope.length > 0) {
-                const studentBranchNorm = normalizeBranch(
-                    student.Department?.DepartmentCode || studentBatch.split(/\s+/)[0] || ''
-                );
+            // STEP 2: Branch scope match check (CS vs EC vs EE vs ME vs CE vs AD vs CA vs CC vs ER vs MCA vs INT_MCA)
+            if (!isAllBranches && normalizedBranches.size > 0) {
+                let studentBranchNorm = studentParsed.normalizedBranchCode;
+                if (studentBranchNorm === 'UNKNOWN' || !studentBranchNorm) {
+                    studentBranchNorm = normalizeBranchCode(student.Department?.DepartmentCode || studentBatch);
+                }
 
-                const matchesBranch = branchScope.some(bCode => {
-                    const normTargetBranch = normalizeBranch(bCode);
-                    return normTargetBranch === studentBranchNorm || studentBatch.includes(normTargetBranch);
-                });
-
-                if (!matchesBranch) {
+                if (!normalizedBranches.has(studentBranchNorm)) {
+                    branchMismatchCount++;
                     continue;
                 }
             }
 
+            // STEP 3: Division check
             const deptEntry = deptEntries.find((d: any) => d.DepartmentID === student.DepartmentID);
             const deptDiv = deptEntry?.Division ? String(deptEntry.Division).toUpperCase().trim() : 'ALL';
 
@@ -329,6 +309,7 @@ export class InternalExamEligibilityService {
                 divMismatchCount++;
                 continue;
             }
+
             finalEligibleStudents.push(student);
         }
 
@@ -345,15 +326,18 @@ export class InternalExamEligibilityService {
         const missingDetails: StudentEligibilityDetail[] = [];
 
         for (const s of finalEligibleStudents) {
+            const sParsed = parseBatchString(s.Batch || '');
+            const deptCode = s.Department?.DepartmentCode || sParsed.departmentCode || sParsed.rawBranch || 'UNKNOWN';
+
             const detail: StudentEligibilityDetail = {
                 internalStudentId: s.InternalStudentID,
                 registerNumber: s.RegisterNumber,
                 fullName: s.FullName,
-                departmentCode: s.Department?.DepartmentCode || 'UNKNOWN',
-                programCode: s.Program?.ProgramCode || s.Department?.DepartmentCode || 'UNKNOWN',
-                division: s.Division || 'A',
+                departmentCode: deptCode,
+                programCode: s.Program?.ProgramCode || sParsed.programCode || 'UNKNOWN',
+                division: s.Division || sParsed.division || 'A',
                 rollNumber: s.RollNumber ?? null,
-                batch: s.Batch || `${s.BatchYear || ''}`,
+                batch: s.Batch || sParsed.batchName || `${s.BatchYear || ''}`,
                 semester: s.Semester || `S${semNum}`,
             };
 
@@ -369,50 +353,20 @@ export class InternalExamEligibilityService {
         const registeredCount = registeredStudentIds.size;
         const missingCount = missingDetails.length;
 
-        // 6. Calculate Ineligible Summaries across non-scope programs in same semester
-        const otherBranchStudentsCount = await InternalStudent.count({
-            where: {
-                DepartmentID: { [Op.notIn]: targetDeptIds.length > 0 ? targetDeptIds : [-1] },
-                Status: 'ACTIVE',
-                Semester: `S${semNum}`
-            },
-            transaction
-        });
-
-        const inactiveCount = await InternalStudent.count({
-            where: {
-                DepartmentID: { [Op.in]: targetDeptIds.length > 0 ? targetDeptIds : [-1] },
-                Status: { [Op.ne]: 'ACTIVE' },
-                Semester: `S${semNum}`
-            },
-            transaction
-        });
-
-        // 7. Generate Branch-wise & Batch-wise breakdowns
+        // 6. Branch-wise & Batch-wise breakdowns
         const branchBreakdownMap = new Map<string, { deptName: string; expected: number; registered: number; missing: number }>();
-
-        targetDeptIds.forEach(id => {
-            const dept = deptMapById.get(id);
-            if (dept) {
-                branchBreakdownMap.set(dept.DepartmentCode, {
-                    deptName: dept.DepartmentName,
-                    expected: 0,
-                    registered: 0,
-                    missing: 0
-                });
-            }
-        });
-
         const batchBreakdownMap = new Map<string, { expected: number; registered: number; missing: number }>();
 
         for (const s of finalEligibleStudents) {
-            const code = s.Department?.DepartmentCode || 'UNKNOWN';
-            const bKey = `${s.Program?.ProgramCode || code}_${s.Batch || s.BatchYear}_${s.Division || 'A'}`;
+            const sParsed = parseBatchString(s.Batch || '');
+            const rawBranch = sParsed.rawBranch !== 'UNKNOWN' ? sParsed.rawBranch : (s.Department?.DepartmentCode || sParsed.normalizedBranchCode);
+            const deptName = s.Department?.DepartmentName || sParsed.departmentName || rawBranch;
+            const bKey = s.Batch || sParsed.batchName || `${rawBranch} ${s.BatchYear || ''} ${s.Division || 'A'}`;
 
-            if (!branchBreakdownMap.has(code)) {
-                branchBreakdownMap.set(code, { deptName: s.Department?.DepartmentName || code, expected: 0, registered: 0, missing: 0 });
+            if (!branchBreakdownMap.has(rawBranch)) {
+                branchBreakdownMap.set(rawBranch, { deptName, expected: 0, registered: 0, missing: 0 });
             }
-            const bItem = branchBreakdownMap.get(code)!;
+            const bItem = branchBreakdownMap.get(rawBranch)!;
             bItem.expected++;
 
             if (!batchBreakdownMap.has(bKey)) {
@@ -436,21 +390,22 @@ export class InternalExamEligibilityService {
             expected: val.expected,
             registered: val.registered,
             missing: val.missing,
-            status: val.missing === 0 ? 'OK' : 'ERROR'
-        }));
+            status: (val.missing === 0 ? 'OK' : 'ERROR') as 'OK' | 'ERROR'
+        })).sort((a, b) => a.departmentCode.localeCompare(b.departmentCode));
 
         const batchBreakdown: BatchBreakdownItem[] = Array.from(batchBreakdownMap.entries()).map(([key, val]) => {
-            const [batch, division] = key.split('_');
+            const divMatch = key.match(/\b([A-E])\b$/);
+            const division = divMatch && divMatch[1] ? divMatch[1] : 'A';
             return {
-                batch: batch || key,
-                division: division || 'A',
+                batch: key,
+                division,
                 expected: val.expected,
                 registered: val.registered,
                 missing: val.missing
             };
-        });
+        }).sort((a, b) => a.batch.localeCompare(b.batch));
 
-        // 8. Final Status determination
+        // 7. Final Status determination
         let status: ExamEligibilityResult['status'] = 'VERIFIED';
         let message = `All ${expectedCount} eligible students are registered for this exam (${eligibilitySource}).`;
 
@@ -458,7 +413,7 @@ export class InternalExamEligibilityService {
 
         if (expectedCount === 0) {
             status = 'NO_PROGRAMME_MATCH';
-            message = `No active students found for ${exam.SubjectCode} (${branchScope.join(', ')}) in Semester ${semRaw}.`;
+            message = `No active ${examProgLabel} students found for ${exam.SubjectCode} (${exam.BranchScope || 'All Branches'}) in Semester ${semRaw}.`;
         } else if (unresolvedCount > 0) {
             status = 'UNRESOLVED_STUDENTS';
             message = `${unresolvedCount} students listed in subject roster for "${exam.SubjectCode}" are missing from the master student registry.`;
@@ -474,7 +429,9 @@ export class InternalExamEligibilityService {
             semester: semRaw,
             subjectType: exam.SubjectType || 'CORE',
             scopeType: exam.ScopeType || 'BRANCH_SCOPE',
-            branchScope,
+            branchScope: rawBranches,
+            normalizedBranchScope: normalizedBranchList,
+            programme: examProgLabel,
             eligibilitySource,
             expectedCount,
             eligibleCount: expectedCount,
@@ -489,8 +446,8 @@ export class InternalExamEligibilityService {
             missingStudents: missingDetails,
             unresolvedStudents,
             ineligibleSummary: {
-                branchMismatch: 0,
-                noProgrammeScope: 0,
+                branchMismatch: branchMismatchCount,
+                noProgrammeScope: progMismatchCount,
                 divisionMismatch: divMismatchCount,
                 inactiveCount: 0
             }

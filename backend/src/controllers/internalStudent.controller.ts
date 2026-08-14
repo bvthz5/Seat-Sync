@@ -215,14 +215,22 @@ export const importInternalStudents = async (req: Request, res: Response) => {
             const row = rawRows[rowIdx];
             if (!row || row.length === 0) { continue; }
 
-            const firstCell = String(row[0] || '').trim();
-            if (firstCell.toLowerCase().includes('batch :') || firstCell.toLowerCase().includes('batch:')) {
-                globalBatch = firstCell.replace(/batch\s*:/i, '').trim();
+            // Check if any cell in row is a Batch Header (e.g., "Batch : EEE 2025-2029 (S3)", "Batch : CSE 2025-2029 A (S3)")
+            const batchCell = row.find((c: any) => {
+                const s = String(c || '').trim().toLowerCase();
+                return s.startsWith('batch :') || s.startsWith('batch:') || s.includes('batch :') || s.includes('batch:');
+            });
+            if (batchCell) {
+                const fullText = String(batchCell).trim();
+                const cleanBatch = fullText.replace(/^.*?batch\s*:\s*/i, '').trim();
+                globalBatch = cleanBatch;
                 globalCourseCode = '';
                 globalSubjectName = '';
                 isCollecting = false;
                 continue;
             }
+
+            const firstCell = String(row[0] || '').trim();
 
             // Check if row is a Subject Header (e.g., "24SJMNADT301: Introduction to Artificial Intelligence")
             const courseMatch = firstCell.match(courseHeaderRegex);
@@ -377,18 +385,20 @@ export const importInternalStudents = async (req: Request, res: Response) => {
             const name = String(row['Name'] || '').trim();
 
             // Resolve academic context
-            const rawAcademic = row['Batch'] || row['Program'] || row['Department'] || '';
+            const rawAcademic = row['Batch'] || globalBatch || row['Program'] || row['Department'] || '';
             const parsed = parseBatchString(rawAcademic);
-            const programCode = normalizeProgram(parsed.programCode !== 'UNKNOWN' ? parsed.programCode : (row['Program'] || row['Department'] || ''));
+            const programCode = parsed.programCode !== 'UNKNOWN' ? parsed.programCode : 'BTECH';
+            const progDeptCode = parsed.departmentCode !== 'UNKNOWN' ? parsed.departmentCode : 'CSE';
+            const progDeptName = parsed.departmentName !== 'UNKNOWN' ? parsed.departmentName : 'Computer Science & Engineering';
 
             let batchYear = parsed.batchYear || (row['Batch'] ? parseInt(String(row['Batch']).replace(/[^0-9]/g, '').slice(0, 4)) : null);
             const divRaw = row['Division'] ?? row['Div'] ?? row['DIV'] ?? row['SECTION'] ?? row['Section'];
             const division = (divRaw !== undefined && divRaw !== null && String(divRaw).trim() !== '')
                 ? String(divRaw).toUpperCase().trim()
-                : (parsed.division || null);
+                : (parsed.division || 'A');
 
             if (!regNo && rollNumber !== null && !isNaN(rollNumber)) {
-                regNo = `${programCode !== 'UNKNOWN' ? programCode : 'STU'}${batchYear || ''}${division || ''}${String(rollNumber).padStart(2, '0')}`;
+                regNo = `${parsed.departmentCode || parsed.normalizedBranchCode || 'STU'}${batchYear || ''}${division || 'A'}${String(rollNumber).padStart(3, '0')}`;
             }
 
             if (!regNo && name) {
@@ -400,38 +410,16 @@ export const importInternalStudents = async (req: Request, res: Response) => {
             processedRegNos.add(regNo);
 
             try {
-
                 let targetProgram = progCache.get(programCode);
                 if (!targetProgram) {
                     targetProgram = await resolveOrCreateProgram(programCode, t);
                     progCache.set(programCode, targetProgram);
                 }
 
-                let targetDept = targetProgram?.DepartmentID ? deptCache.get(String(targetProgram.DepartmentID)) : null;
-                if (!targetDept && targetProgram?.DepartmentID) {
-                    targetDept = await Department.findByPk(targetProgram.DepartmentID, { transaction: t });
-                    if (targetDept) deptCache.set(String(targetDept.DepartmentID), targetDept);
-                }
-
-                // Explicit department override or derivation from Register Number (e.g. 25CE001 -> CE)
-                if (!targetDept && row['Department']) {
-                    const deptKey = String(row['Department']).trim().toUpperCase();
-                    targetDept = deptCache.get(deptKey);
-                    if (!targetDept) {
-                        targetDept = await resolveOrCreateDepartment(deptKey, deptKey, t);
-                        deptCache.set(deptKey, targetDept);
-                    }
-                }
-                if (!targetDept && regNo) {
-                    const deptMatch = regNo.match(/^[0-9]*([A-Z]{2,4})[0-9]*$/);
-                    if (deptMatch && deptMatch[1]) {
-                        const deptCodeFromReg = deptMatch[1].toUpperCase();
-                        targetDept = deptCache.get(deptCodeFromReg);
-                        if (!targetDept) {
-                            targetDept = await resolveOrCreateDepartment(deptCodeFromReg, deptCodeFromReg, t);
-                            deptCache.set(deptCodeFromReg, targetDept);
-                        }
-                    }
+                let targetDept = deptCache.get(progDeptCode);
+                if (!targetDept) {
+                    targetDept = await resolveOrCreateDepartment(progDeptCode, progDeptName, t);
+                    deptCache.set(progDeptCode, targetDept);
                 }
 
                 // Resolve semester from row data, request context, or exam context
@@ -456,13 +444,13 @@ export const importInternalStudents = async (req: Request, res: Response) => {
                     batchYear = extractBatchYearFromRegisterNumber(regNo);
                 }
                 const batchEnd = parsed.batchEndYear || (batchYear ? batchYear + 4 : null);
-                const batchName = parsed.batchName || (row['Batch'] ? String(row['Batch']).trim() : `${programCode} ${batchYear ? batchYear : ''}`);
+                const batchName = parsed.batchName || (row['Batch'] ? String(row['Batch']).trim() : `${progDeptCode} ${batchYear ? batchYear : ''}`);
 
                 // Validate class-level Roll Number uniqueness scoped to specific batch cohort
                 if (rollNumber !== null && !isNaN(rollNumber)) {
-                    const classRollKey = `${batchName || programCode}_${division || 'NO_DIV'}_${semStr}_${rollNumber}`;
+                    const classRollKey = `${batchName || programCode}_${division || 'A'}_${semStr}_${rollNumber}`;
                     if (processedClassRolls.has(classRollKey)) {
-                        errors.push({ row: row._row, reason: `Duplicate Roll No ${rollNumber} in ${batchName || programCode} Div ${division || 'none'} (${semStr})` });
+                        errors.push({ row: row._row, reason: `Duplicate Roll No ${rollNumber} in ${batchName || programCode} Div ${division || 'A'} (${semStr})` });
                     } else {
                         processedClassRolls.add(classRollKey);
                     }
@@ -472,12 +460,20 @@ export const importInternalStudents = async (req: Request, res: Response) => {
                 if (targetProgram) {
                     targetSemester = semCache.get(`${targetProgram.ProgramID}_${semNum}`);
                     if (!targetSemester) {
-                        targetSemester = await Semester.create({
-                            ProgramID: targetProgram.ProgramID,
-                            SemesterNumber: semNum,
-                            SemesterName: semStr,
-                            IsActive: true,
-                        }, { transaction: t });
+                        const [createdSem] = await Semester.findOrCreate({
+                            where: {
+                                ProgramID: targetProgram.ProgramID,
+                                SemesterNumber: semNum
+                            },
+                            defaults: {
+                                ProgramID: targetProgram.ProgramID,
+                                SemesterNumber: semNum,
+                                SemesterName: semStr,
+                                IsActive: true,
+                            },
+                            transaction: t
+                        });
+                        targetSemester = createdSem;
                         semCache.set(`${targetProgram.ProgramID}_${semNum}`, targetSemester);
                     }
                 }

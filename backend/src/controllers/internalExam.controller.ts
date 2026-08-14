@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { InternalExam, InternalExamSeries, InternalExamDepartment, Department, AcademicYear, InternalSubjectEligibility, Subject, ExamSchedule, InternalStudentSubject } from '../models/index.js';
 import { autoMapStudentsForExamCore } from './internalStudent.controller.js';
 import { SubjectEligibilityImportService } from '../services/internal/subjectEligibilityImport.service.js';
+import { normalizeBranchCode, normalizeProgramme, getProgrammeLabel, getDepartmentCodeFromProgram } from '../services/academicNormalizer.service.js';
 import { Op } from 'sequelize';
 import * as XLSX from 'xlsx';
 import { PDFParse } from 'pdf-parse';
@@ -17,32 +18,9 @@ const OCR_CACHE_PATH = path.join(os.tmpdir(), 'seat-sync-tesseract-cache');
 export class InternalExamController {
 
     static normalizeDepartmentCode(value: unknown): string {
-        let text = String(value ?? '').toUpperCase().trim();
-        text = text.replace(/\(.*\)/g, '').trim();
-        const parts = text.split(/[\s_]+/);
-        let raw = parts[0] ? parts[0].replace(/[^A-Z0-9]/g, '') : '';
-        if (!raw) return '';
-
-        const aliases: Record<string, string> = {
-            CS: 'CSE', CSE: 'CSE', ITCS: 'CSE', CSEPGR: 'CSE', CSEWP: 'CSE',
-            EC: 'ECE', ECE: 'ECE', ITEC: 'ECE', ECEPGL: 'ECE', ECEWP: 'ECE',
-            EE: 'EEE', EEE: 'EEE', ITEE: 'EEE', EEEWP: 'EEE',
-            ME: 'ME', MECH: 'ME', MEWP: 'ME', MEAMPM: 'ME',
-            CE: 'CE', CIVIL: 'CE', ITCE: 'CE', CEWP: 'CE',
-            AD: 'AD', AIDS: 'AD', 'AI&DS': 'AD',
-            CA: 'CA', MCA: 'CA', INT_MCA: 'CA', IMCA: 'CA', INMCA: 'CA',
-            CC: 'CC',
-            ER: 'ER', RA: 'ER',
-            BHM: 'BHM', MBA: 'MBA', PHD: 'PHD', INT: 'INT'
-        };
-
-        if (raw.startsWith('IT') && raw.length > 2 && !aliases[raw]) {
-            const withoutIT = raw.slice(2);
-            if (aliases[withoutIT] || withoutIT.length >= 2) {
-                raw = withoutIT;
-            }
-        }
-        return aliases[raw] || raw;
+        const norm = normalizeBranchCode(value);
+        if (norm === 'UNKNOWN') return '';
+        return getDepartmentCodeFromProgram(norm);
     }
 
     static parseDepartmentCodes(raw: unknown): string[] {
@@ -57,9 +35,22 @@ export class InternalExamController {
         const tokens = text.split(/[\s,/;&|.\-_]+/);
         const results = new Set<string>();
 
+        // Also check comma chunks first
+        const commaChunks = text.split(/[,;&|]+/).map(s => s.trim()).filter(Boolean);
+        for (const chunk of commaChunks) {
+            const norm = normalizeBranchCode(chunk);
+            if (norm && norm !== 'UNKNOWN') {
+                const deptCode = getDepartmentCodeFromProgram(norm);
+                results.add(deptCode);
+                results.add(norm);
+            }
+        }
+
         for (const token of tokens) {
-            const norm = InternalExamController.normalizeDepartmentCode(token);
-            if (norm && norm !== 'A' && norm !== 'B' && norm !== 'C' && norm !== 'D' && norm !== 'E') {
+            const norm = normalizeBranchCode(token);
+            if (norm && norm !== 'UNKNOWN' && !['A', 'B', 'C', 'D', 'E', 'S'].includes(norm)) {
+                const deptCode = getDepartmentCodeFromProgram(norm);
+                results.add(deptCode);
                 results.add(norm);
             }
         }
