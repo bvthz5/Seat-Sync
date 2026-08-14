@@ -1,8 +1,18 @@
-// --- DELETE ALL STRUCTURE DATA --- 
-import { InvigilatorAssignment } from "../models/InvigilatorAssignment.js";
-import { IncidentReport } from "../models/IncidentReport.js";
+import { Request, Response } from "express";
+import { Op } from "sequelize";
+import { sequelize } from "../config/database.js";
+import { Block } from "../models/Block.js";
+import { Floor } from "../models/Floor.js";
+import { Room } from "../models/Room.js";
+import { Seat } from "../models/Seat.js";
+import { Exam } from "../models/Exam.js";
+import { SeatAllocation } from "../models/SeatAllocation.js";
 import { DutySwap } from "../models/DutySwap.js";
+import { IncidentReport } from "../models/IncidentReport.js";
+import { InvigilatorAssignment } from "../models/InvigilatorAssignment.js";
+import { generateSeats } from '../services/seatEngine.js';
 
+// --- DELETE ALL STRUCTURE DATA --- 
 export const deleteAllStructureData = async (req: Request, res: Response) => {
     try {
         await sequelize.transaction(async (t) => {
@@ -24,19 +34,7 @@ export const deleteAllStructureData = async (req: Request, res: Response) => {
         res.status(500).json({ message: error.message });
     }
 };
-import { generateSeats } from '../services/seatEngine.js';
-import { Request, Response } from "express";
-import { sequelize } from "../config/database.js";
-import { Block } from "../models/Block.js";
-import { Floor } from "../models/Floor.js";
-import { Room } from "../models/Room.js";
-import { Seat } from "../models/Seat.js";
-import { Exam } from "../models/Exam.js";
-import { SeatAllocation } from "../models/SeatAllocation.js";
-import { DutySwap } from "../models/DutySwap.js";
-import { IncidentReport } from "../models/IncidentReport.js";
-import { InvigilatorAssignment } from "../models/InvigilatorAssignment.js";
-import { Op } from "sequelize";
+
 
 
 // --- BLOCKS ---
