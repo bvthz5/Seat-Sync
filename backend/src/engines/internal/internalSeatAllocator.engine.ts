@@ -54,25 +54,7 @@ export class InternalSeatAllocator {
         if (exams.length === 0) {
             throw new Error("No internal exams found for this date and session.");
         }
-
         const examIds = exams.map(e => e.InternalExamID);
-        console.log(`[InternalSeatAllocator] Exam IDs: ${examIds.join(', ')}`);
-
-        // 1b. Auto-register any eligible students missing registration for this slot
-        for (const exam of exams) {
-            try {
-                await autoMapStudentsForExamCore(exam.InternalExamID);
-            } catch (autoErr: any) {
-                console.warn(`[InternalSeatAllocator] Auto-map skipped for exam #${exam.InternalExamID}:`, autoErr.message);
-            }
-        }
-
-        // 2. Perform Pre-Seating Reconciliation Check (ensure 0 missing students)
-        const validation = await InternalReconciliationService.validatePreSeating(req.seriesId, req.examDate, req.session, { transaction });
-        if (!validation.isValid) {
-            const errSummary = validation.errors.map(e => `${e.subjectCode} (${e.subjectName}): ${e.missingCount} student(s) missing registration`).join('; ');
-            throw new Error(`Seating generation blocked: Unregistered students detected in exam slot. ${errSummary}. Run student auto-registration or reconciliation resolution before seating allocation.`);
-        }
 
         // Fetch registered students grouped by exam (subject) as single source of truth
         const registrations = await InternalExamRegistration.findAll({
@@ -86,6 +68,10 @@ export class InternalSeatAllocator {
         });
 
         console.log(`[InternalSeatAllocator] Found ${registrations.length} student registrations for exams: ${examIds.join(', ')}`);
+        
+        if (registrations.length === 0) {
+            throw new Error("No students are mapped/registered to the selected exams. Please map students before generating seating allocations.");
+        }
         
         // Group by examId → array of student info, sorted by register number
         const subjectQueues = new Map<number, any[]>();

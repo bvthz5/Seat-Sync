@@ -615,6 +615,18 @@ export class ExamController {
 
                 const internalExams = await InternalExam.findAll({
                     where: ieWhere,
+                    attributes: {
+                        include: [
+                            [
+                                sequelize.literal(`(
+                                    SELECT COUNT(*)
+                                    FROM InternalExamRegistrations AS ier
+                                    WHERE ier.InternalExamID = InternalExam.InternalExamID
+                                )`),
+                                'registrationCount'
+                            ]
+                        ]
+                    },
                     include: [{
                         model: InternalExamDepartment,
                         include: [{ model: Department, attributes: ['DepartmentID', 'DepartmentName', 'DepartmentCode'] }]
@@ -630,6 +642,50 @@ export class ExamController {
                     const deptName = depts.length > 0 ? depts.map((d: any) => d.Department?.DepartmentCode).filter(Boolean).join(', ') : (data.BranchScope || 'ALL_BRANCHES');
                     const fullDeptName = depts.length > 0 ? depts.map((d: any) => d.Department?.DepartmentName).filter(Boolean).join(', ') : (data.BranchScope || 'All Branches');
                     const mainDeptID = depts[0]?.Department?.DepartmentID || depts[0]?.DepartmentID || undefined;
+
+                    // ── Compute correct branch display ─────────────────────────────────
+                    // Priority 1: Use stored Programme field (set by import from v2 onwards)
+                    // Priority 2: Derive from SubjectCode pattern (fixes legacy records)
+                    // Priority 3: Use raw BranchScope or dept codes (for B.Tech / fallback)
+                    let branchDisplay: string;
+                    const programme: string | null = data.Programme || null;
+                    const subjectCodeUpper = (data.SubjectCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+                    if (programme === 'MCA') {
+                        // MCA master's programme – branch = 'MCA'
+                        branchDisplay = 'MCA';
+                    } else if (programme === 'Integrated MCA') {
+                        // Integrated MCA – branch = 'Int. MCA' (timetable standard abbreviation)
+                        branchDisplay = 'Int. MCA';
+                    } else if (programme === 'M.Tech') {
+                        branchDisplay = 'M.Tech';
+                    } else if (!programme) {
+                        // Legacy record – Programme not yet stored. Derive from SubjectCode.
+                        if (subjectCodeUpper.includes('INMCA') || subjectCodeUpper.includes('IMCA') || subjectCodeUpper.includes('INTMCA')) {
+                            branchDisplay = 'Int. MCA';
+                        } else if (subjectCodeUpper.includes('MCA')) {
+                            branchDisplay = 'MCA';
+                        } else if (subjectCodeUpper.includes('MTECH') || subjectCodeUpper.includes('MTECH')) {
+                            branchDisplay = 'M.Tech';
+                        } else {
+                            // B.Tech or unknown – use BranchScope (normalize spacing), else dept codes
+                            const bs = String(data.BranchScope || '').trim();
+                            branchDisplay = bs
+                                ? bs.split(',').map((s: string) => s.trim()).filter(Boolean).join(', ')
+                                : depts.length > 0
+                                    ? depts.map((d: any) => d.Department?.DepartmentCode).filter(Boolean).join(', ')
+                                    : '';
+                        }
+                    } else {
+                        // B.Tech, MBA, BHM, or other programme – branch = specific dept codes from timetable
+                        const bs = String(data.BranchScope || '').trim();
+                        branchDisplay = bs
+                            ? bs.split(',').map((s: string) => s.trim()).filter(Boolean).join(', ')
+                            : depts.length > 0
+                                ? depts.map((d: any) => d.Department?.DepartmentCode).filter(Boolean).join(', ')
+                                : '';
+                    }
+                    // ──────────────────────────────────────────────────────────────────
 
                     const examDate = new Date(data.ExamDate);
                     const startHour = data.Session === 'FN' ? 10 : 14;
@@ -652,6 +708,8 @@ export class ExamController {
                         Duration: data.Duration || 150,
                         Status: calcStatus,
                         DepartmentID: mainDeptID,
+                        BranchScope: branchDisplay || null,
+                        registrationCount: Number(data.registrationCount || 0),
                         Subject: {
                             SubjectName: data.SubjectName,
                             SubjectCode: data.SubjectCode,
@@ -1018,6 +1076,14 @@ export class ExamController {
             if (!exam) {
                 const internalExam = await InternalExam.findByPk(id as string);
                 if (internalExam) {
+                    await sequelize.query('DELETE FROM InternalSeatAllocations WHERE InternalExamID = :id', {
+                        replacements: { id: internalExam.InternalExamID },
+                        type: QueryTypes.DELETE
+                    });
+                    await sequelize.query('DELETE FROM InternalExamRegistrations WHERE InternalExamID = :id', {
+                        replacements: { id: internalExam.InternalExamID },
+                        type: QueryTypes.DELETE
+                    });
                     await sequelize.query('DELETE FROM InternalExamDepartments WHERE InternalExamID = :id', {
                         replacements: { id: internalExam.InternalExamID },
                         type: QueryTypes.DELETE
@@ -1163,7 +1229,21 @@ export class ExamController {
             if (parsedSeriesId) {
                 const seriesInfo = await ExamSeries.findByPk(parsedSeriesId);
                 if (seriesInfo && seriesInfo.ExamType === 'Internal') {
-                    // It's an internal series. Manually clean up departments first to avoid FK errors.
+                    // Internal series cleanup: SeatAllocations -> ExamRegistrations -> ExamDepartments -> InternalExams
+                    await sequelize.query(
+                        'DELETE FROM InternalSeatAllocations WHERE InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
+                        {
+                            replacements: { seriesId: parsedSeriesId },
+                            type: QueryTypes.DELETE
+                        }
+                    );
+                    await sequelize.query(
+                        'DELETE FROM InternalExamRegistrations WHERE InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
+                        {
+                            replacements: { seriesId: parsedSeriesId },
+                            type: QueryTypes.DELETE
+                        }
+                    );
                     await sequelize.query(
                         'DELETE FROM InternalExamDepartments WHERE InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
                         {

@@ -1,6 +1,6 @@
-import "./config/env.js";
 import { Logger } from "./utils/logger.js";
 Logger.overrideConsole();
+import "./config/env.js";
 import { connectDB } from "./config/database.js";
 import { startDependencyWatcher } from "./utils/autoDependencyInstaller.js";
 // import open from "open";

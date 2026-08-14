@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardBody, Button, Input, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Chip, Tooltip, Switch } from '@heroui/react';
-import { ArrowLeft, Upload, Users, Trash2, Search, BookOpen, Clock, CalendarDays, Building2, GraduationCap, FileSpreadsheet, CheckCircle, AlertTriangle, X, Download, RefreshCcw } from 'lucide-react';
+import { ArrowLeft, Upload, Users, Trash2, Search, BookOpen, Clock, CalendarDays, Building2, GraduationCap, FileSpreadsheet, CheckCircle, AlertTriangle, X, Download, RefreshCcw, Info } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { InternalStudentService, MappedStudent, InternalExamDetail } from '../services/internalStudentService';
+import { SubjectEligibilityImportModal } from '../components/internal-structure/SubjectEligibilityImportModal';
 
 const InternalExamDetailPage: React.FC = () => {
     const { seriesId, examId } = useParams<{ seriesId: string; examId: string }>();
@@ -25,6 +26,12 @@ const InternalExamDetailPage: React.FC = () => {
     const [reconciliation, setReconciliation] = useState<any>(null);
     const [showReconciliationModal, setShowReconciliationModal] = useState(false);
     const [importFromExams, setImportFromExams] = useState(true);
+    const [deptToRemove, setDeptToRemove] = useState<{ DepartmentCode: string; DepartmentName: string; count: number } | null>(null);
+    const [removingDept, setRemovingDept] = useState(false);
+    const [showBulkDeptRemoveModal, setShowBulkDeptRemoveModal] = useState(false);
+    const [selectedDeptsToRemove, setSelectedDeptsToRemove] = useState<string[]>([]);
+    const [bulkRemoving, setBulkRemoving] = useState(false);
+    const [showSubjectRosterModal, setShowSubjectRosterModal] = useState(false);
 
     // Load exam detail & reconciliation
     const loadExamDetail = useCallback(async () => {
@@ -131,6 +138,39 @@ const InternalExamDetailPage: React.FC = () => {
         }
     };
 
+    // Remove specific department and all its mapped students
+    const handleRemoveDepartment = async () => {
+        if (!examId || !deptToRemove) return;
+        setRemovingDept(true);
+        try {
+            const result = await InternalStudentService.removeDepartmentFromExam(parseInt(examId), deptToRemove.DepartmentCode);
+            toast.success(result.message || `Removed ${deptToRemove.DepartmentCode} department and its students`);
+            setDeptToRemove(null);
+            await Promise.all([loadExamDetail(), loadStudents()]);
+        } catch (error: any) {
+            toast.error(error.response?.data?.message || `Failed to remove ${deptToRemove.DepartmentCode} department`);
+        } finally {
+            setRemovingDept(false);
+        }
+    };
+
+    // Bulk remove multiple departments and all their mapped students
+    const handleBulkRemoveDepartments = async () => {
+        if (!examId || selectedDeptsToRemove.length === 0) return;
+        setBulkRemoving(true);
+        try {
+            const result = await InternalStudentService.removeDepartmentFromExam(parseInt(examId), selectedDeptsToRemove);
+            toast.success(result.message || `Removed ${selectedDeptsToRemove.length} department(s) and their students`);
+            setShowBulkDeptRemoveModal(false);
+            setSelectedDeptsToRemove([]);
+            await Promise.all([loadExamDetail(), loadStudents()]);
+        } catch (error: any) {
+            toast.error(error.response?.data?.message || 'Failed to remove selected departments');
+        } finally {
+            setBulkRemoving(false);
+        }
+    };
+
     // Filter & Sort students Batch-wise (Department -> Division -> Roll Number 1..N -> Register Number)
     const filteredStudents = useMemo(() => {
         const result = students.filter(s => {
@@ -211,28 +251,42 @@ const InternalExamDetailPage: React.FC = () => {
                     <div className="flex items-center gap-3 shrink-0">
                         <Button
                             variant="flat"
-                            className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl h-10 px-4 text-xs border border-indigo-200/60 shadow-xs transition-all"
-                            startContent={<CheckCircle size={15} />}
-                            onPress={() => setShowReconciliationModal(true)}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl h-10 px-4 text-xs shadow-sm transition-all"
+                            startContent={<Users size={15} />}
+                            onPress={() => setShowSubjectRosterModal(true)}
                         >
-                            Reconciliation & Audit
+                            Import Subject Roster
                         </Button>
-                        <Button
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl h-10 px-4 text-xs shadow-sm transition-all"
-                            startContent={<RefreshCcw size={15} className={isAutoMapping ? "animate-spin" : ""} />}
-                            isLoading={isAutoMapping}
-                            onPress={handleAutoMap}
-                        >
-                            Auto Register Students
-                        </Button>
-                        <Button
-                            variant="flat"
-                            className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold rounded-xl h-10 px-4 text-xs border border-rose-200/60 shadow-xs transition-all"
-                            startContent={<Trash2 size={15} />}
-                            onPress={() => setShowClearConfirm(true)}
-                        >
-                            Clear Mapping
-                        </Button>
+                        {((examDetail?.studentCount || 0) > 0 || students.length > 0) && (
+                            <Button
+                                variant="flat"
+                                className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl h-10 px-4 text-xs border border-indigo-200/60 shadow-xs transition-all"
+                                startContent={<CheckCircle size={15} />}
+                                onPress={() => setShowReconciliationModal(true)}
+                            >
+                                Reconciliation & Audit
+                            </Button>
+                        )}
+                        {((examDetail?.studentCount || 0) === 0 && students.length === 0) && (
+                            <Button
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl h-10 px-4 text-xs shadow-sm transition-all"
+                                startContent={<RefreshCcw size={15} className={isAutoMapping ? "animate-spin" : ""} />}
+                                isLoading={isAutoMapping}
+                                onPress={handleAutoMap}
+                            >
+                                Auto Register Students
+                            </Button>
+                        )}
+                        {((examDetail?.studentCount || 0) > 0 || students.length > 0) && (
+                            <Button
+                                variant="flat"
+                                className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold rounded-xl h-10 px-4 text-xs border border-rose-200/60 shadow-xs transition-all"
+                                startContent={<Trash2 size={15} />}
+                                onPress={() => setShowClearConfirm(true)}
+                            >
+                                Clear Mapping
+                            </Button>
+                        )}
                     </div>
                 </div>
             </div>
@@ -296,27 +350,66 @@ const InternalExamDetailPage: React.FC = () => {
                 {/* ── Department Breakdown ── */}
                 {examDetail?.departmentBreakdown && examDetail.departmentBreakdown.length > 0 && (
                     <Card className="bg-white border border-slate-200/70 shadow-xs rounded-2xl">
-                        <CardBody className="p-5 sm:p-6 space-y-3.5">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                                    <Building2 size={15} className="text-indigo-600" /> Department Breakdown
-                                </h3>
-                                <span className="text-xs font-bold text-slate-400">
-                                    {examDetail.departmentBreakdown.length} Departments
-                                </span>
+                        <CardBody className="p-5 sm:p-6 space-y-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-slate-100">
+                                <div className="flex items-center gap-2.5 flex-wrap">
+                                    <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                                        <Building2 size={15} className="text-indigo-600" /> Department Breakdown
+                                    </h3>
+                                    <Tooltip 
+                                        content="Use Case: Click the remove icon on any department tag to remove that department and unmap all its corresponding students from this exam (e.g. BHM, M.Tech, or PhD students who do not take this exam)."
+                                        placement="top"
+                                        classNames={{
+                                            content: "bg-slate-900 text-white font-medium text-xs px-3.5 py-2.5 rounded-xl max-w-sm shadow-xl leading-relaxed"
+                                        }}
+                                    >
+                                        <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100/80 text-[11px] font-bold cursor-help hover:bg-indigo-100 transition-colors shadow-2xs">
+                                            <Info size={13} className="text-indigo-600 shrink-0" />
+                                            <span>Use Case Info</span>
+                                        </div>
+                                    </Tooltip>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-slate-400">
+                                        {examDetail.departmentBreakdown.length} {examDetail.departmentBreakdown.length === 1 ? 'Department' : 'Departments'} Mapped
+                                    </span>
+                                </div>
                             </div>
-                            <div className="flex flex-wrap gap-2.5">
+
+                            {/* Quick Tip Banner for New Users */}
+                            <div className="bg-indigo-50/60 border border-indigo-100/80 rounded-xl px-3.5 py-2 flex items-center gap-2 text-xs text-indigo-900">
+                                <Info size={14} className="text-indigo-600 shrink-0" />
+                                <p className="font-medium">
+                                    <span className="font-bold">Tip for users:</span> Click the remove button on any department tag below to remove that department and unmap its students.
+                                </p>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2.5 pt-1">
                                 {examDetail.departmentBreakdown.map((d, i) => (
                                     <div 
                                         key={i} 
-                                        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50/90 border border-slate-200/70 hover:bg-indigo-50/50 hover:border-indigo-200 transition-all text-xs"
+                                        className="flex items-center gap-2 pl-3 pr-1.5 py-1.5 rounded-xl bg-slate-50/90 border border-slate-200/80 hover:bg-white hover:border-indigo-300 hover:shadow-md transition-all duration-200 text-xs"
                                     >
-                                        <span className="font-extrabold text-indigo-700">{d.DepartmentCode}</span>
-                                        <span className="text-slate-300">•</span>
-                                        <span className="font-semibold text-slate-600 max-w-[200px] truncate" title={d.DepartmentName}>{d.DepartmentName}</span>
-                                        <span className="ml-1 px-2 py-0.5 rounded-lg bg-indigo-100/80 text-indigo-700 font-extrabold text-[11px]">
+                                        <span className="font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md text-[11px] uppercase tracking-wide">
+                                            {d.DepartmentCode}
+                                        </span>
+                                        <span className="font-semibold text-slate-700 max-w-[180px] truncate" title={d.DepartmentName}>
+                                            {d.DepartmentName}
+                                        </span>
+                                        <span className="ml-0.5 px-2 py-0.5 rounded-lg bg-slate-200/80 text-slate-700 font-extrabold text-[11px]">
                                             {d.count}
                                         </span>
+                                        
+                                        <Tooltip content={`Click to remove ${d.DepartmentCode} department and unmap ${d.count} student(s)`}>
+                                            <button
+                                                type="button"
+                                                onClick={() => setDeptToRemove(d)}
+                                                className="ml-1 w-6 h-6 rounded-lg bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white border border-rose-200/70 flex items-center justify-center transition-all shadow-2xs hover:scale-105 active:scale-95 cursor-pointer"
+                                                aria-label={`Remove department ${d.DepartmentCode}`}
+                                            >
+                                                <X size={13} strokeWidth={2.5} />
+                                            </button>
+                                        </Tooltip>
                                     </div>
                                 ))}
                             </div>
@@ -357,6 +450,23 @@ const InternalExamDetailPage: React.FC = () => {
                                         }}
                                     />
                                 </div>
+
+                                 {/* Remove Department Button */}
+                                 {examDetail?.departmentBreakdown && examDetail.departmentBreakdown.length > 0 && (
+                                     <Tooltip content="Select and remove whole departments (e.g. BHM, PHD) and all their students at once">
+                                         <Button
+                                             variant="flat"
+                                             className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl h-10 px-3.5 text-xs border border-indigo-200/60 shadow-2xs transition-all shrink-0"
+                                             startContent={<Building2 size={15} className="text-indigo-600" />}
+                                             onPress={() => {
+                                                 setSelectedDeptsToRemove([]);
+                                                 setShowBulkDeptRemoveModal(true);
+                                             }}
+                                         >
+                                             Remove Dept
+                                         </Button>
+                                     </Tooltip>
+                                 )}
 
                                 <Tooltip content="Refresh student list">
                                     <Button 
@@ -624,6 +734,207 @@ const InternalExamDetailPage: React.FC = () => {
                 </ModalContent>
             </Modal>
 
+            {/* ── Bulk Department Removal Modal ── */}
+            <Modal 
+                isOpen={showBulkDeptRemoveModal} 
+                onClose={() => !bulkRemoving && setShowBulkDeptRemoveModal(false)} 
+                size="lg" 
+                backdrop="blur"
+                classNames={{ 
+                    base: 'bg-white shadow-2xl rounded-3xl overflow-hidden',
+                    header: 'border-b border-slate-100 px-6 py-4',
+                    body: 'p-6',
+                    footer: 'border-t border-slate-100 px-6 py-4 flex justify-between items-center'
+                }}
+            >
+                <ModalContent>
+                    <ModalHeader className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center shrink-0">
+                            <Building2 size={20} />
+                        </div>
+                        <div>
+                            <h3 className="text-base font-extrabold text-slate-900">Remove Department(s) & Students</h3>
+                            <p className="text-xs text-slate-400 font-medium mt-0.5">
+                                Select department(s) to unmap all their enrolled students from {exam?.SubjectCode}
+                            </p>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="space-y-4 max-h-[60vh] overflow-y-auto">
+                        <div className="flex items-center justify-between bg-slate-50 border border-slate-200/70 p-3 rounded-xl">
+                            <span className="text-xs font-bold text-slate-700">
+                                Mapped Departments ({examDetail?.departmentBreakdown?.length || 0})
+                            </span>
+                            <div className="flex items-center gap-2">
+                                <Button 
+                                    size="sm" 
+                                    variant="light" 
+                                    className="text-xs font-bold text-indigo-600 h-7"
+                                    onPress={() => setSelectedDeptsToRemove(examDetail?.departmentBreakdown?.map(d => d.DepartmentCode) || [])}
+                                >
+                                    Select All
+                                </Button>
+                                <span className="text-slate-300">•</span>
+                                <Button 
+                                    size="sm" 
+                                    variant="light" 
+                                    className="text-xs font-bold text-slate-500 h-7"
+                                    onPress={() => setSelectedDeptsToRemove([])}
+                                >
+                                    Clear
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            {examDetail?.departmentBreakdown?.map((d) => {
+                                const isSelected = selectedDeptsToRemove.includes(d.DepartmentCode);
+                                return (
+                                    <div
+                                        key={d.DepartmentCode}
+                                        onClick={() => {
+                                            setSelectedDeptsToRemove(prev => 
+                                                isSelected 
+                                                    ? prev.filter(c => c !== d.DepartmentCode) 
+                                                    : [...prev, d.DepartmentCode]
+                                            );
+                                        }}
+                                        className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
+                                            isSelected
+                                                ? 'bg-rose-50/60 border-rose-300 ring-2 ring-rose-500/10 shadow-xs'
+                                                : 'bg-white border-slate-200/80 hover:border-indigo-200 hover:bg-slate-50/50'
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                            <input
+                                                type="checkbox"
+                                                checked={isSelected}
+                                                onChange={() => {}}
+                                                className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 border-slate-300 cursor-pointer"
+                                            />
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="font-extrabold text-indigo-700 text-xs">{d.DepartmentCode}</span>
+                                                </div>
+                                                <p className="text-[11px] text-slate-500 font-medium truncate" title={d.DepartmentName}>
+                                                    {d.DepartmentName}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <Chip size="sm" className={`font-extrabold text-xs shrink-0 ${isSelected ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700'}`}>
+                                            {d.count} Students
+                                        </Chip>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {selectedDeptsToRemove.length > 0 && (
+                            <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 flex items-center gap-2 text-xs text-rose-800">
+                                <AlertTriangle size={16} className="text-rose-600 shrink-0" />
+                                <span>
+                                    Selected <span className="font-extrabold">{selectedDeptsToRemove.length} department(s)</span>. Total <span className="font-extrabold">{
+                                        examDetail?.departmentBreakdown
+                                            ?.filter(d => selectedDeptsToRemove.includes(d.DepartmentCode))
+                                            ?.reduce((sum, d) => sum + d.count, 0) || 0
+                                    } student(s)</span> will be unmapped from this exam.
+                                </span>
+                            </div>
+                        )}
+                    </ModalBody>
+                    <ModalFooter>
+                        <Button 
+                            variant="flat" 
+                            onPress={() => setShowBulkDeptRemoveModal(false)} 
+                            isDisabled={bulkRemoving} 
+                            className="font-bold bg-slate-100 text-slate-700 rounded-xl h-10 px-5 text-xs"
+                        >
+                            Cancel
+                        </Button>
+                        <Button 
+                            color="danger" 
+                            onPress={handleBulkRemoveDepartments} 
+                            isLoading={bulkRemoving} 
+                            isDisabled={selectedDeptsToRemove.length === 0}
+                            className="font-bold rounded-xl h-10 px-5 text-xs shadow-sm"
+                            startContent={!bulkRemoving && <Trash2 size={14} />}
+                        >
+                            {bulkRemoving 
+                                ? 'Removing...' 
+                                : `Remove ${selectedDeptsToRemove.length} Dept(s) (${
+                                    examDetail?.departmentBreakdown
+                                        ?.filter(d => selectedDeptsToRemove.includes(d.DepartmentCode))
+                                        ?.reduce((sum, d) => sum + d.count, 0) || 0
+                                } Students)`
+                            }
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            {/* ── Remove Specific Department Confirm Modal ── */}
+            <Modal 
+                isOpen={!!deptToRemove} 
+                onClose={() => !removingDept && setDeptToRemove(null)} 
+                size="md" 
+                backdrop="blur"
+                classNames={{ 
+                    base: 'bg-white shadow-2xl rounded-3xl overflow-hidden',
+                    header: 'border-b border-slate-100 px-6 py-4',
+                    body: 'p-6',
+                    footer: 'border-t border-slate-100 px-6 py-4 flex justify-end gap-3'
+                }}
+            >
+                <ModalContent>
+                    <ModalHeader className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 border border-rose-100 flex items-center justify-center shrink-0">
+                            <Trash2 size={20} />
+                        </div>
+                        <div>
+                            <h3 className="text-base font-extrabold text-slate-900">Remove Department Mapping?</h3>
+                            <p className="text-xs text-slate-400 font-medium mt-0.5">
+                                {exam?.SubjectCode} — {exam?.SubjectName}
+                            </p>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="space-y-4">
+                        <div className="bg-rose-50/50 border border-rose-200/80 rounded-2xl p-4 flex items-start gap-3">
+                            <AlertTriangle size={20} className="text-rose-600 shrink-0 mt-0.5" />
+                            <div className="text-xs text-slate-700 space-y-1">
+                                <p className="font-bold text-slate-900">
+                                    You are about to remove <span className="text-rose-600 font-extrabold">{deptToRemove?.DepartmentCode}</span> ({deptToRemove?.DepartmentName}).
+                                </p>
+                                <p className="text-slate-600">
+                                    This action will unmap <span className="font-extrabold text-rose-600">{deptToRemove?.count} student(s)</span> belonging to {deptToRemove?.DepartmentCode} from this exam.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-50 border border-slate-200/70 rounded-xl p-3 text-xs text-slate-500">
+                            <span className="font-bold text-slate-700">Note:</span> Student records in the main database will remain unaffected. Only their mapping to this specific internal exam will be removed.
+                        </div>
+                    </ModalBody>
+                    <ModalFooter>
+                        <Button 
+                            variant="flat" 
+                            onPress={() => setDeptToRemove(null)} 
+                            isDisabled={removingDept} 
+                            className="font-bold bg-slate-100 text-slate-700 rounded-xl h-10 px-5 text-xs"
+                        >
+                            Cancel
+                        </Button>
+                        <Button 
+                            color="danger" 
+                            onPress={handleRemoveDepartment} 
+                            isLoading={removingDept} 
+                            className="font-bold rounded-xl h-10 px-5 text-xs shadow-sm"
+                            startContent={!removingDept && <Trash2 size={14} />}
+                        >
+                            {removingDept ? 'Removing...' : `Remove ${deptToRemove?.DepartmentCode} (${deptToRemove?.count} Students)`}
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
             {/* ── Clear All Confirm ── */}
             <Modal isOpen={showClearConfirm} onClose={() => !clearing && setShowClearConfirm(false)} size="sm" backdrop="blur"
                 classNames={{ base: 'bg-white shadow-2xl rounded-3xl' }}
@@ -779,6 +1090,18 @@ const InternalExamDetailPage: React.FC = () => {
                     </ModalFooter>
                 </ModalContent>
             </Modal>
+
+            {/* Subject Eligibility Roster Import Modal */}
+            <SubjectEligibilityImportModal
+                isOpen={showSubjectRosterModal}
+                onClose={() => setShowSubjectRosterModal(false)}
+                onSuccess={() => {
+                    Promise.all([loadExamDetail(), loadStudents()]);
+                }}
+                examId={examId ? parseInt(examId, 10) : undefined}
+                initialCourseCode={examDetail?.exam?.SubjectCode || ''}
+                initialCourseName={examDetail?.exam?.SubjectName || ''}
+            />
         </div>
     );
 };

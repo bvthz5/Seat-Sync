@@ -30,19 +30,32 @@ type GroupedExam = {
     hasRegistrations: boolean;
 };
 
+const normalizeExamTitle = (name: string): string => {
+    return String(name || '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '')
+        .trim();
+};
+
 const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
-    const groups = new Map<string, GroupedExam & { branchKeys: Set<string> }>();
+    const groups = new Map<string, GroupedExam & { branchKeys: Set<string>; subjectCodes: Set<string> }>();
 
     exams.forEach((exam: any) => {
         const date = String(exam?.ExamDate || '').split('T')[0];
         const examName = String(exam?.ExamName || '').trim();
         const session = String(exam?.Session || '').trim().toUpperCase();
         const duration = Number(exam?.Duration || 0);
-        // Stable grouping by date, session, and subject code (fallback to name)
-        const paperId = String(exam?.Subject?.SubjectCode || examName).trim();
-        const groupKey = `${date}::${session}::${paperId}::${duration}`;
+        const semRaw = String(exam?.Semester || exam?.Subject?.Semester || '').toUpperCase().trim();
+        const rawCode = String(exam?.Subject?.SubjectCode || exam?.SubjectCode || '').trim().toUpperCase();
+
+        const titleNorm = normalizeExamTitle(examName);
+        const codeNorm = rawCode.replace(/[^A-Z0-9]/g, '');
+
+        const groupKey = `${semRaw}::${date}::${session}::${titleNorm || codeNorm}`;
         const department = exam?.Subject?.Department || {};
-        const branchKey = String(department.DepartmentID || department.DepartmentCode || exam.ExamID);
+        const deptCode = String(department.DepartmentCode || exam?.BranchScope || 'GEN');
+        const deptName = String(department.DepartmentName || exam?.BranchScope || 'General');
+        const branchKey = String(department.DepartmentID || deptCode || exam.ExamID);
 
         if (!groups.has(groupKey)) {
             groups.set(groupKey, {
@@ -52,24 +65,30 @@ const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
                 session,
                 status: String(exam?.Status || 'Scheduled'),
                 duration,
-                subjectCode: String(exam?.Subject?.SubjectCode || ''),
+                subjectCode: rawCode,
                 examType: String(exam?.ExamSeries?.ExamType || 'Internal'),
                 programName: String(exam?.Subject?.Semester?.Program?.ProgramName || 'Program'),
-                semesterName: String(exam?.Subject?.Semester?.SemesterName || ''),
+                semesterName: String(exam?.Subject?.Semester?.SemesterName || semRaw),
                 branches: [],
                 branchKeys: new Set<string>(),
+                subjectCodes: new Set<string>(),
                 hasRegistrations: false
             });
         }
 
         const group = groups.get(groupKey)!;
+
+        if (rawCode && !group.subjectCodes.has(rawCode)) {
+            group.subjectCodes.add(rawCode);
+        }
+
         if (!group.branchKeys.has(branchKey)) {
             group.branchKeys.add(branchKey);
             group.branches.push({
                 examId: Number(exam.ExamID),
                 departmentId: Number(department.DepartmentID || 0),
-                departmentCode: String(department.DepartmentCode || 'GEN'),
-                departmentName: String(department.DepartmentName || 'General')
+                departmentCode: deptCode,
+                departmentName: deptName
             });
         }
 
@@ -79,7 +98,14 @@ const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
     });
 
     return Array.from(groups.values())
-        .map(({ branchKeys, ...group }) => group)
+        .map(({ branchKeys, subjectCodes, ...group }) => {
+            const codes = Array.from(subjectCodes);
+            const displayCode = codes.length > 0 ? codes.join(' / ') : group.subjectCode;
+            return {
+                ...group,
+                subjectCode: displayCode
+            };
+        })
         .sort((a, b) => a.examName.localeCompare(b.examName));
 };
 

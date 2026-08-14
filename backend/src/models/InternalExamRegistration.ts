@@ -10,7 +10,7 @@ interface InternalExamRegistrationAttributes {
     InternalExamRegistrationID: number;
     InternalExamID: number;
     InternalStudentID: number;
-    RegistrationMethod?: "AUTO" | "EXCEL" | "MANUAL";
+    RegistrationMethod?: "SUBJECT_LIST" | "MASTER_BATCH_RULE" | "MANUAL" | "AUTO_FALLBACK" | "AUTO" | "EXCEL" | string;
 }
 
 export class InternalExamRegistration extends Model<InternalExamRegistrationAttributes>
@@ -18,7 +18,7 @@ export class InternalExamRegistration extends Model<InternalExamRegistrationAttr
     declare InternalExamRegistrationID: number;
     declare InternalExamID: number;
     declare InternalStudentID: number;
-    declare RegistrationMethod: "AUTO" | "EXCEL" | "MANUAL";
+    declare RegistrationMethod: string;
     declare Student?: any;
 }
 
@@ -40,7 +40,7 @@ InternalExamRegistration.init(
             references: { model: "InternalStudents", key: "InternalStudentID" },
         },
         RegistrationMethod: {
-            type: DataTypes.STRING(20),
+            type: DataTypes.STRING(50),
             allowNull: false,
             defaultValue: "AUTO",
         },

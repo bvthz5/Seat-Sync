@@ -17,6 +17,18 @@ console.warn = (...args: any[]) => {
   originalWarn.call(console, ...args);
 };
 
+// Ignore unhandled promise rejections originating from third-party browser extensions
+window.addEventListener('unhandledrejection', (event) => {
+  const reason = event.reason;
+  const message = reason?.message || String(reason || '');
+  if (
+    message.includes('Could not establish connection. Receiving end does not exist') ||
+    message.includes("Cannot read properties of undefined (reading 'useCache')")
+  ) {
+    event.preventDefault();
+  }
+});
+
 const bootLoader = document.getElementById("boot-loader");
 if (bootLoader) bootLoader.remove();
 

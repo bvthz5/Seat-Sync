@@ -171,14 +171,19 @@ import InternalExamRegistration from './InternalExamRegistration.js';
 import InternalSeatAllocation from './InternalSeatAllocation.js';
 import { InternalSeatSnapshot } from './InternalSeatSnapshot.js';
 import InternalStudentSubject from './InternalStudentSubject.js';
+import InternalSubjectEligibility from './InternalSubjectEligibility.js';
 
 export { 
     InternalStudent, 
     InternalExamRegistration, 
     InternalSeatAllocation,
     InternalSeatSnapshot,
-    InternalStudentSubject
+    InternalStudentSubject,
+    InternalSubjectEligibility
 };
+
+InternalSubjectEligibility.belongsTo(InternalStudent, { foreignKey: 'InternalStudentID', as: 'Student', onDelete: 'SET NULL' });
+InternalStudent.hasMany(InternalSubjectEligibility, { foreignKey: 'InternalStudentID', as: 'SubjectEligibilities', onDelete: 'SET NULL' });
 
 InternalStudentSubject.belongsTo(InternalStudent, { foreignKey: 'InternalStudentID', as: 'Student', onDelete: 'CASCADE' });
 InternalStudent.hasMany(InternalStudentSubject, { foreignKey: 'InternalStudentID', as: 'Subjects', onDelete: 'CASCADE' });

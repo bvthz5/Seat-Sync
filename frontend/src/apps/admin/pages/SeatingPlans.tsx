@@ -1899,13 +1899,10 @@ const SeatingPlans: React.FC = () => {
                 doc.setFillColor(255, 255, 255);
                 doc.rect(0, 0, pageW, pageH, 'F');
 
-                const subjectCounts = new Map<string, number>();
-                const roomSubjectCodes = new Set<string>();
-
-                Object.values(assignments).forEach(ass => {
-                    if (ass.subjectCode) {
-                        subjectCounts.set(ass.subjectCode, (subjectCounts.get(ass.subjectCode) || 0) + 1);
-                        roomSubjectCodes.add(ass.subjectCode);
+                          const subjectNamesMap = new Map<string, string>();
+                Object.values(assignments).forEach((ass: any) => {
+                    if (ass?.subjectCode && !subjectNamesMap.has(ass.subjectCode)) {
+                        subjectNamesMap.set(ass.subjectCode, ass.subjectName || ass.courseName || '');
                     }
                 });
 
@@ -1929,24 +1926,24 @@ const SeatingPlans: React.FC = () => {
                 doc.setFont('helvetica', 'bold');
                 doc.setFontSize(14);
                 doc.setTextColor(0, 0, 0);
-                doc.text("ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI", pageW / 2, 15, { align: 'center' });
+                doc.text("ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI", pageW / 2, 14, { align: 'center' });
 
                 doc.setFontSize(12);
-                doc.text("SEATING ARRANGEMENT", pageW / 2, 21, { align: 'center' });
+                doc.text("SEATING ARRANGEMENT", pageW / 2, 20, { align: 'center' });
 
                 doc.setFont('helvetica', 'normal');
-                doc.setFontSize(10);
+                doc.setFontSize(9.5);
                 doc.setTextColor(60, 60, 60);
-                doc.text(`Exam: ${examTitle}`, pageW / 2, 28, { align: 'center' });
-                doc.text(`Date: ${dateFormatted} - ${selectedSession === 'FN' ? 'Forenoon' : 'Afternoon'}`, pageW / 2, 33, { align: 'center' });
+                doc.text(`Exam: ${examTitle}`, pageW / 2, 26.5, { align: 'center' });
+                doc.text(`Date: ${dateFormatted} - ${selectedSession === 'FN' ? 'Forenoon' : 'Afternoon'}`, pageW / 2, 31.5, { align: 'center' });
 
                 doc.setFont('helvetica', 'bold');
-                doc.setFontSize(10);
+                doc.setFontSize(9.5);
                 doc.setTextColor(40, 40, 40);
-                doc.text(`Subjects: ${subjectCodesString}`, pageW / 2, 39, { align: 'center' });
+                doc.text(`Subjects: ${subjectCodesString}`, pageW / 2, 37, { align: 'center' });
 
                 doc.setFontSize(11);
-                doc.text(`Hall / Room: ${hall.hallCode}`, pageW / 2, 45, { align: 'center' });
+                doc.text(`Hall / Room: ${hall.hallCode}`, pageW / 2, 43, { align: 'center' });
 
                 const cols = Math.max(rowLabels.length, 1);
                 const rowsNeeded = Math.max(benchNumbers.length, 1);
@@ -1998,7 +1995,7 @@ const SeatingPlans: React.FC = () => {
                 const rawCardH = (allowedH - (rowsNeeded - 1) * gapY) / rowsNeeded;
                 const cardH = Math.min(rawCardH, maxCardH);
 
-                // Draw Column Headers with Badges
+                // Draw Column Headers with Badges (Side-by-side positioning)
                 rowLabels.forEach((rowLabel, colIdx) => {
                     const x = marginX + colIdx * (cardW + gapX);
 
@@ -2007,32 +2004,58 @@ const SeatingPlans: React.FC = () => {
                     doc.setTextColor(0, 0, 0);
                     doc.text(`${rowLabel}`, x + cardW / 2, startY - 8.5, { align: 'center' });
 
-                    const rowSubjects = new Set<string>();
-                    benches.filter(b => b.rowLabel === rowLabel).forEach(b => {
-                        b.seats.forEach(s => {
-                            const ass = assignments[s.SeatID];
-                            if (ass?.subjectCode) rowSubjects.add(ass.subjectCode);
-                        });
-                    });
+                    const rowBenches = benches.filter(b => b.rowLabel === rowLabel);
+                    let leftSubjCode: string | null = null;
+                    let rightSubjCode: string | null = null;
 
-                    const subjArr = Array.from(rowSubjects).sort();
-                    if (subjArr.length > 0) {
-                        const badgeH = 4;
-                        const badgeW = cardW * 0.9;
-                        const badgeX = x + (cardW - badgeW) / 2;
-                        const badgeY = startY - 7;
+                    for (const b of rowBenches) {
+                        const lSeat = b.seats.find((s: any) => s.SeatNumber === 1 || s.SeatIndex === 1);
+                        const rSeat = b.seats.find((s: any) => s.SeatNumber === 2 || s.SeatIndex === 2);
+                        if (!leftSubjCode && lSeat && assignments[lSeat.SeatID]?.subjectCode) {
+                            leftSubjCode = assignments[lSeat.SeatID].subjectCode;
+                        }
+                        if (!rightSubjCode && rSeat && assignments[rSeat.SeatID]?.subjectCode) {
+                            rightSubjCode = assignments[rSeat.SeatID].subjectCode;
+                        }
+                        if (leftSubjCode && rightSubjCode) break;
+                    }
 
-                        subjArr.forEach((sCode, sIdx) => {
+                    const badgeY = startY - 5.5;
+                    const badgeH = 3.6;
+
+                    if (leftSubjCode && rightSubjCode && leftSubjCode !== rightSubjCode) {
+                        const colorL = subjectColors.get(leftSubjCode) || subjectColorPalette[0];
+                        const bxL = x + 0.5;
+                        const bwL = (cardW / 2) - 1;
+                        doc.setFillColor(colorL.fill[0], colorL.fill[1], colorL.fill[2]);
+                        doc.roundedRect(bxL, badgeY, bwL, badgeH, 0.8, 0.8, 'F');
+                        doc.setFontSize(6.5);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(colorL.text[0], colorL.text[1], colorL.text[2]);
+                        doc.text(leftSubjCode, bxL + bwL / 2, badgeY + 2.6, { align: 'center' });
+
+                        const colorR = subjectColors.get(rightSubjCode) || subjectColorPalette[1];
+                        const bxR = x + (cardW / 2) + 0.5;
+                        const bwR = (cardW / 2) - 1;
+                        doc.setFillColor(colorR.fill[0], colorR.fill[1], colorR.fill[2]);
+                        doc.roundedRect(bxR, badgeY, bwR, badgeH, 0.8, 0.8, 'F');
+                        doc.setFontSize(6.5);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(colorR.text[0], colorR.text[1], colorR.text[2]);
+                        doc.text(rightSubjCode, bxR + bwR / 2, badgeY + 2.6, { align: 'center' });
+                    } else {
+                        const sCode = leftSubjCode || rightSubjCode;
+                        if (sCode) {
                             const color = subjectColors.get(sCode) || subjectColorPalette[0];
-                            const sy = badgeY + (sIdx * (badgeH + 1));
-
+                            const bw = Math.min(cardW * 0.85, 34);
+                            const bx = x + (cardW - bw) / 2;
                             doc.setFillColor(color.fill[0], color.fill[1], color.fill[2]);
-                            doc.roundedRect(badgeX, sy, badgeW, badgeH, 1, 1, 'F');
-
+                            doc.roundedRect(bx, badgeY, bw, badgeH, 0.8, 0.8, 'F');
                             doc.setFontSize(7);
+                            doc.setFont('helvetica', 'bold');
                             doc.setTextColor(color.text[0], color.text[1], color.text[2]);
-                            doc.text(sCode, badgeX + badgeW / 2, sy + 3, { align: 'center' });
-                        });
+                            doc.text(sCode, bx + bw / 2, badgeY + 2.6, { align: 'center' });
+                        }
                     }
                 });
 
@@ -2123,22 +2146,32 @@ const SeatingPlans: React.FC = () => {
                 let currentY = startY + rowsNeeded * (cardH + gapY) + gridTableGap;
                 const autoTable = (await import('jspdf-autotable')).default;
 
-                // SECTION 3: REVISED SUBJECT TABLE
-                const subjData: any[][] = Array.from(subjectCounts.entries()).map(([code, count]) => [code, count]);
+                // SECTION 3: REVISED SUBJECT TABLE (Includes Subject Name along with Subject Code)
+                const subjData: any[][] = Array.from(subjectCounts.entries()).map(([code, count]) => {
+                    const name = subjectNamesMap.get(code) || '';
+                    const displayLabel = name ? `${code} - ${name}` : code;
+                    return [displayLabel, count];
+                });
                 const totalStudents = Array.from(subjectCounts.values()).reduce((a, b) => a + b, 0);
-                subjData.push([{ content: 'Total', styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }, { content: totalStudents, styles: { fontStyle: 'bold', fillColor: [245, 245, 245] } }]);
+                subjData.push([
+                    { content: 'Total', styles: { fontStyle: 'bold', fillColor: [245, 245, 245], halign: 'right' } },
+                    { content: totalStudents, styles: { fontStyle: 'bold', fillColor: [245, 245, 245], halign: 'center' } }
+                ]);
 
-                const tableW = 80;
+                const tableW = Math.min(pageW - 40, 130);
                 autoTable(doc, {
                     startY: currentY,
                     head: [['Subjects', 'Count']],
                     body: subjData,
                     theme: 'grid',
-                    styles: { fontSize: tableFontSize, cellPadding: tablePadding, textColor: [40, 40, 40], font: 'helvetica' },
-                    headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
-                    bodyStyles: { lineWidth: 0.1, lineColor: [200, 200, 200] },
+                    styles: { fontSize: tableFontSize, cellPadding: tablePadding + 0.5, textColor: [30, 41, 59], font: 'helvetica', valign: 'middle' },
+                    headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, halign: 'center' },
+                    bodyStyles: { lineWidth: 0.15, lineColor: [203, 213, 225] },
+                    columnStyles: {
+                        0: { cellWidth: tableW - 25, halign: 'left' },
+                        1: { cellWidth: 25, halign: 'center', fontStyle: 'bold' }
+                    },
                     margin: { left: (pageW - tableW) / 2 },
-                    tableWidth: tableW
                 });
 
                 const pdfBlob = doc.output('blob');

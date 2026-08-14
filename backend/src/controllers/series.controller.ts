@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import { ExamSeries, ActivityLog, InternalExam, Exam, Subject, Semester } from "../models/index.js";
+import { sequelize } from "../config/database.js";
+import { QueryTypes } from "sequelize";
 
 /**
  * Exam Series Controller
@@ -318,8 +320,40 @@ export const deleteSeries = async (req: Request, res: Response): Promise<void> =
         const seriesName = series.SeriesName;
         const seriesIdNum = series.ExamSeriesID;
 
-        // Check if exams are linked
-        // This is handled by DB FK constraint usually, but we can check or just attempt delete
+        if (series.ExamType === 'Internal') {
+            await sequelize.query(
+                'DELETE FROM InternalSeatAllocations WHERE InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
+                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE }
+            );
+            await sequelize.query(
+                'DELETE FROM InternalExamRegistrations WHERE InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
+                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE }
+            );
+            await sequelize.query(
+                'DELETE FROM InternalExamDepartments WHERE InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
+                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE }
+            );
+            await InternalExam.destroy({ where: { InternalExamSeriesID: seriesIdNum } });
+        } else {
+            await sequelize.query(
+                'DELETE FROM Attendance WHERE ExamID IN (SELECT ExamID FROM Exams WHERE ExamSeriesID = :seriesId)',
+                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE }
+            );
+            await sequelize.query(
+                'DELETE FROM InvigilatorAssignments WHERE ExamID IN (SELECT ExamID FROM Exams WHERE ExamSeriesID = :seriesId)',
+                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE }
+            );
+            await sequelize.query(
+                'DELETE FROM SeatAllocations WHERE ExamID IN (SELECT ExamID FROM Exams WHERE ExamSeriesID = :seriesId)',
+                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE }
+            );
+            await sequelize.query(
+                'DELETE FROM ExamRegistrations WHERE ExamID IN (SELECT ExamID FROM Exams WHERE ExamSeriesID = :seriesId)',
+                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE }
+            );
+            await Exam.destroy({ where: { ExamSeriesID: seriesIdNum } });
+        }
+
         await series.destroy();
 
         // Log activity (optional - don't fail if this fails)
