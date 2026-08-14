@@ -28,13 +28,40 @@ export const PROGRAM_DEPARTMENT_MAP: Record<string, string> = {
   "BHM": "Hotel Management"
 };
 
+export const normalizeProgramme = (progInput: unknown): string => {
+    if (!progInput) return 'BTECH';
+    const clean = String(progInput).toUpperCase().trim();
+    if (clean.includes('INT_MCA') || clean.includes('INT MCA') || clean.includes('INT. MCA') || clean.includes('INTEGRATED MCA')) return 'INT_MCA';
+    if (clean.includes('MCA')) return 'MCA';
+    if (clean.includes('B.TECH') || clean.includes('BTECH') || clean.includes('B TECH')) return 'BTECH';
+    if (clean.includes('M.TECH') || clean.includes('MTECH') || clean.includes('M TECH')) return 'MTECH';
+    if (clean.includes('MBA')) return 'MBA';
+    if (clean.includes('BHM')) return 'BHM';
+    return clean || 'BTECH';
+};
+
+export const normalizeBranch = (branchInput: unknown): string => {
+    if (!branchInput) return 'UNKNOWN';
+    const clean = String(branchInput).toUpperCase().trim();
+    if (clean === 'CS' || clean === 'CSE') return 'CSE';
+    if (clean.includes('INT_MCA') || clean.includes('INT MCA') || clean.includes('INT. MCA')) return 'INT_MCA';
+    if (clean === 'MCA') return 'MCA';
+    if (clean === 'CA') return 'CA';
+    if (clean === 'AD' || clean === 'AI&DS' || clean === 'AIDS') return 'AD';
+    if (clean === 'EC' || clean === 'ECE') return 'ECE';
+    if (clean === 'EE' || clean === 'EEE') return 'EEE';
+    if (clean === 'ME') return 'ME';
+    if (clean === 'CE') return 'CE';
+    if (clean === 'CC') return 'CC';
+    if (clean === 'ER') return 'ER';
+    return clean;
+};
+
 export const normalizeProgram = (programCode: string): string => {
     if (!programCode) return "UNKNOWN";
     let cleaned = programCode.toUpperCase().trim();
-    // Special handling for INT_MCA or AI&DS since they have special characters
     if (cleaned.includes('INT_MCA') || cleaned.includes('INT MCA')) return 'INT_MCA';
     if (cleaned.includes('AI&DS') || cleaned.includes('AIDS')) return 'AI&DS';
-    // Just keep A-Z letters for everything else
     const alphaOnly = cleaned.replace(/[^A-Z]/g, '');
     return alphaOnly || "UNKNOWN";
 };
@@ -66,13 +93,15 @@ export const parseBatchString = (batchText: unknown): NormalizedAcademicInfo => 
     const programMatch = cleanText.split(/\s+/)[0];
     let programCode = programMatch ? normalizeProgram(programMatch) : 'UNKNOWN';
 
-    // 3. Extract Batch Years (e.g. 2023-2027)
+    // 3. Extract Batch Years (e.g. 2025-2029 or 2025-27)
     let batchYear: number | null = null;
     let batchEndYear: number | null = null;
-    const rangeMatch = cleanText.match(/(20\d{2})\s*[-–]\s*(20\d{2})/);
+    const rangeMatch = cleanText.match(/(20\d{2})\s*[-–]\s*(20\d{2}|\d{2})/);
     if (rangeMatch && rangeMatch[1] && rangeMatch[2]) {
         batchYear = parseInt(rangeMatch[1], 10);
-        batchEndYear = parseInt(rangeMatch[2], 10);
+        let endRaw = rangeMatch[2];
+        if (endRaw.length === 2) endRaw = '20' + endRaw;
+        batchEndYear = parseInt(endRaw, 10);
     } else {
         const yearMatch = cleanText.match(/(20\d{2})/);
         if (yearMatch && yearMatch[1]) {
@@ -80,11 +109,7 @@ export const parseBatchString = (batchText: unknown): NormalizedAcademicInfo => 
         }
     }
 
-    const batchName = programCode !== 'UNKNOWN' && batchYear
-        ? `${programCode} ${batchYear}${batchEndYear ? '-' + batchEndYear : ''}`
-        : null;
-
-    // 4. Extract Division (e.g. "A", "B", "C" in "CSE 2023-2027 A (S3)")
+    // 4. Extract Division (e.g. "A", "B", "C" in "CSE 2025-2029 A (S3)")
     let division: string | null = null;
     const divMatch = cleanText.match(/\b([A-Z])\b(?=\s*\([S\d\s]+\)|\s*$)/i) || cleanText.match(/(?:DIV|DIVISION|SEC|SECTION)\s*([A-Z])/i);
     if (divMatch && divMatch[1] && divMatch[1].length === 1 && !['S', 'V', 'T'].includes(divMatch[1].toUpperCase())) {
@@ -104,6 +129,12 @@ export const parseBatchString = (batchText: unknown): NormalizedAcademicInfo => 
     }
 
     const semesterName = semester ? `S${semester}` : null;
+
+    // 6. Construct unique batchName preserving division (e.g. "CSE 2025-2029 A", "MCA 2025-2027")
+    const cleanNoSem = cleanText.replace(/\s*\([S\d\s\-_]+\)/i, '').trim();
+    const batchName = cleanNoSem || (programCode !== 'UNKNOWN' && batchYear
+        ? `${programCode} ${batchYear}${batchEndYear ? '-' + batchEndYear : ''}${division ? ' ' + division : ''}`
+        : null);
 
     return { programCode, batchYear, batchEndYear, batchName, division, semester, semesterName };
 };

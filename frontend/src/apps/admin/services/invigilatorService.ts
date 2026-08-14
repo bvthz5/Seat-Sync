@@ -112,8 +112,12 @@ export const invigilatorService = {
         return response.data;
     },
     getSwaps: async (status?: string) => {
-        const response = await api.get('/invigilators/swaps', { params: { status } });
-        return response.data;
+        try {
+            const response = await api.get('/invigilators/swaps', { params: { status } });
+            return response.data;
+        } catch {
+            return [];
+        }
     },
     getAvailableInvigilatorsForSwap: async (swapId: number) => {
         const response = await api.get(`/invigilators/swaps/${swapId}/available`);

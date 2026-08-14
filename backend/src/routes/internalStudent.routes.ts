@@ -24,6 +24,9 @@ import {
     getInternalExamReconciliation,
     getInternalSeriesReconciliation,
     createInternalSubjectEnrollment,
+    importSubjectEligibility,
+    getExamReconciliation,
+    getInternalStudentBatches,
 } from '../controllers/internalStudent.controller.js';
 
 const router = Router();
@@ -31,6 +34,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 
 // ── Internal Student CRUD ──
 router.get('/students', getAllInternalStudents);
+router.get('/students/batches', getInternalStudentBatches);
 router.post('/students', createInternalStudent);
 router.put('/students/:id', updateInternalStudent);
 router.get('/students/stats', getInternalStudentStats);
@@ -40,8 +44,9 @@ router.post('/students/sync-semesters', syncInternalSemesters);
 router.delete('/students/:id', deleteInternalStudent);
 router.delete('/students', deleteAllInternalStudents);
 
-// ── Student Import (maps to specific exam) & Subject Enrollments ──
+// ── Student Import & Subject Eligibility ──
 router.post('/students/import', upload.single('file'), importInternalStudents);
+router.post('/students/subject-eligibility/import', upload.single('file'), importSubjectEligibility);
 router.post('/students/subject-enrollments', createInternalSubjectEnrollment);
 
 // ── Exam Detail + Mapped Students + Reconciliation ──

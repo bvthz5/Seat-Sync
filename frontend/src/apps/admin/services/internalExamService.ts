@@ -1,14 +1,45 @@
 import api from '../../../services/api';
 
+export interface InternalExamPreviewRow {
+    semester: string;
+    programmeCode: string;
+    programmeLabel: string;
+    date: string;
+    session: string;
+    slot: string;
+    branch: string;
+    subjectCode: string;
+    subjectName: string;
+    subjectType: string;
+    scopeType: string;
+    sourceSheet?: string;
+    sourceRow?: number;
+}
+
+export interface InternalExamImportProgrammeSummary {
+    programme: string;
+    programmeLabel: string;
+    examCount: number;
+}
+
+export interface InternalExamImportSemesterSummary {
+    semester: string;
+    examCount: number;
+    programmes: InternalExamImportProgrammeSummary[];
+}
+
 export interface InternalExamImportResult {
     success: boolean;
     message: string;
+    totalRows?: number;
+    totalExams?: number;
     successCount?: number;
     updatedCount?: number;
     errorCount?: number;
     errors?: string[];
     parseMode?: string;
-    preview?: any[];
+    semesters?: InternalExamImportSemesterSummary[];
+    preview?: InternalExamPreviewRow[];
 }
 
 export const InternalExamService = {
@@ -26,3 +57,4 @@ export const InternalExamService = {
         return response.data;
     }
 };
+

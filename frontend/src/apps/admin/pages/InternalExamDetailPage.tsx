@@ -4,6 +4,7 @@ import { Card, CardBody, Button, Input, Modal, ModalContent, ModalHeader, ModalB
 import { ArrowLeft, Upload, Users, Trash2, Search, BookOpen, Clock, CalendarDays, Building2, GraduationCap, FileSpreadsheet, CheckCircle, AlertTriangle, X, Download, RefreshCcw, Info } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { InternalStudentService, MappedStudent, InternalExamDetail } from '../services/internalStudentService';
+import { SubjectEligibilityImportModal } from '../components/internal-structure/SubjectEligibilityImportModal';
 
 const InternalExamDetailPage: React.FC = () => {
     const { seriesId, examId } = useParams<{ seriesId: string; examId: string }>();
@@ -30,6 +31,7 @@ const InternalExamDetailPage: React.FC = () => {
     const [showBulkDeptRemoveModal, setShowBulkDeptRemoveModal] = useState(false);
     const [selectedDeptsToRemove, setSelectedDeptsToRemove] = useState<string[]>([]);
     const [bulkRemoving, setBulkRemoving] = useState(false);
+    const [showSubjectRosterModal, setShowSubjectRosterModal] = useState(false);
 
     // Load exam detail & reconciliation
     const loadExamDetail = useCallback(async () => {
@@ -247,6 +249,14 @@ const InternalExamDetailPage: React.FC = () => {
                         </div>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
+                        <Button
+                            variant="flat"
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl h-10 px-4 text-xs shadow-sm transition-all"
+                            startContent={<Users size={15} />}
+                            onPress={() => setShowSubjectRosterModal(true)}
+                        >
+                            Import Subject Roster
+                        </Button>
                         {((examDetail?.studentCount || 0) > 0 || students.length > 0) && (
                             <Button
                                 variant="flat"
@@ -1080,6 +1090,18 @@ const InternalExamDetailPage: React.FC = () => {
                     </ModalFooter>
                 </ModalContent>
             </Modal>
+
+            {/* Subject Eligibility Roster Import Modal */}
+            <SubjectEligibilityImportModal
+                isOpen={showSubjectRosterModal}
+                onClose={() => setShowSubjectRosterModal(false)}
+                onSuccess={() => {
+                    Promise.all([loadExamDetail(), loadStudents()]);
+                }}
+                examId={examId ? parseInt(examId, 10) : undefined}
+                initialCourseCode={examDetail?.exam?.SubjectCode || ''}
+                initialCourseName={examDetail?.exam?.SubjectName || ''}
+            />
         </div>
     );
 };

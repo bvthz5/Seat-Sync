@@ -156,8 +156,12 @@ export const getMyNotifications = async (params: any = {}): Promise<{ data: Noti
 };
 
 export const getNotificationStats = async (): Promise<NotificationStats> => {
-    const response = await api.get(`${API_URL}/stats`);
-    return response.data.data;
+    try {
+        const response = await api.get(`${API_URL}/stats`);
+        return response.data?.data || { unread: 0, critical: 0 };
+    } catch {
+        return { unread: 0, critical: 0 };
+    }
 };
 
 export const markAsRead = async (id: number): Promise<void> => {

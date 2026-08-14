@@ -40,8 +40,43 @@ type GroupedExam = {
     hasRegistrations: boolean;
 };
 
+const formatExamCardTitle = (examName: string, subjectCode: string): string => {
+    const codeStr = (subjectCode || '').trim().toUpperCase();
+    const nameStr = (examName || '').trim();
+
+    if (!nameStr || nameStr.toUpperCase() === codeStr || /^[0-9]{2}[A-Z]{2,8}[0-9]{3,4}[A-Z0-9]*$/i.test(nameStr)) {
+        return "Subject Name Not Specified";
+    }
+
+    let cleanName = nameStr;
+    if (codeStr && cleanName.toUpperCase().startsWith(codeStr)) {
+        cleanName = cleanName.slice(codeStr.length).replace(/^[\s:-–—]+/, '').trim();
+    }
+
+    if (!cleanName || cleanName.toUpperCase() === codeStr) return "Subject Name Not Specified";
+
+    const acronyms = new Set(['MCA', 'BTECH', 'MTECH', 'AI', 'ML', 'CS', 'IT', 'ECE', 'EEE', 'CE', 'ME', 'VLSI', 'DSP', 'IOT', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'I', 'II', 'III', 'IV', 'V', 'VI']);
+    
+    return cleanName
+        .split(' ')
+        .map(word => {
+            const upper = word.toUpperCase();
+            if (acronyms.has(upper)) return upper;
+            if (word.length <= 3 && /^[A-Z]+$/i.test(word)) return upper;
+            return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        })
+        .join(' ');
+};
+
+const normalizeExamTitle = (name: string): string => {
+    return String(name || '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '')
+        .trim();
+};
+
 const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
-    const groups = new Map<string, GroupedExam & { branchKeys: Set<string> }>();
+    const groups = new Map<string, GroupedExam & { branchKeys: Set<string>; subjectCodes: Set<string> }>();
 
     exams.forEach((exam: any) => {
         const date = String(exam?.ExamDate || '').split('T')[0];
@@ -50,11 +85,18 @@ const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
         const duration = Number(exam?.Duration || 0);
         const semRaw = String(exam?.Semester || exam?.Subject?.Semester || 'S3').toUpperCase().trim();
         const semester = semRaw.startsWith('S') ? semRaw : (semRaw ? `S${semRaw}` : 'S3');
-        // Stable grouping by date, session, and subject code (fallback to name)
-        const paperId = String(exam?.Subject?.SubjectCode || examName).trim();
-        const groupKey = `${date}::${session}::${paperId}::${duration}::${semester}`;
+        const rawCode = String(exam?.Subject?.SubjectCode || exam?.SubjectCode || '').trim().toUpperCase();
+
+        const titleNorm = normalizeExamTitle(examName);
+        const codeNorm = rawCode.replace(/[^A-Z0-9]/g, '');
+
+        // Standardized grouping key: Semester + Date + Session + Normalized Title (or Code)
+        // Consolidates identical paper sessions (e.g. Sensors AND Actuators across ECE & ER) into 1 card
+        const groupKey = `${semester}::${date}::${session}::${titleNorm || codeNorm}`;
         const department = exam?.Subject?.Department || {};
-        const branchKey = String(department.DepartmentID || department.DepartmentCode || exam.ExamID);
+        const deptCode = String(department.DepartmentCode || exam?.BranchScope || 'GEN');
+        const deptName = String(department.DepartmentName || exam?.BranchScope || 'General');
+        const branchKey = String(department.DepartmentID || deptCode || exam.ExamID);
 
         if (!groups.has(groupKey)) {
             groups.set(groupKey, {
@@ -64,22 +106,28 @@ const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
                 session,
                 status: String(exam?.Status || 'Scheduled'),
                 duration,
-                subjectCode: String(exam?.Subject?.SubjectCode || ''),
+                subjectCode: rawCode,
                 semester,
                 branches: [],
                 branchKeys: new Set<string>(),
+                subjectCodes: new Set<string>(),
                 hasRegistrations: false
             });
         }
 
         const group = groups.get(groupKey)!;
+
+        if (rawCode && !group.subjectCodes.has(rawCode)) {
+            group.subjectCodes.add(rawCode);
+        }
+
         if (!group.branchKeys.has(branchKey)) {
             group.branchKeys.add(branchKey);
             group.branches.push({
                 examId: Number(exam.ExamID),
                 departmentId: Number(department.DepartmentID || 0),
-                departmentCode: String(department.DepartmentCode || 'GEN'),
-                departmentName: String(department.DepartmentName || 'General')
+                departmentCode: deptCode,
+                departmentName: deptName
             });
         }
 
@@ -89,17 +137,22 @@ const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
     });
 
     return Array.from(groups.values())
-        .map(({ branchKeys, ...group }) => group)
+        .map(({ branchKeys, subjectCodes, ...group }) => {
+            const codes = Array.from(subjectCodes);
+            const displayCode = codes.length > 0 ? codes.join(' / ') : group.subjectCode;
+            return {
+                ...group,
+                subjectCode: displayCode
+            };
+        })
         .sort((a, b) => {
             const dateCmp = new Date(a.date).getTime() - new Date(b.date).getTime();
             if (dateCmp !== 0) return dateCmp;
             
-            // If same date, sort by session (FN before AN)
             if (a.session !== b.session) {
                 return a.session === 'FN' ? -1 : 1;
             }
             
-            // If same date and session, sort alphabetically
             return a.examName.localeCompare(b.examName);
         });
 };
@@ -150,12 +203,19 @@ const ExamSeriesList: React.FC = () => {
         }
     };
 
+    const [batches, setBatches] = useState<any[]>([]);
+    const [selectedProgrammes, setSelectedProgrammes] = useState<Record<string, string>>({});
+
     const fetchExams = async () => {
         if (!AccessTokenStore.hasAnySession()) return;
         setLoading(true);
         try {
-            const response = await ExamService.getAll({ seriesId });
-            setExams(response || []);
+            const [examsRes, batchesRes] = await Promise.all([
+                ExamService.getAll({ seriesId }),
+                InternalStudentService.getBatches().catch(() => ({ batches: [] }))
+            ]);
+            setExams(examsRes || []);
+            setBatches(batchesRes?.batches || []);
         } catch (error) {
             console.error("Failed to fetch exams", error);
             toast.error("Failed to load exams");
@@ -450,7 +510,7 @@ const ExamSeriesList: React.FC = () => {
                 ) : (
                     <div className="space-y-10">
                         {/* ── TOP SEMESTER HUB CARDS ── */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[repeat(auto-fill,minmax(390px,1fr))] gap-6">
                             {examsBySemester.map(([semKey, semExams]) => {
                                 const isOpen = openSemesters[semKey] ?? true;
                                 const branchSet = new Set<string>();
@@ -461,7 +521,7 @@ const ExamSeriesList: React.FC = () => {
                                     <div
                                         key={semKey}
                                         onClick={() => toggleSemesterOpen(semKey)}
-                                        className={`relative cursor-pointer rounded-3xl p-6 transition-all duration-300 border text-left ${
+                                        className={`relative cursor-pointer rounded-3xl p-5 transition-all duration-300 border text-left overflow-hidden ${
                                             isOpen 
                                                 ? 'bg-gradient-to-br from-indigo-500/10 via-white to-white border-indigo-500 shadow-xl ring-2 ring-indigo-500/20' 
                                                 : 'bg-white/90 hover:bg-white border-slate-200/80 shadow-sm hover:shadow-md hover:border-indigo-300'
@@ -490,20 +550,20 @@ const ExamSeriesList: React.FC = () => {
                                             </div>
                                         </div>
 
-                                        <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between gap-2 text-xs font-bold text-slate-600">
-                                            <span className="truncate max-w-[130px] bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg border border-slate-200/60 text-[11px]">
+                                        <div className="mt-5 pt-3.5 border-t border-slate-100 flex items-center justify-between gap-1.5 text-xs font-bold text-slate-600">
+                                            <span className="truncate max-w-[100px] shrink min-w-0 bg-slate-100 text-slate-700 px-2 py-1 rounded-lg border border-slate-200/60 text-[10px] font-bold">
                                                 Dept: {branchesStr || 'All'}
                                             </span>
-                                            <div className="flex items-center gap-1.5">
+                                            <div className="flex items-center gap-1.5 shrink-0 ml-auto">
                                                 <Button
                                                     size="sm"
                                                     onPress={(e) => {
                                                         e.stopPropagation();
                                                         setActiveImportSemester(semKey);
                                                     }}
-                                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[11px] h-8 px-2.5 rounded-xl shadow-xs transition-all flex items-center gap-1"
+                                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[11px] h-7.5 px-2.5 rounded-xl shadow-xs transition-all flex items-center gap-1"
                                                 >
-                                                    <UserPlus size={13} />
+                                                    <UserPlus size={12} />
                                                     Import
                                                 </Button>
                                                 {semExams.some(e => e.hasRegistrations) && (
@@ -515,7 +575,7 @@ const ExamSeriesList: React.FC = () => {
                                                                 e.stopPropagation();
                                                                 openBulkDeptRemove(semKey);
                                                             }}
-                                                            className="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/70 font-extrabold text-[11px] h-8 px-2 rounded-xl transition-all flex items-center gap-1"
+                                                            className="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/70 font-extrabold text-[11px] h-7.5 px-2 rounded-xl transition-all flex items-center gap-1"
                                                             title={`Remove specific departments from Semester ${semKey}`}
                                                         >
                                                             <Building2 size={12} />
@@ -528,10 +588,10 @@ const ExamSeriesList: React.FC = () => {
                                                                 e.stopPropagation();
                                                                 setClearSemesterTarget(semKey);
                                                             }}
-                                                            className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/60 font-extrabold text-[11px] h-8 px-2 rounded-xl transition-all flex items-center gap-1"
+                                                            className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/60 font-extrabold text-[11px] h-7.5 px-2 rounded-xl transition-all flex items-center gap-1"
                                                             title={`Clear all student mappings for Semester ${semKey}`}
                                                         >
-                                                            <Trash2 size={13} />
+                                                            <Trash2 size={12} />
                                                             Clear
                                                         </Button>
                                                     </>
@@ -615,107 +675,208 @@ const ExamSeriesList: React.FC = () => {
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                                            {semesterExams.map((examGroup) => {
-                                                const hasMissingDept = examGroup.branches.some(b => isMissingDepartment(b.departmentCode, b.departmentName));
-                                                const cardBorderClass = hasMissingDept 
-                                                    ? 'border-amber-300/80 shadow-amber-100/50 ring-1 ring-amber-200/50' 
-                                                    : 'border-slate-200/80 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-500/5';
-                                                
-                                                const formattedTitle = examGroup.examName
-                                                    .toLowerCase()
-                                                    .split(' ')
-                                                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-                                                    .join(' ');
+                                        {/* ── PURE TIMETABLE PROGRAMME & SUBJECT HIERARCHY ── */}
+                                        {(() => {
+                                            const getProgrammeForExamGroup = (examGroup: GroupedExam): string => {
+                                                const code = String(examGroup.subjectCode || '').toUpperCase();
+                                                const name = String(examGroup.examName || '').toUpperCase();
+                                                const deptCodes = examGroup.branches.map(b => String(b.departmentCode || '').toUpperCase());
 
-                                                return (
-                                                    <Card
-                                                        key={examGroup.groupKey}
-                                                        className={`bg-white border text-left hover:-translate-y-1 transition-all duration-200 group rounded-2xl overflow-hidden shadow-sm ${cardBorderClass}`}
-                                                    >
-                                                        <CardBody className="p-5 flex flex-col justify-between h-full space-y-4">
-                                                            <div>
-                                                                <div className="flex items-center justify-between gap-2 mb-3">
-                                                                    <span className="font-extrabold text-[11px] tracking-wider text-indigo-700 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-lg uppercase truncate max-w-[140px]" title={examGroup.subjectCode || examGroup.examName}>
-                                                                        {examGroup.subjectCode || "NO CODE"}
-                                                                    </span>
-                                                                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
-                                                                        examGroup.status === 'Scheduled' ? 'bg-blue-50 text-blue-700 border-blue-200/60' :
-                                                                        examGroup.status === 'Completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60' :
-                                                                        'bg-purple-50 text-purple-700 border-purple-200/60'
-                                                                    }`}>
-                                                                        {examGroup.status}
-                                                                    </span>
-                                                                </div>
+                                                // 1. Check for Integrated MCA
+                                                if (
+                                                    code.includes('INMCA') || code.includes('IMCA') || code.includes('INT_MCA') ||
+                                                    name.includes('INTEGRATED MCA') || name.includes('INT MCA') || name.includes('INT. MCA') ||
+                                                    deptCodes.some(d => d === 'INMCA' || d === 'IMCA' || d === 'INT_MCA' || d === 'INT')
+                                                ) {
+                                                    return 'Integrated MCA';
+                                                }
 
-                                                                <h3 className="text-base font-bold text-slate-900 leading-snug group-hover:text-indigo-600 transition-colors line-clamp-2 min-h-[2.75rem]">
-                                                                    {formattedTitle}
+                                                // 2. Check for MCA
+                                                if (
+                                                    code.includes('MCA') ||
+                                                    name.includes('MASTER OF COMPUTER APPLICATIONS') || name.includes('MCA') ||
+                                                    deptCodes.some(d => d === 'MCA')
+                                                ) {
+                                                    return 'MCA';
+                                                }
+
+                                                // 3. Check for M.Tech
+                                                if (
+                                                    code.includes('MTECH') || code.includes('M.TECH') ||
+                                                    name.includes('M.TECH') || name.includes('MTECH') ||
+                                                    deptCodes.some(d => d === 'MTECH')
+                                                ) {
+                                                    return 'M.Tech';
+                                                }
+
+                                                // 4. Default to B.Tech
+                                                return 'B.Tech';
+                                            };
+
+                                            // Available programmes derived strictly from the active timetable exams in this semester
+                                            const availableProgrammes = Array.from(
+                                                new Set(semesterExams.map(e => getProgrammeForExamGroup(e)))
+                                            ).sort();
+
+                                            const currentProgFilter = selectedProgrammes[semesterKey] || 'ALL';
+
+                                            // Group exams by Programme for sectioned rendering
+                                            const examsByProg = new Map<string, GroupedExam[]>();
+                                            semesterExams.forEach(e => {
+                                                const prog = getProgrammeForExamGroup(e);
+                                                if (currentProgFilter !== 'ALL' && prog !== currentProgFilter) return;
+                                                if (!examsByProg.has(prog)) examsByProg.set(prog, []);
+                                                examsByProg.get(prog)!.push(e);
+                                            });
+
+                                            return (
+                                                <div className="space-y-8">
+                                                    {/* Programme Scope Filter Tabs */}
+                                                    <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar border-b border-slate-100 pb-3">
+                                                        <span className="text-xs font-black uppercase text-slate-400 tracking-wider mr-2 shrink-0">Programme Scope:</span>
+                                                        <button
+                                                            onClick={() => setSelectedProgrammes(p => ({ ...p, [semesterKey]: 'ALL' }))}
+                                                            className={`px-4 py-2 rounded-xl text-xs font-black transition-all shrink-0 ${
+                                                                currentProgFilter === 'ALL'
+                                                                    ? 'bg-indigo-600 text-white shadow-xs'
+                                                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                                            }`}
+                                                        >
+                                                            All Programmes ({semesterExams.length} Subjects)
+                                                        </button>
+                                                        {availableProgrammes.map(prog => {
+                                                            const progCount = semesterExams.filter(e => getProgrammeForExamGroup(e) === prog).length;
+                                                            return (
+                                                                <button
+                                                                    key={prog}
+                                                                    onClick={() => setSelectedProgrammes(p => ({ ...p, [semesterKey]: prog }))}
+                                                                    className={`px-4 py-2 rounded-xl text-xs font-black transition-all shrink-0 ${
+                                                                        currentProgFilter === prog
+                                                                            ? 'bg-indigo-600 text-white shadow-xs'
+                                                                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                                                    }`}
+                                                                >
+                                                                    {prog} ({progCount})
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+
+                                                    {/* Programme Groups & Clean White Subject Cards */}
+                                                    {Array.from(examsByProg.entries()).map(([progName, progExams]) => (
+                                                        <div key={progName} className="space-y-4">
+                                                            <div className="flex items-center justify-between bg-slate-50 border border-slate-200/70 rounded-2xl px-5 py-3">
+                                                                <h3 className="text-base font-black text-slate-800 tracking-tight flex items-center gap-2">
+                                                                    {progName}
+                                                                    <span className="px-2.5 py-0.5 rounded-full bg-white border border-slate-200 text-slate-600 text-xs font-extrabold">
+                                                                        {progExams.length} Subjects
+                                                                    </span>
                                                                 </h3>
-
-                                                                <div className="flex flex-wrap gap-1.5 mt-3">
-                                                                    {examGroup.branches.map((branch) => (
-                                                                        <span 
-                                                                            key={branch.examId} 
-                                                                            className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase border ${
-                                                                                isMissingDepartment(branch.departmentCode, branch.departmentName)
-                                                                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                                                                    : 'bg-slate-100 text-slate-600 border-slate-200/60'
-                                                                            }`}
-                                                                        >
-                                                                            Dept: {branch.departmentCode}
-                                                                        </span>
-                                                                    ))}
-                                                                </div>
+                                                                <span className="text-xs font-bold text-slate-400">
+                                                                    Semester {semesterKey} • {progName} Schedule
+                                                                </span>
                                                             </div>
 
-                                                            <div className="space-y-3 pt-2 border-t border-slate-100">
-                                                                <div className="bg-slate-50/80 rounded-xl p-2.5 border border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-600">
-                                                                    <div className="flex items-center gap-1.5 text-slate-700">
-                                                                        <CalendarDays size={14} className="text-slate-400 shrink-0" />
-                                                                        <span>{new Date(examGroup.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                                                                    </div>
-                                                                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-500 shrink-0">
-                                                                        {examGroup.session === 'FN' ? 'Morning (FN)' : 'Afternoon (AN)'}
-                                                                    </span>
-                                                                </div>
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                                                {progExams.map((examGroup) => {
+                                                                    const hasMissingDept = examGroup.branches.some(b => isMissingDepartment(b.departmentCode, b.departmentName));
+                                                                    const cardBorderClass = hasMissingDept 
+                                                                        ? 'border-amber-300/80 shadow-amber-100/50 ring-1 ring-amber-200/50' 
+                                                                        : 'border-slate-200/80 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-500/5';
+                                                                    
+                                                                    const formattedTitle = formatExamCardTitle(examGroup.examName, examGroup.subjectCode);
 
-                                                                <div className="flex items-center gap-2 pt-1">
-                                                                    {examType === 'Internal' && (
-                                                                        <Button
-                                                                            size="sm"
-                                                                            variant="flat"
-                                                                            className="flex-1 bg-indigo-50 hover:bg-indigo-600 text-indigo-600 hover:text-white font-bold rounded-xl text-xs h-9 transition-all border border-indigo-100 flex items-center justify-center gap-1"
-                                                                            startContent={<Users size={13} />}
-                                                                            onPress={() => navigate(`/admin/exams/series/${seriesId}/internal/${examGroup.branches[0]?.examId}`)}
+                                                                    return (
+                                                                        <Card
+                                                                            key={examGroup.groupKey}
+                                                                            className={`bg-white border text-left hover:-translate-y-1 transition-all duration-200 group rounded-2xl overflow-hidden shadow-sm ${cardBorderClass}`}
                                                                         >
-                                                                            Students
-                                                                        </Button>
-                                                                    )}
-                                                                    <Button
-                                                                        size="sm"
-                                                                        variant="flat"
-                                                                        className="flex-1 bg-slate-100 hover:bg-slate-800 text-slate-700 hover:text-white font-bold rounded-xl text-xs h-9 transition-all border border-slate-200 flex items-center justify-center gap-1"
-                                                                        startContent={<Pencil size={13} />}
-                                                                        onPress={() => handleEdit(exams.find(e => e.ExamID === examGroup.branches[0].examId))}
-                                                                    >
-                                                                        Edit
-                                                                    </Button>
-                                                                    <Button
-                                                                        size="sm"
-                                                                        variant="flat"
-                                                                        className="flex-1 bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white font-bold rounded-xl text-xs h-9 transition-all border border-rose-200/70 flex items-center justify-center gap-1"
-                                                                        startContent={<Trash2 size={13} />}
-                                                                        onPress={() => handleDeleteClick(examGroup.branches.map(b => b.examId))}
-                                                                    >
-                                                                        Delete
-                                                                    </Button>
-                                                                </div>
+                                                                            <CardBody className="p-5 flex flex-col justify-between h-full space-y-4">
+                                                                                <div>
+                                                                                    <div className="flex items-center justify-between gap-2 mb-3">
+                                                                                        <span className="font-extrabold text-[11px] tracking-wider text-indigo-700 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-lg uppercase truncate max-w-[140px]" title={examGroup.subjectCode || examGroup.examName}>
+                                                                                            {examGroup.subjectCode || "NO CODE"}
+                                                                                        </span>
+                                                                                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
+                                                                                            !examGroup.hasRegistrations ? 'bg-rose-50 text-rose-700 border-rose-200/60' : 'bg-emerald-50 text-emerald-700 border-emerald-200/60'
+                                                                                        }`}>
+                                                                                            {!examGroup.hasRegistrations ? 'NOT MAPPED' : 'FULLY MAPPED'}
+                                                                                        </span>
+                                                                                    </div>
+
+                                                                                    <h3 className="text-base font-bold text-slate-900 leading-snug group-hover:text-indigo-600 transition-colors line-clamp-2 min-h-[2.75rem]">
+                                                                                        {formattedTitle}
+                                                                                    </h3>
+
+                                                                                    <div className="flex flex-wrap gap-1.5 mt-3">
+                                                                                        {examGroup.branches.map((branch) => (
+                                                                                            <span 
+                                                                                                key={branch.examId} 
+                                                                                                className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase border ${
+                                                                                                    isMissingDepartment(branch.departmentCode, branch.departmentName)
+                                                                                                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                                                                        : 'bg-slate-100 text-slate-600 border-slate-200/60'
+                                                                                                }`}
+                                                                                            >
+                                                                                                Dept: {branch.departmentCode}
+                                                                                            </span>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                <div className="space-y-3 pt-2 border-t border-slate-100">
+                                                                                    <div className="bg-slate-50/80 rounded-xl p-2.5 border border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-600">
+                                                                                        <div className="flex items-center gap-1.5 text-slate-700">
+                                                                                            <CalendarDays size={14} className="text-slate-400 shrink-0" />
+                                                                                            <span>{new Date(examGroup.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                                                                        </div>
+                                                                                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-500 shrink-0">
+                                                                                            {examGroup.session === 'FN' ? 'Morning (FN)' : 'Afternoon (AN)'}
+                                                                                        </span>
+                                                                                    </div>
+
+                                                                                    <div className="flex items-center gap-2 pt-1">
+                                                                                        {examType === 'Internal' && (
+                                                                                            <Button
+                                                                                                size="sm"
+                                                                                                variant="flat"
+                                                                                                className="flex-1 bg-indigo-50 hover:bg-indigo-600 text-indigo-600 hover:text-white font-bold rounded-xl text-xs h-9 transition-all border border-indigo-100 flex items-center justify-center gap-1"
+                                                                                                startContent={<Users size={13} />}
+                                                                                                onPress={() => navigate(`/admin/exams/series/${seriesId}/internal/${examGroup.branches[0]?.examId}`)}
+                                                                                            >
+                                                                                                Students
+                                                                                            </Button>
+                                                                                        )}
+                                                                                        <Button
+                                                                                            size="sm"
+                                                                                            variant="flat"
+                                                                                            className="flex-1 bg-slate-100 hover:bg-slate-800 text-slate-700 hover:text-white font-bold rounded-xl text-xs h-9 transition-all border border-slate-200 flex items-center justify-center gap-1"
+                                                                                            startContent={<Pencil size={13} />}
+                                                                                            onPress={() => handleEdit(exams.find(e => e.ExamID === examGroup.branches[0].examId))}
+                                                                                        >
+                                                                                            Edit
+                                                                                        </Button>
+                                                                                        <Button
+                                                                                            size="sm"
+                                                                                            variant="flat"
+                                                                                            className="flex-1 bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white font-bold rounded-xl text-xs h-9 transition-all border border-rose-200/70 flex items-center justify-center gap-1"
+                                                                                            startContent={<Trash2 size={13} />}
+                                                                                            onPress={() => handleDeleteClick(examGroup.branches.map(b => b.examId))}
+                                                                                        >
+                                                                                            Delete
+                                                                                        </Button>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </CardBody>
+                                                                        </Card>
+                                                                    );
+                                                                })}
                                                             </div>
-                                                        </CardBody>
-                                                    </Card>
-                                                );
-                                            })}
-                                        </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            );
+                                        })()}
                                     </motion.div>
                                 );
                             })}

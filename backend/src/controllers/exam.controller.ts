@@ -1031,6 +1031,14 @@ export class ExamController {
             if (!exam) {
                 const internalExam = await InternalExam.findByPk(id as string);
                 if (internalExam) {
+                    await sequelize.query('DELETE FROM InternalSeatAllocations WHERE InternalExamID = :id', {
+                        replacements: { id: internalExam.InternalExamID },
+                        type: QueryTypes.DELETE
+                    });
+                    await sequelize.query('DELETE FROM InternalExamRegistrations WHERE InternalExamID = :id', {
+                        replacements: { id: internalExam.InternalExamID },
+                        type: QueryTypes.DELETE
+                    });
                     await sequelize.query('DELETE FROM InternalExamDepartments WHERE InternalExamID = :id', {
                         replacements: { id: internalExam.InternalExamID },
                         type: QueryTypes.DELETE
@@ -1176,7 +1184,21 @@ export class ExamController {
             if (parsedSeriesId) {
                 const seriesInfo = await ExamSeries.findByPk(parsedSeriesId);
                 if (seriesInfo && seriesInfo.ExamType === 'Internal') {
-                    // It's an internal series. Manually clean up departments first to avoid FK errors.
+                    // Internal series cleanup: SeatAllocations -> ExamRegistrations -> ExamDepartments -> InternalExams
+                    await sequelize.query(
+                        'DELETE FROM InternalSeatAllocations WHERE InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
+                        {
+                            replacements: { seriesId: parsedSeriesId },
+                            type: QueryTypes.DELETE
+                        }
+                    );
+                    await sequelize.query(
+                        'DELETE FROM InternalExamRegistrations WHERE InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
+                        {
+                            replacements: { seriesId: parsedSeriesId },
+                            type: QueryTypes.DELETE
+                        }
+                    );
                     await sequelize.query(
                         'DELETE FROM InternalExamDepartments WHERE InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
                         {

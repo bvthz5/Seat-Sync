@@ -46,6 +46,12 @@ export interface MappedStudent {
 }
 
 export const InternalStudentService = {
+    // Fetch active student batches grouped by semester, programme, department, batch, division
+    getBatches: async (): Promise<{ success: boolean; count: number; batches: { batchKey: string; semester: string; programme: string; departmentCode: string; departmentName: string; batchName: string; division: string; studentCount: number }[] }> => {
+        const response = await api.get('/internal/students/batches');
+        return response.data;
+    },
+
     // Import students and optionally map to an internal exam or auto-map across a semester/series
     importStudents: async (
         file: File, 
@@ -201,6 +207,20 @@ export const InternalStudentService = {
     // Upload / Add student subject enrollments (for Electives/Minor/Honours)
     uploadSubjectEnrollments: async (enrollments: Array<{ registerNumber: string; subjectCode: string; semester?: string; enrollmentType?: string }>) => {
         const response = await api.post('/internal/students/subject-enrollments', { enrollments });
+        return response.data;
+    },
+
+    // Import subject-wise student eligibility file (.xlsx, .csv, .pdf, .docx)
+    importSubjectEligibility: async (file: File, params?: { manualCourseCode?: string; manualCourseName?: string; examId?: number }): Promise<{ success: boolean; message: string; result: any; autoMapResult: any }> => {
+        const formData = new FormData();
+        formData.append('file', file);
+        if (params?.manualCourseCode) formData.append('manualCourseCode', params.manualCourseCode);
+        if (params?.manualCourseName) formData.append('manualCourseName', params.manualCourseName);
+        if (params?.examId) formData.append('examId', params.examId.toString());
+
+        const response = await api.post('/internal/students/subject-eligibility/import', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
         return response.data;
     }
 };

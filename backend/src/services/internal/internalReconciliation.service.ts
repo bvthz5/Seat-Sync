@@ -88,9 +88,9 @@ export class InternalReconciliationService {
             totalRegistered += res.registeredCount;
             totalMissing += res.missingCount;
 
-            if (res.status === 'VALIDATED') validatedCount++;
+            if (res.status === 'VERIFIED') validatedCount++;
             else if (res.status === 'MISSING_STUDENTS') missingStudentsCount++;
-            else if (res.status === 'SUBJECT_ENROLLMENT_REQUIRED') subjectEnrollmentCount++;
+            else if (res.status === 'UNRESOLVED_STUDENTS' || res.status === 'SUBJECT_ENROLLMENT_REQUIRED') subjectEnrollmentCount++;
             else if (res.status === 'NO_PROGRAMME_MATCH') noProgrammeMatchCount++;
             else if (res.status === 'DATA_ERROR') dataErrorCount++;
         }

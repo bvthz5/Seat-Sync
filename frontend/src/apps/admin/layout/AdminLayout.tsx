@@ -25,20 +25,21 @@ const AdminLayout: React.FC = () => {
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
 
     const fetchCounts = async () => {
-        if (!AccessTokenStore.hasAnySession()) return;
+        if (!AccessTokenStore.token) return;
         try {
             const [notifStats, swaps] = await Promise.all([
-                getNotificationStats(),
-                invigilatorService.getSwaps('PENDING')
+                getNotificationStats().catch(() => null),
+                invigilatorService.getSwaps('PENDING').catch(() => null)
             ]);
-            setUnreadCount((notifStats?.unread || 0) + (swaps?.length || 0));
+            const swapCount = Array.isArray(swaps) ? swaps.length : (Array.isArray(swaps?.data) ? swaps.data.length : 0);
+            setUnreadCount((notifStats?.unread || 0) + swapCount);
         } catch (e) {
             // Silently handle background polling errors
         }
     };
 
     React.useEffect(() => {
-        if (user && AccessTokenStore.hasAnySession()) {
+        if (user && AccessTokenStore.token) {
             fetchCounts();
             const interval = setInterval(fetchCounts, 60000); // Check every minute
             return () => clearInterval(interval);

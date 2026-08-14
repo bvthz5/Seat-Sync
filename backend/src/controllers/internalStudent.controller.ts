@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx';
 import {
     InternalStudent,
     InternalExamRegistration,
+    InternalSeatAllocation,
     InternalExam,
     InternalExamDepartment,
     InternalStudentSubject,
@@ -17,6 +18,7 @@ import { generateDefaultPassword, generateStudentEmail, extractBatchYearFromRegi
 import { normalizeProgram, parseBatchString, resolveOrCreateProgram, resolveOrCreateDepartment } from '../services/academicNormalizer.service.js';
 import { InternalExamEligibilityService } from '../services/internal/internalExamEligibility.service.js';
 import { InternalReconciliationService } from '../services/internal/internalReconciliation.service.js';
+import { SubjectEligibilityImportService } from '../services/internal/subjectEligibilityImport.service.js';
 
 /* ════════════════════════════════════════════════════════════════
  *  GET /api/internal/students
@@ -181,6 +183,7 @@ export const importInternalStudents = async (req: Request, res: Response) => {
     if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
 
     const internalExamId = req.body.internalExamId ? parseInt(req.body.internalExamId) : null;
+    const seriesId = req.body.seriesId ? parseInt(req.body.seriesId) : null;
 
     // Verify exam if provided
     let exam = null;
@@ -197,27 +200,43 @@ export const importInternalStudents = async (req: Request, res: Response) => {
         const sheet = workbook.Sheets[sheetName];
         if (!sheet) { await t.rollback(); return res.status(400).json({ message: 'Empty sheet' }); }
 
-        // ── Adaptive multi-section parser (Enhanced to match end-sem) ──
+        // ── Adaptive multi-section parser (Enhanced for Master Batch Lists & Subject Rosters) ──
         const rawRows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
         const data: any[] = [];
         let currentHeaders: string[] = [];
         let isCollecting = false;
         let globalBatch = '';
+        let globalCourseCode = '';
+        let globalSubjectName = '';
+
+        const courseHeaderRegex = /^([0-9]{2}[A-Za-z]{2,8}[0-9]{3,4}[A-Za-z0-9]*|[A-Za-z]{2,6}[0-9]{3,4}[A-Za-z0-9]*)[\s:\-–—]+(.*)$/i;
 
         for (let rowIdx = 0; rowIdx < rawRows.length; rowIdx++) {
             const row = rawRows[rowIdx];
-            if (!row || row.length === 0) { isCollecting = false; continue; }
+            if (!row || row.length === 0) { continue; }
 
             const firstCell = String(row[0] || '').trim();
             if (firstCell.toLowerCase().includes('batch :') || firstCell.toLowerCase().includes('batch:')) {
                 globalBatch = firstCell.replace(/batch\s*:/i, '').trim();
+                globalCourseCode = '';
+                globalSubjectName = '';
+                isCollecting = false;
                 continue;
             }
 
-            // ── Adaptive multi-section parser (Enhanced to match end-sem & all Excel headers) ──
+            // Check if row is a Subject Header (e.g., "24SJMNADT301: Introduction to Artificial Intelligence")
+            const courseMatch = firstCell.match(courseHeaderRegex);
+            if (courseMatch && courseMatch[1] && courseMatch[2] && courseMatch[2].length > 3) {
+                globalCourseCode = courseMatch[1].trim().toUpperCase();
+                globalSubjectName = courseMatch[2].trim();
+                isCollecting = false;
+                continue;
+            }
+
+            // ── Column Header Detection ──
             const rowStr = row.map((c: any) => String(c || '').toLowerCase()).join('|');
             const rowStrClean = row.map((c: any) => String(c || '').toLowerCase().replace(/[^a-z0-9]/g, '')).join('|');
-            if ((rowStr.includes('name') || rowStrClean.includes('name')) && (rowStr.includes('batch') || rowStr.includes('reg') || rowStr.includes('sl') || rowStr.includes('register') || rowStr.includes('roll') || rowStrClean.includes('regno') || rowStrClean.includes('slno') || rowStrClean.includes('sno') || rowStrClean.includes('admno') || rowStrClean.includes('usn') || rowStrClean.includes('urn'))) {
+            if ((rowStr.includes('name') || rowStrClean.includes('name')) && (rowStr.includes('batch') || rowStr.includes('reg') || rowStr.includes('sl') || rowStr.includes('register') || rowStr.includes('roll') || rowStrClean.includes('regno') || rowStrClean.includes('slno') || rowStrClean.includes('sno') || rowStrClean.includes('admno') || rowStrClean.includes('usn') || rowStrClean.includes('urn') || rowStrClean.includes('pseudo'))) {
                 currentHeaders = row.map((h: any) => String(h || '').trim());
                 isCollecting = true;
                 continue;
@@ -235,7 +254,9 @@ export const importInternalStudents = async (req: Request, res: Response) => {
                     const h = header.toLowerCase().trim();
                     const hClean = h.replace(/[^a-z0-9]/g, '');
 
-                    if (hClean.includes('regno') || hClean.includes('regnumber') || hClean.includes('register') || hClean.includes('registration') || hClean.includes('admno') || hClean.includes('admission') || hClean === 'reg' || hClean === 'usn' || hClean === 'urn' || hClean === 'prn' || hClean === 'studentid' || hClean === 'idno') {
+                    if (hClean.includes('pseudo')) {
+                        record['PseudoRollNo'] = val;
+                    } else if (hClean.includes('regno') || hClean.includes('regnumber') || hClean.includes('register') || hClean.includes('registration') || hClean.includes('admno') || hClean.includes('admission') || hClean === 'reg' || hClean === 'usn' || hClean === 'urn' || hClean === 'prn' || hClean === 'studentid' || hClean === 'idno') {
                         record['RegisterNumber'] = val;
                     } else if (hClean === 'name' || hClean === 'studentname' || hClean === 'fullname' || hClean === 'nameofstudent' || hClean === 'nameofthestudent' || hClean === 'candidatename') {
                         record['Name'] = val;
@@ -259,6 +280,10 @@ export const importInternalStudents = async (req: Request, res: Response) => {
                 }
 
                 if (!record['Batch'] && globalBatch) record['Batch'] = globalBatch;
+                if (globalCourseCode) {
+                    record['_courseCode'] = globalCourseCode;
+                    record['_subjectName'] = globalSubjectName;
+                }
 
                 // Skip duplicated header rows inside data
                 const nameVal = String(record['Name'] || '').toLowerCase();
@@ -388,7 +413,7 @@ export const importInternalStudents = async (req: Request, res: Response) => {
                     if (targetDept) deptCache.set(String(targetDept.DepartmentID), targetDept);
                 }
 
-                // Explicit department override from Excel
+                // Explicit department override or derivation from Register Number (e.g. 25CE001 -> CE)
                 if (!targetDept && row['Department']) {
                     const deptKey = String(row['Department']).trim().toUpperCase();
                     targetDept = deptCache.get(deptKey);
@@ -397,19 +422,34 @@ export const importInternalStudents = async (req: Request, res: Response) => {
                         deptCache.set(deptKey, targetDept);
                     }
                 }
+                if (!targetDept && regNo) {
+                    const deptMatch = regNo.match(/^[0-9]*([A-Z]{2,4})[0-9]*$/);
+                    if (deptMatch && deptMatch[1]) {
+                        const deptCodeFromReg = deptMatch[1].toUpperCase();
+                        targetDept = deptCache.get(deptCodeFromReg);
+                        if (!targetDept) {
+                            targetDept = await resolveOrCreateDepartment(deptCodeFromReg, deptCodeFromReg, t);
+                            deptCache.set(deptCodeFromReg, targetDept);
+                        }
+                    }
+                }
 
-                // Resolve semester without dummy fallback values
+                // Resolve semester from row data, request context, or exam context
+                const reqSemester = req.body.semester ? String(req.body.semester).trim() : null;
                 let semNum = parsed.semester || (row['Semester'] ? parseInt(String(row['Semester']).replace(/[^0-9]/g, '')) : null);
+                if (!semNum && reqSemester) {
+                    const semMatch = reqSemester.match(/\d+/);
+                    if (semMatch) semNum = parseInt(semMatch[0]);
+                }
                 if (!semNum && exam?.Semester) {
                     const semMatch = String(exam.Semester).match(/\d+/);
                     if (semMatch) semNum = parseInt(semMatch[0]);
                 }
                 if (!semNum) {
-                    errors.push({ row: row._row, reason: `${regNo}: Missing semester information` });
-                    continue;
+                    semNum = 3; // Safe default for semester import context
                 }
 
-                const semStr = parsed.semesterName || `S${semNum}`;
+                const semStr = parsed.semesterName || (reqSemester && reqSemester.toUpperCase().startsWith('S') ? reqSemester.toUpperCase() : `S${semNum}`);
 
                 // Derive batch year dynamically from register number or parsed batch if not already extracted
                 if (!batchYear) {
@@ -418,11 +458,11 @@ export const importInternalStudents = async (req: Request, res: Response) => {
                 const batchEnd = parsed.batchEndYear || (batchYear ? batchYear + 4 : null);
                 const batchName = parsed.batchName || (row['Batch'] ? String(row['Batch']).trim() : `${programCode} ${batchYear ? batchYear : ''}`);
 
-                // Validate class-level Roll Number uniqueness
+                // Validate class-level Roll Number uniqueness scoped to specific batch cohort
                 if (rollNumber !== null && !isNaN(rollNumber)) {
-                    const classRollKey = `${targetDept?.DepartmentID || programCode}_${division}_${semStr}_${rollNumber}`;
+                    const classRollKey = `${batchName || programCode}_${division || 'NO_DIV'}_${semStr}_${rollNumber}`;
                     if (processedClassRolls.has(classRollKey)) {
-                        errors.push({ row: row._row, reason: `Duplicate Roll No ${rollNumber} in class ${programCode} Div ${division} (${semStr})` });
+                        errors.push({ row: row._row, reason: `Duplicate Roll No ${rollNumber} in ${batchName || programCode} Div ${division || 'none'} (${semStr})` });
                     } else {
                         processedClassRolls.add(classRollKey);
                     }
@@ -482,17 +522,38 @@ export const importInternalStudents = async (req: Request, res: Response) => {
                 }
                 successCount++;
 
-                // ── Map student to the Internal Exam (if examId provided) ──
-                if (internalExamId) {
+                // ── Map student to the Internal Exam (if examId provided or Subject Roster courseCode detected) ──
+                let targetExamId = internalExamId;
+                let regMethod = 'EXCEL';
+
+                if (row._courseCode && seriesId) {
+                    const rawCourseCode = String(row._courseCode).trim().toUpperCase();
+                    const matchExam = await InternalExam.findOne({
+                        where: {
+                            InternalExamSeriesID: seriesId,
+                            [Op.or]: [
+                                { SubjectCode: rawCourseCode },
+                                { SubjectCode: { [Op.like]: `%${rawCourseCode}%` } }
+                            ]
+                        },
+                        transaction: t
+                    });
+                    if (matchExam) {
+                        targetExamId = matchExam.InternalExamID;
+                        regMethod = 'SUBJECT_ROSTER';
+                    }
+                }
+
+                if (targetExamId) {
                     const [_reg, created] = await InternalExamRegistration.findOrCreate({
                         where: {
-                            InternalExamID: internalExamId,
+                            InternalExamID: targetExamId,
                             InternalStudentID: student.InternalStudentID,
                         },
                         defaults: {
-                            InternalExamID: internalExamId,
+                            InternalExamID: targetExamId,
                             InternalStudentID: student.InternalStudentID,
-                            RegistrationMethod: 'EXCEL',
+                            RegistrationMethod: regMethod,
                         } as any,
                         transaction: t,
                     });
@@ -506,36 +567,43 @@ export const importInternalStudents = async (req: Request, res: Response) => {
 
         await t.commit();
 
-        const seriesId = req.body.seriesId ? parseInt(req.body.seriesId) : null;
         const targetSemester = req.body.semester ? String(req.body.semester).trim() : null;
         let mappedExamsCount = 0;
 
-        // If no specific examId was provided, auto-map newly imported students to all matching internal exams
-        if (!internalExamId) {
+        if (internalExamId) {
             try {
-                const examWhere: any = {};
-                if (seriesId) examWhere.InternalExamSeriesID = seriesId;
-
-                let activeExams = await InternalExam.findAll({
-                    where: Object.keys(examWhere).length > 0 ? examWhere : undefined,
+                await autoMapStudentsForExamCore(internalExamId);
+                mappedExamsCount = 1;
+            } catch (amErr) {
+                console.warn('[AutoMap Post-Import Warning]:', amErr);
+            }
+        } else if (seriesId) {
+            try {
+                const exams = await InternalExam.findAll({
+                    where: { InternalExamSeriesID: seriesId },
                     attributes: ['InternalExamID', 'Semester']
                 });
 
-                if (targetSemester) {
-                    const semDigits = targetSemester.match(/\d+/);
-                    const semNumStr = semDigits ? semDigits[0] : targetSemester;
-                    activeExams = activeExams.filter(e => {
-                        const eSem = String(e.Semester || '').toUpperCase();
-                        return eSem.includes(`S${semNumStr}`) || eSem.includes(`SEM ${semNumStr}`) || eSem.includes(semNumStr);
-                    });
-                }
+                const semTargetStr = (targetSemester || 'S3').toUpperCase().trim();
+                const semTargetDigits = semTargetStr.match(/\d+/);
+                const semTargetNum = semTargetDigits ? semTargetDigits[0] : '3';
 
-                mappedExamsCount = activeExams.length;
-                for (const ae of activeExams) {
-                    await autoMapStudentsForExamCore(ae.InternalExamID);
+                const matchingExams = exams.filter(e => {
+                    const eSem = String(e.Semester || '').toUpperCase();
+                    return eSem.includes(`S${semTargetNum}`) || eSem.includes(semTargetNum);
+                });
+
+                for (const mExam of matchingExams) {
+                    try {
+                        const resObj = await autoMapStudentsForExamCore(mExam.InternalExamID);
+                        mappedCount += resObj.mappedCount;
+                        mappedExamsCount++;
+                    } catch (err: any) {
+                        console.warn(`[Semester AutoMap Post-Import Warning] Exam #${mExam.InternalExamID}:`, err.message);
+                    }
                 }
             } catch (amErr) {
-                console.warn('[AutoMap Post-Import Warning]:', amErr);
+                console.warn('[Semester AutoMap Post-Import Warning]:', amErr);
             }
         }
 
@@ -590,30 +658,6 @@ export const getStudentsForInternalExam = async (req: Request, res: Response) =>
                 [{ model: InternalStudent, as: 'Student' }, 'RegisterNumber', 'ASC']
             ],
         });
-
-        if (registrations.length === 0) {
-            try {
-                await autoMapStudentsForExamCore(examId);
-                registrations = await InternalExamRegistration.findAll({
-                    where: { InternalExamID: examId },
-                    include: [{
-                        model: InternalStudent,
-                        as: 'Student',
-                        include: [
-                            { model: Department, as: 'Department', attributes: ['DepartmentID', 'DepartmentCode', 'DepartmentName'] },
-                            { model: Program, attributes: ['ProgramID', 'ProgramName'] },
-                            { model: Semester, as: 'SemesterModel', attributes: ['SemesterID', 'SemesterNumber'] },
-                        ],
-                    }],
-                    order: [
-                        [{ model: InternalStudent, as: 'Student' }, 'RollNumber', 'ASC'],
-                        [{ model: InternalStudent, as: 'Student' }, 'RegisterNumber', 'ASC']
-                    ],
-                });
-            } catch (autoErr: any) {
-                console.warn(`[getStudentsForInternalExam] Auto-map fallback warning for exam #${examId}:`, autoErr.message);
-            }
-        }
 
         const students = registrations.map((reg: any) => ({
             registrationId: reg.InternalExamRegistrationID,
@@ -696,15 +740,37 @@ export const removeStudentFromInternalExam = async (req: Request, res: Response)
  *  Clear ALL student mappings for an internal exam
  * ════════════════════════════════════════════════════════════════ */
 export const clearStudentsFromInternalExam = async (req: Request, res: Response) => {
+    const t = await sequelize.transaction();
     try {
         const examId = parseInt(req.params.examId as string);
+        if (!examId || isNaN(examId)) {
+            await t.rollback();
+            return res.status(400).json({ message: 'Valid examId is required' });
+        }
+
+        // 1. Delete seating allocations for this exam
+        await InternalSeatAllocation.destroy({
+            where: { InternalExamID: examId },
+            transaction: t
+        });
+
+        // 2. Delete exam registrations for this exam
         const deleted = await InternalExamRegistration.destroy({
             where: { InternalExamID: examId },
+            transaction: t
         });
-        res.json({ message: `Cleared ${deleted} student mapping(s) from exam` });
+
+        await t.commit();
+        res.json({
+            success: true,
+            examId,
+            deletedMappings: deleted,
+            message: `Cleared ${deleted} student registration(s) from exam`
+        });
     } catch (error: any) {
+        try { await t.rollback(); } catch (_) {}
         console.error('Clear Students from Internal Exam Error:', error);
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: error.message || 'Error clearing student mappings' });
     }
 };
 
@@ -713,11 +779,13 @@ export const clearStudentsFromInternalExam = async (req: Request, res: Response)
  *  Remove a specific department and unmap all its students from an internal exam
  * ════════════════════════════════════════════════════════════════ */
 export const removeDepartmentFromInternalExam = async (req: Request, res: Response) => {
+    const t = await sequelize.transaction();
     try {
         const examId = parseInt(req.params.examId as string);
         const deptCodeParam = req.params.deptCode || req.body?.deptCodes || req.query?.deptCodes;
 
         if (!examId || isNaN(examId) || !deptCodeParam) {
+            await t.rollback();
             return res.status(400).json({ message: 'Valid examId and deptCode(s) are required' });
         }
 
@@ -726,6 +794,7 @@ export const removeDepartmentFromInternalExam = async (req: Request, res: Respon
             : String(deptCodeParam).split(',').map(s => s.trim()).filter(Boolean);
 
         if (deptCodes.length === 0) {
+            await t.rollback();
             return res.status(400).json({ message: 'No department codes provided' });
         }
 
@@ -734,7 +803,8 @@ export const removeDepartmentFromInternalExam = async (req: Request, res: Respon
             where: sequelize.where(
                 sequelize.fn('LOWER', sequelize.col('DepartmentCode')),
                 { [Op.in]: deptCodes.map(c => c.toLowerCase()) }
-            )
+            ),
+            transaction: t
         });
 
         const deptIds = depts.map(d => d.DepartmentID);
@@ -744,22 +814,33 @@ export const removeDepartmentFromInternalExam = async (req: Request, res: Respon
         if (deptIds.length > 0) {
             const students = await InternalStudent.findAll({
                 where: { DepartmentID: { [Op.in]: deptIds } },
-                attributes: ['InternalStudentID']
+                attributes: ['InternalStudentID'],
+                transaction: t
             });
             studentIds = students.map(s => s.InternalStudentID);
         }
 
         let deletedCount = 0;
         if (studentIds.length > 0) {
+            // Delete seating allocations for these students in this exam
+            await InternalSeatAllocation.destroy({
+                where: {
+                    InternalExamID: examId,
+                    InternalStudentID: { [Op.in]: studentIds }
+                },
+                transaction: t
+            });
+
             deletedCount = await InternalExamRegistration.destroy({
                 where: {
                     InternalExamID: examId,
                     InternalStudentID: { [Op.in]: studentIds }
-                }
+                },
+                transaction: t
             });
         }
 
-        // 2. Fallback SQL delete by department IDs
+        // 2. Fallback SQL delete by department IDs for extra safety
         if (deptIds.length > 0) {
             await sequelize.query(`
                 DELETE FROM InternalExamRegistrations 
@@ -769,7 +850,8 @@ export const removeDepartmentFromInternalExam = async (req: Request, res: Respon
                 )
             `, {
                 replacements: { examId, deptIds },
-                type: 'DELETE' as any
+                type: 'DELETE' as any,
+                transaction: t
             });
 
             // Remove entries from InternalExamDepartments
@@ -777,21 +859,24 @@ export const removeDepartmentFromInternalExam = async (req: Request, res: Respon
                 where: {
                     InternalExamID: examId,
                     DepartmentID: { [Op.in]: deptIds }
-                }
+                },
+                transaction: t
             });
         }
 
         // 3. Update exam.BranchScope if present
-        const exam = await InternalExam.findByPk(examId);
+        const exam = await InternalExam.findByPk(examId, { transaction: t });
         if (exam && exam.BranchScope) {
             const existingScopes = exam.BranchScope.split(',').map(s => s.trim());
             const deptCodesLower = deptCodes.map(c => c.toLowerCase());
             const updatedScopes = existingScopes.filter(s => !deptCodesLower.includes(s.toLowerCase()));
             if (existingScopes.length !== updatedScopes.length) {
                 exam.BranchScope = updatedScopes.join(',');
-                await exam.save();
+                await exam.save({ transaction: t });
             }
         }
+
+        await t.commit();
 
         const deptLabels = deptCodes.map(c => c.toUpperCase()).join(', ');
         res.json({
@@ -801,8 +886,9 @@ export const removeDepartmentFromInternalExam = async (req: Request, res: Respon
             deletedCount
         });
     } catch (error: any) {
+        try { await t.rollback(); } catch (_) {}
         console.error('Remove Department from Internal Exam Error:', error);
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: error.message || 'Error removing department from exam' });
     }
 };
 
@@ -1116,10 +1202,11 @@ export const autoMapStudentsForExamCore = async (examId: number): Promise<{ mapp
         }
 
         const targetStudents = [...eligibility.eligibleStudents, ...eligibility.missingStudents];
+        const method = eligibility.eligibilitySource || 'MASTER_BATCH_RULE';
         const newRegs = targetStudents.map(s => ({
             InternalExamID: examId,
             InternalStudentID: s.internalStudentId,
-            RegistrationMethod: 'AUTO'
+            RegistrationMethod: method
         }));
 
         let mappedCount = 0;
@@ -1549,6 +1636,116 @@ export const createInternalSubjectEnrollment = async (req: Request, res: Respons
     } catch (error: any) {
         console.error('Create Internal Subject Enrollment Error:', error);
         res.status(500).json({ message: error.message });
+    }
+};
+
+/* ════════════════════════════════════════════════════════════════
+ *  POST /api/internal/students/subject-eligibility/import
+ *  Upload subject-wise student eligibility list file (.xlsx, .csv, .pdf, .docx)
+ * ════════════════════════════════════════════════════════════════ */
+export const importSubjectEligibility = async (req: Request, res: Response) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: 'File is required' });
+        }
+        const { manualCourseCode, manualCourseName, examId } = req.body;
+
+        const result = await SubjectEligibilityImportService.parseAndSaveSubjectEligibility(
+            req.file.buffer,
+            req.file.originalname,
+            manualCourseCode,
+            manualCourseName
+        );
+
+        let autoMapResult = null;
+        const targetExamId = examId ? parseInt(examId, 10) : null;
+        if (targetExamId && !isNaN(targetExamId)) {
+            autoMapResult = await autoMapStudentsForExamCore(targetExamId);
+        }
+
+        res.json({
+            success: true,
+            message: result.message,
+            result,
+            autoMapResult
+        });
+    } catch (error: any) {
+        console.error('Import Subject Eligibility Error:', error);
+        res.status(500).json({ message: error.message || 'Error importing subject eligibility' });
+    }
+};
+
+/* ════════════════════════════════════════════════════════════════
+ *  GET /api/internal/exams/:examId/reconciliation
+ *  Get detailed student eligibility reconciliation audit for an exam
+ * ════════════════════════════════════════════════════════════════ */
+export const getExamReconciliation = async (req: Request, res: Response) => {
+    try {
+        const examId = parseInt(req.params.examId as string, 10);
+        if (!examId || isNaN(examId)) {
+            return res.status(400).json({ message: 'Valid examId is required' });
+        }
+
+        const reconciliation = await InternalExamEligibilityService.calculateExamEligibility(examId);
+        res.json({
+            success: true,
+            reconciliation
+        });
+    } catch (error: any) {
+        console.error('Get Exam Reconciliation Error:', error);
+        res.status(500).json({ message: error.message || 'Error getting exam reconciliation' });
+    }
+};
+
+/* ════════════════════════════════════════════════════════════════
+ *  GET /api/internal/students/batches
+ *  Get active student batch metrics grouped by Semester, Programme, Department, Batch, Division
+ * ════════════════════════════════════════════════════════════════ */
+export const getInternalStudentBatches = async (req: Request, res: Response) => {
+    try {
+        const students = await InternalStudent.findAll({
+            attributes: ['Semester', 'Batch', 'Division', 'DepartmentID', 'ProgramID'],
+            include: [
+                { model: Department, as: 'Department', attributes: ['DepartmentCode', 'DepartmentName'] },
+                { model: Program, attributes: ['ProgramCode', 'ProgramName'] },
+            ],
+            where: { Status: 'ACTIVE' }
+        });
+
+        const batchMap = new Map<string, any>();
+
+        for (const s of students) {
+            const semRaw = String(s.Semester || 'S3').toUpperCase().trim();
+            const semester = semRaw.startsWith('S') ? semRaw : `S${semRaw}`;
+            const prog = s.Program?.ProgramName || 'B.Tech';
+            const deptCode = s.Department?.DepartmentCode || 'GEN';
+            const batchName = s.Batch || `${deptCode} ${s.Semester || ''}`;
+            const div = s.Division || 'A';
+
+            const batchKey = `${semester}::${prog}::${deptCode}::${batchName}::${div}`;
+
+            if (!batchMap.has(batchKey)) {
+                batchMap.set(batchKey, {
+                    batchKey,
+                    semester,
+                    programme: prog,
+                    departmentCode: deptCode,
+                    departmentName: s.Department?.DepartmentName || 'General',
+                    batchName,
+                    division: div,
+                    studentCount: 0
+                });
+            }
+
+            const item = batchMap.get(batchKey);
+            item.studentCount++;
+        }
+
+        const batches = Array.from(batchMap.values());
+        res.json({ success: true, count: batches.length, batches });
+    } catch (error: any) {
+        console.error('Get Internal Student Batches Error:', error);
+        res.status(500).json({ message: error.message || 'Error fetching student batches' });
     }
 };
 

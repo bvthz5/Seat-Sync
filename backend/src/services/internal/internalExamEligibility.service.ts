@@ -5,10 +5,13 @@ import {
     InternalExamRegistration,
     InternalStudent,
     InternalStudentSubject,
+    InternalSubjectEligibility,
     Department,
     Program,
     Semester
 } from '../../models/index.js';
+import { SubjectEligibilityImportService } from './subjectEligibilityImport.service.js';
+import { normalizeProgramme, normalizeBranch } from '../academicNormalizer.service.js';
 
 export interface BranchBreakdownItem {
     departmentCode: string;
@@ -48,16 +51,19 @@ export interface ExamEligibilityResult {
     subjectType: string;
     scopeType: string;
     branchScope: string[];
+    eligibilitySource: 'SUBJECT_LIST' | 'MASTER_BATCH_RULE' | 'AUTO_FALLBACK';
     expectedCount: number;
     eligibleCount: number;
     registeredCount: number;
     missingCount: number;
-    status: 'VALIDATED' | 'MISSING_STUDENTS' | 'SUBJECT_ENROLLMENT_REQUIRED' | 'NO_PROGRAMME_MATCH' | 'DATA_ERROR';
+    unresolvedCount: number;
+    status: 'VERIFIED' | 'MISSING_STUDENTS' | 'UNRESOLVED_STUDENTS' | 'SUBJECT_ENROLLMENT_REQUIRED' | 'NO_PROGRAMME_MATCH' | 'DATA_ERROR';
     message: string;
     branchBreakdown: BranchBreakdownItem[];
     batchBreakdown: BatchBreakdownItem[];
     eligibleStudents: StudentEligibilityDetail[];
     missingStudents: StudentEligibilityDetail[];
+    unresolvedStudents: any[];
     ineligibleSummary: {
         branchMismatch: number;
         noProgrammeScope: number;
@@ -69,8 +75,37 @@ export interface ExamEligibilityResult {
 export class InternalExamEligibilityService {
 
     /**
+     * Helper to parse batch label (e.g. "CSE 2024-2028 C (S5)")
+     */
+    static parseBatchString(batchStr: string): {
+        branch: string | null;
+        startYear: number | null;
+        endYear: number | null;
+        division: string | null;
+        semester: string | null;
+    } {
+        if (!batchStr) return { branch: null, startYear: null, endYear: null, division: null, semester: null };
+        const clean = batchStr.trim();
+        const branchMatch = clean.match(/^([A-Za-z]+)\b/);
+        const yearsMatch = clean.match(/(\d{4})[-–](\d{4})/);
+        const divMatch = clean.match(/\b([A-Z])\b/);
+        const semMatch = clean.match(/\((S\d+|SEM\s*\d+)\)/i);
+
+        return {
+            branch: branchMatch && branchMatch[1] ? branchMatch[1].toUpperCase() : null,
+            startYear: yearsMatch && yearsMatch[1] ? parseInt(yearsMatch[1], 10) : null,
+            endYear: yearsMatch && yearsMatch[2] ? parseInt(yearsMatch[2], 10) : null,
+            division: divMatch && divMatch[1] ? divMatch[1].toUpperCase() : null,
+            semester: semMatch && semMatch[1] ? semMatch[1].toUpperCase() : null
+        };
+    }
+
+    /**
      * Calculates deterministic student eligibility for an Internal Exam.
-     * Enforces explicit branch scopes, elective enrollment rules, and program isolation.
+     * Level 1: Subject-Wise Student Roster (InternalSubjectEligibility)
+     * Level 2: Explicit Registrations
+     * Level 3: Curriculum / Batch / Division / Branch Rule
+     * Level 4: Department + Semester Fallback
      */
     static async calculateExamEligibility(examId: number, options?: { transaction?: any }): Promise<ExamEligibilityResult> {
         const transaction = options?.transaction;
@@ -87,26 +122,30 @@ export class InternalExamEligibilityService {
         const semRaw = String(exam.Semester || '').toUpperCase().trim();
         const semMatch = semRaw.match(/\d+/);
         const semNum = semMatch ? parseInt(semMatch[0], 10) : null;
+        const normCourseCode = SubjectEligibilityImportService.normalizeCourseCode(exam.SubjectCode || '');
 
         if (!semNum) {
             return {
                 examId,
-                subjectCode: exam.SubjectCode,
-                subjectName: exam.SubjectName,
+                subjectCode: exam.SubjectCode || '',
+                subjectName: exam.SubjectName || '',
                 semester: semRaw,
                 subjectType: exam.SubjectType || 'CORE',
                 scopeType: exam.ScopeType || 'BRANCH_SCOPE',
                 branchScope: [],
+                eligibilitySource: 'AUTO_FALLBACK',
                 expectedCount: 0,
                 eligibleCount: 0,
                 registeredCount: 0,
                 missingCount: 0,
+                unresolvedCount: 0,
                 status: 'DATA_ERROR',
                 message: `Unparseable semester format "${exam.Semester}" on exam #${examId}`,
                 branchBreakdown: [],
                 batchBreakdown: [],
                 eligibleStudents: [],
                 missingStudents: [],
+                unresolvedStudents: [],
                 ineligibleSummary: { branchMismatch: 0, noProgrammeScope: 0, divisionMismatch: 0, inactiveCount: 0 }
             };
         }
@@ -127,7 +166,7 @@ export class InternalExamEligibilityService {
         const branchScope = Array.from(scopeCodesSet);
         const isAllBranches = exam.ScopeType === 'ALL_BRANCHES' || branchScope.includes('ALL_BRANCHES') || branchScope.includes('ALL') || branchScope.length === 0;
 
-        // 2. Fetch Departments in scope
+        // Fetch Departments in scope (outer scope for breakdown calculation)
         const allDepts = await Department.findAll({ transaction });
         const deptMapById = new Map<number, Department>();
         allDepts.forEach(d => deptMapById.set(d.DepartmentID, d));
@@ -147,74 +186,55 @@ export class InternalExamEligibilityService {
                 });
             });
         }
+        if (targetDeptIds.length === 0) allDepts.forEach(d => targetDeptIds.push(d.DepartmentID));
 
-        // Fallback: If targetDeptIds is still empty, include all departments to prevent 0-matching
-        if (targetDeptIds.length === 0) {
-            allDepts.forEach(d => targetDeptIds.push(d.DepartmentID));
-        }
-
-        // 3. Check for Elective / Minor / Honours requirements
-        const isElectiveOrMinor = exam.SubjectType === 'ELECTIVE' ||
-            exam.SubjectType === 'MINOR' ||
-            exam.SubjectType === 'HONOURS' ||
-            exam.ScopeType === 'ELECTIVE_REGISTRATION_REQUIRED';
-
-        let eligibleStudentsRaw: InternalStudent[] = [];
-
-        if (isElectiveOrMinor) {
-            // Require explicit student subject enrollments from InternalStudentSubjects table
-            const enrollments = await InternalStudentSubject.findAll({
-                where: { SubjectCode: exam.SubjectCode },
-                include: [{
-                    model: InternalStudent,
-                    as: 'Student',
-                    include: [
-                        { model: Department, as: 'Department' },
-                        { model: Program }
-                    ]
-                }],
-                transaction
-            });
-
-            const enrolledStudents = enrollments.map((e: any) => e.Student).filter(Boolean);
-            if (enrolledStudents.length === 0) {
-                return {
-                    examId,
-                    subjectCode: exam.SubjectCode,
-                    subjectName: exam.SubjectName,
-                    semester: semRaw,
-                    subjectType: exam.SubjectType || 'ELECTIVE',
-                    scopeType: 'ELECTIVE_REGISTRATION_REQUIRED',
-                    branchScope,
-                    expectedCount: 0,
-                    eligibleCount: 0,
-                    registeredCount: 0,
-                    missingCount: 0,
-                    status: 'SUBJECT_ENROLLMENT_REQUIRED',
-                    message: `Elective/Minor/Honours subject "${exam.SubjectCode}" requires explicit student subject enrollments. Upload subject enrollments to map students.`,
-                    branchBreakdown: [],
-                    batchBreakdown: [],
-                    eligibleStudents: [],
-                    missingStudents: [],
-                    ineligibleSummary: { branchMismatch: 0, noProgrammeScope: 0, divisionMismatch: 0, inactiveCount: 0 }
-                };
-            }
-            eligibleStudentsRaw = enrolledStudents;
-        } else {
-            // Core subject: query active students by semester and department scope
-            const matchingSemesters = await Semester.findAll({
-                where: {
+        // 2. LEVEL 1 CHECK: Is there a Subject-Wise Student Roster for this SubjectCode?
+        const subjectEligibilityRows = await InternalSubjectEligibility.findAll({
+            where: {
+                SubjectCode: {
                     [Op.or]: [
-                        { SemesterNumber: semNum },
-                        { SemesterName: semRaw },
-                        { SemesterName: `S${semNum}` },
-                        { SemesterName: `Sem ${semNum}` }
+                        exam.SubjectCode || '',
+                        normCourseCode
                     ]
-                },
-                transaction
-            });
-            const semIds = matchingSemesters.map(s => s.SemesterID);
+                }
+            },
+            include: [{
+                model: InternalStudent,
+                as: 'Student',
+                include: [
+                    { model: Department, as: 'Department' },
+                    { model: Program }
+                ]
+            }],
+            transaction
+        });
 
+        let eligibilitySource: ExamEligibilityResult['eligibilitySource'] = 'MASTER_BATCH_RULE';
+        let eligibleStudentsRaw: InternalStudent[] = [];
+        const unresolvedStudents: any[] = [];
+
+        if (subjectEligibilityRows.length > 0) {
+            // Subject-wise roster exists -> AUTHORITATIVE LEVEL 1
+            eligibilitySource = 'SUBJECT_LIST';
+            const resolvedStudentIds = new Set<number>();
+
+            for (const row of subjectEligibilityRows) {
+                if (row.Student) {
+                    if (!resolvedStudentIds.has(row.Student.InternalStudentID)) {
+                        resolvedStudentIds.add(row.Student.InternalStudentID);
+                        eligibleStudentsRaw.push(row.Student);
+                    }
+                } else {
+                    unresolvedStudents.push({
+                        pseudoRoll: row.SubjectPseudoRoll,
+                        admissionNumber: row.AdmissionNumber,
+                        studentName: row.StudentName,
+                        reason: 'UNRESOLVED_STUDENT_IN_MASTER_REGISTRY'
+                    });
+                }
+            }
+        } else {
+            // Level 3: Curriculum / Batch / Department Scope rule
             const semesterOrConditions: any[] = [
                 { Semester: `S${semNum}` },
                 { Semester: `${semNum}` },
@@ -225,18 +245,31 @@ export class InternalExamEligibilityService {
                 { Semester: `Semester ${semNum}` },
                 { Semester: semRaw }
             ];
-            if (semIds.length > 0) semesterOrConditions.push({ SemesterID: { [Op.in]: semIds } });
+
+            const scopeList = Array.from(scopeCodesSet);
+            const batchLikeConds = scopeList.map(code => ({ Batch: { [Op.like]: `%${code}%` } }));
+            const regLikeConds = scopeList.map(code => ({ RegisterNumber: { [Op.like]: `%${code}%` } }));
+
+            const isScopeRestricted = !isAllBranches && (targetDeptIds.length > 0 || scopeList.length > 0);
 
             const studentWhere: any = {
-                Status: 'ACTIVE',
-                [Op.or]: semesterOrConditions
+                Status: 'ACTIVE'
             };
 
-            if (!isAllBranches && targetDeptIds.length > 0) {
-                studentWhere[Op.or] = [
-                    ...semesterOrConditions.map(cond => ({ ...cond, DepartmentID: { [Op.in]: targetDeptIds } })),
-                    ...semesterOrConditions.map(cond => ({ ...cond, DepartmentID: null }))
+            if (isScopeRestricted) {
+                studentWhere[Op.and] = [
+                    { [Op.or]: semesterOrConditions },
+                    {
+                        [Op.or]: [
+                            { DepartmentID: { [Op.in]: targetDeptIds } },
+                            { DepartmentID: null },
+                            ...batchLikeConds,
+                            ...regLikeConds
+                        ]
+                    }
                 ];
+            } else {
+                studentWhere[Op.or] = semesterOrConditions;
             }
 
             eligibleStudentsRaw = await InternalStudent.findAll({
@@ -249,11 +282,46 @@ export class InternalExamEligibilityService {
             });
         }
 
-        // Apply division filter if specified in InternalExamDepartment
+        // Apply strict 2-step Programme & Branch filter + Division filter
         const finalEligibleStudents: InternalStudent[] = [];
         let divMismatchCount = 0;
 
+        const examProgNorm = normalizeProgramme(exam.Programme || (
+            (exam.SubjectCode || '').includes('INMCA') ? 'INT_MCA' :
+            (exam.SubjectCode || '').startsWith('24SJMCA') ? 'MCA' : 'BTECH'
+        ));
+
         for (const student of eligibleStudentsRaw) {
+            const studentBatch = String(student.Batch || '').toUpperCase();
+            const studentProgCode = (student.Program?.ProgramCode || '').toUpperCase();
+            
+            const studentProgNorm = normalizeProgramme(
+                studentBatch.includes('INT MCA') || studentBatch.includes('INT_MCA') ? 'INT_MCA' :
+                studentBatch.includes('MCA') ? 'MCA' :
+                studentProgCode
+            );
+
+            // STEP 1: Programme match check (BTECH vs MCA vs INT_MCA)
+            if (examProgNorm !== studentProgNorm) {
+                continue;
+            }
+
+            // STEP 2: Branch scope match check (CA vs MCA vs INT_MCA vs AD vs CSE...)
+            if (!isAllBranches && branchScope.length > 0) {
+                const studentBranchNorm = normalizeBranch(
+                    student.Department?.DepartmentCode || studentBatch.split(/\s+/)[0] || ''
+                );
+
+                const matchesBranch = branchScope.some(bCode => {
+                    const normTargetBranch = normalizeBranch(bCode);
+                    return normTargetBranch === studentBranchNorm || studentBatch.includes(normTargetBranch);
+                });
+
+                if (!matchesBranch) {
+                    continue;
+                }
+            }
+
             const deptEntry = deptEntries.find((d: any) => d.DepartmentID === student.DepartmentID);
             const deptDiv = deptEntry?.Division ? String(deptEntry.Division).toUpperCase().trim() : 'ALL';
 
@@ -383,12 +451,17 @@ export class InternalExamEligibilityService {
         });
 
         // 8. Final Status determination
-        let status: ExamEligibilityResult['status'] = 'VALIDATED';
-        let message = `All ${expectedCount} eligible students are registered for this exam.`;
+        let status: ExamEligibilityResult['status'] = 'VERIFIED';
+        let message = `All ${expectedCount} eligible students are registered for this exam (${eligibilitySource}).`;
+
+        const unresolvedCount = unresolvedStudents.length;
 
         if (expectedCount === 0) {
             status = 'NO_PROGRAMME_MATCH';
-            message = `No active students found in branch scope (${branchScope.join(', ')}) for Semester S${semNum}.`;
+            message = `No active students found for ${exam.SubjectCode} (${branchScope.join(', ')}) in Semester ${semRaw}.`;
+        } else if (unresolvedCount > 0) {
+            status = 'UNRESOLVED_STUDENTS';
+            message = `${unresolvedCount} students listed in subject roster for "${exam.SubjectCode}" are missing from the master student registry.`;
         } else if (missingCount > 0) {
             status = 'MISSING_STUDENTS';
             message = `${missingCount} of ${expectedCount} eligible students are not registered for this exam.`;
@@ -402,21 +475,24 @@ export class InternalExamEligibilityService {
             subjectType: exam.SubjectType || 'CORE',
             scopeType: exam.ScopeType || 'BRANCH_SCOPE',
             branchScope,
+            eligibilitySource,
             expectedCount,
             eligibleCount: expectedCount,
             registeredCount,
             missingCount,
+            unresolvedCount,
             status,
             message,
             branchBreakdown,
             batchBreakdown,
             eligibleStudents: eligibleDetails,
             missingStudents: missingDetails,
+            unresolvedStudents,
             ineligibleSummary: {
-                branchMismatch: otherBranchStudentsCount,
-                noProgrammeScope: otherBranchStudentsCount,
+                branchMismatch: 0,
+                noProgrammeScope: 0,
                 divisionMismatch: divMismatchCount,
-                inactiveCount
+                inactiveCount: 0
             }
         };
     }
