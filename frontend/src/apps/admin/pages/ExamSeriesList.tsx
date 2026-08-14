@@ -25,6 +25,8 @@ type BranchOption = {
     departmentId: number;
     departmentCode: string;
     departmentName: string;
+    /** Raw timetable Branches value – source of truth for card display */
+    branchScope: string;
 };
 
 type GroupedExam = {
@@ -96,6 +98,9 @@ const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
         const department = exam?.Subject?.Department || {};
         const deptCode = String(department.DepartmentCode || exam?.BranchScope || 'GEN');
         const deptName = String(department.DepartmentName || exam?.BranchScope || 'General');
+        // Use the raw timetable BranchScope value as the display label.
+        // Fall back to deptCode only if BranchScope is absent (legacy records).
+        const branchScope = String(exam?.BranchScope || '').trim() || deptCode;
         const branchKey = String(department.DepartmentID || deptCode || exam.ExamID);
 
         if (!groups.has(groupKey)) {
@@ -127,7 +132,8 @@ const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
                 examId: Number(exam.ExamID),
                 departmentId: Number(department.DepartmentID || 0),
                 departmentCode: deptCode,
-                departmentName: deptName
+                departmentName: deptName,
+                branchScope: branchScope,
             });
         }
 
@@ -808,20 +814,30 @@ const ExamSeriesList: React.FC = () => {
                                                                                         {formattedTitle}
                                                                                     </h3>
 
-                                                                                    <div className="flex flex-wrap gap-1.5 mt-3">
-                                                                                        {examGroup.branches.map((branch) => (
-                                                                                            <span 
-                                                                                                key={branch.examId} 
-                                                                                                className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase border ${
-                                                                                                    isMissingDepartment(branch.departmentCode, branch.departmentName)
+                                                                                    {/* Branch scope tag – sourced from timetable BranchScope, never from DepartmentID */}
+                                                                                    {(() => {
+                                                                                        const rawScopes = examGroup.branches
+                                                                                            .map(b => b.branchScope)
+                                                                                            .filter(Boolean);
+                                                                                        // Deduplicate while preserving order
+                                                                                        const uniqueScopes = Array.from(new Set(rawScopes));
+                                                                                        const isMissing = uniqueScopes.length === 0;
+                                                                                        const scopeDisplay = isMissing ? 'Scope not specified' : uniqueScopes.join(', ');
+                                                                                        // Single-value with a comma means multi-branch within one scope string (e.g. "AD, CA, CC, CS")
+                                                                                        const isMultiBranch = !isMissing && (uniqueScopes.length > 1 || scopeDisplay.includes(','));
+                                                                                        const label = isMultiBranch ? 'BRANCHES' : 'BRANCH';
+                                                                                        return (
+                                                                                            <div className="flex flex-wrap gap-1.5 mt-3">
+                                                                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[10px] font-bold tracking-wide border ${
+                                                                                                    isMissing
                                                                                                         ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                                                                                        : 'bg-slate-100 text-slate-600 border-slate-200/60'
-                                                                                                }`}
-                                                                                            >
-                                                                                                Dept: {branch.departmentCode}
-                                                                                            </span>
-                                                                                        ))}
-                                                                                    </div>
+                                                                                                        : 'bg-indigo-50 text-indigo-700 border-indigo-100'
+                                                                                                }`}>
+                                                                                                    {label}: {scopeDisplay}
+                                                                                                </span>
+                                                                                            </div>
+                                                                                        );
+                                                                                    })()}
                                                                                 </div>
 
                                                                                 <div className="space-y-3 pt-2 border-t border-slate-100">

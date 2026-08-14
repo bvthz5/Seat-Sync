@@ -643,6 +643,50 @@ export class ExamController {
                     const fullDeptName = depts.length > 0 ? depts.map((d: any) => d.Department?.DepartmentName).filter(Boolean).join(', ') : (data.BranchScope || 'All Branches');
                     const mainDeptID = depts[0]?.Department?.DepartmentID || depts[0]?.DepartmentID || undefined;
 
+                    // ── Compute correct branch display ─────────────────────────────────
+                    // Priority 1: Use stored Programme field (set by import from v2 onwards)
+                    // Priority 2: Derive from SubjectCode pattern (fixes legacy records)
+                    // Priority 3: Use raw BranchScope or dept codes (for B.Tech / fallback)
+                    let branchDisplay: string;
+                    const programme: string | null = data.Programme || null;
+                    const subjectCodeUpper = (data.SubjectCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+                    if (programme === 'MCA') {
+                        // MCA master's programme – branch = 'MCA'
+                        branchDisplay = 'MCA';
+                    } else if (programme === 'Integrated MCA') {
+                        // Integrated MCA – branch = 'Int. MCA' (timetable standard abbreviation)
+                        branchDisplay = 'Int. MCA';
+                    } else if (programme === 'M.Tech') {
+                        branchDisplay = 'M.Tech';
+                    } else if (!programme) {
+                        // Legacy record – Programme not yet stored. Derive from SubjectCode.
+                        if (subjectCodeUpper.includes('INMCA') || subjectCodeUpper.includes('IMCA') || subjectCodeUpper.includes('INTMCA')) {
+                            branchDisplay = 'Int. MCA';
+                        } else if (subjectCodeUpper.includes('MCA')) {
+                            branchDisplay = 'MCA';
+                        } else if (subjectCodeUpper.includes('MTECH') || subjectCodeUpper.includes('MTECH')) {
+                            branchDisplay = 'M.Tech';
+                        } else {
+                            // B.Tech or unknown – use BranchScope (normalize spacing), else dept codes
+                            const bs = String(data.BranchScope || '').trim();
+                            branchDisplay = bs
+                                ? bs.split(',').map((s: string) => s.trim()).filter(Boolean).join(', ')
+                                : depts.length > 0
+                                    ? depts.map((d: any) => d.Department?.DepartmentCode).filter(Boolean).join(', ')
+                                    : '';
+                        }
+                    } else {
+                        // B.Tech, MBA, BHM, or other programme – branch = specific dept codes from timetable
+                        const bs = String(data.BranchScope || '').trim();
+                        branchDisplay = bs
+                            ? bs.split(',').map((s: string) => s.trim()).filter(Boolean).join(', ')
+                            : depts.length > 0
+                                ? depts.map((d: any) => d.Department?.DepartmentCode).filter(Boolean).join(', ')
+                                : '';
+                    }
+                    // ──────────────────────────────────────────────────────────────────
+
                     const examDate = new Date(data.ExamDate);
                     const startHour = data.Session === 'FN' ? 10 : 14;
                     const examStart = new Date(examDate);
@@ -664,6 +708,7 @@ export class ExamController {
                         Duration: data.Duration || 150,
                         Status: calcStatus,
                         DepartmentID: mainDeptID,
+                        BranchScope: branchDisplay || null,
                         registrationCount: Number(data.registrationCount || 0),
                         Subject: {
                             SubjectName: data.SubjectName,

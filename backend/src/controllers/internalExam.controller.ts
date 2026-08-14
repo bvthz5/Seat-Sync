@@ -688,7 +688,9 @@ export class InternalExamController {
                     const explicitNameRaw = row.CourseName || row.ExaminationName || row.SubjectName || row.ExamName || row.Title || row.SubjectTitle;
                     const { subjectCode, subjectName } = await InternalExamController.resolveSubjectCodeAndName(courseRaw, explicitNameRaw);
 
-                    const branchScopeStr = deptCodes.join(',');
+                    // Preserve the raw timetable "Branches" value for display (e.g. "Int. MCA", "AD, CA, CC, CS").
+                    // The normalized deptCodes are only used for InternalExamDepartment FK lookups.
+                    const branchScopeStr = String(branchesRaw || '').trim() || deptCodes.join(',');
 
                     let resolvedProgCode = programmeCodeRaw;
                     let resolvedProgLabel = programmeLabelRaw;
@@ -761,6 +763,7 @@ export class InternalExamController {
                             StartTime: startTime || null,
                             EndTime: endTime || null,
                             BranchScope: branchScopeStr,
+                            Programme: resolvedProgLabel,
                             ScopeType: scopeType,
                             SubjectType: subjectType
                         } as any
@@ -776,6 +779,7 @@ export class InternalExamController {
                             StartTime: startTime || null,
                             EndTime: endTime || null,
                             BranchScope: branchScopeStr,
+                            Programme: resolvedProgLabel,
                             ScopeType: scopeType,
                             SubjectType: subjectType
                         };
