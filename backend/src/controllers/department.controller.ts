@@ -142,6 +142,7 @@ export const deleteDepartment = async (req: Request, res: Response) => {
                 }
                 await sequelize.query(`DELETE FROM ExamSeries WHERE SemesterID IN (${semList})`, { transaction: t });
                 await sequelize.query(`UPDATE Students SET SemesterID = NULL, ProgramID = NULL WHERE SemesterID IN (${semList})`, { transaction: t });
+                await sequelize.query(`UPDATE InternalStudents SET SemesterID = NULL, ProgramID = NULL WHERE SemesterID IN (${semList})`, { transaction: t });
                 await sequelize.query(`DELETE FROM Semesters WHERE SemesterID IN (${semList})`, { transaction: t });
             }
             await sequelize.query(`DELETE FROM Attendance WHERE ExamID IN (SELECT ExamID FROM Exams WHERE SubjectID IN (SELECT SubjectID FROM Subjects WHERE SemesterID IN (SELECT SemesterID FROM Semesters WHERE ProgramID IN (${progList}))))`, { transaction: t });
@@ -152,8 +153,11 @@ export const deleteDepartment = async (req: Request, res: Response) => {
         }
 
         // Delete department-level linked data
+        await sequelize.query(`DELETE FROM InternalExamDepartments WHERE DepartmentID = ${deptId}`, { transaction: t });
         await sequelize.query(`DELETE FROM ProgramDepartments WHERE DepartmentID = ${deptId}`, { transaction: t });
         await sequelize.query(`UPDATE Students SET DepartmentID = NULL WHERE DepartmentID = ${deptId}`, { transaction: t });
+        await sequelize.query(`UPDATE InternalStudents SET DepartmentID = NULL WHERE DepartmentID = ${deptId}`, { transaction: t });
+        await sequelize.query(`UPDATE Invigilators SET DepartmentID = NULL WHERE DepartmentID = ${deptId}`, { transaction: t });
         await department.destroy({ transaction: t });
         await t.commit();
         res.json({ message: "Department deleted successfully" });

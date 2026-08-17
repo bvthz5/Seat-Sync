@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { ExamSeries, ActivityLog, InternalExam, Exam, Subject, Semester } from "../models/index.js";
+import { ExamSeries, ActivityLog, InternalExam, InternalExamSeries, Exam, Subject, Semester } from "../models/index.js";
 import { sequelize } from "../config/database.js";
 import { QueryTypes } from "sequelize";
 
@@ -322,7 +322,11 @@ export const deleteSeries = async (req: Request, res: Response): Promise<void> =
 
         if (series.ExamType === 'Internal') {
             await sequelize.query(
-                'DELETE FROM InternalSeatAllocations WHERE InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
+                'DELETE FROM InternalSeatAllocations WHERE SnapshotID IN (SELECT SnapshotID FROM InternalSeatSnapshots WHERE SeriesID = :seriesId) OR InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
+                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE }
+            );
+            await sequelize.query(
+                'DELETE FROM InternalSeatSnapshots WHERE SeriesID = :seriesId',
                 { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE }
             );
             await sequelize.query(
@@ -330,10 +334,15 @@ export const deleteSeries = async (req: Request, res: Response): Promise<void> =
                 { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE }
             );
             await sequelize.query(
+                'DELETE FROM InternalSubjectEligibility WHERE InternalExamSeriesID = :seriesId',
+                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE }
+            );
+            await sequelize.query(
                 'DELETE FROM InternalExamDepartments WHERE InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
                 { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE }
             );
             await InternalExam.destroy({ where: { InternalExamSeriesID: seriesIdNum } });
+            await InternalExamSeries.destroy({ where: { InternalExamSeriesID: seriesIdNum } });
         } else {
             await sequelize.query(
                 'DELETE FROM Attendance WHERE ExamID IN (SELECT ExamID FROM Exams WHERE ExamSeriesID = :seriesId)',

@@ -254,12 +254,14 @@ export const deleteProgram = async (req: Request, res: Response) => {
             await sequelize.query(`DELETE FROM ExamSeries WHERE SemesterID IN (${semList})`, { transaction: t });
             // Nullify Students' SemesterID (keep students, just unlink)
             await sequelize.query(`UPDATE Students SET SemesterID = NULL WHERE SemesterID IN (${semList})`, { transaction: t });
+            await sequelize.query(`UPDATE InternalStudents SET SemesterID = NULL WHERE SemesterID IN (${semList})`, { transaction: t });
         }
 
         // Delete Semesters, bridge table, then the Program
         await sequelize.query(`DELETE FROM Semesters WHERE ProgramID = ${programId}`, { transaction: t });
         await sequelize.query(`DELETE FROM ProgramDepartments WHERE ProgramID = ${programId}`, { transaction: t });
         await sequelize.query(`UPDATE Students SET ProgramID = NULL WHERE ProgramID = ${programId}`, { transaction: t });
+        await sequelize.query(`UPDATE InternalStudents SET ProgramID = NULL WHERE ProgramID = ${programId}`, { transaction: t });
         await program.destroy({ transaction: t });
 
         await t.commit();
@@ -383,7 +385,8 @@ export const deleteAllPrograms = async (req: Request, res: Response) => {
         await sequelize.query(`DELETE FROM InvigilatorSubjects`, { transaction: t });
         await sequelize.query(`DELETE FROM Subjects`, { transaction: t });
         await sequelize.query(`DELETE FROM ExamSeries WHERE SemesterID IS NOT NULL`, { transaction: t });
-        await sequelize.query(`UPDATE Students SET SemesterID = NULL, ProgramID = NULL WHERE SemesterID IS NOT NULL`, { transaction: t });
+        await sequelize.query(`UPDATE Students SET SemesterID = NULL, ProgramID = NULL WHERE SemesterID IS NOT NULL OR ProgramID IS NOT NULL`, { transaction: t });
+        await sequelize.query(`UPDATE InternalStudents SET SemesterID = NULL, ProgramID = NULL WHERE SemesterID IS NOT NULL OR ProgramID IS NOT NULL`, { transaction: t });
         await sequelize.query(`DELETE FROM Semesters`, { transaction: t });
         await sequelize.query(`DELETE FROM ProgramDepartments`, { transaction: t });
         await sequelize.query(`DELETE FROM Programs`, { transaction: t });

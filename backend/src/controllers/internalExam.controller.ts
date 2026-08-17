@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { InternalExam, InternalExamSeries, InternalExamDepartment, Department, AcademicYear, InternalSubjectEligibility, Subject, ExamSchedule, InternalStudentSubject } from '../models/index.js';
+import { InternalExam, InternalExamSeries, ExamSeries, InternalExamDepartment, Department, AcademicYear, InternalSubjectEligibility, Subject, ExamSchedule, InternalStudentSubject } from '../models/index.js';
 import { autoMapStudentsForExamCore } from './internalStudent.controller.js';
 import { SubjectEligibilityImportService } from '../services/internal/subjectEligibilityImport.service.js';
 import { normalizeBranchCode, normalizeProgramme, getProgrammeLabel, getDepartmentCodeFromProgram } from '../services/academicNormalizer.service.js';
@@ -152,10 +152,40 @@ export class InternalExamController {
         if (typeof raw === 'number') {
             return InternalExamController.excelSerialToDate(raw);
         }
-        const text = String(raw ?? '').trim();
+        let text = String(raw ?? '').trim();
         if (!text) return null;
 
-        const ddmmyyyyMatch = text.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$/);
+        // If string is purely numeric (Excel serial as string e.g. "45522" or "46252")
+        if (/^\d{4,6}(\.\d+)?$/.test(text)) {
+            const num = parseFloat(text);
+            if (num > 30000 && num < 70000) {
+                return InternalExamController.excelSerialToDate(num);
+            }
+        }
+
+        // Clean out day names, session indicators, and surrounding parentheses
+        text = text
+            .replace(/\b(?:MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY)\b/gi, '')
+            .replace(/\b(?:MON|TUE|WED|THU|FRI|SAT|SUN)\b/gi, '')
+            .replace(/\b(?:FN|AN|FORENOON|AFTERNOON|MORNING|EVENING)\b/gi, '')
+            .replace(/[\(\)\[\]]/g, ' ')
+            .replace(/^[,\s:-]+|[,\s:-]+$/g, '')
+            .trim();
+
+        if (!text) return null;
+
+        // 1. YYYY-MM-DD or YYYY/MM/DD
+        const ymdMatch = text.match(/\b(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})\b/);
+        if (ymdMatch && ymdMatch[1] && ymdMatch[2] && ymdMatch[3]) {
+            const y = parseInt(ymdMatch[1]);
+            const m = parseInt(ymdMatch[2]);
+            const d = parseInt(ymdMatch[3]);
+            const parsed = new Date(y, m - 1, d);
+            if (!isNaN(parsed.getTime())) return parsed;
+        }
+
+        // 2. DD-MM-YYYY or DD/MM/YYYY or DD.MM.YYYY
+        const ddmmyyyyMatch = text.match(/\b(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})\b/);
         if (ddmmyyyyMatch && ddmmyyyyMatch[1] && ddmmyyyyMatch[2] && ddmmyyyyMatch[3]) {
             const d = parseInt(ddmmyyyyMatch[1]);
             const m = parseInt(ddmmyyyyMatch[2]);
@@ -165,6 +195,35 @@ export class InternalExamController {
             if (!isNaN(manualDate.getTime())) return manualDate;
         }
 
+        // 3. DD MMM YYYY or DD-MMM-YYYY (e.g. 18 Aug 2026, 18-Aug-2026, 18-AUG-26)
+        const monthNames: Record<string, number> = {
+            JAN: 0, JANU: 0, JANUARY: 0,
+            FEB: 1, FEBR: 1, FEBRUARY: 1,
+            MAR: 2, MARC: 2, MARCH: 2,
+            APR: 3, APRI: 3, APRIL: 3,
+            MAY: 4,
+            JUN: 5, JUNE: 5,
+            JUL: 6, JULY: 6,
+            AUG: 7, AUGU: 7, AUGUST: 7,
+            SEP: 8, SEPT: 8, SEPTEMBER: 8,
+            OCT: 9, OCTO: 9, OCTOBER: 9,
+            NOV: 10, NOVE: 10, NOVEMBER: 10,
+            DEC: 11, DECE: 11, DECEMBER: 11
+        };
+
+        const wordDateMatch = text.match(/\b(\d{1,2})[\s\-/.]([A-Za-z]{3,9})[\s\-/,.]+(\d{2,4})\b/);
+        if (wordDateMatch && wordDateMatch[1] && wordDateMatch[2] && wordDateMatch[3]) {
+            const d = parseInt(wordDateMatch[1]);
+            const monKey = wordDateMatch[2].toUpperCase().slice(0, 3);
+            let y = parseInt(wordDateMatch[3]);
+            if (y < 100) y += 2000;
+            if (monthNames[monKey] !== undefined) {
+                const manualDate = new Date(y, monthNames[monKey]!, d);
+                if (!isNaN(manualDate.getTime())) return manualDate;
+            }
+        }
+
+        // 4. Standard Date fallback
         const standardDate = new Date(text);
         if (!isNaN(standardDate.getTime())) {
             let y = standardDate.getFullYear();
@@ -253,9 +312,9 @@ export class InternalExamController {
         const upper = text.toUpperCase().trim();
 
         const isHeaderContext = upper.includes('INTERNAL') || upper.includes('EXAM') || upper.includes('SCHEME') ||
-                                upper.includes('SEMESTER') || upper.includes('TIMETABLE') || upper.includes('BTECH') ||
-                                upper.includes('DEGREE') || upper.includes('MCA') || upper.includes('PROGRAMME') ||
-                                upper.match(/\bS[1-8]\b/);
+            upper.includes('SEMESTER') || upper.includes('TIMETABLE') || upper.includes('BTECH') ||
+            upper.includes('DEGREE') || upper.includes('MCA') || upper.includes('PROGRAMME') ||
+            upper.match(/\bS[1-8]\b/);
 
         if (!isHeaderContext) return null;
 
@@ -294,7 +353,7 @@ export class InternalExamController {
     static extractRowsFromSpreadsheet(buffer: Buffer) {
         const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
         if (workbook.SheetNames.length === 0) throw new Error('Invalid file: No sheets found');
-        
+
         let allRows: any[] = [];
 
         for (const sheetName of workbook.SheetNames) {
@@ -310,22 +369,41 @@ export class InternalExamController {
 
             let tableStartIndex = -1;
             let columnHeaders: string[] = [];
+            let bestHeaderScore = 0;
 
-            // Detect primary header row
-            for (let i = 0; i < rawData.length; i++) {
+            // Intelligent Header Scoring
+            for (let i = 0; i < Math.min(rawData.length, 15); i++) {
                 const row = rawData[i] || [];
-                const rowStr = row.join(' ').toUpperCase();
-                
-                if (rowStr.includes('DAY') || rowStr.includes('DATE') || rowStr.includes('COURSE') || rowStr.includes('SUBJECT') || rowStr.includes('EXAM')) {
+                const rowUpper = row.map(c => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, ''));
+
+                let score = 0;
+                let hasDate = false;
+                let hasCourse = false;
+                let hasBranch = false;
+                let hasTime = false;
+                let hasSem = false;
+
+                for (const cell of rowUpper) {
+                    if (!cell) continue;
+                    if (!hasDate && (cell.includes('DATE') || cell.includes('DAY') || cell.includes('DAYDATE'))) { hasDate = true; score++; }
+                    if (!hasCourse && (cell.includes('COURSE') || cell.includes('SUBJECT') || cell.includes('PAPER') || cell.includes('CODE') || cell.includes('DISCIPLINE'))) { hasCourse = true; score++; }
+                    if (!hasBranch && (cell.includes('BRANCH') || cell.includes('DEPT') || cell.includes('DEPARTMENT') || cell.includes('PROGRAM') || cell.includes('STREAM'))) { hasBranch = true; score++; }
+                    if (!hasTime && (cell.includes('TIME') || cell.includes('SESSION') || cell.includes('SLOT') || cell.includes('TIMING'))) { hasTime = true; score++; }
+                    if (!hasSem && (cell.includes('SEM') || cell.includes('SEMESTER'))) { hasSem = true; score++; }
+                }
+
+                // If row has at least 2 distinct timetable column categories, candidate header
+                if (score >= 2 && score > bestHeaderScore) {
+                    bestHeaderScore = score;
                     tableStartIndex = i;
-                    columnHeaders = row.map(h => String(h).toUpperCase().replace(/[^A-Z0-9]/g, ''));
-                    break;
+                    columnHeaders = rowUpper;
                 }
             }
 
+            // Fallback: If no row scored >= 2, check row 0
             if (tableStartIndex === -1 && rawData.length > 0) {
                 tableStartIndex = 0;
-                columnHeaders = (rawData[0] || []).map(h => String(h).toUpperCase().replace(/[^A-Z0-9]/g, ''));
+                columnHeaders = (rawData[0] || []).map(h => String(h || '').toUpperCase().replace(/[^A-Z0-9]/g, ''));
             }
 
             let currentSemester: string | null = sheetSemester || null;
@@ -373,16 +451,47 @@ export class InternalExamController {
                             return String(rowObj[k]).trim();
                         }
                     }
+                    // Fuzzy match on actual column header keys
+                    for (const actualKey of Object.keys(rowObj)) {
+                        for (const k of keys) {
+                            if (actualKey.includes(k) || k.includes(actualKey)) {
+                                if (rowObj[actualKey] !== undefined && rowObj[actualKey] !== null && String(rowObj[actualKey]).trim() !== '') {
+                                    return String(rowObj[actualKey]).trim();
+                                }
+                            }
+                        }
+                    }
                     return undefined;
                 };
 
-                const dateVal = getColVal(['DAYDATE', 'DATE', 'EXAMDATE', 'DAYANDDATE', 'DAY', 'DATEOFEXAM']);
-                const timeVal = getColVal(['TIME', 'SESSION', 'EXAMTIME', 'TIMINGS', 'TIMING']);
-                const slotVal = getColVal(['SLOT']);
-                const branchVal = getColVal(['BRANCHES', 'BRANCH', 'DEPARTMENT', 'DEPARTMENTS', 'DEPTS', 'DEPT', 'PROGRAMME', 'PROGRAM', 'STREAM']);
+                let dateVal = getColVal(['DAYDATE', 'DATE', 'EXAMDATE', 'DAYANDDATE', 'DAY', 'DATEOFEXAM', 'DATEOFEXAMINATION']);
+                let timeVal = getColVal(['TIME', 'SESSION', 'EXAMTIME', 'TIMINGS', 'TIMING']);
+                let slotVal = getColVal(['SLOT']);
+                let branchVal = getColVal(['BRANCHES', 'BRANCH', 'DEPARTMENT', 'DEPARTMENTS', 'DEPTS', 'DEPT', 'PROGRAMME', 'PROGRAM', 'STREAM']);
 
-                const courseVal = getColVal(['COURSECODE', 'SUBJECTCODE', 'COURSECODESUBJECTCODE', 'SUBCODE', 'PAPERCODE', 'CODE', 'COURSE', 'SUBJECT', 'DISCIPLINE']);
-                const courseNameVal = getColVal(['EXAMINATIONNAME', 'EXAMNAME', 'EXAMINATION', 'SUBJECTNAME', 'COURSENAME', 'PAPERNAME', 'SUBJECTTITLE', 'TITLE', 'EXAMTITLE', 'NAME', 'TITLEOFPAPER', 'SUBTITLE', 'TITLEOFCOURSE']);
+                let courseVal = getColVal(['COURSECODE', 'SUBJECTCODE', 'COURSECODESUBJECTCODE', 'SUBCODE', 'PAPERCODE', 'CODE', 'COURSE', 'SUBJECT', 'DISCIPLINE']);
+                let courseNameVal = getColVal(['EXAMINATIONNAME', 'EXAMNAME', 'EXAMINATION', 'SUBJECTNAME', 'COURSENAME', 'PAPERNAME', 'SUBJECTTITLE', 'TITLE', 'EXAMTITLE', 'NAME', 'TITLEOFPAPER', 'SUBTITLE', 'TITLEOFCOURSE']);
+
+                // If column mappings didn't identify date/course, scan the cells directly
+                if (!courseVal) {
+                    for (const cell of rowArray) {
+                        const strCell = String(cell || '').trim();
+                        if (/^[0-9]{2}[A-Za-z]{2,8}[0-9]{3,4}/i.test(strCell) || /^[A-Za-z]{2,6}[0-9]{3,4}/i.test(strCell)) {
+                            courseVal = strCell;
+                            break;
+                        }
+                    }
+                }
+
+                if (!dateVal) {
+                    for (const cell of rowArray) {
+                        const parsed = InternalExamController.parseExamDateValue(cell);
+                        if (parsed) {
+                            dateVal = String(cell);
+                            break;
+                        }
+                    }
+                }
 
                 if (dateVal) lastDate = dateVal;
                 if (timeVal) lastTime = timeVal;
@@ -491,9 +600,9 @@ export class InternalExamController {
             const slotMatch = line.match(/\b(?:Slot\s+)?([A-Z])\b/i);
             if (slotMatch && line.toLowerCase().includes('slot')) currentSlot = slotMatch[1] || null;
 
-            // Course code matching (e.g. 24SJGAMAT301, 24SJPCCET501, 24SIMCA263, MAT201, CST302)
-            const courseCodeMatch = line.match(/\b(2[0-9][A-Z0-9]{5,12}|[A-Z]{2,6}[0-9]{3,6}[A-Z0-9]*)\b/);
-            
+            // Course code matching (e.g. 24SJGAMAT301, 24SJPCCET501, 24SIMCA263, MAT201, CST302, CS101)
+            const courseCodeMatch = line.match(/\b(2[0-9][A-Za-z0-9]{5,14}|[A-Za-z]{2,8}[-_]?[0-9]{2,5}[A-Za-z0-9-_]*)\b/);
+
             if (courseCodeMatch) {
                 const matchedCode = courseCodeMatch[1];
                 if (matchedCode && !/^\d+$/.test(matchedCode) && !/^\d{1,2}[\/.-]\d{1,2}/.test(matchedCode)) {
@@ -567,10 +676,34 @@ export class InternalExamController {
 
         try {
             const filename = (req.file.originalname || '').toLowerCase();
-            const { seriesId } = req.body;
+            const rawSeriesId = req.body.seriesId;
+            let seriesId: number | string | undefined = (rawSeriesId && rawSeriesId !== 'undefined' && rawSeriesId !== 'null') ? rawSeriesId : undefined;
 
             if (!seriesId) {
-                return res.status(400).json({ message: "Exam Series ID is required" });
+                // Auto-resolve to active or latest InternalExamSeries if omitted or undefined
+                const activeSeries = await InternalExamSeries.findOne({
+                    where: { IsActive: true },
+                    order: [['InternalExamSeriesID', 'DESC']]
+                });
+                if (activeSeries) {
+                    seriesId = activeSeries.InternalExamSeriesID;
+                } else {
+                    const anySeries = await InternalExamSeries.findOne({
+                        order: [['InternalExamSeriesID', 'DESC']]
+                    });
+                    if (anySeries) {
+                        seriesId = anySeries.InternalExamSeriesID;
+                    } else {
+                        const regularSeries = await ExamSeries.findOne({
+                            order: [['ExamSeriesID', 'DESC']]
+                        });
+                        if (regularSeries) {
+                            seriesId = regularSeries.ExamSeriesID;
+                        } else {
+                            return res.status(400).json({ message: "Exam Series ID is required" });
+                        }
+                    }
+                }
             }
 
             const isPdf = req.file.mimetype === 'application/pdf' || filename.endsWith('.pdf');
@@ -594,7 +727,7 @@ export class InternalExamController {
             }
 
             if (!Array.isArray(data) || data.length === 0) {
-                return res.status(400).json({ message: "No valid rows found in uploaded file. Check the format." });
+                return res.status(400).json({ message: "No valid rows found in uploaded file. Please check the timetable format." });
             }
 
             let successCount = 0;

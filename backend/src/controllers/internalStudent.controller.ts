@@ -9,6 +9,7 @@ import {
     InternalExam,
     InternalExamDepartment,
     InternalStudentSubject,
+    InternalSubjectEligibility,
     Department,
     Program,
     Semester,
@@ -954,13 +955,22 @@ export const getInternalExamDetail = async (req: Request, res: Response) => {
  *  Delete an internal student (and all their exam mappings)
  * ════════════════════════════════════════════════════════════════ */
 export const deleteInternalStudent = async (req: Request, res: Response) => {
+    const t = await sequelize.transaction();
     try {
         const id = parseInt(req.params.id as string);
-        await InternalExamRegistration.destroy({ where: { InternalStudentID: id } });
-        const deleted = await InternalStudent.destroy({ where: { InternalStudentID: id } });
-        if (deleted === 0) return res.status(404).json({ message: 'Student not found' });
+        await InternalSeatAllocation.destroy({ where: { InternalStudentID: id }, transaction: t });
+        await InternalExamRegistration.destroy({ where: { InternalStudentID: id }, transaction: t });
+        await InternalSubjectEligibility.destroy({ where: { InternalStudentID: id }, transaction: t });
+        await InternalStudentSubject.destroy({ where: { InternalStudentID: id }, transaction: t });
+        const deleted = await InternalStudent.destroy({ where: { InternalStudentID: id }, transaction: t });
+        if (deleted === 0) {
+            await t.rollback();
+            return res.status(404).json({ message: 'Student not found' });
+        }
+        await t.commit();
         res.json({ message: 'Internal student deleted' });
     } catch (error: any) {
+        await t.rollback();
         console.error('Delete Internal Student Error:', error);
         res.status(500).json({ message: error.message });
     }
@@ -1063,7 +1073,10 @@ export const createInternalStudent = async (req: Request, res: Response) => {
 export const deleteAllInternalStudents = async (req: Request, res: Response) => {
     const t = await sequelize.transaction();
     try {
+        await InternalSeatAllocation.destroy({ where: {}, transaction: t });
         await InternalExamRegistration.destroy({ where: {}, transaction: t });
+        await InternalSubjectEligibility.destroy({ where: {}, transaction: t });
+        await InternalStudentSubject.destroy({ where: {}, transaction: t });
         await InternalStudent.destroy({ where: {}, truncate: false, transaction: t });
         await t.commit();
         res.json({ message: 'All internal students deleted' });

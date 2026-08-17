@@ -1229,9 +1229,16 @@ export class ExamController {
             if (parsedSeriesId) {
                 const seriesInfo = await ExamSeries.findByPk(parsedSeriesId);
                 if (seriesInfo && seriesInfo.ExamType === 'Internal') {
-                    // Internal series cleanup: SeatAllocations -> ExamRegistrations -> ExamDepartments -> InternalExams
+                    // Internal series cleanup: SeatAllocations -> Snapshots -> ExamRegistrations -> Eligibilities -> ExamDepartments -> InternalExams
                     await sequelize.query(
-                        'DELETE FROM InternalSeatAllocations WHERE InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
+                        'DELETE FROM InternalSeatAllocations WHERE SnapshotID IN (SELECT SnapshotID FROM InternalSeatSnapshots WHERE SeriesID = :seriesId) OR InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
+                        {
+                            replacements: { seriesId: parsedSeriesId },
+                            type: QueryTypes.DELETE
+                        }
+                    );
+                    await sequelize.query(
+                        'DELETE FROM InternalSeatSnapshots WHERE SeriesID = :seriesId',
                         {
                             replacements: { seriesId: parsedSeriesId },
                             type: QueryTypes.DELETE
@@ -1239,6 +1246,13 @@ export class ExamController {
                     );
                     await sequelize.query(
                         'DELETE FROM InternalExamRegistrations WHERE InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
+                        {
+                            replacements: { seriesId: parsedSeriesId },
+                            type: QueryTypes.DELETE
+                        }
+                    );
+                    await sequelize.query(
+                        'DELETE FROM InternalSubjectEligibility WHERE InternalExamSeriesID = :seriesId',
                         {
                             replacements: { seriesId: parsedSeriesId },
                             type: QueryTypes.DELETE

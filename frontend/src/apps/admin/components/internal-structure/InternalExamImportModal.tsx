@@ -15,6 +15,7 @@ export const InternalExamImportModal: React.FC<Props> = ({ isOpen, onClose, onSu
     const [isDragging, setIsDragging] = useState(false);
     const [loading, setLoading] = useState(false);
     const [previewLoading, setPreviewLoading] = useState(false);
+    const [previewError, setPreviewError] = useState<string | null>(null);
     const [result, setResult] = useState<any>(null);
     const [previewData, setPreviewData] = useState<any[]>([]);
     const [formatType, setFormatType] = useState<string>('');
@@ -26,6 +27,7 @@ export const InternalExamImportModal: React.FC<Props> = ({ isOpen, onClose, onSu
 
     useEffect(() => {
         setResult(null);
+        setPreviewError(null);
         if (!file || !seriesId) {
             setPreviewData([]);
             setFormatType('');
@@ -40,9 +42,10 @@ export const InternalExamImportModal: React.FC<Props> = ({ isOpen, onClose, onSu
 
         const loadPreview = async () => {
             setPreviewLoading(true);
+            setPreviewError(null);
             try {
                 const res = await InternalExamService.importTimetable(file, seriesId, true);
-                if (res.success && res.preview) {
+                if (res.success && res.preview && res.preview.length > 0) {
                     setPreviewData(res.preview);
                     
                     const semExpandState: Record<string, boolean> = {};
@@ -57,9 +60,17 @@ export const InternalExamImportModal: React.FC<Props> = ({ isOpen, onClose, onSu
 
                     setExpandedSemesters(semExpandState);
                     setExpandedProgrammes(progExpandState);
+                } else {
+                    setPreviewData([]);
+                    if (res.message) {
+                        setPreviewError(res.message);
+                    }
                 }
-            } catch (err) {
+            } catch (err: any) {
                 console.error("Preview extraction failed", err);
+                const errMsg = err.response?.data?.message || err.message || "Failed to extract timetable preview.";
+                setPreviewError(errMsg);
+                setPreviewData([]);
             } finally {
                 setPreviewLoading(false);
             }
@@ -263,6 +274,17 @@ export const InternalExamImportModal: React.FC<Props> = ({ isOpen, onClose, onSu
                         <div className="flex flex-col items-center justify-center p-10 text-indigo-600 font-bold text-xs bg-indigo-50/50 rounded-2xl border border-indigo-100">
                             <Loader2 className="w-8 h-8 animate-spin mb-3 text-indigo-600" />
                             <p className="text-slate-800 font-extrabold">Analyzing multi-semester & multi-programme timetable structure...</p>
+                        </div>
+                    )}
+
+                    {/* Error State for Preview */}
+                    {!result && !previewLoading && file && previewError && (
+                        <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
+                            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                            <div>
+                                <h4 className="text-xs font-bold text-amber-900 mb-0.5">Could not extract timetable preview</h4>
+                                <p className="text-xs text-amber-700 leading-relaxed font-medium">{previewError}</p>
+                            </div>
                         </div>
                     )}
 
