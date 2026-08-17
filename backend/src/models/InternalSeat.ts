@@ -58,6 +58,7 @@ InternalSeat.init(
     tableName: "InternalSeats",
     timestamps: false,
     indexes: [
+      { unique: true, fields: ["RoomID", "RowLabel", "BenchNumber", "SeatNumber"] },
       { fields: ["RoomID", "IsActive"] },
       { fields: ["RoomID", "RowLabel", "BenchNumber"] },
     ],

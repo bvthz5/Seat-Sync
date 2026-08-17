@@ -155,37 +155,43 @@ export const InternalLayoutConfig: React.FC<Props> = ({ readOnly = false }) => {
 
     const singleVisualColumns: SingleColumnView[] = useMemo(() => {
         if (!isSingleMode) return [];
-        return config.rowLayout.map((benchCount, colIdx) => {
-            const colLabel = String.fromCharCode(65 + colIdx);
-            const seatsList: SingleSeatView[] = [];
-            for (let bi = 0; bi < benchCount; bi++) {
-                const b = bi + 1;
-                const seatKey = `${colLabel}-${b}-1`;
-                const seat = seatLookup.get(seatKey);
-                const label = `${colLabel.toLowerCase()}${b}`;
-                seatsList.push({ benchNum: b, seatKey, seat, label });
-            }
-            return { colLabel, benchCount, seats: seatsList };
-        });
+        return config.rowLayout
+            .map((benchCount, colIdx) => ({ benchCount, colIdx }))
+            .filter(({ benchCount }) => benchCount > 0)
+            .map(({ benchCount, colIdx }) => {
+                const colLabel = String.fromCharCode(65 + colIdx);
+                const seatsList: SingleSeatView[] = [];
+                for (let bi = 0; bi < benchCount; bi++) {
+                    const b = bi + 1;
+                    const seatKey = `${colLabel}-${b}-1`;
+                    const seat = seatLookup.get(seatKey);
+                    const label = `${colLabel.toLowerCase()}${b}`;
+                    seatsList.push({ benchNum: b, seatKey, seat, label });
+                }
+                return { colLabel, benchCount, seats: seatsList };
+            });
     }, [config, seatLookup, isSingleMode]);
 
     const dualVisualColumns: DualColumnView[] = useMemo(() => {
         if (isSingleMode) return [];
-        return config.rowLayout.map((benchCount, colIdx) => {
-            const colLabel = String.fromCharCode(65 + colIdx);
-            const benches: BenchView[] = [];
-            for (let bi = 0; bi < benchCount; bi++) {
-                const b = bi + 1;
-                const leftKey = `${colLabel}-${b}-1`;
-                const leftSeat = seatLookup.get(leftKey);
-                const leftLabel = `${b}L`;
-                const rightKey = `${colLabel}-${b}-2`;
-                const rightSeat = seatLookup.get(rightKey);
-                const rightLabel = `${b}R`;
-                benches.push({ benchNum: b, leftKey, rightKey, leftSeat, rightSeat, leftLabel, rightLabel });
-            }
-            return { colLabel, benchCount, benches };
-        });
+        return config.rowLayout
+            .map((benchCount, colIdx) => ({ benchCount, colIdx }))
+            .filter(({ benchCount }) => benchCount > 0)
+            .map(({ benchCount, colIdx }) => {
+                const colLabel = String.fromCharCode(65 + colIdx);
+                const benches: BenchView[] = [];
+                for (let bi = 0; bi < benchCount; bi++) {
+                    const b = bi + 1;
+                    const leftKey = `${colLabel}-${b}-1`;
+                    const leftSeat = seatLookup.get(leftKey);
+                    const leftLabel = `${b}L`;
+                    const rightKey = `${colLabel}-${b}-2`;
+                    const rightSeat = seatLookup.get(rightKey);
+                    const rightLabel = `${b}R`;
+                    benches.push({ benchNum: b, leftKey, rightKey, leftSeat, rightSeat, leftLabel, rightLabel });
+                }
+                return { colLabel, benchCount, benches };
+            });
     }, [config, seatLookup, isSingleMode]);
 
     // Count currently visible disabled seats

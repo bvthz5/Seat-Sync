@@ -135,8 +135,44 @@ export const internalStructureService = {
     },
 
     // ─── BULK ─────────────────────────────────────────────────────────────────
+    previewStructure: async (data: any[]) => {
+        const res = await api.post<{
+            totalRows: number;
+            validCount: number;
+            mismatchCount: number;
+            missingCapacityCount: number;
+            invalidRowCount: number;
+            items: Array<{
+                rawIndex?: number;
+                rawRoomCode: string;
+                roomCode: string;
+                normalizedRoomKey: string;
+                blockName: string;
+                floorNumber: number;
+                roomType: string;
+                seatMode: string;
+                seatsPerBench: number;
+                sourceCapacity: number | null;
+                calculatedCapacity: number;
+                generatedCapacity?: number;
+                rowLayout: number[];
+                rowDetails: { label: string; benches: number }[];
+                totalBenches: number;
+                status: 'VALID' | 'CAPACITY_MISMATCH' | 'MISSING_SOURCE_CAPACITY' | 'INVALID_SOURCE_ROW';
+                message: string;
+                isUsable: boolean;
+            }>;
+        }>(`${PREFIX}/import/preview`, { data });
+        return res.data;
+    },
     importStructure: async (data: any[]) => {
-        const res = await api.post(`${PREFIX}/import`, { data });
+        const res = await api.post<{
+            blocksCreated: number;
+            floorsCreated: number;
+            roomsCreated: number;
+            roomsUpdated: number;
+            summary?: any;
+        }>(`${PREFIX}/import`, { data });
         return res.data;
     },
     getFloorsByBlock: async (blockId: number) => {

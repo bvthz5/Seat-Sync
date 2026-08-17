@@ -7,7 +7,7 @@ import {
   getInternalRooms, createInternalRoom, bulkCreateInternalRooms, updateInternalRoom,
   disableInternalRoom, enableInternalRoom, deleteInternalRoom,
   getInternalRoomLayout, updateInternalRoomLayout, updateInternalSeatStates,
-  deleteAllInternalStructureData, importInternalStructure, getFloorsByBlock
+  deleteAllInternalStructureData, importInternalStructure, previewInternalStructure, getFloorsByBlock
 } from "../controllers/internalStructure.controller.js";
 
 // All routes require root admin auth
@@ -15,6 +15,7 @@ router.use(AuthMiddleware.requireRootAuth);
 
 // --- BULK OPERATIONS ---
 router.delete("/all", deleteAllInternalStructureData);
+router.post("/import/preview", previewInternalStructure);
 router.post("/import", importInternalStructure);
 
 // --- BLOCKS ---

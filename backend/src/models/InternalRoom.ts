@@ -8,6 +8,8 @@ interface InternalRoomAttributes {
   BlockID: number;
   FloorID: number;
   RoomCode: string;
+  NormalizedRoomCode?: string;
+  SourceCapacity?: number | null;
   RoomType: "Classroom" | "Drawing Hall" | "Lab" | "Minor Room" | "Seminar Hall";
   TotalCapacity: number;
   OverrideCap?: number | null;
@@ -20,7 +22,7 @@ interface InternalRoomAttributes {
   updatedAt?: Date;
 }
 
-interface InternalRoomCreationAttributes extends Optional<InternalRoomAttributes, "RoomID" | "RowLayout" | "SeatsPerBench" | "OverrideCap" | "RoomType" | "SeatMode"> { }
+interface InternalRoomCreationAttributes extends Optional<InternalRoomAttributes, "RoomID" | "NormalizedRoomCode" | "SourceCapacity" | "RowLayout" | "SeatsPerBench" | "OverrideCap" | "RoomType" | "SeatMode"> { }
 
 export class InternalRoom extends Model<InternalRoomAttributes, InternalRoomCreationAttributes>
   implements InternalRoomAttributes {
@@ -28,6 +30,8 @@ export class InternalRoom extends Model<InternalRoomAttributes, InternalRoomCrea
   declare BlockID: number;
   declare FloorID: number;
   declare RoomCode: string;
+  declare NormalizedRoomCode: string;
+  declare SourceCapacity: number | null;
   declare RoomType: "Classroom" | "Drawing Hall" | "Lab" | "Minor Room" | "Seminar Hall";
   declare TotalCapacity: number;
   declare OverrideCap: number | null;
@@ -63,6 +67,23 @@ InternalRoom.init(
       type: DataTypes.STRING(50),
       allowNull: false,
       field: "RoomCode",
+      set(val: string) {
+        const raw = String(val || "").trim();
+        this.setDataValue("RoomCode", raw);
+        this.setDataValue("NormalizedRoomCode", raw.toUpperCase().replace(/\s+/g, ""));
+      }
+    },
+    NormalizedRoomCode: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      defaultValue: "",
+      field: "NormalizedRoomCode",
+    },
+    SourceCapacity: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: null,
+      field: "SourceCapacity",
     },
     RoomType: {
       type: DataTypes.ENUM("Classroom", "Drawing Hall", "Lab", "Minor Room", "Seminar Hall"),
@@ -124,8 +145,18 @@ InternalRoom.init(
     sequelize,
     tableName: "InternalRooms",
     timestamps: true,
+    hooks: {
+      beforeValidate: (instance: InternalRoom) => {
+        if (instance.RoomCode) {
+          const raw = String(instance.RoomCode).trim();
+          instance.RoomCode = raw;
+          instance.NormalizedRoomCode = raw.toUpperCase().replace(/\s+/g, "");
+        }
+      }
+    },
     indexes: [
-      { unique: true, fields: ["RoomCode", "FloorID"] }
+      { unique: true, fields: ["RoomCode", "FloorID"] },
+      { unique: true, fields: ["NormalizedRoomCode", "FloorID"] }
     ],
   }
 );

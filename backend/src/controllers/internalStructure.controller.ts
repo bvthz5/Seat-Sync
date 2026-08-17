@@ -540,6 +540,19 @@ export const updateInternalSeatStates = async (req: Request, res: Response) => {
 
 // ─── BULK IMPORT ──────────────────────────────────────────────────────────────
 
+export const previewInternalStructure = async (req: Request, res: Response) => {
+  try {
+    const rawData = req.body.data;
+    if (!rawData) return res.status(400).json({ message: "No data provided" });
+
+    const preview = InternalInfrastructureImportService.previewBatch(rawData);
+    res.json(preview);
+  } catch (error: any) {
+    console.error("INTERNAL IMPORT PREVIEW ERROR:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 export const importInternalStructure = async (req: Request, res: Response) => {
   try {
     const rawData = req.body.data;

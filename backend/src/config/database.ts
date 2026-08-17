@@ -1292,6 +1292,33 @@ async function syncMissingColumns() {
                 // Table does not exist yet; sequelize.sync() will create it
             }
         }
+
+        // Backfill NormalizedRoomCode if needed and deduplicate existing stale entries
+        try {
+            await sequelize.query(
+                "UPDATE InternalRooms SET NormalizedRoomCode = UPPER(REPLACE(RoomCode, ' ', '')) WHERE NormalizedRoomCode IS NULL OR NormalizedRoomCode = ''"
+            );
+            // Deduplicate stale InternalSeats if any
+            await sequelize.query(`
+                DELETE s1 FROM InternalSeats s1
+                INNER JOIN InternalSeats s2 
+                ON s1.RoomID = s2.RoomID 
+                AND s1.RowLabel = s2.RowLabel 
+                AND s1.BenchNumber = s2.BenchNumber 
+                AND s1.SeatNumber = s2.SeatNumber
+                WHERE s1.SeatID < s2.SeatID
+            `).catch(() => {});
+            // Deduplicate stale InternalRooms if any
+            await sequelize.query(`
+                DELETE r1 FROM InternalRooms r1
+                INNER JOIN InternalRooms r2 
+                ON r1.FloorID = r2.FloorID 
+                AND r1.NormalizedRoomCode = r2.NormalizedRoomCode
+                WHERE r1.RoomID < r2.RoomID
+            `).catch(() => {});
+        } catch (backfillErr: any) {
+            // Ignore if table doesn't exist yet
+        }
     } catch (e: any) {
         console.warn("[SchemaIntegrity] Missing columns sync note:", e.message);
     }

@@ -51,6 +51,7 @@ import {
     Printer,
     X,
     Search,
+    DoorOpen,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -142,6 +143,7 @@ const InternalSeatingPlans: React.FC = () => {
     // Dashboard State
     const [hallSummary, setHallSummary] = useState<any[]>([]);
     const [loadingSummary, setLoadingSummary] = useState(false);
+    const [roomFilter, setRoomFilter] = useState<'all' | 'allotted' | 'full' | 'partial' | 'unassigned'>('all');
     const [isGenerating, setIsGenerating] = useState(false);
     const [isAutoRegistering, setIsAutoRegistering] = useState(false);
     const [isClearing, setIsClearing] = useState(false);
@@ -1761,7 +1763,26 @@ const InternalSeatingPlans: React.FC = () => {
     // Stats
     const totalFilled = hallSummary.reduce((acc, h) => acc + (h.filledSeats || 0), 0);
     const totalCapacity = hallSummary.reduce((acc, h) => acc + (h.totalSeats || 0), 0);
-    const visibleHalls = hallSummary.filter(h => h.hallCode.toLowerCase().includes(hallSearch.toLowerCase()));
+
+    // Room-level allocation metrics
+    const allottedRooms = useMemo(() => hallSummary.filter(h => (h.filledSeats || 0) > 0), [hallSummary]);
+    const allottedRoomsCount = allottedRooms.length;
+    const fullySeatedRoomsCount = useMemo(() => hallSummary.filter(h => (h.filledSeats || 0) >= (h.totalSeats || 0) && (h.filledSeats || 0) > 0).length, [hallSummary]);
+    const partialRoomsCount = useMemo(() => hallSummary.filter(h => (h.filledSeats || 0) > 0 && (h.filledSeats || 0) < (h.totalSeats || 0)).length, [hallSummary]);
+    const unallottedRoomsCount = useMemo(() => hallSummary.filter(h => (h.filledSeats || 0) === 0).length, [hallSummary]);
+    const totalAllottedCapacity = useMemo(() => allottedRooms.reduce((acc, h) => acc + (h.totalSeats || 0), 0), [allottedRooms]);
+
+    const visibleHalls = useMemo(() => {
+        return hallSummary.filter(h => {
+            const matchesSearch = (h.hallCode || '').toLowerCase().includes(hallSearch.toLowerCase());
+            if (!matchesSearch) return false;
+            if (roomFilter === 'allotted') return (h.filledSeats || 0) > 0;
+            if (roomFilter === 'full') return (h.filledSeats || 0) >= (h.totalSeats || 0) && (h.filledSeats || 0) > 0;
+            if (roomFilter === 'partial') return (h.filledSeats || 0) > 0 && (h.filledSeats || 0) < (h.totalSeats || 0);
+            if (roomFilter === 'unassigned') return (h.filledSeats || 0) === 0;
+            return true;
+        });
+    }, [hallSummary, hallSearch, roomFilter]);
 
     const fmtDate = (d: string) => {
         if (!d) return '';
@@ -2013,6 +2034,15 @@ const InternalSeatingPlans: React.FC = () => {
                                     <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-lg text-[11px] font-bold shadow-sm">
                                         <Calendar size={11} className="text-indigo-500" />
                                         {fmtDate(selectedDate)}
+                                    </span>
+                                </>
+                            )}
+                            {hasAllocation && (
+                                <>
+                                    <ChevronRight size={14} className="text-slate-300" />
+                                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-[11px] font-black shadow-xs">
+                                        <DoorOpen size={12} className="text-emerald-600" />
+                                        {allottedRoomsCount} {allottedRoomsCount === 1 ? 'Class Allotted' : 'Classes Allotted'}
                                     </span>
                                 </>
                             )}
@@ -2285,6 +2315,19 @@ const InternalSeatingPlans: React.FC = () => {
                                     <div className="px-5 py-4 space-y-4">
                                         {/* Stats Row */}
                                         <div className="grid grid-cols-2 gap-3">
+                                            {/* Classes Allotted */}
+                                            {hasAllocation && (
+                                                <div className="bg-emerald-50 border border-emerald-100 rounded-2xl px-3 py-3 text-center col-span-2 shadow-xs">
+                                                    <div className="flex items-center justify-center gap-1.5 mb-0.5">
+                                                        <DoorOpen size={16} className="text-emerald-600" />
+                                                        <p className="text-[24px] font-black text-emerald-600 leading-none">{allottedRoomsCount}</p>
+                                                    </div>
+                                                    <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mt-1">
+                                                        {allottedRoomsCount === 1 ? 'Class Allotted' : 'Classes Allotted'} ({allottedRoomsCount} of {hallSummary.length} Halls)
+                                                    </p>
+                                                </div>
+                                            )}
+
                                             {/* Total Registered */}
                                             <div className="bg-amber-50 border border-amber-100 rounded-2xl px-3 py-3 text-center col-span-2">
                                                 <p className="text-[24px] font-black text-amber-600 leading-none">{registeredStudents.length}</p>
@@ -2443,130 +2486,255 @@ const InternalSeatingPlans: React.FC = () => {
                         ) : hallSummary.length > 0 ? (
                             /* HALL GRID */
                             <div>
-                                {/* Summary bar */}
-                                <div className="flex items-center justify-between mb-5">
-                                    <div>
-                                        <h2 className="text-[15px] font-black text-slate-800">
-                                            {hallSummary.length} Halls
-                                            <span className="ml-2 text-[11px] font-bold text-slate-400 normal-case">for {fmtDate(selectedDate)} · {selectedSession === 'FN' ? 'Forenoon' : 'Afternoon'}</span>
-                                        </h2>
+                                {/* Hero Allocation Summary Hub */}
+                                <div className="bg-white/90 backdrop-blur-md rounded-[24px] border border-slate-200/90 shadow-lg shadow-slate-100/60 p-5 sm:p-6 mb-6 transition-all">
+                                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+                                        <div className="flex items-start sm:items-center gap-4">
+                                            <div className={`w-13 h-13 rounded-2xl flex items-center justify-center shrink-0 shadow-md ${
+                                                allottedRoomsCount > 0
+                                                    ? 'bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-600 text-white shadow-emerald-500/25'
+                                                    : 'bg-indigo-50 border border-indigo-100 text-indigo-600 shadow-indigo-100'
+                                            }`}>
+                                                <DoorOpen size={24} />
+                                            </div>
+                                            <div>
+                                                {allottedRoomsCount > 0 ? (
+                                                    <div className="flex items-center gap-2.5 flex-wrap">
+                                                        <h2 className="text-[22px] font-black text-slate-900 tracking-tight leading-tight">
+                                                            <span className="text-emerald-600 font-black">{allottedRoomsCount}</span> {allottedRoomsCount === 1 ? 'Class Allotted' : 'Classes Allotted'}
+                                                        </h2>
+                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200/80 shadow-2xs">
+                                                            {hallSummary.length > 0 ? `${Math.round((allottedRoomsCount / hallSummary.length) * 100)}% of Total Halls in Use` : '0%'}
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <h2 className="text-[20px] font-black text-slate-900 tracking-tight leading-tight">
+                                                        {hallSummary.length} Halls Configured
+                                                    </h2>
+                                                )}
+                                                <p className="text-[12px] font-medium text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
+                                                    <span>for <strong className="text-slate-700 font-bold">{fmtDate(selectedDate)}</strong> · <strong className="text-slate-700 font-bold">{selectedSession === 'FN' ? 'Forenoon' : 'Afternoon'}</strong></span>
+                                                    {allottedRoomsCount > 0 && (
+                                                        <>
+                                                            <span className="text-slate-300">•</span>
+                                                            <span className="text-indigo-600 font-bold">
+                                                                {totalFilled} / {totalCapacity} Seats Seated ({totalCapacity > 0 ? Math.round((totalFilled / totalCapacity) * 100) : 0}% Occupancy)
+                                                            </span>
+                                                        </>
+                                                    )}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2.5 self-start sm:self-end lg:self-center shrink-0 w-full sm:w-auto">
+                                            <div className="flex items-center h-10 rounded-xl border border-slate-200 bg-slate-50/80 focus-within:bg-white focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100 transition-all px-3 gap-2 flex-1 sm:w-56">
+                                                <Search size={14} className="text-slate-400 shrink-0" />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Search hall..."
+                                                    value={hallSearch}
+                                                    onChange={e => setHallSearch(e.target.value)}
+                                                    className="w-full text-xs font-semibold text-slate-800 placeholder:text-slate-400 bg-transparent outline-none border-none ring-0 focus:ring-0"
+                                                />
+                                                {hallSearch && (
+                                                    <button onClick={() => setHallSearch('')} className="text-slate-400 hover:text-slate-600">
+                                                        <X size={12} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <button
+                                                onClick={loadSummary}
+                                                className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-xl text-[12px] font-extrabold text-slate-600 hover:text-indigo-600 border border-slate-200 bg-white hover:bg-indigo-50 hover:border-indigo-200 transition-all shadow-sm cursor-pointer active:scale-95 shrink-0"
+                                                title="Refresh Live Data"
+                                            >
+                                                <RefreshCw size={13} className={loadingSummary ? 'animate-spin text-indigo-600' : ''} />
+                                                Refresh
+                                            </button>
+                                        </div>
                                     </div>
-                                    <button
-                                        onClick={loadSummary}
-                                        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[11px] font-bold text-slate-500 hover:text-indigo-600 border border-slate-200 bg-white hover:bg-indigo-50 hover:border-indigo-200 transition-all shadow-sm"
-                                    >
-                                        <RefreshCw size={12} />
-                                        Refresh
-                                    </button>
+
+                                    {/* Status Filter Pills */}
+                                    <div className="flex items-center gap-2 mt-4 pt-3.5 border-t border-slate-100/90 flex-wrap">
+                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider mr-1">Filter:</span>
+                                        <button
+                                            onClick={() => setRoomFilter('all')}
+                                            className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold transition-all border cursor-pointer active:scale-95 ${
+                                                roomFilter === 'all'
+                                                    ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                                                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                                            }`}
+                                        >
+                                            All ({hallSummary.length})
+                                        </button>
+                                        <button
+                                            onClick={() => setRoomFilter('allotted')}
+                                            className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold transition-all border cursor-pointer active:scale-95 ${
+                                                roomFilter === 'allotted'
+                                                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm shadow-emerald-200'
+                                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                            }`}
+                                        >
+                                            🟢 Allotted ({allottedRoomsCount})
+                                        </button>
+                                        <button
+                                            onClick={() => setRoomFilter('full')}
+                                            className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold transition-all border cursor-pointer active:scale-95 ${
+                                                roomFilter === 'full'
+                                                    ? 'bg-emerald-700 text-white border-emerald-700 shadow-sm shadow-emerald-200'
+                                                    : 'bg-emerald-50/70 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                                            }`}
+                                        >
+                                            Fully Seated ({fullySeatedRoomsCount})
+                                        </button>
+                                        <button
+                                            onClick={() => setRoomFilter('partial')}
+                                            className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold transition-all border cursor-pointer active:scale-95 ${
+                                                roomFilter === 'partial'
+                                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm shadow-indigo-200'
+                                                    : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                                            }`}
+                                        >
+                                            Partial ({partialRoomsCount})
+                                        </button>
+                                        <button
+                                            onClick={() => setRoomFilter('unassigned')}
+                                            className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold transition-all border cursor-pointer active:scale-95 ${
+                                                        roomFilter === 'unassigned'
+                                                    ? 'bg-slate-700 text-white border-slate-700 shadow-sm'
+                                                    : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'
+                                            }`}
+                                        >
+                                            Standby / Empty ({unallottedRoomsCount})
+                                        </button>
+                                    </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                                    {[...hallSummary]
-                                        .sort((a, b) => {
-                                            const getRank = (h: any) => {
-                                                if (h.filledSeats >= h.totalSeats && h.filledSeats > 0) return 0; // Fully Seated
-                                                if (h.filledSeats > 0 && h.filledSeats < h.totalSeats) return 1;   // Partial
-                                                return 2;                                                         // Unassigned
-                                            };
-                                            const rankA = getRank(a);
-                                            const rankB = getRank(b);
-                                            if (rankA !== rankB) return rankA - rankB;
-                                            return (a.hallCode || '').localeCompare(b.hallCode || '', undefined, { numeric: true, sensitivity: 'base' });
-                                        })
-                                        .map((h) => {
-                                            const pct = h.totalSeats > 0 ? Math.round((h.filledSeats / h.totalSeats) * 100) : 0;
-                                            const isFull = h.filledSeats >= h.totalSeats && h.filledSeats > 0;
-                                            const isPartial = h.filledSeats > 0 && h.filledSeats < h.totalSeats;
-                                            const isEmpty = h.filledSeats === 0;
+                                {visibleHalls.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center min-h-[280px] bg-white rounded-[22px] border border-slate-200 border-dashed p-8 text-center">
+                                        <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mb-3 text-slate-400">
+                                            <Search size={20} />
+                                        </div>
+                                        <h4 className="text-[14px] font-bold text-slate-700 mb-1">No matching halls found</h4>
+                                        <p className="text-[12px] text-slate-400 max-w-[260px] mb-4">
+                                            No halls matched the filter <span className="font-bold text-slate-600">"{roomFilter}"</span>
+                                            {hallSearch ? ` or search "${hallSearch}"` : ''}.
+                                        </p>
+                                        <button
+                                            onClick={() => { setRoomFilter('all'); setHallSearch(''); }}
+                                            className="px-3.5 py-1.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 text-[11px] font-bold hover:bg-indigo-100 transition-all"
+                                        >
+                                            Reset Filters
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                                        {[...visibleHalls]
+                                            .sort((a, b) => {
+                                                const getRank = (h: any) => {
+                                                    if (h.filledSeats >= h.totalSeats && h.filledSeats > 0) return 0; // Fully Seated
+                                                    if (h.filledSeats > 0 && h.filledSeats < h.totalSeats) return 1;   // Partial
+                                                    return 2;                                                         // Unassigned
+                                                };
+                                                const rankA = getRank(a);
+                                                const rankB = getRank(b);
+                                                if (rankA !== rankB) return rankA - rankB;
+                                                return (a.hallCode || '').localeCompare(b.hallCode || '', undefined, { numeric: true, sensitivity: 'base' });
+                                            })
+                                            .map((h) => {
+                                                const pct = h.totalSeats > 0 ? Math.round((h.filledSeats / h.totalSeats) * 100) : 0;
+                                                const isFull = h.filledSeats >= h.totalSeats && h.filledSeats > 0;
+                                                const isPartial = h.filledSeats > 0 && h.filledSeats < h.totalSeats;
+                                                const isEmpty = h.filledSeats === 0;
 
-                                            return (
-                                                <motion.div
-                                                    key={h.hallId}
-                                                    initial={{ opacity: 0, y: 12 }}
-                                                    animate={{ opacity: 1, y: 0 }}
-                                                    whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                                                    transition={{ duration: 0.3 }}
-                                                >
-                                                    <div className={`relative rounded-[22px] border p-5 transition-all duration-300 group cursor-pointer overflow-hidden ${isFull
-                                                            ? 'bg-gradient-to-br from-emerald-50 to-emerald-50/30 border-emerald-200 shadow-md shadow-emerald-50 hover:shadow-emerald-100'
-                                                            : isPartial
-                                                                ? 'bg-gradient-to-br from-indigo-50/60 to-white border-indigo-200 shadow-md shadow-indigo-50 hover:shadow-indigo-100'
-                                                                : 'bg-white border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300'
-                                                        }`}>
-                                                        {/* Glow effect */}
-                                                        {!isEmpty && (
-                                                            <div className={`absolute -top-10 -right-10 w-28 h-28 rounded-full blur-[40px] pointer-events-none ${isFull ? 'bg-emerald-300/20' : 'bg-indigo-300/15'
-                                                                }`} />
-                                                        )}
+                                                return (
+                                                    <motion.div
+                                                        key={h.hallId}
+                                                        initial={{ opacity: 0, y: 12 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        whileHover={{ y: -4, transition: { duration: 0.2 } }}
+                                                        transition={{ duration: 0.3 }}
+                                                    >
+                                                        <div className={`relative rounded-[22px] border p-5 transition-all duration-300 group cursor-pointer overflow-hidden ${isFull
+                                                                ? 'bg-gradient-to-br from-emerald-50 to-emerald-50/30 border-emerald-200 shadow-md shadow-emerald-50 hover:shadow-emerald-100'
+                                                                : isPartial
+                                                                    ? 'bg-gradient-to-br from-indigo-50/60 to-white border-indigo-200 shadow-md shadow-indigo-50 hover:shadow-indigo-100'
+                                                                    : 'bg-white border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300'
+                                                            }`}>
+                                                            {/* Glow effect */}
+                                                            {!isEmpty && (
+                                                                <div className={`absolute -top-10 -right-10 w-28 h-28 rounded-full blur-[40px] pointer-events-none ${isFull ? 'bg-emerald-300/20' : 'bg-indigo-300/15'
+                                                                    }`} />
+                                                            )}
 
-                                                        <div className="relative z-10">
-                                                            {/* Header */}
-                                                            <div className="flex items-start justify-between mb-4">
-                                                                <div className="flex items-center gap-3">
-                                                                    <div className={`w-11 h-11 rounded-[14px] flex items-center justify-center shrink-0 transition-all ${isFull
-                                                                            ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
-                                                                            : isPartial
-                                                                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                                                                                : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'
-                                                                        }`}>
-                                                                        <Armchair size={20} />
-                                                                    </div>
-                                                                    <div>
-                                                                        <h4 className={`text-[16px] font-black tracking-tight ${isFull ? 'text-emerald-900' : isPartial ? 'text-indigo-900' : 'text-slate-700'
-                                                                            }`}>{h.hallCode}</h4>
-                                                                        <span className={`inline-flex px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider mt-0.5 ${isFull
-                                                                                ? 'bg-emerald-100 text-emerald-700'
+                                                            <div className="relative z-10">
+                                                                {/* Header */}
+                                                                <div className="flex items-start justify-between mb-4">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <div className={`w-11 h-11 rounded-[14px] flex items-center justify-center shrink-0 transition-all ${isFull
+                                                                                ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
                                                                                 : isPartial
-                                                                                    ? 'bg-indigo-100 text-indigo-700'
-                                                                                    : 'bg-slate-100 text-slate-400'
+                                                                                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                                                                                    : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'
                                                                             }`}>
-                                                                            {isFull ? 'Fully Seated' : isPartial ? 'Partial' : 'Unassigned'}
-                                                                        </span>
+                                                                            <Armchair size={20} />
+                                                                        </div>
+                                                                        <div>
+                                                                            <h4 className={`text-[16px] font-black tracking-tight ${isFull ? 'text-emerald-900' : isPartial ? 'text-indigo-900' : 'text-slate-700'
+                                                                                }`}>{h.hallCode}</h4>
+                                                                            <span className={`inline-flex px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider mt-0.5 ${isFull
+                                                                                    ? 'bg-emerald-100 text-emerald-700'
+                                                                                    : isPartial
+                                                                                        ? 'bg-indigo-100 text-indigo-700'
+                                                                                        : 'bg-slate-100 text-slate-400'
+                                                                                }`}>
+                                                                                {isFull ? 'Fully Seated' : isPartial ? 'Partial' : 'Unassigned'}
+                                                                            </span>
+                                                                        </div>
                                                                     </div>
                                                                 </div>
-                                                            </div>
 
-                                                            {/* Progress */}
-                                                            <div className="mb-4">
-                                                                <div className="flex items-center justify-between mb-1.5">
-                                                                    <span className="text-[11px] font-bold text-slate-500">Occupancy</span>
-                                                                    <span className={`text-[11px] font-black ${isFull ? 'text-emerald-600' : isPartial ? 'text-indigo-600' : 'text-slate-400'}`}>{pct}%</span>
+                                                                {/* Progress */}
+                                                                <div className="mb-4">
+                                                                    <div className="flex items-center justify-between mb-1.5">
+                                                                        <span className="text-[11px] font-bold text-slate-500">Occupancy</span>
+                                                                        <span className={`text-[11px] font-black ${isFull ? 'text-emerald-600' : isPartial ? 'text-indigo-600' : 'text-slate-400'}`}>{pct}%</span>
+                                                                    </div>
+                                                                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                                                        <div
+                                                                            className={`h-full rounded-full transition-all duration-500 ${isFull ? 'bg-emerald-500' : isPartial ? 'bg-indigo-500' : 'bg-slate-200'}`}
+                                                                            style={{ width: `${pct}%` }}
+                                                                        />
+                                                                    </div>
                                                                 </div>
-                                                                <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                                                    <div
-                                                                        className={`h-full rounded-full transition-all duration-500 ${isFull ? 'bg-emerald-500' : isPartial ? 'bg-indigo-500' : 'bg-slate-200'}`}
-                                                                        style={{ width: `${pct}%` }}
-                                                                    />
-                                                                </div>
-                                                            </div>
 
-                                                            {/* Footer */}
-                                                            <div className="flex items-center justify-between">
-                                                                <div>
-                                                                    <span className={`text-[20px] font-black ${isFull ? 'text-emerald-700' : isPartial ? 'text-indigo-700' : 'text-slate-700'}`}>
-                                                                        {h.filledSeats}
-                                                                    </span>
-                                                                    <span className="text-[12px] text-slate-400 font-bold"> / {h.totalSeats}</span>
+                                                                {/* Footer */}
+                                                                <div className="flex items-center justify-between">
+                                                                    <div>
+                                                                        <span className={`text-[20px] font-black ${isFull ? 'text-emerald-700' : isPartial ? 'text-indigo-700' : 'text-slate-700'}`}>
+                                                                            {h.filledSeats}
+                                                                        </span>
+                                                                        <span className="text-[12px] text-slate-400 font-bold"> / {h.totalSeats}</span>
+                                                                    </div>
+                                                                    <button
+                                                                        onClick={() => openHallDetail(h)}
+                                                                        className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all cursor-pointer ${isFull
+                                                                                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-600/20'
+                                                                                : isPartial
+                                                                                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shadow-indigo-600/20'
+                                                                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                                                                            }`}
+                                                                    >
+                                                                        <Eye size={11} />
+                                                                        View
+                                                                    </button>
                                                                 </div>
-                                                                <button
-                                                                    onClick={() => openHallDetail(h)}
-                                                                    className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all ${isFull
-                                                                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-600/20'
-                                                                            : isPartial
-                                                                                ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shadow-indigo-600/20'
-                                                                                : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
-                                                                        }`}
-                                                                >
-                                                                    <Eye size={11} />
-                                                                    View
-                                                                </button>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                </motion.div>
-                                            );
-                                        })}
-                                </div>
+                                                    </motion.div>
+                                                );
+                                            })}
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             /* NO ALLOCATIONS YET */
