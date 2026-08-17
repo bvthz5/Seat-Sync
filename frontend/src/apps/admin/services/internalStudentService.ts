@@ -23,6 +23,8 @@ export interface InternalExamDetail {
         Duration: number;
         StartTime: string;
         EndTime: string;
+        Programme?: string;
+        BranchScope?: string;
         departments: { DepartmentID: number; DepartmentCode: string; DepartmentName: string }[];
     };
     studentCount: number;
@@ -39,7 +41,10 @@ export interface MappedStudent {
     fullName: string;
     department: string;
     departmentCode: string;
-    program: string;
+    program?: string;
+    programme?: string;
+    branch?: string;
+    normalizedBranch?: string;
     semester: number | string;
     batchYear: number;
     registrationMethod?: string;

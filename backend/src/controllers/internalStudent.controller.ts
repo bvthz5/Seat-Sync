@@ -396,10 +396,10 @@ export const importInternalStudents = async (req: Request, res: Response) => {
             const divRaw = row['Division'] ?? row['Div'] ?? row['DIV'] ?? row['SECTION'] ?? row['Section'];
             const division = (divRaw !== undefined && divRaw !== null && String(divRaw).trim() !== '')
                 ? String(divRaw).toUpperCase().trim()
-                : (parsed.division || 'A');
+                : (parsed.division ?? null);
 
             if (!regNo && rollNumber !== null && !isNaN(rollNumber)) {
-                regNo = `${parsed.departmentCode || parsed.normalizedBranchCode || 'STU'}${batchYear || ''}${division || 'A'}${String(rollNumber).padStart(3, '0')}`;
+                regNo = `${parsed.departmentCode || parsed.normalizedBranchCode || 'STU'}${batchYear || ''}${division || ''}${String(rollNumber).padStart(3, '0')}`;
             }
 
             if (!regNo && name) {
@@ -449,9 +449,9 @@ export const importInternalStudents = async (req: Request, res: Response) => {
 
                 // Validate class-level Roll Number uniqueness scoped to specific batch cohort
                 if (rollNumber !== null && !isNaN(rollNumber)) {
-                    const classRollKey = `${batchName || programCode}_${division || 'A'}_${semStr}_${rollNumber}`;
+                    const classRollKey = `${batchName || programCode}_${division || 'NONE'}_${semStr}_${rollNumber}`;
                     if (processedClassRolls.has(classRollKey)) {
-                        errors.push({ row: row._row, reason: `Duplicate Roll No ${rollNumber} in ${batchName || programCode} Div ${division || 'A'} (${semStr})` });
+                        errors.push({ row: row._row, reason: `Duplicate Roll No ${rollNumber} in ${batchName || programCode} Div ${division || 'NONE'} (${semStr})` });
                     } else {
                         processedClassRolls.add(classRollKey);
                     }
@@ -492,10 +492,13 @@ export const importInternalStudents = async (req: Request, res: Response) => {
                         DepartmentID: targetDept?.DepartmentID ?? student.DepartmentID,
                         ProgramID: targetProgram?.ProgramID ?? student.ProgramID,
                         SemesterID: targetSemester?.SemesterID ?? student.SemesterID,
+                        Programme: parsed.programCode || student.Programme,
+                        Branch: parsed.rawBranch || student.Branch,
+                        NormalizedBranch: parsed.normalizedBranchCode || student.NormalizedBranch,
                         Batch: batchName ?? student.Batch,
                         BatchStart: batchYear ?? student.BatchStart,
                         BatchEnd: batchEnd ?? student.BatchEnd,
-                        Division: division || student.Division,
+                        Division: division !== undefined ? division : student.Division,
                         Semester: semStr || student.Semester,
                         BatchYear: batchYear || student.BatchYear,
                     }, { transaction: t });
@@ -507,6 +510,9 @@ export const importInternalStudents = async (req: Request, res: Response) => {
                         DepartmentID: targetDept?.DepartmentID ?? null,
                         ProgramID: targetProgram?.ProgramID ?? null,
                         SemesterID: targetSemester?.SemesterID ?? null,
+                        Programme: parsed.programCode,
+                        Branch: parsed.rawBranch,
+                        NormalizedBranch: parsed.normalizedBranchCode,
                         Batch: batchName,
                         BatchStart: batchYear,
                         BatchEnd: batchEnd,
@@ -664,6 +670,9 @@ export const getStudentsForInternalExam = async (req: Request, res: Response) =>
             division: reg.Student?.Division ?? null,
             batch: reg.Student?.Batch ?? null,
             fullName: reg.Student?.FullName,
+            programme: reg.Student?.Programme || reg.Student?.Program?.ProgramName,
+            branch: reg.Student?.Branch || reg.Student?.Department?.DepartmentCode,
+            normalizedBranch: reg.Student?.NormalizedBranch,
             department: reg.Student?.Department?.DepartmentName,
             departmentCode: reg.Student?.Department?.DepartmentCode,
             program: reg.Student?.Program?.ProgramName,
@@ -672,11 +681,15 @@ export const getStudentsForInternalExam = async (req: Request, res: Response) =>
             registrationMethod: reg.RegistrationMethod || 'AUTO',
         }));
 
-        // Sort Batch-wise (Department Code -> Division -> Roll Number 1..N -> Register Number)
+        // Sort Batch-wise (Programme -> Branch -> Division -> Roll Number 1..N -> Register Number)
         students.sort((a: any, b: any) => {
-            const deptA = String(a.departmentCode || a.department || '').toUpperCase().trim();
-            const deptB = String(b.departmentCode || b.department || '').toUpperCase().trim();
-            if (deptA !== deptB) return deptA.localeCompare(deptB);
+            const progA = String(a.programme || '').toUpperCase().trim();
+            const progB = String(b.programme || '').toUpperCase().trim();
+            if (progA !== progB) return progA.localeCompare(progB);
+
+            const branchA = String(a.normalizedBranch || a.branch || a.departmentCode || '').toUpperCase().trim();
+            const branchB = String(b.normalizedBranch || b.branch || b.departmentCode || '').toUpperCase().trim();
+            if (branchA !== branchB) return branchA.localeCompare(branchB);
 
             const divA = String(a.division || '').toUpperCase().trim();
             const divB = String(b.division || '').toUpperCase().trim();
@@ -698,6 +711,8 @@ export const getStudentsForInternalExam = async (req: Request, res: Response) =>
                 Session: exam.Session,
                 Semester: exam.Semester,
                 Duration: exam.Duration,
+                Programme: exam.Programme,
+                BranchScope: exam.BranchScope,
                 departments: (exam as any).InternalExamDepartments?.map((d: any) => ({
                     DepartmentID: d.Department?.DepartmentID,
                     DepartmentCode: d.Department?.DepartmentCode,
@@ -935,6 +950,8 @@ export const getInternalExamDetail = async (req: Request, res: Response) => {
                 Duration: exam.Duration,
                 StartTime: exam.StartTime,
                 EndTime: exam.EndTime,
+                Programme: (exam as any).Programme,
+                BranchScope: (exam as any).BranchScope,
                 departments: (exam as any).InternalExamDepartments?.map((d: any) => ({
                     DepartmentID: d.Department?.DepartmentID,
                     DepartmentCode: d.Department?.DepartmentCode,

@@ -235,10 +235,20 @@ const InternalExamDetailPage: React.FC = () => {
                             <ArrowLeft size={18} />
                         </Button>
                         <div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                                 <span className="px-2.5 py-0.5 rounded-md bg-indigo-50 border border-indigo-100 text-indigo-700 font-extrabold text-xs tracking-wide uppercase">
                                     {exam?.SubjectCode || 'EXAM'}
                                 </span>
+                                {exam?.Programme && (
+                                    <span className="px-2.5 py-0.5 rounded-md bg-purple-50 border border-purple-100 text-purple-700 font-extrabold text-xs tracking-wide">
+                                        {exam.Programme}
+                                    </span>
+                                )}
+                                {exam?.BranchScope && (
+                                    <span className="px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-700 font-extrabold text-xs tracking-wide">
+                                        {exam.BranchScope.includes(',') ? 'BRANCHES:' : 'BRANCH:'} {exam.BranchScope}
+                                    </span>
+                                )}
                                 <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">
                                     {exam?.SubjectName || 'Internal Exam Detail'}
                                 </h1>
@@ -528,8 +538,8 @@ const InternalExamDetailPage: React.FC = () => {
                                             <th className="px-4 py-3.5 w-12 text-center">#</th>
                                             <th className="px-4 py-3.5">Register No / Roll</th>
                                             <th className="px-4 py-3.5">Name</th>
-                                            <th className="px-4 py-3.5">Department</th>
-                                            <th className="px-4 py-3.5">Program</th>
+                                            <th className="px-4 py-3.5">Programme</th>
+                                            <th className="px-4 py-3.5">Branch</th>
                                             <th className="px-4 py-3.5">Sem</th>
                                             <th className="px-4 py-3.5">Batch</th>
                                             <th className="px-4 py-3.5 text-center">Method</th>
@@ -552,21 +562,39 @@ const InternalExamDetailPage: React.FC = () => {
                                                 </td>
                                                 <td className="px-4 py-3 font-bold text-slate-900">{s.fullName}</td>
                                                 <td className="px-4 py-3">
-                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-extrabold text-[10px] border border-slate-200/60">
-                                                        {s.departmentCode || '-'}
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-extrabold text-[10px] border border-indigo-100">
+                                                        {s.programme || s.program || 'B.Tech'}
                                                     </span>
                                                 </td>
-                                                <td className="px-4 py-3 text-slate-600 font-medium">{s.program || '-'}</td>
+                                                <td className="px-4 py-3">
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-extrabold text-[10px] border border-slate-200/60">
+                                                        {s.branch || s.normalizedBranch || s.departmentCode || '-'}
+                                                    </span>
+                                                </td>
                                                 <td className="px-4 py-3 text-slate-600 font-bold">{s.semester || '-'}</td>
                                                 <td className="px-4 py-3 text-slate-600 font-medium">{s.batch || s.batchYear || '-'}</td>
                                                 <td className="px-4 py-3 text-center">
-                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${
-                                                        s.registrationMethod === 'EXCEL' 
-                                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                                                            : 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                                                    }`}>
-                                                        {s.registrationMethod || 'AUTO'}
-                                                    </span>
+                                                    <Tooltip content={
+                                                        s.registrationMethod === 'SUBJECT_ROSTER'
+                                                            ? 'Explicitly listed in the uploaded subject roster'
+                                                            : s.registrationMethod === 'MASTER_BATCH_RULE'
+                                                                ? 'Matched by timetable programme + branch + semester rule'
+                                                                : s.registrationMethod === 'EXCEL'
+                                                                    ? 'Imported from student list'
+                                                                    : 'Manually added or registered'
+                                                    }>
+                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border cursor-help ${
+                                                            s.registrationMethod === 'SUBJECT_ROSTER'
+                                                                ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                                                : s.registrationMethod === 'MASTER_BATCH_RULE'
+                                                                    ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                                                    : s.registrationMethod === 'EXCEL' 
+                                                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                                                                        : 'bg-slate-50 text-slate-700 border-slate-200'
+                                                        }`}>
+                                                            {s.registrationMethod === 'MASTER_BATCH_RULE' ? 'BATCH RULE' : (s.registrationMethod || 'AUTO')}
+                                                        </span>
+                                                    </Tooltip>
                                                 </td>
                                                 <td className="px-4 py-3 text-center">
                                                     <Tooltip content="Remove from this exam">

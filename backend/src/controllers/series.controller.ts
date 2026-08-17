@@ -334,10 +334,6 @@ export const deleteSeries = async (req: Request, res: Response): Promise<void> =
                 { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE }
             );
             await sequelize.query(
-                'DELETE FROM InternalSubjectEligibility WHERE InternalExamSeriesID = :seriesId',
-                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE }
-            );
-            await sequelize.query(
                 'DELETE FROM InternalExamDepartments WHERE InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
                 { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE }
             );

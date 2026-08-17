@@ -172,7 +172,7 @@ export class InternalExamEligibilityService {
             };
         }
 
-        // 1. Resolve Exam Programme & Canonical Branch Scope
+        // 1. Resolve Exam Programme & Canonical Branch Scope directly from timetable properties
         const examProgNorm = normalizeProgramme(exam.Programme || (
             (exam.SubjectCode || '').includes('INMCA') || (exam.SubjectCode || '').includes('IMCA') ? 'INT_MCA' :
             (exam.SubjectCode || '').startsWith('24SJMCA') || (exam.SubjectCode || '').includes('MCA') ? 'MCA' : 'BTECH'
@@ -180,19 +180,12 @@ export class InternalExamEligibilityService {
         const examProgLabel = getProgrammeLabel(examProgNorm);
 
         const deptEntries = (exam as any).InternalExamDepartments || [];
-        const rawScopeParts: string[] = [];
-
-        if (exam.BranchScope) {
-            rawScopeParts.push(exam.BranchScope);
+        let rawScopeStr = (exam.BranchScope || '').trim();
+        if (!rawScopeStr && deptEntries.length > 0) {
+            rawScopeStr = deptEntries.map((d: any) => d.Department?.DepartmentCode).filter(Boolean).join(', ');
         }
-        deptEntries.forEach((d: any) => {
-            if (d.Department?.DepartmentCode) {
-                rawScopeParts.push(d.Department.DepartmentCode);
-            }
-        });
 
-        const combinedScopeStr = rawScopeParts.join(', ');
-        const { rawBranches, normalizedBranches, isAllBranches } = InternalExamEligibilityService.parseScopeToNormalizedBranches(combinedScopeStr);
+        const { rawBranches, normalizedBranches, isAllBranches } = InternalExamEligibilityService.parseScopeToNormalizedBranches(rawScopeStr);
         const normalizedBranchList = Array.from(normalizedBranches);
 
         // 2. LEVEL 1 CHECK: Is there a Subject-Wise Student Roster for this SubjectCode?
@@ -266,23 +259,29 @@ export class InternalExamEligibilityService {
             });
         }
 
-        // 3. Apply Strict 2-Step Matching (Programme -> Branch -> Division)
+        // 3. Apply Strict Deterministic Matching (Programme -> Branch -> Division)
         const finalEligibleStudents: InternalStudent[] = [];
         let progMismatchCount = 0;
         let branchMismatchCount = 0;
         let divMismatchCount = 0;
 
         for (const student of eligibleStudentsRaw) {
+            // For subject-wise roster (Level 1), bypass generic batch filtering
+            if (eligibilitySource === 'SUBJECT_LIST') {
+                finalEligibleStudents.push(student);
+                continue;
+            }
+
             const studentBatch = String(student.Batch || '').trim();
             const studentParsed = parseBatchString(studentBatch);
             
             // Extract Student Programme
-            let studentProgNorm = studentParsed.programCode;
+            let studentProgNorm = (student as any).Programme || studentParsed.programCode;
             if (studentProgNorm === 'UNKNOWN' || !studentProgNorm) {
                 studentProgNorm = normalizeProgramme(student.Program?.ProgramCode || student.Program?.ProgramName || studentBatch);
             }
 
-            // STEP 1: Programme match check (BTECH vs MCA vs INT_MCA vs MTECH vs MBA)
+            // STEP 1: Programme match check (BTECH vs MCA vs INT_MCA vs MTECH vs MBA vs PHD)
             if (studentProgNorm !== examProgNorm) {
                 progMismatchCount++;
                 continue;
@@ -290,9 +289,9 @@ export class InternalExamEligibilityService {
 
             // STEP 2: Branch scope match check (CS vs EC vs EE vs ME vs CE vs AD vs CA vs CC vs ER vs MCA vs INT_MCA)
             if (!isAllBranches && normalizedBranches.size > 0) {
-                let studentBranchNorm = studentParsed.normalizedBranchCode;
+                let studentBranchNorm = (student as any).NormalizedBranch || studentParsed.normalizedBranchCode;
                 if (studentBranchNorm === 'UNKNOWN' || !studentBranchNorm) {
-                    studentBranchNorm = normalizeBranchCode(student.Department?.DepartmentCode || studentBatch);
+                    studentBranchNorm = normalizeBranchCode(student.Department?.DepartmentCode || (student as any).Branch || studentBatch);
                 }
 
                 if (!normalizedBranches.has(studentBranchNorm)) {

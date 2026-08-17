@@ -10,7 +10,7 @@ import { Program } from "../models/Program.js";
 import { ExamRegistration } from "../models/ExamRegistration.js";
 import { AcademicYear } from "../models/AcademicYear.js";
 import { Op, QueryTypes } from 'sequelize';
-import { ExamSeries, InternalExam, InternalExamDepartment } from '../models/index.js';
+import { ExamSeries, InternalExam, InternalExamSeries, InternalExamDepartment } from '../models/index.js';
 import * as XLSX from 'xlsx';
 import { PDFParse } from 'pdf-parse';
 import { createWorker } from 'tesseract.js';
@@ -21,6 +21,7 @@ import path from 'path';
 import mammoth from 'mammoth';
 import { sequelize } from '../config/database.js';
 import { generateDefaultPassword, generateStudentEmail, extractBatchYearFromRegisterNumber, extractProgramCodeFromRegisterNumber } from '../utils/student.utils.js';
+import { normalizeProgramme, getProgrammeLabel } from '../services/academicNormalizer.service.js';
 
 const require = createRequire(import.meta.url);
 
@@ -133,7 +134,9 @@ const normalizeDepartmentCode = (value: unknown): string => {
         ME: 'ME', MECH: 'ME', MEWP: 'ME', MEAMPM: 'ME',
         CE: 'CE', CIVIL: 'CE', ITCE: 'CE', CEWP: 'CE',
         AD: 'AD', AIDS: 'AD', 'AI&DS': 'AD',
-        CA: 'CA', MCA: 'CA', INT_MCA: 'CA', IMCA: 'CA', INMCA: 'CA',
+        CA: 'CA',
+        MCA: 'MCA',
+        INT_MCA: 'INT_MCA', IMCA: 'INT_MCA', INMCA: 'INT_MCA',
         CC: 'CC',
         ER: 'ER', RA: 'ER',
         BHM: 'BHM', MBA: 'MBA', PHD: 'PHD', INT: 'INT'
@@ -639,53 +642,31 @@ export class ExamController {
                     const data = ie.toJSON() as any;
 
                     const depts = data.InternalExamDepartments || [];
-                    const deptName = depts.length > 0 ? depts.map((d: any) => d.Department?.DepartmentCode).filter(Boolean).join(', ') : (data.BranchScope || 'ALL_BRANCHES');
-                    const fullDeptName = depts.length > 0 ? depts.map((d: any) => d.Department?.DepartmentName).filter(Boolean).join(', ') : (data.BranchScope || 'All Branches');
-                    const mainDeptID = depts[0]?.Department?.DepartmentID || depts[0]?.DepartmentID || undefined;
+                    const progNorm = normalizeProgramme(data.Programme || (
+                        (data.SubjectCode || '').includes('INMCA') || (data.SubjectCode || '').includes('IMCA') ? 'INT_MCA' :
+                        (data.SubjectCode || '').startsWith('24SJMCA') || (data.SubjectCode || '').includes('MCA') ? 'MCA' : 'BTECH'
+                    ));
+                    const resolvedProgLabel = getProgrammeLabel(progNorm);
 
-                    // ── Compute correct branch display ─────────────────────────────────
-                    // Priority 1: Use stored Programme field (set by import from v2 onwards)
-                    // Priority 2: Derive from SubjectCode pattern (fixes legacy records)
-                    // Priority 3: Use raw BranchScope or dept codes (for B.Tech / fallback)
+                    const rawScope = String(data.BranchScope || '').trim();
                     let branchDisplay: string;
-                    const programme: string | null = data.Programme || null;
-                    const subjectCodeUpper = (data.SubjectCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-
-                    if (programme === 'MCA') {
-                        // MCA master's programme – branch = 'MCA'
+                    if (rawScope) {
+                        branchDisplay = rawScope;
+                    } else if (progNorm === 'MCA') {
                         branchDisplay = 'MCA';
-                    } else if (programme === 'Integrated MCA') {
-                        // Integrated MCA – branch = 'Int. MCA' (timetable standard abbreviation)
+                    } else if (progNorm === 'INT_MCA') {
                         branchDisplay = 'Int. MCA';
-                    } else if (programme === 'M.Tech') {
+                    } else if (progNorm === 'MTECH') {
                         branchDisplay = 'M.Tech';
-                    } else if (!programme) {
-                        // Legacy record – Programme not yet stored. Derive from SubjectCode.
-                        if (subjectCodeUpper.includes('INMCA') || subjectCodeUpper.includes('IMCA') || subjectCodeUpper.includes('INTMCA')) {
-                            branchDisplay = 'Int. MCA';
-                        } else if (subjectCodeUpper.includes('MCA')) {
-                            branchDisplay = 'MCA';
-                        } else if (subjectCodeUpper.includes('MTECH') || subjectCodeUpper.includes('MTECH')) {
-                            branchDisplay = 'M.Tech';
-                        } else {
-                            // B.Tech or unknown – use BranchScope (normalize spacing), else dept codes
-                            const bs = String(data.BranchScope || '').trim();
-                            branchDisplay = bs
-                                ? bs.split(',').map((s: string) => s.trim()).filter(Boolean).join(', ')
-                                : depts.length > 0
-                                    ? depts.map((d: any) => d.Department?.DepartmentCode).filter(Boolean).join(', ')
-                                    : '';
-                        }
+                    } else if (progNorm === 'MBA') {
+                        branchDisplay = 'MBA';
                     } else {
-                        // B.Tech, MBA, BHM, or other programme – branch = specific dept codes from timetable
-                        const bs = String(data.BranchScope || '').trim();
-                        branchDisplay = bs
-                            ? bs.split(',').map((s: string) => s.trim()).filter(Boolean).join(', ')
-                            : depts.length > 0
-                                ? depts.map((d: any) => d.Department?.DepartmentCode).filter(Boolean).join(', ')
-                                : '';
+                        branchDisplay = '';
                     }
-                    // ──────────────────────────────────────────────────────────────────
+
+                    const displayDeptCode = branchDisplay || (progNorm === 'BTECH' ? 'All Branches' : resolvedProgLabel);
+                    const displayDeptName = resolvedProgLabel;
+                    const mainDeptID = depts[0]?.Department?.DepartmentID || depts[0]?.DepartmentID || undefined;
 
                     const examDate = new Date(data.ExamDate);
                     const startHour = data.Session === 'FN' ? 10 : 14;
@@ -708,6 +689,7 @@ export class ExamController {
                         Duration: data.Duration || 150,
                         Status: calcStatus,
                         DepartmentID: mainDeptID,
+                        Programme: resolvedProgLabel,
                         BranchScope: branchDisplay || null,
                         registrationCount: Number(data.registrationCount || 0),
                         Subject: {
@@ -717,8 +699,8 @@ export class ExamController {
                             DepartmentID: mainDeptID,
                             Department: {
                                 DepartmentID: mainDeptID,
-                                DepartmentName: fullDeptName,
-                                DepartmentCode: deptName
+                                DepartmentName: displayDeptName,
+                                DepartmentCode: displayDeptCode
                             }
                         },
                         Enrollment: 0,
@@ -1228,8 +1210,11 @@ export class ExamController {
 
             if (parsedSeriesId) {
                 const seriesInfo = await ExamSeries.findByPk(parsedSeriesId);
-                if (seriesInfo && seriesInfo.ExamType === 'Internal') {
-                    // Internal series cleanup: SeatAllocations -> Snapshots -> ExamRegistrations -> Eligibilities -> ExamDepartments -> InternalExams
+                const intSeriesInfo = !seriesInfo ? await InternalExamSeries.findByPk(parsedSeriesId) : null;
+                const isInternal = seriesInfo?.ExamType === 'Internal' || !!intSeriesInfo;
+
+                if (isInternal) {
+                    // Internal series cleanup: SeatAllocations -> Snapshots -> ExamRegistrations -> ExamDepartments -> InternalExams
                     await sequelize.query(
                         'DELETE FROM InternalSeatAllocations WHERE SnapshotID IN (SELECT SnapshotID FROM InternalSeatSnapshots WHERE SeriesID = :seriesId) OR InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
                         {
@@ -1246,13 +1231,6 @@ export class ExamController {
                     );
                     await sequelize.query(
                         'DELETE FROM InternalExamRegistrations WHERE InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
-                        {
-                            replacements: { seriesId: parsedSeriesId },
-                            type: QueryTypes.DELETE
-                        }
-                    );
-                    await sequelize.query(
-                        'DELETE FROM InternalSubjectEligibility WHERE InternalExamSeriesID = :seriesId',
                         {
                             replacements: { seriesId: parsedSeriesId },
                             type: QueryTypes.DELETE
@@ -1312,11 +1290,17 @@ export class ExamController {
             await sequelize.query('DELETE FROM InvigilatorAssignments', { type: QueryTypes.DELETE });
             await sequelize.query('DELETE FROM SeatAllocations', { type: QueryTypes.DELETE });
             await sequelize.query('DELETE FROM ExamRegistrations', { type: QueryTypes.DELETE });
-            const deletedCount = await Exam.destroy({ where: {} });
+            const regularDeletedCount = await Exam.destroy({ where: {} });
+
+            await sequelize.query('DELETE FROM InternalSeatAllocations', { type: QueryTypes.DELETE });
+            await sequelize.query('DELETE FROM InternalSeatSnapshots', { type: QueryTypes.DELETE });
+            await sequelize.query('DELETE FROM InternalExamRegistrations', { type: QueryTypes.DELETE });
+            await sequelize.query('DELETE FROM InternalExamDepartments', { type: QueryTypes.DELETE });
+            const internalDeletedCount = await InternalExam.destroy({ where: {} });
 
             return res.json({
                 message: 'All exams deleted successfully',
-                deletedCount
+                deletedCount: regularDeletedCount + internalDeletedCount
             });
         } catch (error: any) {
             return res.status(500).json({ message: 'Error deleting exams', error: error.message });

@@ -26,7 +26,7 @@ export class InternalExamController {
     static parseDepartmentCodes(raw: unknown): string[] {
         let text = String(raw ?? '').trim().toUpperCase();
         if (!text) return [];
-        
+
         if (text.includes('ALL BRANCHES') || text === 'ALL' || text === 'ALL_BRANCHES') {
             return ['ALL_BRANCHES'];
         }
@@ -289,8 +289,8 @@ export class InternalExamController {
         if (!text) return null;
         const upper = text.toUpperCase().trim();
 
-        if (/\b(?:INT\.?(?:EGRATED)?\s*MCA|IMCA|INMCA)\b/.test(upper)) {
-            return { code: 'INTEGRATED_MCA', label: 'Integrated MCA' };
+        if (/\b(?:INT\.?(?:EGRATED)?\s*MCA|IMCA|INMCA|INT_MCA)\b/.test(upper)) {
+            return { code: 'INT_MCA', label: 'Int. MCA' };
         }
         if (/\b(?:MCA|M\.C\.A)\b/.test(upper)) {
             return { code: 'MCA', label: 'MCA' };
@@ -303,6 +303,12 @@ export class InternalExamController {
         }
         if (/\b(?:BHM|B\.H\.M)\b/.test(upper)) {
             return { code: 'BHM', label: 'BHM' };
+        }
+        if (/\b(?:MTECH|M\.TECH|M\s+TECH|MASTER\s+OF\s+TECHNOLOGY)\b/.test(upper)) {
+            return { code: 'MTECH', label: 'M.Tech' };
+        }
+        if (/\b(?:PHD|PH\.D)\b/.test(upper)) {
+            return { code: 'PHD', label: 'PhD' };
         }
         return null;
     }
@@ -467,7 +473,9 @@ export class InternalExamController {
                 let dateVal = getColVal(['DAYDATE', 'DATE', 'EXAMDATE', 'DAYANDDATE', 'DAY', 'DATEOFEXAM', 'DATEOFEXAMINATION']);
                 let timeVal = getColVal(['TIME', 'SESSION', 'EXAMTIME', 'TIMINGS', 'TIMING']);
                 let slotVal = getColVal(['SLOT']);
-                let branchVal = getColVal(['BRANCHES', 'BRANCH', 'DEPARTMENT', 'DEPARTMENTS', 'DEPTS', 'DEPT', 'PROGRAMME', 'PROGRAM', 'STREAM']);
+                let semColVal = getColVal(['SEMESTER', 'SEM']);
+                let progColVal = getColVal(['PROGRAMME', 'PROGRAM', 'DEGREE']);
+                let branchVal = getColVal(['BRANCHES', 'BRANCH', 'DEPARTMENT', 'DEPARTMENTS', 'DEPTS', 'DEPT', 'STREAM']);
 
                 let courseVal = getColVal(['COURSECODE', 'SUBJECTCODE', 'COURSECODESUBJECTCODE', 'SUBCODE', 'PAPERCODE', 'CODE', 'COURSE', 'SUBJECT', 'DISCIPLINE']);
                 let courseNameVal = getColVal(['EXAMINATIONNAME', 'EXAMNAME', 'EXAMINATION', 'SUBJECTNAME', 'COURSENAME', 'PAPERNAME', 'SUBJECTTITLE', 'TITLE', 'EXAMTITLE', 'NAME', 'TITLEOFPAPER', 'SUBTITLE', 'TITLEOFCOURSE']);
@@ -499,11 +507,27 @@ export class InternalExamController {
 
                 if (!courseVal && !courseNameVal) continue; // Skip non-course rows
 
-                // Check inline row content for explicit semester or programme override if present
-                const rowSem = InternalExamController.extractSemester(rowStr) || currentSemester || 'S3';
-                const rowProg = InternalExamController.extractProgramme(rowStr);
-                const finalProgCode = rowProg?.code || currentProgrammeCode;
-                const finalProgLabel = rowProg?.label || currentProgrammeLabel;
+                // Resolve semester from column or row context
+                const rowSem = (semColVal ? InternalExamController.extractSemester(semColVal) : null) || 
+                               InternalExamController.extractSemester(rowStr) || 
+                               currentSemester || 
+                               'S3';
+
+                // Resolve programme from column or row context
+                let finalProgCode = currentProgrammeCode;
+                let finalProgLabel = currentProgrammeLabel;
+
+                if (progColVal) {
+                    const normP = normalizeProgramme(progColVal);
+                    finalProgCode = normP;
+                    finalProgLabel = getProgrammeLabel(normP);
+                } else {
+                    const rowProg = InternalExamController.extractProgramme(rowStr);
+                    if (rowProg) {
+                        finalProgCode = rowProg.code;
+                        finalProgLabel = rowProg.label;
+                    }
+                }
 
                 allRows.push({
                     _inheritedDate: lastDate,
@@ -514,7 +538,7 @@ export class InternalExamController {
                     _programmeLabel: finalProgLabel,
                     _sourceSheet: sheetName,
                     _sourceRow: i + 1,
-                    Branch: branchVal,
+                    Branch: branchVal || progColVal || 'ALL_BRANCHES',
                     Course: courseVal || courseNameVal,
                     CourseName: courseNameVal
                 });
@@ -676,7 +700,7 @@ export class InternalExamController {
 
         try {
             const filename = (req.file.originalname || '').toLowerCase();
-            const rawSeriesId = req.body.seriesId;
+            const rawSeriesId = req.body.seriesId || req.params.seriesId || req.query.seriesId;
             let seriesId: number | string | undefined = (rawSeriesId && rawSeriesId !== 'undefined' && rawSeriesId !== 'null') ? rawSeriesId : undefined;
 
             if (!seriesId) {
@@ -713,7 +737,7 @@ export class InternalExamController {
 
             let data: any[] = [];
             let parseMode = 'Standard';
-            
+
             if (isPdf) {
                 const pdfResult = await InternalExamController.extractRowsFromPdf(req.file.buffer);
                 data = pdfResult.rows;
@@ -765,7 +789,7 @@ export class InternalExamController {
                         const timeStr = String(timeRaw).toLowerCase();
                         if (timeStr.includes('am')) session = 'FN';
                         if (timeStr.includes('pm')) session = 'AN';
-                        
+
                         const timeMatch = String(timeRaw).match(/(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/gi);
                         if (timeMatch && timeMatch.length >= 2) {
                             startTime = timeMatch[0] ? timeMatch[0].trim() : '';
@@ -816,8 +840,8 @@ export class InternalExamController {
                     // The normalized deptCodes are only used for InternalExamDepartment FK lookups.
                     const branchScopeStr = String(branchesRaw || '').trim() || deptCodes.join(',');
 
-                    let resolvedProgCode = programmeCodeRaw;
-                    let resolvedProgLabel = programmeLabelRaw;
+                    let resolvedProgCode = normalizeProgramme(programmeCodeRaw || programmeLabelRaw || 'BTECH');
+                    let resolvedProgLabel = getProgrammeLabel(resolvedProgCode);
 
                     const upperCode = (subjectCode || '').toUpperCase();
                     const upperName = (subjectName || '').toUpperCase();
@@ -827,11 +851,11 @@ export class InternalExamController {
                         upperName.includes('INTEGRATED MCA') || upperName.includes('INT MCA') ||
                         deptCodes.some(d => d === 'INMCA' || d === 'IMCA' || d === 'INT_MCA' || d === 'INT')
                     ) {
-                        resolvedProgCode = 'INTEGRATED_MCA';
-                        resolvedProgLabel = 'Integrated MCA';
+                        resolvedProgCode = 'INT_MCA';
+                        resolvedProgLabel = 'Int. MCA';
                     } else if (
                         upperCode.includes('MCA') ||
-                        upperName.includes('MASTER OF COMPUTER APPLICATIONS') || upperName.includes('MCA') ||
+                        upperName.includes('MASTER OF COMPUTER APPLICATIONS') ||
                         deptCodes.some(d => d === 'MCA')
                     ) {
                         resolvedProgCode = 'MCA';
@@ -955,7 +979,7 @@ export class InternalExamController {
 
             return res.json({
                 success: true,
-                message: req.body.previewOnly === 'true' || req.body.previewOnly === true 
+                message: req.body.previewOnly === 'true' || req.body.previewOnly === true
                     ? `Timetable preview loaded (${parsedItems.length} subjects across ${semestersSummary.length} semester(s))`
                     : "Import processing complete",
                 totalRows: data.length,

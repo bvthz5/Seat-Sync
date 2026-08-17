@@ -4,8 +4,8 @@ import { Department } from '../models/Department.js';
 import ProgramDepartment from '../models/ProgramDepartment.js';
 
 export interface NormalizedAcademicInfo {
-  programCode: string;
-  programmeLabel: string;
+  programCode: string; // 'BTECH' | 'MCA' | 'INT_MCA' | 'MBA' | 'MTECH' | 'PHD'
+  programmeLabel: string; // 'B.Tech' | 'MCA' | 'Int. MCA' | 'MBA' | 'M.Tech' | 'PhD'
   rawBranch: string;
   normalizedBranchCode: string;
   departmentCode: string;
@@ -13,7 +13,7 @@ export interface NormalizedAcademicInfo {
   batchYear: number | null;
   batchEndYear: number | null;
   batchName: string | null;
-  division: string | null;
+  division: string | null; // null for cohorts without division (e.g. CA, MCA, INT MCA)
   semester: number | null;
   semesterName: string | null;
 }
@@ -32,14 +32,14 @@ export const PROGRAM_DEPARTMENT_MAP: Record<string, string> = {
   "MECH": "Mechanical Engineering",
   "CE": "Civil Engineering",
   "CIVIL": "Civil Engineering",
-  "CA": "Computer Applications",
+  "CA": "Computer Applications (B.Tech)",
   "CC": "Computer Science (Cyber Security)",
   "CY": "Cyber Security",
   "CT": "Computer Technology",
   "ER": "Electronics & Robotics",
   "RA": "Robotics & Automation",
-  "MCA": "Computer Applications",
-  "INT_MCA": "Integrated Computer Applications",
+  "MCA": "Master of Computer Applications",
+  "INT_MCA": "Integrated Master of Computer Applications",
   "MBA": "Management Studies",
   "BHM": "Hotel Management",
   "MTECH": "Master of Technology",
@@ -57,8 +57,8 @@ export const normalizeProgramme = (progInput: unknown): string => {
         return 'INT_MCA';
     }
     if (clean.includes('MCA') || clean.includes('M.C.A')) return 'MCA';
-    if (clean.includes('B.TECH') || clean.includes('BTECH') || clean.includes('B TECH') || clean.includes('BACHELOR OF TECHNOLOGY')) return 'BTECH';
-    if (clean.includes('M.TECH') || clean.includes('MTECH') || clean.includes('M TECH') || clean.includes('MASTER OF TECHNOLOGY')) return 'MTECH';
+    if (clean.includes('B.TECH') || clean.includes('BTECH') || clean.includes('B TECH') || clean.includes('BACHELOR OF TECHNOLOGY') || clean.includes('ENGINEERING')) return 'BTECH';
+    if (clean.includes('M.TECH') || clean.includes('MTECH') || clean.includes('M TECH') || clean.includes('MASTER OF TECHNOLOGY') || clean.includes('PGR') || clean.includes('PGL') || clean.includes('AMPM')) return 'MTECH';
     if (clean.includes('MBA') || clean.includes('M.B.A')) return 'MBA';
     if (clean.includes('BHM') || clean.includes('B.H.M')) return 'BHM';
     if (clean.includes('PHD') || clean.includes('PH.D')) return 'PHD';
@@ -71,7 +71,7 @@ export const normalizeProgramme = (progInput: unknown): string => {
 export const getProgrammeLabel = (progCode: unknown): string => {
     const norm = normalizeProgramme(progCode);
     switch (norm) {
-        case 'INT_MCA': return 'Integrated MCA';
+        case 'INT_MCA': return 'Int. MCA';
         case 'MCA': return 'MCA';
         case 'BTECH': return 'B.Tech';
         case 'MTECH': return 'M.Tech';
@@ -93,7 +93,7 @@ export const normalizeBranchCode = (branchInput: unknown): string => {
     clean = clean.replace(/\(.*\)/g, '').trim();
 
     // Strip common prefixes
-    if (clean.startsWith('IT') && clean.length > 2 && !['INT', 'INT_MCA', 'INT MCA'].includes(clean)) {
+    if (clean.startsWith('IT') && clean.length > 2 && !['INT', 'INT_MCA', 'INT MCA', 'INT. MCA'].includes(clean)) {
         const withoutIT = clean.slice(2);
         if (withoutIT.length >= 2) clean = withoutIT;
     }
@@ -191,7 +191,7 @@ export const normalizeBranchCode = (branchInput: unknown): string => {
     const matchedCanonical = canonicalMap[clean];
     if (matchedCanonical) return matchedCanonical;
 
-    // Check partial containment for complex names
+    // Check partial containment for complex names (with strict ordering, INT MCA before MCA, NEVER substring matching CA!)
     if (clean.includes('INT MCA') || clean.includes('INT_MCA') || clean.includes('INTEGRATED MCA') || clean.includes('INMCA') || clean.includes('IMCA')) return 'INT_MCA';
     if (clean.includes('AI&DS') || clean.includes('AIDS') || clean.includes('ARTIFICIAL INTELLIGENCE')) return 'AD';
     if (clean.includes('CYBER SECURITY')) return 'CC';
@@ -201,7 +201,8 @@ export const normalizeBranchCode = (branchInput: unknown): string => {
     if (clean.includes('ELECTRICAL & ELECTRONICS') || clean.includes('EEE')) return 'EE';
     if (clean.includes('MECHANICAL') || clean.includes('MECH')) return 'ME';
     if (clean.includes('CIVIL')) return 'CE';
-    if (clean.includes('MCA')) return 'MCA';
+    if (clean.includes('MASTER OF COMPUTER APPLICATIONS') || clean === 'MCA' || clean.startsWith('MCA ') || clean.endsWith(' MCA')) return 'MCA';
+    if (clean === 'CA' || clean.startsWith('CA ') || clean.endsWith(' CA')) return 'CA';
 
     const alphaOnly = clean.replace(/[^A-Z0-9]/g, '');
     return alphaOnly || 'UNKNOWN';
@@ -235,13 +236,15 @@ export const getDepartmentCodeFromProgram = (programCode: string): string => {
         "MCA": "MCA",
         "INT_MCA": "INT_MCA",
         "MBA": "MBA",
-        "BHM": "BHM"
+        "BHM": "BHM",
+        "MTECH": "MTECH",
+        "PHD": "PHD"
     };
     return map[normalized] || normalized;
 };
 
 /**
- * Parses batch string (e.g. "Batch : CSE 2025-2029 A (S3)", "Batch : MCA 2025-27 (S3)", "Batch : INT MCA 2025-30 (S3)")
+ * Parses batch string (e.g. "Batch : CSE 2025-2029 A (S3)", "Batch : MCA 2025-27 (S3)", "Batch : INT MCA 2025-30 (S3)", "Batch : CA 2025-2029 (S3)")
  * and extracts a normalized academic identity.
  */
 export const parseBatchString = (batchText: unknown): NormalizedAcademicInfo => {
@@ -249,7 +252,7 @@ export const parseBatchString = (batchText: unknown): NormalizedAcademicInfo => 
     if (!text) {
         return {
             programCode: 'UNKNOWN',
-            programmeLabel: 'B.Tech',
+            programmeLabel: 'Unknown',
             rawBranch: 'UNKNOWN',
             normalizedBranchCode: 'UNKNOWN',
             departmentCode: 'UNKNOWN',
@@ -257,7 +260,7 @@ export const parseBatchString = (batchText: unknown): NormalizedAcademicInfo => 
             batchYear: null,
             batchEndYear: null,
             batchName: null,
-            division: 'A',
+            division: null,
             semester: null,
             semesterName: null
         };
@@ -295,52 +298,61 @@ export const parseBatchString = (batchText: unknown): NormalizedAcademicInfo => 
         }
     }
 
-    // 4. Extract Division (e.g. "A", "B", "C" in "CSE 2025-2029 A (S3)" or "Div B" or "Section C")
-    let division = 'A';
-    // Match standalone single letter after years or before semester
-    const divMatch = cleanText.match(/(?:20\d{2}[-–]\d{2,4}|\d{4})\s+([A-E])\b/i) ||
-                     cleanText.match(/(?:DIV|DIVISION|SEC|SECTION)\s*([A-E])/i) ||
-                     cleanText.match(/\b([A-E])\b(?=\s*\([S\d\s]+\)|\s*$)/i);
+    // 4. Extract Branch text before years
+    let textBeforeYears = cleanText;
+    if (rangeMatch) {
+        textBeforeYears = cleanText.substring(0, cleanText.indexOf(rangeMatch[0])).trim();
+    } else if (cleanText.match(/20\d{2}/)) {
+        const idx = cleanText.search(/20\d{2}/);
+        textBeforeYears = cleanText.substring(0, idx).trim();
+    }
 
-    if (divMatch && divMatch[1] && !['S', 'V', 'T'].includes(divMatch[1].toUpperCase())) {
+    const rawBranch = textBeforeYears.toUpperCase().trim() || cleanText.split(/\s+/)[0]?.toUpperCase() || 'UNKNOWN';
+
+    // 5. Extract Division: ONLY if explicit section letter is specified after years or with Div/Section
+    let division: string | null = null;
+    let textAfterYears = '';
+    if (rangeMatch) {
+        textAfterYears = cleanText.substring(cleanText.indexOf(rangeMatch[0]) + rangeMatch[0].length).replace(/\(S\d+\)/gi, '').trim();
+    }
+
+    const divMatch = textAfterYears.match(/\b([A-E])\b/i) ||
+                     cleanText.match(/(?:DIV|DIVISION|SEC|SECTION)\s*([A-E])/i);
+    if (divMatch && divMatch[1]) {
         division = divMatch[1].toUpperCase();
     }
 
-    // 5. Extract Branch prefix (remove years, division, semester)
-    let branchText = cleanText
-        .replace(/\s*\([S\d\s\-_]+\)/gi, '')
-        .replace(/(20\d{2})\s*[-–]\s*(20\d{2}|\d{2})/g, '')
-        .replace(/(20\d{2})/g, '')
-        .replace(/(?:DIV|DIVISION|SEC|SECTION)\s*[A-E]/gi, '')
-        .replace(/\b[A-E]\b$/i, '')
-        .trim();
-
-    if (!branchText) {
-        branchText = cleanText.split(/\s+/)[0] || 'UNKNOWN';
-    }
-
-    const rawBranch = branchText.toUpperCase().trim();
-    const normalizedBranchCode = normalizeBranchCode(rawBranch);
-
-    // 6. Determine Programme
+    // 6. Determine Programme & Normalized Branch
     let programmeCode = 'BTECH';
-    if (normalizedBranchCode === 'INT_MCA' || rawBranch.includes('INT MCA') || rawBranch.includes('INTEGRATED MCA')) {
-        programmeCode = 'INT_MCA';
-        if (batchYear && !batchEndYear) batchEndYear = batchYear + 5;
-    } else if (normalizedBranchCode === 'MCA') {
-        programmeCode = 'MCA';
-        if (batchYear && !batchEndYear) batchEndYear = batchYear + 2;
-    } else if (normalizedBranchCode === 'MBA') {
-        programmeCode = 'MBA';
-        if (batchYear && !batchEndYear) batchEndYear = batchYear + 2;
-    } else if (normalizedBranchCode === 'BHM') {
-        programmeCode = 'BHM';
-        if (batchYear && !batchEndYear) batchEndYear = batchYear + 3;
-    } else if (normalizedBranchCode === 'MTECH') {
-        programmeCode = 'MTECH';
-        if (batchYear && !batchEndYear) batchEndYear = batchYear + 2;
-    } else if (normalizedBranchCode === 'PHD') {
+    let normalizedBranchCode = normalizeBranchCode(rawBranch);
+
+    if (rawBranch.startsWith('PHD') || rawBranch.includes('PH.D') || rawBranch.includes('PHD')) {
         programmeCode = 'PHD';
+        normalizedBranchCode = rawBranch.replace(/^PHD\s*/i, '').trim();
+    } else if (rawBranch.includes('INT MCA') || rawBranch.includes('INT_MCA') || rawBranch.includes('INT. MCA') || rawBranch.includes('INMCA') || rawBranch.includes('IMCA')) {
+        programmeCode = 'INT_MCA';
+        normalizedBranchCode = 'INT_MCA';
+        if (batchYear && !batchEndYear) batchEndYear = batchYear + 5;
+    } else if (rawBranch === 'MCA' || rawBranch === 'M.C.A' || rawBranch.includes('MASTER OF COMPUTER APPLICATIONS')) {
+        programmeCode = 'MCA';
+        normalizedBranchCode = 'MCA';
+        if (batchYear && !batchEndYear) batchEndYear = batchYear + 2;
+    } else if (rawBranch === 'MBA' || rawBranch === 'M.B.A' || rawBranch.includes('MANAGEMENT STUDIES')) {
+        programmeCode = 'MBA';
+        normalizedBranchCode = 'MBA';
+        if (batchYear && !batchEndYear) batchEndYear = batchYear + 2;
+    } else if (rawBranch.includes('PGR') || rawBranch.includes('PGL') || rawBranch.includes('AMPM') || rawBranch.startsWith('MTECH') || rawBranch.startsWith('M.TECH') || rawBranch.includes('M TECH')) {
+        programmeCode = 'MTECH';
+        normalizedBranchCode = rawBranch;
+        if (batchYear && !batchEndYear) batchEndYear = batchYear + 2;
+    } else if (rawBranch === 'BHM' || rawBranch.includes('HOTEL MANAGEMENT')) {
+        programmeCode = 'BHM';
+        normalizedBranchCode = 'BHM';
+        if (batchYear && !batchEndYear) batchEndYear = batchYear + 3;
+    } else if (rawBranch === 'CA') {
+        programmeCode = 'BTECH';
+        normalizedBranchCode = 'CA';
+        if (batchYear && !batchEndYear) batchEndYear = batchYear + 4;
     } else {
         programmeCode = 'BTECH';
         if (batchYear && !batchEndYear) batchEndYear = batchYear + 4;
@@ -350,11 +362,10 @@ export const parseBatchString = (batchText: unknown): NormalizedAcademicInfo => 
     const departmentCode = getDepartmentCodeFromProgram(normalizedBranchCode);
     const departmentName = PROGRAM_DEPARTMENT_MAP[normalizedBranchCode] || PROGRAM_DEPARTMENT_MAP[departmentCode] || `${departmentCode} Department`;
 
-    // 7. Construct canonical batchName preserving division (e.g. "CSE 2025-2029 A", "MCA 2025-2027", "INT MCA 2025-2030")
+    // 7. Canonical batchName preserving division (e.g. "CSE 2025-2029 A", "CA 2025-2029", "MCA 2025-27", "INT MCA 2025-30")
     const cleanNoSem = cleanText.replace(/\s*\([S\d\s\-_]+\)/i, '').trim();
-    const divSuffix = (rawBranch === 'CSE' || cleanText.includes(' ' + division)) ? ` ${division}` : (division !== 'A' ? ` ${division}` : '');
     const batchName = cleanNoSem || (batchYear 
-        ? `${rawBranch} ${batchYear}${batchEndYear ? '-' + batchEndYear : ''}${divSuffix}`
+        ? `${rawBranch} ${batchYear}${batchEndYear ? '-' + batchEndYear : ''}${division ? ' ' + division : ''}`
         : rawBranch);
 
     return {
@@ -427,7 +438,7 @@ export const resolveOrCreateDepartment = async (deptCodeRaw: string, deptNameRaw
   const deptCode = getDepartmentCodeFromProgram(normBranch);
   const departmentName = deptNameRaw || PROGRAM_DEPARTMENT_MAP[normBranch] || `${deptCode} Department`;
 
-  // 1. Try to find by Code first (fastest)
+  // 1. Find strictly by DepartmentCode first
   let department = await Department.findOne({
     where: { 
       [Op.or]: [
@@ -438,15 +449,7 @@ export const resolveOrCreateDepartment = async (deptCodeRaw: string, deptNameRaw
     transaction: t || null
   });
 
-  // 2. If not found by code, try finding by Name
-  if (!department) {
-    department = await Department.findOne({
-      where: { DepartmentName: departmentName },
-      transaction: t || null
-    });
-  }
-
-  // 3. If still not found, create it
+  // 2. If not found by code, create it cleanly with its own distinct DepartmentCode
   if (!department) {
     department = await Department.create({
       DepartmentCode: deptCode,
@@ -457,3 +460,4 @@ export const resolveOrCreateDepartment = async (deptCodeRaw: string, deptNameRaw
   
   return department;
 };
+

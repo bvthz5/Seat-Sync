@@ -32,6 +32,7 @@ type BranchOption = {
 type GroupedExam = {
     groupKey: string;
     examName: string;
+    programme: string;
     date: string;
     session: string;
     status: string;
@@ -88,25 +89,28 @@ const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
         const semRaw = String(exam?.Semester || exam?.Subject?.Semester || 'S3').toUpperCase().trim();
         const semester = semRaw.startsWith('S') ? semRaw : (semRaw ? `S${semRaw}` : 'S3');
         const rawCode = String(exam?.Subject?.SubjectCode || exam?.SubjectCode || '').trim().toUpperCase();
+        const programme = String(exam?.Programme || '').trim();
 
         const titleNorm = normalizeExamTitle(examName);
         const codeNorm = rawCode.replace(/[^A-Z0-9]/g, '');
+        const progNorm = programme.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-        // Standardized grouping key: Semester + Date + Session + Normalized Title (or Code)
-        // Consolidates identical paper sessions (e.g. Sensors AND Actuators across ECE & ER) into 1 card
-        const groupKey = `${semester}::${date}::${session}::${titleNorm || codeNorm}`;
+        // Standardized grouping key: Semester + Programme + Date + Session + Normalized Title (or Code)
+        // Consolidates identical paper sessions into 1 card while strictly separating programmes
+        const groupKey = `${semester}::${progNorm}::${date}::${session}::${titleNorm || codeNorm}`;
         const department = exam?.Subject?.Department || {};
         const deptCode = String(department.DepartmentCode || exam?.BranchScope || 'GEN');
         const deptName = String(department.DepartmentName || exam?.BranchScope || 'General');
-        // Use the raw timetable BranchScope value as the display label.
-        // Fall back to deptCode only if BranchScope is absent (legacy records).
-        const branchScope = String(exam?.BranchScope || '').trim() || deptCode;
-        const branchKey = String(department.DepartmentID || deptCode || exam.ExamID);
+        // Use the raw timetable BranchScope value directly from the database record/imported timetable
+        // NEVER fall back to DepartmentID or Department table data
+        const branchScope = String(exam?.BranchScope || '').trim();
+        const branchKey = String(exam.ExamID);
 
         if (!groups.has(groupKey)) {
             groups.set(groupKey, {
                 groupKey,
                 examName,
+                programme,
                 date,
                 session,
                 status: String(exam?.Status || 'Scheduled'),
@@ -520,7 +524,9 @@ const ExamSeriesList: React.FC = () => {
                             {examsBySemester.map(([semKey, semExams]) => {
                                 const isOpen = openSemesters[semKey] ?? true;
                                 const branchSet = new Set<string>();
-                                semExams.forEach(e => e.branches.forEach(b => branchSet.add(b.departmentCode)));
+                                semExams.forEach(e => e.branches.forEach(b => {
+                                    if (b.branchScope) branchSet.add(b.branchScope);
+                                }));
                                 const branchesStr = Array.from(branchSet).slice(0, 5).join(', ');
 
                                 return (
@@ -557,8 +563,8 @@ const ExamSeriesList: React.FC = () => {
                                         </div>
 
                                         <div className="mt-5 pt-3.5 border-t border-slate-100 flex items-center justify-between gap-1.5 text-xs font-bold text-slate-600">
-                                            <span className="truncate max-w-[100px] shrink min-w-0 bg-slate-100 text-slate-700 px-2 py-1 rounded-lg border border-slate-200/60 text-[10px] font-bold">
-                                                Dept: {branchesStr || 'All'}
+                                            <span className="truncate max-w-[140px] shrink min-w-0 bg-slate-100 text-slate-700 px-2 py-1 rounded-lg border border-slate-200/60 text-[10px] font-bold" title={branchesStr || 'All'}>
+                                                Branches: {branchesStr || 'All'}
                                             </span>
                                             <div className="flex items-center gap-1.5 shrink-0 ml-auto">
                                                 <Button
@@ -684,6 +690,16 @@ const ExamSeriesList: React.FC = () => {
                                         {/* ── PURE TIMETABLE PROGRAMME & SUBJECT HIERARCHY ── */}
                                         {(() => {
                                             const getProgrammeForExamGroup = (examGroup: GroupedExam): string => {
+                                                if (examGroup.programme) {
+                                                    const progUpper = examGroup.programme.toUpperCase();
+                                                    if (progUpper.includes('INT') || progUpper.includes('INMCA')) return 'Int. MCA';
+                                                    if (progUpper === 'MCA' || progUpper === 'M.C.A') return 'MCA';
+                                                    if (progUpper.includes('MTECH') || progUpper.includes('M.TECH')) return 'M.Tech';
+                                                    if (progUpper === 'MBA') return 'MBA';
+                                                    if (progUpper === 'BHM') return 'BHM';
+                                                    if (progUpper.includes('BTECH') || progUpper.includes('B.TECH')) return 'B.Tech';
+                                                    return examGroup.programme;
+                                                }
                                                 const code = String(examGroup.subjectCode || '').toUpperCase();
                                                 const name = String(examGroup.examName || '').toUpperCase();
                                                 const deptCodes = examGroup.branches.map(b => String(b.departmentCode || '').toUpperCase());
@@ -694,7 +710,7 @@ const ExamSeriesList: React.FC = () => {
                                                     name.includes('INTEGRATED MCA') || name.includes('INT MCA') || name.includes('INT. MCA') ||
                                                     deptCodes.some(d => d === 'INMCA' || d === 'IMCA' || d === 'INT_MCA' || d === 'INT')
                                                 ) {
-                                                    return 'Integrated MCA';
+                                                    return 'Int. MCA';
                                                 }
 
                                                 // 2. Check for MCA

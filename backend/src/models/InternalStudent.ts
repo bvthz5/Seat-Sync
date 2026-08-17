@@ -15,6 +15,9 @@ interface InternalStudentAttributes {
     DepartmentID: number | null;
     ProgramID: number | null;
     SemesterID: number | null;
+    Programme: string | null;
+    Branch: string | null;
+    NormalizedBranch: string | null;
     Batch: string | null;
     BatchStart: number | null;
     BatchEnd: number | null;
@@ -30,7 +33,7 @@ interface InternalStudentAttributes {
 
 interface InternalStudentCreationAttributes
     extends Optional<InternalStudentAttributes,
-        "InternalStudentID" | "UserID" | "RollNumber" | "Batch" | "BatchStart" | "BatchEnd" | "Division" | "Semester" | "Source" | "Status" | "DepartmentID" | "ProgramID" | "SemesterID" | "BatchYear" | "AcademicYear"
+        "InternalStudentID" | "UserID" | "RollNumber" | "Programme" | "Branch" | "NormalizedBranch" | "Batch" | "BatchStart" | "BatchEnd" | "Division" | "Semester" | "Source" | "Status" | "DepartmentID" | "ProgramID" | "SemesterID" | "BatchYear" | "AcademicYear"
     > {}
 
 export class InternalStudent extends Model<InternalStudentAttributes, InternalStudentCreationAttributes>
@@ -43,6 +46,9 @@ export class InternalStudent extends Model<InternalStudentAttributes, InternalSt
     declare DepartmentID: number | null;
     declare ProgramID: number | null;
     declare SemesterID: number | null;
+    declare Programme: string | null;
+    declare Branch: string | null;
+    declare NormalizedBranch: string | null;
     declare Batch: string | null;
     declare BatchStart: number | null;
     declare BatchEnd: number | null;
@@ -102,6 +108,18 @@ InternalStudent.init(
             allowNull: true,
             references: { model: "Semesters", key: "SemesterID" },
         },
+        Programme: {
+            type: DataTypes.STRING(50),
+            allowNull: true,
+        },
+        Branch: {
+            type: DataTypes.STRING(50),
+            allowNull: true,
+        },
+        NormalizedBranch: {
+            type: DataTypes.STRING(50),
+            allowNull: true,
+        },
         Batch: {
             type: DataTypes.STRING(100),
             allowNull: true,
@@ -117,7 +135,7 @@ InternalStudent.init(
         Division: {
             type: DataTypes.STRING(10),
             allowNull: true,
-            defaultValue: "A",
+            defaultValue: null,
         },
         Semester: {
             type: DataTypes.STRING(20),
@@ -160,6 +178,7 @@ InternalStudent.init(
             { fields: ["RegisterNumber"] },
             { fields: ["DepartmentID"] },
             { fields: ["BatchYear"] },
+            { fields: ["Programme", "NormalizedBranch", "Semester"] },
             { fields: ["Batch", "Division", "Semester", "RollNumber"] },
         ],
     }

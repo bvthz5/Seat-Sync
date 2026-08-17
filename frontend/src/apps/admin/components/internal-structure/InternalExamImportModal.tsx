@@ -47,7 +47,7 @@ export const InternalExamImportModal: React.FC<Props> = ({ isOpen, onClose, onSu
                 const res = await InternalExamService.importTimetable(file, seriesId, true);
                 if (res.success && res.preview && res.preview.length > 0) {
                     setPreviewData(res.preview);
-                    
+
                     const semExpandState: Record<string, boolean> = {};
                     const progExpandState: Record<string, boolean> = {};
 
@@ -195,8 +195,8 @@ export const InternalExamImportModal: React.FC<Props> = ({ isOpen, onClose, onSu
                             <p className="text-xs text-slate-500 font-medium mt-0.5">Multi-Semester & Multi-Programme parser for Excel, PDF, and Word formats</p>
                         </div>
                     </div>
-                    <button 
-                        onClick={onClose} 
+                    <button
+                        onClick={onClose}
                         className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all"
                     >
                         <X className="w-5 h-5" />
@@ -207,11 +207,10 @@ export const InternalExamImportModal: React.FC<Props> = ({ isOpen, onClose, onSu
                     {/* Upload Zone */}
                     {!result && (
                         <div
-                            className={`border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center transition-all cursor-pointer ${
-                                isDragging 
-                                    ? 'border-indigo-600 bg-indigo-50/80 scale-[0.99]' 
+                            className={`border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center transition-all cursor-pointer ${isDragging
+                                    ? 'border-indigo-600 bg-indigo-50/80 scale-[0.99]'
                                     : 'border-slate-200 hover:border-indigo-400 bg-slate-50/70 hover:bg-indigo-50/30'
-                            }`}
+                                }`}
                             onDragOver={handleDragOver}
                             onDragLeave={handleDragLeave}
                             onDrop={handleDrop}
@@ -226,7 +225,7 @@ export const InternalExamImportModal: React.FC<Props> = ({ isOpen, onClose, onSu
                                     if (e.target.files && e.target.files[0]) setFile(e.target.files[0]);
                                 }}
                             />
-                            
+
                             {file ? (
                                 <div className="flex flex-col sm:flex-row items-center justify-between w-full p-4 rounded-2xl bg-indigo-50/80 border border-indigo-100 gap-4">
                                     <div className="flex items-center gap-4 text-left">
@@ -240,7 +239,7 @@ export const InternalExamImportModal: React.FC<Props> = ({ isOpen, onClose, onSu
                                             </p>
                                         </div>
                                     </div>
-                                    <button 
+                                    <button
                                         type="button"
                                         className="px-4 py-2 text-xs font-extrabold text-rose-600 hover:text-rose-700 hover:bg-rose-100/70 rounded-xl transition-all shrink-0 border border-rose-200/60"
                                         onClick={(e) => { e.stopPropagation(); setFile(null); }}
@@ -330,7 +329,7 @@ export const InternalExamImportModal: React.FC<Props> = ({ isOpen, onClose, onSu
                                             return (
                                                 <React.Fragment key={semester}>
                                                     {/* Semester Group Header */}
-                                                    <tr 
+                                                    <tr
                                                         className="bg-indigo-600 text-white cursor-pointer hover:bg-indigo-700 transition-colors"
                                                         onClick={() => toggleSemester(semester)}
                                                     >
@@ -338,7 +337,7 @@ export const InternalExamImportModal: React.FC<Props> = ({ isOpen, onClose, onSu
                                                             <div className="flex items-center justify-between">
                                                                 <div className="flex items-center gap-2">
                                                                     {expandedSemesters[semester] ? <ChevronDown className="w-4 h-4 text-indigo-200" /> : <ChevronRight className="w-4 h-4 text-indigo-200" />}
-                                                                    <span className="text-sm font-black tracking-wide">Semester {semester}</span> 
+                                                                    <span className="text-sm font-black tracking-wide">Semester {semester}</span>
                                                                 </div>
                                                                 <span className="text-[11px] font-extrabold bg-white/20 backdrop-blur-xs text-white border border-white/30 px-3 py-0.5 rounded-full">
                                                                     {semTotalExams} exam{semTotalExams > 1 ? 's' : ''} across {semProgrammes.length} programme{semProgrammes.length > 1 ? 's' : ''}
@@ -355,7 +354,7 @@ export const InternalExamImportModal: React.FC<Props> = ({ isOpen, onClose, onSu
                                                         return (
                                                             <React.Fragment key={semProgKey}>
                                                                 {/* Programme Sub-header */}
-                                                                <tr 
+                                                                <tr
                                                                     className="bg-slate-100/90 cursor-pointer hover:bg-slate-200/80 transition-colors border-y border-slate-200/80"
                                                                     onClick={() => toggleProgramme(semProgKey)}
                                                                 >
@@ -377,11 +376,10 @@ export const InternalExamImportModal: React.FC<Props> = ({ isOpen, onClose, onSu
                                                                     <tr key={`${semProgKey}-${i}`} className="hover:bg-slate-50/80 transition-colors">
                                                                         <td className="px-6 py-2.5 font-bold text-slate-800 whitespace-nowrap">{row.date}</td>
                                                                         <td className="px-4 py-2.5 whitespace-nowrap">
-                                                                            <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-md border ${
-                                                                                row.session === 'FN' 
-                                                                                    ? 'bg-amber-50 text-amber-800 border-amber-200' 
+                                                                            <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-md border ${row.session === 'FN'
+                                                                                    ? 'bg-amber-50 text-amber-800 border-amber-200'
                                                                                     : 'bg-purple-50 text-purple-800 border-purple-200'
-                                                                            }`}>
+                                                                                }`}>
                                                                                 {row.session}
                                                                             </span>
                                                                         </td>
@@ -413,7 +411,7 @@ export const InternalExamImportModal: React.FC<Props> = ({ isOpen, onClose, onSu
 
                     {/* Animated Import Progress Bar */}
                     {loading && (
-                        <motion.div 
+                        <motion.div
                             initial={{ opacity: 0, scale: 0.98 }}
                             animate={{ opacity: 1, scale: 1 }}
                             className="bg-white rounded-3xl p-6 shadow-xl shadow-indigo-100/60 border border-indigo-100 space-y-4 relative overflow-hidden"
@@ -433,7 +431,7 @@ export const InternalExamImportModal: React.FC<Props> = ({ isOpen, onClose, onSu
 
                             {/* Animated Gradient Progress Bar Track */}
                             <div className="w-full bg-slate-100 rounded-full h-3.5 p-0.5 border border-slate-200 shadow-inner relative z-10 overflow-hidden">
-                                <motion.div 
+                                <motion.div
                                     className="h-full bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-500 rounded-full transition-all duration-300 shadow-sm"
                                     style={{ width: `${importProgress}%` }}
                                 />
@@ -449,14 +447,13 @@ export const InternalExamImportModal: React.FC<Props> = ({ isOpen, onClose, onSu
 
                     {/* Results / Feedback */}
                     {result && (
-                        <motion.div 
+                        <motion.div
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className={`p-6 rounded-2xl border ${
-                                result.success 
-                                    ? 'bg-emerald-50/90 border-emerald-200' 
+                            className={`p-6 rounded-2xl border ${result.success
+                                    ? 'bg-emerald-50/90 border-emerald-200'
                                     : 'bg-rose-50/90 border-rose-200'
-                            }`}
+                                }`}
                         >
                             <div className="flex items-start gap-4">
                                 {result.success ? (
@@ -468,7 +465,7 @@ export const InternalExamImportModal: React.FC<Props> = ({ isOpen, onClose, onSu
                                     <h3 className={`text-base font-extrabold ${result.success ? 'text-emerald-950' : 'text-rose-950'}`}>
                                         {result.message}
                                     </h3>
-                                    
+
                                     {result.success && (
                                         <>
                                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5">
@@ -554,11 +551,10 @@ export const InternalExamImportModal: React.FC<Props> = ({ isOpen, onClose, onSu
                         <button
                             onClick={handleImport}
                             disabled={!file || previewLoading || loading || previewData.length === 0}
-                            className={`flex items-center gap-2 font-bold rounded-xl h-10 px-6 text-xs transition-all shadow-md ${
-                                !file || previewLoading || loading || previewData.length === 0
-                                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' 
+                            className={`flex items-center gap-2 font-bold rounded-xl h-10 px-6 text-xs transition-all shadow-md ${!file || previewLoading || loading || previewData.length === 0
+                                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
                                     : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200'
-                            }`}
+                                }`}
                         >
                             {loading ? (
                                 <>
