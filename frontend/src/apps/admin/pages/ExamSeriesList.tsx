@@ -965,7 +965,7 @@ const ExamSeriesList: React.FC = () => {
                 onClose={() => setDeleteExamIds(null)}
                 onConfirm={confirmDelete}
                 title="Delete Exam Group"
-                message="Are you sure you want to delete this exam and all its associated department branches? This action cannot be undone."
+                message="Are you sure you want to delete this exam and its branch mappings? This will remove timetable schedules and seating allocations for this exam. Master student records and Academic Setup will remain intact."
                 confirmText="Delete All Branches"
                 cancelText="Cancel"
                 type="danger"
@@ -976,7 +976,7 @@ const ExamSeriesList: React.FC = () => {
                 onClose={() => setIsDeleteAllOpen(false)}
                 onConfirm={confirmDeleteAll}
                 title="Delete All Exams"
-                message="Are you sure you want to delete all exams in this series? This action cannot be undone."
+                message="Are you sure you want to delete all exams in this series? This will remove all timetable schedules and seating allocations for this series. Master student records and Academic Setup will remain intact."
                 confirmText="Delete All"
                 cancelText="Cancel"
                 type="danger"

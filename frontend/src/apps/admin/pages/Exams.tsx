@@ -446,7 +446,7 @@ const Exams: React.FC = () => {
                 onClose={() => setDeleteExamId(null)}
                 onConfirm={confirmDelete}
                 title="Delete Exam"
-                message="Are you sure you want to delete this exam? This action cannot be undone and will remove all associated allocations."
+                message="Are you sure you want to delete this exam? This will remove timetable schedules, student registrations for this exam, and seating allocations. Master student records and Academic Setup will remain intact."
                 confirmText="Delete Exam"
                 cancelText="Cancel"
                 type="danger"

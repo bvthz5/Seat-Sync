@@ -733,15 +733,32 @@ export const getStudentsForInternalExam = async (req: Request, res: Response) =>
  *  Remove a single student mapping from an internal exam
  * ════════════════════════════════════════════════════════════════ */
 export const removeStudentFromInternalExam = async (req: Request, res: Response) => {
+    const t = await sequelize.transaction();
     try {
         const examId = parseInt(req.params.examId as string);
         const studentId = parseInt(req.params.studentId as string);
+        if (!examId || isNaN(examId) || !studentId || isNaN(studentId)) {
+            await t.rollback();
+            return res.status(400).json({ message: 'Valid examId and studentId are required' });
+        }
+
+        // 1. Delete seating allocations for this student in this exam
+        await InternalSeatAllocation.destroy({
+            where: { InternalExamID: examId, InternalStudentID: studentId },
+            transaction: t
+        });
+
+        // 2. Delete registration mapping
         const deleted = await InternalExamRegistration.destroy({
             where: { InternalExamID: examId, InternalStudentID: studentId },
+            transaction: t
         });
+
+        await t.commit();
         if (deleted === 0) return res.status(404).json({ message: 'Mapping not found' });
         res.json({ message: 'Student removed from exam' });
     } catch (error: any) {
+        await t.rollback();
         console.error('Remove Student from Internal Exam Error:', error);
         res.status(500).json({ message: error.message });
     }
@@ -1345,18 +1362,24 @@ export const bulkAutoMapStudentsForSeries = async (req: Request, res: Response) 
  *  Clear student mappings across all exams (or specific semester) in a series
  * ════════════════════════════════════════════════════════════════ */
 export const clearSemesterStudentMappings = async (req: Request, res: Response) => {
+    const t = await sequelize.transaction();
     try {
         const seriesId = parseInt(req.params.seriesId as string);
-        if (!seriesId || isNaN(seriesId)) return res.status(400).json({ message: 'seriesId is required' });
+        if (!seriesId || isNaN(seriesId)) {
+            await t.rollback();
+            return res.status(400).json({ message: 'seriesId is required' });
+        }
 
         const semester = req.query.semester ? String(req.query.semester).trim() : null;
 
         const exams = await InternalExam.findAll({
             where: { InternalExamSeriesID: seriesId },
-            attributes: ['InternalExamID', 'Semester']
+            attributes: ['InternalExamID', 'Semester'],
+            transaction: t
         });
 
         if (exams.length === 0) {
+            await t.rollback();
             return res.status(404).json({ message: 'No internal exams found in this series' });
         }
 
@@ -1373,13 +1396,23 @@ export const clearSemesterStudentMappings = async (req: Request, res: Response) 
         }
 
         if (targetExamIds.length === 0) {
+            await t.rollback();
             return res.json({ message: `No exams found matching semester ${semester}`, clearedCount: 0, examsCount: 0 });
         }
 
-        const deleted = await InternalExamRegistration.destroy({
-            where: { InternalExamID: { [Op.in]: targetExamIds } }
+        // 1. Delete seating allocations for target exams
+        await InternalSeatAllocation.destroy({
+            where: { InternalExamID: { [Op.in]: targetExamIds } },
+            transaction: t
         });
 
+        // 2. Delete registrations for target exams
+        const deleted = await InternalExamRegistration.destroy({
+            where: { InternalExamID: { [Op.in]: targetExamIds } },
+            transaction: t
+        });
+
+        await t.commit();
         res.json({
             success: true,
             message: `Cleared ${deleted} student mapping(s) across ${targetExamIds.length} exam(s)${semester ? ` for Semester ${semester}` : ''}.`,
@@ -1387,6 +1420,7 @@ export const clearSemesterStudentMappings = async (req: Request, res: Response) 
             examsCount: targetExamIds.length
         });
     } catch (error: any) {
+        await t.rollback();
         console.error('Clear Semester Student Mappings Error:', error);
         res.status(500).json({ message: error.message });
     }
@@ -1462,12 +1496,14 @@ export const getSeriesSemesterDepartments = async (req: Request, res: Response) 
  *  in the series, optionally scoped to a specific semester via ?semester=S3
  * ════════════════════════════════════════════════════════════════ */
 export const removeDepartmentsFromSeries = async (req: Request, res: Response) => {
+    const t = await sequelize.transaction();
     try {
         const seriesId = parseInt(req.params.seriesId as string);
         const deptCodeParam = req.params.deptCode || req.body?.deptCodes || req.query?.deptCodes;
         const semester = req.query.semester ? String(req.query.semester).trim() : null;
 
         if (!seriesId || isNaN(seriesId) || !deptCodeParam) {
+            await t.rollback();
             return res.status(400).json({ message: 'Valid seriesId and deptCode(s) are required' });
         }
 
@@ -1476,13 +1512,15 @@ export const removeDepartmentsFromSeries = async (req: Request, res: Response) =
             : String(deptCodeParam).split(',').map(s => s.trim()).filter(Boolean);
 
         if (deptCodes.length === 0) {
+            await t.rollback();
             return res.status(400).json({ message: 'No department codes provided' });
         }
 
         // 1. Get all exams in series (optionally filtered by semester)
         const allExams = await InternalExam.findAll({
             where: { InternalExamSeriesID: seriesId },
-            attributes: ['InternalExamID', 'Semester', 'BranchScope']
+            attributes: ['InternalExamID', 'Semester', 'BranchScope'],
+            transaction: t
         });
 
         let targetExams = allExams;
@@ -1496,6 +1534,7 @@ export const removeDepartmentsFromSeries = async (req: Request, res: Response) =
         }
 
         if (targetExams.length === 0) {
+            await t.rollback();
             return res.json({ success: true, message: 'No exams found in scope', deletedCount: 0, examsAffected: 0 });
         }
 
@@ -1506,29 +1545,42 @@ export const removeDepartmentsFromSeries = async (req: Request, res: Response) =
             where: sequelize.where(
                 sequelize.fn('LOWER', sequelize.col('DepartmentCode')),
                 { [Op.in]: deptCodes.map(c => c.toLowerCase()) }
-            )
+            ),
+            transaction: t
         });
 
         const deptIds = depts.map(d => d.DepartmentID);
 
         if (deptIds.length === 0) {
+            await t.rollback();
             return res.status(404).json({ message: `No matching departments found for codes: ${deptCodes.join(', ')}` });
         }
 
         // 3. Find all internal student IDs belonging to those departments
         const students = await InternalStudent.findAll({
             where: { DepartmentID: { [Op.in]: deptIds } },
-            attributes: ['InternalStudentID']
+            attributes: ['InternalStudentID'],
+            transaction: t
         });
         const studentIds = students.map(s => s.InternalStudentID);
 
         let deletedCount = 0;
         if (studentIds.length > 0) {
+            // Delete seating allocations for these students in these exams
+            await InternalSeatAllocation.destroy({
+                where: {
+                    InternalExamID: { [Op.in]: targetExamIds },
+                    InternalStudentID: { [Op.in]: studentIds }
+                },
+                transaction: t
+            });
+
             deletedCount = await InternalExamRegistration.destroy({
                 where: {
                     InternalExamID: { [Op.in]: targetExamIds },
                     InternalStudentID: { [Op.in]: studentIds }
-                }
+                },
+                transaction: t
             });
         }
 
@@ -1537,7 +1589,8 @@ export const removeDepartmentsFromSeries = async (req: Request, res: Response) =
             where: {
                 InternalExamID: { [Op.in]: targetExamIds },
                 DepartmentID: { [Op.in]: deptIds }
-            }
+            },
+            transaction: t
         });
 
         // 5. Update BranchScope on each affected exam
@@ -1548,11 +1601,12 @@ export const removeDepartmentsFromSeries = async (req: Request, res: Response) =
                 const updated = existing.filter(s => !deptCodesLower.includes(s.toLowerCase()));
                 if (existing.length !== updated.length) {
                     exam.BranchScope = updated.join(',');
-                    await exam.save();
+                    await exam.save({ transaction: t });
                 }
             }
         }
 
+        await t.commit();
         const deptLabels = deptCodes.map(c => c.toUpperCase()).join(', ');
         res.json({
             success: true,
@@ -1562,6 +1616,7 @@ export const removeDepartmentsFromSeries = async (req: Request, res: Response) =
             examsAffected: targetExamIds.length
         });
     } catch (error: any) {
+        await t.rollback();
         console.error('Remove Departments From Series Error:', error);
         res.status(500).json({ message: error.message });
     }

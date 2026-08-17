@@ -1051,56 +1051,85 @@ export class ExamController {
 
     // Delete an exam
     static async deleteExam(req: Request, res: Response) {
+        const t = await sequelize.transaction();
         try {
             const { id } = req.params;
-            let exam = await Exam.findByPk(id as string);
+            const { type } = req.query; // optional 'Internal' or 'Regular'
 
-            if (!exam) {
-                const internalExam = await InternalExam.findByPk(id as string);
-                if (internalExam) {
-                    await sequelize.query('DELETE FROM InternalSeatAllocations WHERE InternalExamID = :id', {
-                        replacements: { id: internalExam.InternalExamID },
-                        type: QueryTypes.DELETE
-                    });
-                    await sequelize.query('DELETE FROM InternalExamRegistrations WHERE InternalExamID = :id', {
-                        replacements: { id: internalExam.InternalExamID },
-                        type: QueryTypes.DELETE
-                    });
-                    await sequelize.query('DELETE FROM InternalExamDepartments WHERE InternalExamID = :id', {
-                        replacements: { id: internalExam.InternalExamID },
-                        type: QueryTypes.DELETE
-                    });
-                    await internalExam.destroy();
-                    return res.json({ message: 'Exam deleted successfully' });
+            let internalExam: any = null;
+            let regularExam: any = null;
+
+            if (type === 'Internal') {
+                internalExam = await InternalExam.findByPk(id as string, { transaction: t });
+            } else if (type === 'Regular') {
+                regularExam = await Exam.findByPk(id as string, { transaction: t });
+            } else {
+                // If not explicitly specified, check InternalExam first if in an internal series context, otherwise check Exam then InternalExam
+                internalExam = await InternalExam.findByPk(id as string, { transaction: t });
+                if (!internalExam) {
+                    regularExam = await Exam.findByPk(id as string, { transaction: t });
                 }
-                return res.status(404).json({ message: 'Exam not found' });
             }
 
-            await sequelize.query('DELETE FROM Attendance WHERE ExamID = :id', {
-                replacements: { id: exam.ExamID },
-                type: QueryTypes.DELETE
-            });
-            await sequelize.query('DELETE FROM InvigilatorAssignments WHERE ExamID = :id', {
-                replacements: { id: exam.ExamID },
-                type: QueryTypes.DELETE
-            });
-            await sequelize.query('DELETE FROM SeatAllocations WHERE ExamID = :id', {
-                replacements: { id: exam.ExamID },
-                type: QueryTypes.DELETE
-            });
-            await sequelize.query('DELETE FROM ExamRegistrations WHERE ExamID = :id', {
-                replacements: { id: exam.ExamID },
-                type: QueryTypes.DELETE
-            });
+            if (internalExam) {
+                await sequelize.query('DELETE FROM InternalSeatAllocations WHERE InternalExamID = :id', {
+                    replacements: { id: internalExam.InternalExamID },
+                    type: QueryTypes.DELETE,
+                    transaction: t
+                });
+                await sequelize.query('DELETE FROM InternalExamRegistrations WHERE InternalExamID = :id', {
+                    replacements: { id: internalExam.InternalExamID },
+                    type: QueryTypes.DELETE,
+                    transaction: t
+                });
+                await sequelize.query('DELETE FROM InternalExamDepartments WHERE InternalExamID = :id', {
+                    replacements: { id: internalExam.InternalExamID },
+                    type: QueryTypes.DELETE,
+                    transaction: t
+                });
+                await internalExam.destroy({ transaction: t });
+                await t.commit();
+                return res.json({ message: 'Internal exam deleted successfully' });
+            }
 
-            await exam.destroy();
-            res.json({ message: 'Exam deleted successfully' });
+            if (regularExam) {
+                await sequelize.query('DELETE FROM Attendance WHERE ExamID = :id', {
+                    replacements: { id: regularExam.ExamID },
+                    type: QueryTypes.DELETE,
+                    transaction: t
+                });
+                await sequelize.query('DELETE FROM InvigilatorAssignments WHERE ExamID = :id', {
+                    replacements: { id: regularExam.ExamID },
+                    type: QueryTypes.DELETE,
+                    transaction: t
+                });
+                await sequelize.query('DELETE FROM SeatAllocations WHERE ExamID = :id', {
+                    replacements: { id: regularExam.ExamID },
+                    type: QueryTypes.DELETE,
+                    transaction: t
+                });
+                await sequelize.query('DELETE FROM ExamRegistrations WHERE ExamID = :id', {
+                    replacements: { id: regularExam.ExamID },
+                    type: QueryTypes.DELETE,
+                    transaction: t
+                });
+
+                await regularExam.destroy({ transaction: t });
+                await t.commit();
+                return res.json({ message: 'Exam deleted successfully' });
+            }
+
+            await t.rollback();
+            return res.status(404).json({ message: 'Exam not found' });
         } catch (error: any) {
+            await t.rollback();
+            console.error('Error deleting exam:', error);
             res.status(500).json({ message: 'Error deleting exam', error: error.message });
         }
     }
 
     static async clearEligibility(req: Request, res: Response) {
+        const t = await sequelize.transaction();
         try {
             const { seriesId, date } = req.query;
             let query = 'DELETE FROM ExamRegistrations WHERE ExamID IN (SELECT ExamID FROM Exams WHERE 1=1';
@@ -1122,26 +1151,26 @@ export class ExamController {
             if (date) seatQuery += ' AND ExamDate = :date';
             seatQuery += ')';
 
-            await sequelize.query(seatQuery, { replacements, type: QueryTypes.DELETE });
+            await sequelize.query(seatQuery, { replacements, type: QueryTypes.DELETE, transaction: t });
+            await sequelize.query(query, { replacements, type: QueryTypes.DELETE, transaction: t });
 
-            await sequelize.query(query, {
-                replacements,
-                type: QueryTypes.DELETE
-            });
-
+            await t.commit();
             res.json({ message: 'Eligibility list cleared successfully' });
         } catch (error: any) {
+            await t.rollback();
             console.error('Clear eligibility error:', error);
             res.status(500).json({ message: 'Error clearing eligibility list', error: error.message });
         }
     }
 
     static async deleteEligibility(req: Request, res: Response) {
+        const t = await sequelize.transaction();
         try {
             const examId = Number(req.params.examId);
             const studentId = Number(req.params.studentId);
 
             if (isNaN(examId) || isNaN(studentId)) {
+                await t.rollback();
                 return res.status(400).json({ message: 'Invalid exam or student ID' });
             }
 
@@ -1151,31 +1180,38 @@ export class ExamController {
                 WHERE ExamID = :examId AND StudentID = :studentId
             `, {
                 replacements: { examId, studentId },
-                type: QueryTypes.DELETE
+                type: QueryTypes.DELETE,
+                transaction: t
             });
 
             const deleted = await ExamRegistration.destroy({
                 where: {
                     ExamID: examId,
                     StudentID: studentId
-                }
+                },
+                transaction: t
             });
 
             if (!deleted) {
+                await t.rollback();
                 return res.status(404).json({ message: 'Eligibility record not found' });
             }
 
+            await t.commit();
             res.json({ message: 'Eligibility deleted successfully' });
         } catch (error: any) {
+            await t.rollback();
             console.error('Error deleting eligibility:', error);
             res.status(500).json({ message: 'Failed to delete eligibility', error: error.message });
         }
     }
 
     static async clearSingleExamEligibility(req: Request, res: Response) {
+        const t = await sequelize.transaction();
         try {
             const examId = Number(req.params.id);
             if (isNaN(examId)) {
+                await t.rollback();
                 return res.status(400).json({ message: 'Invalid exam ID' });
             }
 
@@ -1184,15 +1220,19 @@ export class ExamController {
                 DELETE FROM SeatAllocations WHERE ExamID = :examId
             `, {
                 replacements: { examId },
-                type: QueryTypes.DELETE
+                type: QueryTypes.DELETE,
+                transaction: t
             });
 
             await ExamRegistration.destroy({
-                where: { ExamID: examId }
+                where: { ExamID: examId },
+                transaction: t
             });
 
+            await t.commit();
             res.json({ message: 'Exam eligibility cleared successfully' });
         } catch (error: any) {
+            await t.rollback();
             console.error('Error clearing exam eligibility:', error);
             res.status(500).json({ message: 'Failed to clear exam eligibility', error: error.message });
         }
@@ -1200,17 +1240,19 @@ export class ExamController {
 
     // Delete all exams (optionally by series)
     static async deleteAllExams(req: Request, res: Response) {
+        const t = await sequelize.transaction();
         try {
             const { seriesId } = req.query;
             const parsedSeriesId = seriesId ? parseInt(String(seriesId), 10) : null;
 
             if (seriesId && (!parsedSeriesId || Number.isNaN(parsedSeriesId))) {
+                await t.rollback();
                 return res.status(400).json({ message: 'Invalid seriesId' });
             }
 
             if (parsedSeriesId) {
-                const seriesInfo = await ExamSeries.findByPk(parsedSeriesId);
-                const intSeriesInfo = !seriesInfo ? await InternalExamSeries.findByPk(parsedSeriesId) : null;
+                const seriesInfo = await ExamSeries.findByPk(parsedSeriesId, { transaction: t });
+                const intSeriesInfo = !seriesInfo ? await InternalExamSeries.findByPk(parsedSeriesId, { transaction: t }) : null;
                 const isInternal = seriesInfo?.ExamType === 'Internal' || !!intSeriesInfo;
 
                 if (isInternal) {
@@ -1219,33 +1261,38 @@ export class ExamController {
                         'DELETE FROM InternalSeatAllocations WHERE SnapshotID IN (SELECT SnapshotID FROM InternalSeatSnapshots WHERE SeriesID = :seriesId) OR InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
                         {
                             replacements: { seriesId: parsedSeriesId },
-                            type: QueryTypes.DELETE
+                            type: QueryTypes.DELETE,
+                            transaction: t
                         }
                     );
                     await sequelize.query(
                         'DELETE FROM InternalSeatSnapshots WHERE SeriesID = :seriesId',
                         {
                             replacements: { seriesId: parsedSeriesId },
-                            type: QueryTypes.DELETE
+                            type: QueryTypes.DELETE,
+                            transaction: t
                         }
                     );
                     await sequelize.query(
                         'DELETE FROM InternalExamRegistrations WHERE InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
                         {
                             replacements: { seriesId: parsedSeriesId },
-                            type: QueryTypes.DELETE
+                            type: QueryTypes.DELETE,
+                            transaction: t
                         }
                     );
                     await sequelize.query(
                         'DELETE FROM InternalExamDepartments WHERE InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
                         {
                             replacements: { seriesId: parsedSeriesId },
-                            type: QueryTypes.DELETE
+                            type: QueryTypes.DELETE,
+                            transaction: t
                         }
                     );
-                    const deletedCount = await InternalExam.destroy({ where: { InternalExamSeriesID: parsedSeriesId } });
+                    const deletedCount = await InternalExam.destroy({ where: { InternalExamSeriesID: parsedSeriesId }, transaction: t });
+                    await t.commit();
                     return res.json({
-                        message: 'All exams deleted successfully',
+                        message: 'All internal exams in series deleted successfully',
                         deletedCount
                     });
                 }
@@ -1254,55 +1301,63 @@ export class ExamController {
                     'DELETE FROM Attendance WHERE ExamID IN (SELECT ExamID FROM Exams WHERE ExamSeriesID = :seriesId)',
                     {
                         replacements: { seriesId: parsedSeriesId },
-                        type: QueryTypes.DELETE
+                        type: QueryTypes.DELETE,
+                        transaction: t
                     }
                 );
                 await sequelize.query(
                     'DELETE FROM InvigilatorAssignments WHERE ExamID IN (SELECT ExamID FROM Exams WHERE ExamSeriesID = :seriesId)',
                     {
                         replacements: { seriesId: parsedSeriesId },
-                        type: QueryTypes.DELETE
+                        type: QueryTypes.DELETE,
+                        transaction: t
                     }
                 );
                 await sequelize.query(
                     'DELETE FROM SeatAllocations WHERE ExamID IN (SELECT ExamID FROM Exams WHERE ExamSeriesID = :seriesId)',
                     {
                         replacements: { seriesId: parsedSeriesId },
-                        type: QueryTypes.DELETE
+                        type: QueryTypes.DELETE,
+                        transaction: t
                     }
                 );
                 await sequelize.query(
                     'DELETE FROM ExamRegistrations WHERE ExamID IN (SELECT ExamID FROM Exams WHERE ExamSeriesID = :seriesId)',
                     {
                         replacements: { seriesId: parsedSeriesId },
-                        type: QueryTypes.DELETE
+                        type: QueryTypes.DELETE,
+                        transaction: t
                     }
                 );
 
-                const deletedCount = await Exam.destroy({ where: { ExamSeriesID: parsedSeriesId } });
+                const deletedCount = await Exam.destroy({ where: { ExamSeriesID: parsedSeriesId }, transaction: t });
+                await t.commit();
                 return res.json({
                     message: 'Exams deleted successfully',
                     deletedCount
                 });
             }
 
-            await sequelize.query('DELETE FROM Attendance', { type: QueryTypes.DELETE });
-            await sequelize.query('DELETE FROM InvigilatorAssignments', { type: QueryTypes.DELETE });
-            await sequelize.query('DELETE FROM SeatAllocations', { type: QueryTypes.DELETE });
-            await sequelize.query('DELETE FROM ExamRegistrations', { type: QueryTypes.DELETE });
-            const regularDeletedCount = await Exam.destroy({ where: {} });
+            // Global delete all exams (transactional)
+            await sequelize.query('DELETE FROM Attendance', { type: QueryTypes.DELETE, transaction: t });
+            await sequelize.query('DELETE FROM InvigilatorAssignments', { type: QueryTypes.DELETE, transaction: t });
+            await sequelize.query('DELETE FROM SeatAllocations', { type: QueryTypes.DELETE, transaction: t });
+            await sequelize.query('DELETE FROM ExamRegistrations', { type: QueryTypes.DELETE, transaction: t });
+            const regularDeletedCount = await Exam.destroy({ where: {}, transaction: t });
 
-            await sequelize.query('DELETE FROM InternalSeatAllocations', { type: QueryTypes.DELETE });
-            await sequelize.query('DELETE FROM InternalSeatSnapshots', { type: QueryTypes.DELETE });
-            await sequelize.query('DELETE FROM InternalExamRegistrations', { type: QueryTypes.DELETE });
-            await sequelize.query('DELETE FROM InternalExamDepartments', { type: QueryTypes.DELETE });
-            const internalDeletedCount = await InternalExam.destroy({ where: {} });
+            await sequelize.query('DELETE FROM InternalSeatAllocations', { type: QueryTypes.DELETE, transaction: t });
+            await sequelize.query('DELETE FROM InternalSeatSnapshots', { type: QueryTypes.DELETE, transaction: t });
+            await sequelize.query('DELETE FROM InternalExamRegistrations', { type: QueryTypes.DELETE, transaction: t });
+            await sequelize.query('DELETE FROM InternalExamDepartments', { type: QueryTypes.DELETE, transaction: t });
+            const internalDeletedCount = await InternalExam.destroy({ where: {}, transaction: t });
 
+            await t.commit();
             return res.json({
                 message: 'All exams deleted successfully',
                 deletedCount: regularDeletedCount + internalDeletedCount
             });
         } catch (error: any) {
+            await t.rollback();
             return res.status(500).json({ message: 'Error deleting exams', error: error.message });
         }
     }

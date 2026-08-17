@@ -604,7 +604,7 @@ const SeriesSelection: React.FC = () => {
                         <div className="space-y-2">
                             <h3 className="text-2xl font-black text-slate-900 tracking-tight">Delete Series?</h3>
                             <p className="text-slate-500 text-xs font-semibold leading-relaxed px-4">
-                                Are you sure you want to delete this exam series? This action <span className="font-extrabold text-rose-600 underline decoration-2">cannot be undone</span>.
+                                Are you sure you want to delete this exam series? All timetable schedules and seating allocations belonging to this series will be deleted. Master student records and Academic Setup will <span className="font-extrabold text-emerald-600">remain completely untouched</span>.
                             </p>
                         </div>
                         <div className="flex gap-4 w-full pt-2">

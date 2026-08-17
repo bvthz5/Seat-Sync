@@ -304,12 +304,14 @@ export const updateSeries = async (req: Request, res: Response): Promise<void> =
 };
 
 export const deleteSeries = async (req: Request, res: Response): Promise<void> => {
+    const t = await sequelize.transaction();
     try {
         const { seriesId } = req.params;
         const currentUser = (req as any).user;
 
-        const series = await ExamSeries.findByPk(seriesId as string);
+        const series = await ExamSeries.findByPk(seriesId as string, { transaction: t });
         if (!series) {
+            await t.rollback();
             res.status(404).json({
                 success: false,
                 message: "Exam series not found"
@@ -323,43 +325,44 @@ export const deleteSeries = async (req: Request, res: Response): Promise<void> =
         if (series.ExamType === 'Internal') {
             await sequelize.query(
                 'DELETE FROM InternalSeatAllocations WHERE SnapshotID IN (SELECT SnapshotID FROM InternalSeatSnapshots WHERE SeriesID = :seriesId) OR InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
-                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE }
+                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE, transaction: t }
             );
             await sequelize.query(
                 'DELETE FROM InternalSeatSnapshots WHERE SeriesID = :seriesId',
-                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE }
+                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE, transaction: t }
             );
             await sequelize.query(
                 'DELETE FROM InternalExamRegistrations WHERE InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
-                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE }
+                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE, transaction: t }
             );
             await sequelize.query(
                 'DELETE FROM InternalExamDepartments WHERE InternalExamID IN (SELECT InternalExamID FROM InternalExams WHERE InternalExamSeriesID = :seriesId)',
-                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE }
+                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE, transaction: t }
             );
-            await InternalExam.destroy({ where: { InternalExamSeriesID: seriesIdNum } });
-            await InternalExamSeries.destroy({ where: { InternalExamSeriesID: seriesIdNum } });
+            await InternalExam.destroy({ where: { InternalExamSeriesID: seriesIdNum }, transaction: t });
+            await InternalExamSeries.destroy({ where: { InternalExamSeriesID: seriesIdNum }, transaction: t });
         } else {
             await sequelize.query(
                 'DELETE FROM Attendance WHERE ExamID IN (SELECT ExamID FROM Exams WHERE ExamSeriesID = :seriesId)',
-                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE }
+                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE, transaction: t }
             );
             await sequelize.query(
                 'DELETE FROM InvigilatorAssignments WHERE ExamID IN (SELECT ExamID FROM Exams WHERE ExamSeriesID = :seriesId)',
-                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE }
+                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE, transaction: t }
             );
             await sequelize.query(
                 'DELETE FROM SeatAllocations WHERE ExamID IN (SELECT ExamID FROM Exams WHERE ExamSeriesID = :seriesId)',
-                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE }
+                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE, transaction: t }
             );
             await sequelize.query(
                 'DELETE FROM ExamRegistrations WHERE ExamID IN (SELECT ExamID FROM Exams WHERE ExamSeriesID = :seriesId)',
-                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE }
+                { replacements: { seriesId: seriesIdNum }, type: QueryTypes.DELETE, transaction: t }
             );
-            await Exam.destroy({ where: { ExamSeriesID: seriesIdNum } });
+            await Exam.destroy({ where: { ExamSeriesID: seriesIdNum }, transaction: t });
         }
 
-        await series.destroy();
+        await series.destroy({ transaction: t });
+        await t.commit();
 
         // Log activity (optional - don't fail if this fails)
         try {
@@ -385,6 +388,7 @@ export const deleteSeries = async (req: Request, res: Response): Promise<void> =
             message: "Exam series deleted successfully"
         });
     } catch (error: any) {
+        await t.rollback();
         console.error("Error deleting exam series:", error);
         res.status(500).json({
             success: false,

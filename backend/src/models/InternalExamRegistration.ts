@@ -1,4 +1,4 @@
-import { DataTypes, Model } from "sequelize";
+import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from "../config/database.js";
 
 /**
@@ -13,7 +13,10 @@ interface InternalExamRegistrationAttributes {
     RegistrationMethod?: "SUBJECT_LIST" | "MASTER_BATCH_RULE" | "MANUAL" | "AUTO_FALLBACK" | "AUTO" | "EXCEL" | string;
 }
 
-export class InternalExamRegistration extends Model<InternalExamRegistrationAttributes>
+interface InternalExamRegistrationCreationAttributes
+    extends Optional<InternalExamRegistrationAttributes, "InternalExamRegistrationID" | "RegistrationMethod"> {}
+
+export class InternalExamRegistration extends Model<InternalExamRegistrationAttributes, InternalExamRegistrationCreationAttributes>
     implements InternalExamRegistrationAttributes {
     declare InternalExamRegistrationID: number;
     declare InternalExamID: number;

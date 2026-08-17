@@ -1,4 +1,4 @@
-import { DataTypes, Model } from "sequelize";
+import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from "../config/database.js";
 
 /**
@@ -13,7 +13,10 @@ interface InternalSeatAllocationAttributes {
     InternalStudentID: number;
 }
 
-export class InternalSeatAllocation extends Model<InternalSeatAllocationAttributes>
+interface InternalSeatAllocationCreationAttributes
+    extends Optional<InternalSeatAllocationAttributes, "InternalSeatAllocationID"> {}
+
+export class InternalSeatAllocation extends Model<InternalSeatAllocationAttributes, InternalSeatAllocationCreationAttributes>
     implements InternalSeatAllocationAttributes {
     declare InternalSeatAllocationID: number;
     declare InternalExamID: number;
