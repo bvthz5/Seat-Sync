@@ -1899,10 +1899,16 @@ const SeatingPlans: React.FC = () => {
                 doc.setFillColor(255, 255, 255);
                 doc.rect(0, 0, pageW, pageH, 'F');
 
-                          const subjectNamesMap = new Map<string, string>();
+                const roomSubjectCodes = new Set<string>();
+                const subjectCounts = new Map<string, number>();
+                const subjectNamesMap = new Map<string, string>();
                 Object.values(assignments).forEach((ass: any) => {
-                    if (ass?.subjectCode && !subjectNamesMap.has(ass.subjectCode)) {
-                        subjectNamesMap.set(ass.subjectCode, ass.subjectName || ass.courseName || '');
+                    if (ass?.subjectCode) {
+                        roomSubjectCodes.add(ass.subjectCode);
+                        subjectCounts.set(ass.subjectCode, (subjectCounts.get(ass.subjectCode) || 0) + 1);
+                        if (!subjectNamesMap.has(ass.subjectCode)) {
+                            subjectNamesMap.set(ass.subjectCode, ass.subjectName || ass.courseName || '');
+                        }
                     }
                 });
 

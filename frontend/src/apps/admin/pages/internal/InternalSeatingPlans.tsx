@@ -114,6 +114,50 @@ const buildDeptLegend = (rows: any[]): { deptCode: string; style: ReturnType<typ
     return legend.sort((a, b) => a.deptCode.localeCompare(b.deptCode));
 };
 
+/* ── SUBJECT ACCENT PALETTE (VIBRANT BORDERS & ACCENTS) ── */
+const SUBJECT_PALETTE = [
+    { border: '#38bdf8', glow: 'rgba(56,189,248,0.4)', badgeBg: 'rgba(56,189,248,0.18)', badgeText: '#7dd3fc', dot: '#38bdf8', label: 'Sky Blue' },
+    { border: '#4ade80', glow: 'rgba(74,222,128,0.4)', badgeBg: 'rgba(74,222,128,0.18)', badgeText: '#86efac', dot: '#4ade80', label: 'Neon Emerald' },
+    { border: '#f43f5e', glow: 'rgba(244,63,94,0.4)', badgeBg: 'rgba(244,63,94,0.18)', badgeText: '#fda4af', dot: '#f43f5e', label: 'Vivid Rose' },
+    { border: '#fbbf24', glow: 'rgba(251,191,36,0.4)', badgeBg: 'rgba(251,191,36,0.18)', badgeText: '#fde68a', dot: '#fbbf24', label: 'Warm Amber' },
+    { border: '#a855f7', glow: 'rgba(168,85,247,0.4)', badgeBg: 'rgba(168,85,247,0.18)', badgeText: '#d8b4fe', dot: '#a855f7', label: 'Electric Violet' },
+    { border: '#06b6d4', glow: 'rgba(6,182,212,0.4)', badgeBg: 'rgba(6,182,212,0.18)', badgeText: '#67e8f9', dot: '#06b6d4', label: 'Cyber Cyan' },
+    { border: '#f97316', glow: 'rgba(249,115,22,0.4)', badgeBg: 'rgba(249,115,22,0.18)', badgeText: '#fdba74', dot: '#f97316', label: 'Bright Orange' },
+    { border: '#ec4899', glow: 'rgba(236,72,153,0.4)', badgeBg: 'rgba(236,72,153,0.18)', badgeText: '#f9a8d4', dot: '#ec4899', label: 'Radiant Pink' },
+    { border: '#818cf8', glow: 'rgba(129,140,248,0.4)', badgeBg: 'rgba(129,140,248,0.18)', badgeText: '#c7d2fe', dot: '#818cf8', label: 'Indigo Accent' },
+    { border: '#84cc16', glow: 'rgba(132,204,22,0.4)', badgeBg: 'rgba(132,204,22,0.18)', badgeText: '#bef264', dot: '#84cc16', label: 'Lime Green' },
+    { border: '#14b8a6', glow: 'rgba(20,184,166,0.4)', badgeBg: 'rgba(20,184,166,0.18)', badgeText: '#5eead4', dot: '#14b8a6', label: 'Teal Flare' },
+    { border: '#e879f9', glow: 'rgba(232,121,249,0.4)', badgeBg: 'rgba(232,121,249,0.18)', badgeText: '#f5d0fe', dot: '#e879f9', label: 'Fuchsia Glow' },
+];
+
+const getSubjectStyle = (subjectCode?: string) => {
+    if (!subjectCode) return SUBJECT_PALETTE[0];
+    let hash = 0;
+    const cleanCode = String(subjectCode).trim().toUpperCase();
+    for (let i = 0; i < cleanCode.length; i++) hash = cleanCode.charCodeAt(i) + ((hash << 5) - hash);
+    return SUBJECT_PALETTE[Math.abs(hash) % SUBJECT_PALETTE.length] || SUBJECT_PALETTE[0];
+};
+
+const buildSubjectLegend = (rows: any[]): { subjectCode: string; subjectName?: string; style: ReturnType<typeof getSubjectStyle> }[] => {
+    const seen = new Set<string>();
+    const legend: { subjectCode: string; subjectName?: string; style: ReturnType<typeof getSubjectStyle> }[] = [];
+    for (const row of rows) {
+        for (const bench of (row.benches || [])) {
+            for (const seat of [bench.left, bench.right].filter(Boolean)) {
+                if (seat?.subjectCode && !seen.has(seat.subjectCode)) {
+                    seen.add(seat.subjectCode);
+                    legend.push({
+                        subjectCode: seat.subjectCode,
+                        subjectName: seat.subjectName,
+                        style: getSubjectStyle(seat.subjectCode)
+                    });
+                }
+            }
+        }
+    }
+    return legend.sort((a, b) => a.subjectCode.localeCompare(b.subjectCode));
+};
+
 /* ── STEP INDICATOR COMPONENT ── */
 const StepBadge = ({ num, color, label }: { num: number; color: string; label: string }) => (
     <div className="flex items-center gap-2.5">
@@ -2993,73 +3037,115 @@ const InternalSeatingPlans: React.FC = () => {
                                                             {(isSingleMode ? [bench.left] : [bench.left, bench.right]).map((seat: any, idx: number) => {
                                                                 const isEmpty = !seat?.studentId;
                                                                 const dStyle = getDeptStyle(seat?.deptCode);
+                                                                const sStyle = getSubjectStyle(seat?.subjectCode);
 
                                                                 return (
                                                                     <Tooltip
                                                                         key={idx}
                                                                         isDisabled={isEmpty}
                                                                         content={
-                                                                            <div className="p-3.5 min-w-[180px]">
-                                                                                <p className="font-black text-white text-[13px] mb-1.5 leading-tight">{seat?.name}</p>
-                                                                                <div className="space-y-1 mt-2 pt-2 border-t border-slate-700/80">
-                                                                                    <p className="text-[11px] text-slate-300"><span className="text-slate-400 font-bold">Reg No :</span> <span className="font-mono font-bold text-white">{seat?.registerNumber}</span></p>
-                                                                                    {(seat?.rollNumber !== null && seat?.rollNumber !== undefined) && (
-                                                                                        <p className="text-[11px] text-slate-300"><span className="text-slate-400 font-bold">Roll No:</span> {seat?.rollNumber}</p>
-                                                                                    )}
-                                                                                    <p className="text-[11px] text-slate-300"><span className="text-slate-400 font-bold">Dept    :</span> {seat?.deptCode}{seat?.division ? ` (Div ${seat.division})` : ''}</p>
-                                                                                    <p className="text-[11px] text-slate-300"><span className="text-slate-400 font-bold">Subject :</span> {seat?.subjectCode}</p>
+                                                                            <div className="p-3.5 min-w-[220px] space-y-2">
+                                                                                <div className="flex items-start justify-between gap-2 border-b border-slate-700/80 pb-2">
+                                                                                    <div>
+                                                                                        <p className="font-black text-white text-[13px] leading-tight">{seat?.name}</p>
+                                                                                        <p className="text-[10px] font-extrabold mt-0.5" style={{ color: dStyle.text }}>
+                                                                                            {seat?.deptCode}{seat?.division ? ` (Div ${seat.division})` : ''}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                    <span
+                                                                                        className="px-2 py-0.5 rounded text-[9.5px] font-mono font-black border uppercase shrink-0"
+                                                                                        style={{ background: `${sStyle.dot}20`, borderColor: sStyle.border, color: sStyle.badgeText }}
+                                                                                    >
+                                                                                        {seat?.subjectCode}
+                                                                                    </span>
                                                                                 </div>
-                                                                                <div className="mt-2.5 pt-2 border-t border-slate-700/80 flex items-center gap-1.5">
-                                                                                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: dStyle.dot }} />
-                                                                                    <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{seat?.deptCode}{seat?.division ? ` - ${seat.division}` : ''}</span>
+                                                                                <div className="space-y-1 text-[11px] text-slate-300">
+                                                                                    <p><span className="text-slate-400 font-bold">Subject:</span> <span className="font-semibold text-white">{seat?.subjectName || seat?.subjectCode}</span></p>
+                                                                                    <p><span className="text-slate-400 font-bold">Reg No:</span> <span className="font-mono font-bold text-white">{seat?.registerNumber}</span></p>
+                                                                                    {(seat?.rollNumber !== null && seat?.rollNumber !== undefined) && (
+                                                                                        <p><span className="text-slate-400 font-bold">Roll No:</span> <span className="font-bold text-white">{seat?.rollNumber}</span></p>
+                                                                                    )}
                                                                                 </div>
                                                                             </div>
                                                                         }
                                                                         classNames={{ content: "bg-[#0a0f1d] border border-slate-700 p-0 rounded-2xl shadow-2xl" }}
                                                                     >
-                                                                        {/* Seat Card — colored by dept */}
+                                                                        {/* Seat Card — colored by dept fill & subject border */}
                                                                         <div
-                                                                            className={`w-[82px] h-[112px] rounded-2xl border-2 flex flex-col items-center justify-between p-1.5 transition-all select-none ${isEmpty
+                                                                            className={`w-[114px] min-h-[160px] rounded-2xl border-2 flex flex-col items-center justify-between p-2 transition-all select-none ${isEmpty
                                                                                     ? 'bg-slate-900/30 border-slate-800/50 cursor-default'
                                                                                     : 'cursor-pointer hover:scale-105 hover:z-20 active:scale-95 shadow-md'
                                                                                 }`}
                                                                             style={isEmpty ? {} : {
-                                                                                background: `linear-gradient(160deg, ${dStyle.fill}f0 0%, ${dStyle.fill}aa 100%)`,
-                                                                                borderColor: dStyle.border,
-                                                                                boxShadow: `0 0 16px ${dStyle.dot}25, inset 0 1px 0 rgba(255,255,255,0.08)`
+                                                                                background: `linear-gradient(160deg, ${dStyle.fill}f5 0%, #090e1a 100%)`,
+                                                                                borderColor: sStyle.border,
+                                                                                boxShadow: `0 0 18px ${sStyle.glow}, inset 0 1px 0 rgba(255,255,255,0.12)`
                                                                             }}
                                                                         >
                                                                             {isEmpty ? (
-                                                                                <div className="flex flex-col items-center justify-center h-full gap-1 opacity-30">
-                                                                                    <div className="w-6 h-6 rounded-lg border-2 border-dashed border-slate-600" />
-                                                                                    <span className="text-[9px] font-black text-slate-500">{isSingleMode ? 'EMPTY' : (idx === 0 ? 'L' : 'R')}</span>
+                                                                                <div className="flex flex-col items-center justify-center h-full gap-1.5 opacity-30 py-6">
+                                                                                    <div className="w-7 h-7 rounded-lg border-2 border-dashed border-slate-600" />
+                                                                                    <span className="text-[10px] font-black text-slate-500">{isSingleMode ? 'EMPTY' : (idx === 0 ? 'LEFT' : 'RIGHT')}</span>
                                                                                 </div>
                                                                             ) : (
                                                                                 <>
-                                                                                    {/* Dept badge */}
+                                                                                    {/* 1. Top: Subject Name (small size with readable, visible format & matching color tone) */}
+                                                                                    <div className="w-full text-center px-0.5 pt-0.5">
+                                                                                        <span
+                                                                                            className="text-[8.5px] font-black uppercase tracking-tight block truncate leading-tight"
+                                                                                            style={{ color: sStyle.badgeText }}
+                                                                                            title={seat.subjectName || seat.subjectCode}
+                                                                                        >
+                                                                                            {seat.subjectName || 'Exam Paper'}
+                                                                                        </span>
+                                                                                    </div>
+
+                                                                                    {/* 2. Dept / Division Badge */}
+                                                                                    <div className="w-full flex items-center justify-center my-0.5">
+                                                                                        <span
+                                                                                            className="w-full text-center text-[9px] font-black px-1.5 py-0.5 rounded-md truncate tracking-wider"
+                                                                                            style={{ background: `${dStyle.dot}28`, color: dStyle.text, border: `1px solid ${dStyle.dot}40` }}
+                                                                                            title={`${seat.deptCode}${seat.division ? ` (Div ${seat.division})` : ''}`}
+                                                                                        >
+                                                                                            {seat.deptCode}{seat.division ? ` · ${seat.division}` : ''}
+                                                                                        </span>
+                                                                                    </div>
+
+                                                                                    {/* 3. Roll Number or Register Number (Large & prominent) */}
+                                                                                    <div className="my-auto flex flex-col items-center justify-center py-1 w-full">
+                                                                                        <span className="text-[17px] font-black text-white leading-none text-center tracking-tight drop-shadow-sm">
+                                                                                            {seat.rollNumber !== null && seat.rollNumber !== undefined && String(seat.rollNumber).trim() !== ''
+                                                                                                ? seat.rollNumber
+                                                                                                : seat.registerNumber}
+                                                                                        </span>
+                                                                                        {seat.rollNumber !== null && seat.rollNumber !== undefined && String(seat.rollNumber).trim() !== '' && seat.registerNumber && (
+                                                                                            <span className="text-[8.5px] font-mono font-bold text-slate-300 mt-1 tracking-tighter truncate max-w-[102px] opacity-85">
+                                                                                                {seat.registerNumber}
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
+
+                                                                                    {/* 4. Student Name */}
                                                                                     <span
-                                                                                        className="w-full text-center text-[9px] font-black px-1 py-0.5 rounded-md"
-                                                                                        style={{ background: `${dStyle.dot}30`, color: dStyle.text }}
+                                                                                        className="text-[9.5px] font-extrabold leading-[1.2] text-center px-1 line-clamp-1 w-full truncate text-slate-100 mb-1"
+                                                                                        title={seat.name}
                                                                                     >
-                                                                                        {seat.deptCode}
-                                                                                    </span>
-                                                                                    {/* Roll Number or Register Number */}
-                                                                                    <span className="text-[12px] font-black text-white leading-none text-center tracking-tight my-auto px-0.5 break-all">
-                                                                                        {seat.rollNumber !== null && seat.rollNumber !== undefined && String(seat.rollNumber).trim() !== ''
-                                                                                            ? seat.rollNumber
-                                                                                            : seat.registerNumber}
-                                                                                    </span>
-                                                                                    {/* Student name */}
-                                                                                    <span className="text-[8px] font-semibold leading-[1.2] text-center px-0.5 line-clamp-1 mb-1" style={{ color: dStyle.text }}>
                                                                                         {seat.name}
                                                                                     </span>
-                                                                                    {/* Subject code chip */}
-                                                                                    <span
-                                                                                        className="text-[7.5px] font-black px-1.5 py-0.5 rounded-md w-full text-center uppercase tracking-tighter"
-                                                                                        style={{ background: 'rgba(0,0,0,0.4)', color: 'rgba(255,255,255,0.7)' }}
+
+                                                                                    {/* 5. Bottom: Full Subject Code (never sliced, with subject border accent) */}
+                                                                                    <div
+                                                                                        className="w-full text-center px-1 py-1 rounded-md border text-[9.5px] font-black font-mono tracking-wide uppercase shadow-xs truncate"
+                                                                                        style={{
+                                                                                            background: 'rgba(15, 23, 42, 0.92)',
+                                                                                            borderColor: `${sStyle.border}90`,
+                                                                                            color: sStyle.badgeText,
+                                                                                            boxShadow: `0 0 8px ${sStyle.glow}`
+                                                                                        }}
+                                                                                        title={`Subject Code: ${seat.subjectCode}`}
                                                                                     >
-                                                                                        {seat.subjectCode?.slice(0, 7)}
-                                                                                    </span>
+                                                                                        {seat.subjectCode || 'N/A'}
+                                                                                    </div>
                                                                                 </>
                                                                             )}
                                                                         </div>
@@ -3077,25 +3163,50 @@ const InternalSeatingPlans: React.FC = () => {
                         </ModalBody>
 
                         <ModalFooter className="border-t border-slate-800/80 bg-[#0b101d] px-8 py-5 flex flex-col gap-4">
-                            {/* Dept/Batch Color Legend */}
+                            {/* Color Legends: Subject (Borders) & Department (Fill) */}
                             {detailHall?.layout?.rows && detailHall.layout.rows.length > 0 && (() => {
-                                const legend = buildDeptLegend(detailHall.layout.rows);
-                                return legend.length > 0 ? (
-                                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pb-3 border-b border-slate-800/80">
-                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] shrink-0">Dept Color Palette</span>
-                                        {legend.map(({ deptCode, style }) => (
-                                            <div key={deptCode} className="flex items-center gap-2 bg-slate-900/60 px-2.5 py-1 rounded-xl border border-slate-800">
-                                                <span className="w-3 h-3 rounded-full shrink-0 shadow-sm" style={{ background: style.dot, boxShadow: `0 0 8px ${style.dot}80` }} />
-                                                <span className="text-[11px] font-black uppercase tracking-wide" style={{ color: style.text }}>{deptCode}</span>
+                                const deptLegend = buildDeptLegend(detailHall.layout.rows);
+                                const subjLegend = buildSubjectLegend(detailHall.layout.rows);
+
+                                return (
+                                    <div className="space-y-2.5 pb-2 border-b border-slate-800/80">
+                                        {/* Subject Border Legend */}
+                                        {subjLegend.length > 0 && (
+                                            <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] shrink-0">Subject Borders</span>
+                                                {subjLegend.map(({ subjectCode, subjectName, style }) => (
+                                                    <div
+                                                        key={subjectCode}
+                                                        className="flex items-center gap-2 bg-slate-900/80 px-2.5 py-1 rounded-xl border"
+                                                        style={{ borderColor: `${style.border}70` }}
+                                                        title={subjectName ? `${subjectCode} — ${subjectName}` : subjectCode}
+                                                    >
+                                                        <span className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm" style={{ background: style.dot, boxShadow: `0 0 8px ${style.dot}` }} />
+                                                        <span className="text-[11px] font-mono font-black uppercase tracking-wide" style={{ color: style.badgeText }}>{subjectCode}</span>
+                                                        {subjectName && (
+                                                            <span className="text-[10px] font-bold text-slate-400 max-w-[140px] truncate hidden md:inline">· {subjectName}</span>
+                                                        )}
+                                                    </div>
+                                                ))}
                                             </div>
-                                        ))}
-                                        {/* Empty seat legend */}
-                                        <div className="flex items-center gap-2 bg-slate-900/60 px-2.5 py-1 rounded-xl border border-slate-800">
-                                            <span className="w-3 h-3 rounded-full border-2 border-dashed border-slate-600 shrink-0" />
-                                            <span className="text-[11px] font-black text-slate-400 uppercase tracking-wide">Empty Seat</span>
+                                        )}
+
+                                        {/* Dept Palette Legend & Empty Seat */}
+                                        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] shrink-0">Dept Class Fill</span>
+                                            {deptLegend.map(({ deptCode, style }) => (
+                                                <div key={deptCode} className="flex items-center gap-2 bg-slate-900/60 px-2.5 py-1 rounded-xl border border-slate-800">
+                                                    <span className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm" style={{ background: style.dot, boxShadow: `0 0 6px ${style.dot}80` }} />
+                                                    <span className="text-[11px] font-black uppercase tracking-wide" style={{ color: style.text }}>{deptCode}</span>
+                                                </div>
+                                            ))}
+                                            <div className="flex items-center gap-2 bg-slate-900/60 px-2.5 py-1 rounded-xl border border-slate-800">
+                                                <span className="w-2.5 h-2.5 rounded-full border-2 border-dashed border-slate-600 shrink-0" />
+                                                <span className="text-[11px] font-black text-slate-400 uppercase tracking-wide">Empty Seat</span>
+                                            </div>
                                         </div>
                                     </div>
-                                ) : null;
+                                );
                             })()}
 
                             {/* Stats + Close */}
