@@ -600,9 +600,9 @@ const InternalSeatingPlans: React.FC = () => {
             DATA.push(['', '', '', '', '', '', '']);
 
             DATA.push([
-                { v: 'Batch', s: { fill: headerFill, font: headerFont, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border: allThin } },
                 { v: 'Subject Code', s: { fill: headerFill, font: headerFont, alignment: { horizontal: 'center', vertical: 'center' }, border: allThin } },
-                { v: 'Subject Name', s: { fill: headerFill, font: headerFont, alignment: { horizontal: 'center', vertical: 'center' }, border: allThin } },
+                { v: 'Subject Name', s: { fill: headerFill, font: headerFont, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border: allThin } },
+                { v: 'Batch', s: { fill: headerFill, font: headerFont, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border: allThin } },
                 { v: 'Roll Numbers', s: { fill: headerFill, font: headerFont, alignment: { horizontal: 'center', vertical: 'center' }, border: allThin } },
                 { v: 'Hall / Room No', s: { fill: headerFill, font: headerFont, alignment: { horizontal: 'center', vertical: 'center' }, border: allThin } },
                 { v: 'Count', s: { fill: headerFill, font: headerFont, alignment: { horizontal: 'center', vertical: 'center' }, border: allThin } },
@@ -625,15 +625,15 @@ const InternalSeatingPlans: React.FC = () => {
                     
                     if (row.isFirstInBatch) {
                         if (currentBatchStartRow !== -1 && currentRow - 1 >= currentBatchStartRow) {
-                            merges.push({ s: { r: currentBatchStartRow, c: 0 }, e: { r: currentRow - 1, c: 0 } });
+                            merges.push({ s: { r: currentBatchStartRow, c: 2 }, e: { r: currentRow - 1, c: 2 } });
                         }
                         currentBatchStartRow = currentRow;
                     }
 
                     DATA.push([
-                        { v: row.batchLabel, s: { fill, border: allThin, font: boldFont, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } } },
                         { v: subj.subjectCode, s: { fill, border: allThin, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
                         { v: subj.subjectName, s: { fill, border: allThin, font: bodyFont, alignment: { horizontal: 'left', vertical: 'center', wrapText: true } } },
+                        { v: row.batchLabel, s: { fill, border: allThin, font: boldFont, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } } },
                         { v: row.rollRanges, s: { fill, border: allThin, font: regFont, alignment: { horizontal: 'left', vertical: 'center', wrapText: true } } },
                         { v: row.hallCode, s: { fill, border: allThin, font: boldFont, alignment: { horizontal: 'center', vertical: 'center' } } },
                         { v: row.count, s: { fill, border: allThin, font: bodyFont, alignment: { horizontal: 'center', vertical: 'center' } } },
@@ -643,12 +643,12 @@ const InternalSeatingPlans: React.FC = () => {
 
                 const subjectEndRow = DATA.length - 1;
                 if (currentBatchStartRow !== -1 && subjectEndRow >= currentBatchStartRow) {
-                    merges.push({ s: { r: currentBatchStartRow, c: 0 }, e: { r: subjectEndRow, c: 0 } });
+                    merges.push({ s: { r: currentBatchStartRow, c: 2 }, e: { r: subjectEndRow, c: 2 } });
                 }
 
                 if (subjectEndRow >= subjectStartRow) {
+                    merges.push({ s: { r: subjectStartRow, c: 0 }, e: { r: subjectEndRow, c: 0 } });
                     merges.push({ s: { r: subjectStartRow, c: 1 }, e: { r: subjectEndRow, c: 1 } });
-                    merges.push({ s: { r: subjectStartRow, c: 2 }, e: { r: subjectEndRow, c: 2 } });
                     merges.push({ s: { r: subjectStartRow, c: 6 }, e: { r: subjectEndRow, c: 6 } });
                     
                     const firstRow = DATA[subjectStartRow];
@@ -660,9 +660,9 @@ const InternalSeatingPlans: React.FC = () => {
 
             const ws = XLSXStyle.utils.aoa_to_sheet(DATA);
             ws['!cols'] = [
-                { wch: 42 },
                 { wch: 20 },
                 { wch: 38 },
+                { wch: 42 },
                 { wch: 55 },
                 { wch: 22 },
                 { wch: 12 },
@@ -746,9 +746,9 @@ const InternalSeatingPlans: React.FC = () => {
                 subj.rows.forEach((row, rIdx) => {
                     const isFirstInSubject = (rIdx === 0);
                     bodyRows.push([
-                        row.isFirstInBatch ? { content: row.batchLabel, rowSpan: row.batchRowsCount, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } } : null,
                         isFirstInSubject ? { content: subj.subjectCode, rowSpan: totalSubjRows, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } } : null,
                         isFirstInSubject ? { content: subj.subjectName, rowSpan: totalSubjRows, styles: { halign: 'left', valign: 'middle', fontStyle: 'bold', fillColor: fill } } : null,
+                        row.isFirstInBatch ? { content: row.batchLabel, rowSpan: row.batchRowsCount, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } } : null,
                         { content: row.rollRanges, styles: { halign: 'left', valign: 'middle', fontStyle: 'bold', fontSize: 8, fillColor: fill } },
                         { content: row.hallCode, styles: { halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: fill } },
                         { content: String(row.count), styles: { halign: 'center', valign: 'middle', fillColor: fill } },
@@ -759,15 +759,15 @@ const InternalSeatingPlans: React.FC = () => {
 
             autoTable(doc, {
                 startY: 40,
-                head: [['Batch', 'Subject Code', 'Subject Name', 'Roll Numbers', 'Hall / Room No', 'Count', 'Total']],
+                head: [['Subject Code', 'Subject Name', 'Batch', 'Roll Numbers', 'Hall / Room No', 'Count', 'Total']],
                 body: bodyRows,
                 theme: 'grid',
                 styles: { fontSize: 8, cellPadding: 2.5, lineColor: [203, 213, 225], lineWidth: 0.2, valign: 'middle' },
                 headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
                 columnStyles: {
-                    0: { cellWidth: 46, halign: 'center', fontStyle: 'bold' },
-                    1: { cellWidth: 24, halign: 'center', fontStyle: 'bold' },
-                    2: { cellWidth: 48, halign: 'left' },
+                    0: { cellWidth: 24, halign: 'center', fontStyle: 'bold' },
+                    1: { cellWidth: 48, halign: 'left' },
+                    2: { cellWidth: 46, halign: 'center', fontStyle: 'bold' },
                     3: { cellWidth: 80, halign: 'left' },
                     4: { cellWidth: 28, halign: 'center', fontStyle: 'bold' },
                     5: { cellWidth: 13, halign: 'center' },
