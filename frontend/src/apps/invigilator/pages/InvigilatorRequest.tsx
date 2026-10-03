@@ -30,7 +30,8 @@ const InvigilatorRequest: React.FC = () => {
 
     // Fetch departments from public meta (no auth needed)
     React.useEffect(() => {
-        fetch('http://localhost:5000/api/auth/student/meta')
+        const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+        fetch(`${apiBase}/auth/student/meta`)
             .then(r => r.ok ? r.json() : null)
             .then(data => { if (data?.departments) setDepartments(data.departments); })
             .catch(() => {});

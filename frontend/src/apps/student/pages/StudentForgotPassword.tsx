@@ -26,7 +26,8 @@ const StudentForgotPassword: React.FC = () => {
 
         setIsLoading(true);
         try {
-            const response = await fetch('http://localhost:5000/api/auth/student/forgot-password', {
+            const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+            const response = await fetch(`${apiBase}/auth/student/forgot-password`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email }),

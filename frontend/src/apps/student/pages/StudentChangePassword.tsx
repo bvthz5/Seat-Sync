@@ -52,7 +52,8 @@ const StudentChangePassword: React.FC = () => {
                 throw new Error("Session expired. Please login again.");
             }
 
-            const response = await fetch('http://localhost:5000/api/auth/student/change-password', {
+            const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+            const response = await fetch(`${apiBase}/auth/student/change-password`, {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
