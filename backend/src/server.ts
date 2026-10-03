@@ -5,7 +5,7 @@ import { connectDB } from "./config/database.js";
 import { startDependencyWatcher } from "./utils/autoDependencyInstaller.js";
 // import open from "open";
 
-const PORT = 5000;
+const PORT = Number(process.env.PORT) || 5970;
 
 // Global handlers improve stability in development
 process.on("unhandledRejection", (reason) => {
@@ -75,7 +75,7 @@ const startServer = async () => {
                 setTimeout(() => {
                     try {
                         httpServer.close();
-                    } catch (closeErr) {}
+                    } catch (closeErr) { }
                     listen();
                 }, RETRY_DELAY);
             } else {
