@@ -88,8 +88,9 @@ const BulkImportModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
                     const emailInput = t['Email'] || t['Email Address'] || t['Mail'];
 
                     // Auto-generate email from name if not provided
-                    const nameForEmail = t['Name'].toLowerCase().replace(/[^a-z]/g, '');
-                    const email = emailInput || `${nameForEmail}@sjcetpalai.ac.in`;
+                    const nameForEmail = (t['Name'] || '').toLowerCase().replace(/[^a-z]/g, '');
+                    const collegeDomain = import.meta.env.VITE_COLLEGE_EMAIL_DOMAIN || 'sjcetpalai.ac.in';
+                    const email = emailInput || `${nameForEmail}@${collegeDomain}`;
 
                     normalised.push({ 
                         Name: t['Name'], 

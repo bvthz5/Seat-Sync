@@ -16,6 +16,7 @@ import jwt from "jsonwebtoken";
 import { generateDefaultPassword } from "../utils/student.utils.js";
 import { QueryTypes } from "sequelize";
 import { sequelize } from "../config/database.js";
+import { getRefreshTokenCookieOptions } from "../utils/cookieConfig.js";
 
 const normalizeSemesterRank = (semester: { SemesterNumber?: number; SemesterName?: string }) => {
   if (typeof semester.SemesterNumber === "number" && Number.isFinite(semester.SemesterNumber)) {
@@ -133,7 +134,11 @@ export class StudentAuthController {
 
       // Check if password change is required
       if (user.IsPasswordChanged === false) {
-        // Generate a restricted temporary token with full payload required by middleware
+        const jwtSecret = process.env.JWT_ACCESS_SECRET;
+        if (!jwtSecret) {
+          throw new Error("JWT_ACCESS_SECRET environment variable is not set");
+        }
+
         const tempToken = jwt.sign(
           {
             UserID: user.UserID,
@@ -143,8 +148,8 @@ export class StudentAuthController {
             IsRootAdmin: false,
             isTemp: true
           },
-          process.env.JWT_ACCESS_SECRET || 'secret',
-          { expiresIn: '15m' }
+          jwtSecret,
+          { expiresIn: (process.env.JWT_ACCESS_EXPIRY || '15m') as any }
         );
 
         res.status(200).json({
@@ -167,13 +172,7 @@ export class StudentAuthController {
       const accessToken = signAccessToken(payload);
       const refreshToken = signRefreshToken({ UserID: user.UserID });
 
-      res.cookie("refreshToken", refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      });
+      res.cookie("refreshToken", refreshToken, getRefreshTokenCookieOptions());
 
       res.status(200).json({
         message: "Login successful",

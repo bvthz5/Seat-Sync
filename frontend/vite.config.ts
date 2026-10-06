@@ -7,6 +7,11 @@ import { nodePolyfills } from 'vite-plugin-node-polyfills'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const targetUrl = env.VITE_API_URL || 'http://localhost:5000';
+  const serverPort = Number(env.VITE_PORT) || 5173;
+  const serverHost = env.VITE_HOST === 'true' ? true : (env.VITE_HOST === 'false' ? false : (env.VITE_HOST || true));
+  const allowedHostsConfig = env.VITE_ALLOWED_HOSTS
+    ? (env.VITE_ALLOWED_HOSTS === 'true' ? true : env.VITE_ALLOWED_HOSTS.split(',').map((h: string) => h.trim()).filter(Boolean))
+    : true;
 
   return {
   base: './',
@@ -29,10 +34,12 @@ export default defineConfig(({ mode }) => {
     },
   },
   server: {
+    port: serverPort,
+    host: serverHost,
+    allowedHosts: allowedHostsConfig,
     hmr: {
       timeout: 30000,
     },
-    allowedHosts: true,
     proxy: {
       '/api': {
         target: targetUrl,
@@ -50,7 +57,7 @@ export default defineConfig(({ mode }) => {
               // Log refusal warning at most once every 15 seconds to prevent spamming
               if (now - lastRefusalLoggedAt > 15000) {
                 console.log(
-                  `\x1b[90m[${time}]\x1b[0m \x1b[36m[vite:proxy]\x1b[0m \x1b[33mWARN\x1b[0m Backend offline at \x1b[36mhttp://localhost:5000\x1b[0m (ECONNREFUSED) [Throttled]`
+                  `\x1b[90m[${time}]\x1b[0m \x1b[36m[vite:proxy]\x1b[0m \x1b[33mWARN\x1b[0m Backend offline at \x1b[36m${targetUrl}\x1b[0m (ECONNREFUSED) [Throttled]`
                 );
                 lastRefusalLoggedAt = now;
               }

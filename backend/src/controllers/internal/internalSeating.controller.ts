@@ -13,7 +13,8 @@ import {
     InternalFloor,
     InternalExamRegistration,
     InternalExamDepartment,
-    Subject
+    Subject,
+    Program
 } from '../../models/index.js';
 import { InternalSeatAllocator } from '../../engines/internal/internalSeatAllocator.engine.js';
 import { autoMapStudentsForExamCore } from '../internalStudent.controller.js';
@@ -200,7 +201,7 @@ export const internalSeatingController = {
                 include: [{
                     model: InternalStudent,
                     as: 'Student',
-                    include: [{ model: Department, as: 'Department' }]
+                    include: [{ model: Department, as: 'Department' }, { model: Program }]
                 }]
             }) : [];
 
@@ -234,6 +235,9 @@ export const internalSeatingController = {
                     division: alloc?.Student?.Division || null,
                     name: alloc?.Student?.FullName || null,
                     deptCode: alloc?.Student?.Department?.DepartmentCode || null,
+                    semester: alloc?.Student?.Semester || null,
+                    batch: alloc?.Student?.Batch || null,
+                    branch: alloc?.Student?.Branch || null,
                     subjectCode: alloc ? examMap.get(alloc.InternalExamID)?.subjectCode || null : null,
                     subjectName: alloc ? examMap.get(alloc.InternalExamID)?.subjectName || null : null,
                 };

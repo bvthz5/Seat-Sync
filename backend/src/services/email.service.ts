@@ -7,7 +7,7 @@ export class EmailService {
         this.transporter = nodemailer.createTransport({
             host: process.env.SMTP_HOST,
             port: Number(process.env.SMTP_PORT) || 587,
-            secure: false, // true for 465, false for other ports
+            secure: process.env.SMTP_SECURE === 'true' || Number(process.env.SMTP_PORT) === 465, // true for 465 or if SMTP_SECURE=true
             auth: {
                 user: process.env.SMTP_USER,
                 pass: process.env.SMTP_PASS?.replace(/\s+/g, ''),
@@ -195,7 +195,7 @@ export class EmailService {
     }
 
     async sendAdminCreatedEmail(to: string, name: string, email: string, password: string): Promise<void> {
-        const loginUrl = process.env.APP_URL || 'http://localhost:5173';
+        const loginUrl = (process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:5173').replace(/\/+$/, '');
 
         const content = `
             <h2 style="color: #1e293b; margin-top: 0; font-size: 20px;">Welcome to SeatSync!</h2>
@@ -247,7 +247,7 @@ export class EmailService {
         }
     }
     async sendInvigilatorActivationEmail(to: string, name: string, token: string): Promise<void> {
-        const appUrl = process.env.APP_URL || 'http://localhost:5173';
+        const appUrl = (process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:5173').replace(/\/+$/, '');
         const activationUrl = new URL('/activate', appUrl).toString() + `?token=${encodeURIComponent(token)}`;
 
         const content = `
@@ -293,7 +293,7 @@ export class EmailService {
     }
 
     async sendStudentCredentialsEmail(to: string, name: string, email: string, plainTextPassword: string, registerNumber: string): Promise<void> {
-        const loginUrl = process.env.APP_URL || 'http://localhost:5173';
+        const loginUrl = (process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:5173').replace(/\/+$/, '');
 
         const content = `
             <h2 style="color: #1e293b; margin-top: 0; font-size: 20px;">Welcome to SeatSync!</h2>

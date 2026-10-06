@@ -15,9 +15,10 @@ const CreateAdminModal: React.FC<CreateAdminModalProps> = ({ isOpen, onClose, on
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const validateEmail = (email: string) => {
-        const domainRegex = /@([a-zA-Z0-9-]+\.)*sjcetpalai\.ac\.in$/;
+        const collegeDomain = import.meta.env.VITE_COLLEGE_EMAIL_DOMAIN || 'sjcetpalai.ac.in';
+        const domainRegex = new RegExp(`@([a-zA-Z0-9-]+\\.)*${collegeDomain.replace(/\\./g, '\\.')}$`, 'i');
         if (!domainRegex.test(email)) {
-            return 'Email must belong to @sjcetpalai.ac.in domain (or subdomains)';
+            return `Email must belong to @${collegeDomain} domain (or subdomains)`;
         }
         return '';
     };
@@ -101,7 +102,7 @@ const CreateAdminModal: React.FC<CreateAdminModalProps> = ({ isOpen, onClose, on
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
                                             className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                                            placeholder="admin@sjcetpalai.ac.in"
+                                            placeholder={`admin@${import.meta.env.VITE_COLLEGE_EMAIL_DOMAIN || 'sjcetpalai.ac.in'}`}
                                             required
                                         />
                                     </div>

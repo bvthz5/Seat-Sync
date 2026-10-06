@@ -4,6 +4,7 @@ import { AdminService } from "../services/admin.service.js";
 import { verifyRefreshToken } from "../utils/jwt.js";
 import type { LoginRequest, RefreshResponse } from "../interfaces/auth.interfaces.js";
 import { User, Invigilator, Student, Department } from "../models/index.js";
+import { getRefreshTokenCookieOptions, getClearCookieOptions } from "../utils/cookieConfig.js";
 
 export class AuthController {
     /**
@@ -25,14 +26,8 @@ export class AuthController {
             // Authenticate user
             const result = await AuthService.login({ email, password, ...(role && { role }) });
 
-            // Set refresh token as HttpOnly cookie
-            res.cookie("refreshToken", result.refreshToken, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === "production",
-                sameSite: "lax",
-                path: "/",
-                maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-            });
+            // Set refresh token as HttpOnly cookie driven by .env configuration
+            res.cookie("refreshToken", result.refreshToken, getRefreshTokenCookieOptions());
 
             res.status(200).json(result);
 
@@ -87,14 +82,8 @@ export class AuthController {
             // Refresh tokens
             const { accessToken, refreshToken: newRefreshToken } = await AuthService.refresh(refreshToken);
 
-            // Rotate refresh token cookie
-            res.cookie("refreshToken", newRefreshToken, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === "production",
-                sameSite: "lax",
-                path: "/",
-                maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-            });
+            // Rotate refresh token cookie driven by .env configuration
+            res.cookie("refreshToken", newRefreshToken, getRefreshTokenCookieOptions());
 
             res.status(200).json({ accessToken, refreshToken: newRefreshToken });
         } catch (error: any) {
@@ -112,13 +101,8 @@ export class AuthController {
      */
     static async logout(req: Request, res: Response): Promise<void> {
         try {
-            // Clear refresh token cookie
-            res.clearCookie("refreshToken", {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === "production",
-                sameSite: "lax",
-                path: "/",
-            });
+            // Clear refresh token cookie driven by .env configuration
+            res.clearCookie("refreshToken", getClearCookieOptions());
 
             res.status(200).json({
                 message: "Logged out successfully",

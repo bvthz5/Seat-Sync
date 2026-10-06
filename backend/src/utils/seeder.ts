@@ -65,10 +65,12 @@ export async function seedTestUsers() {
         const { Faculty } = await import("../models/Faculty.js");
 
         // ── STUDENT ──────────────────────────────────────────────────────────
-        const studentEmail = "student@sjcetpalai.ac.in";
+        const collegeDomain = process.env.COLLEGE_EMAIL_DOMAIN || "sjcetpalai.ac.in";
+        const studentEmail = process.env.TEST_STUDENT_EMAIL || `student@${collegeDomain}`;
+        const studentPassword = process.env.TEST_STUDENT_PASSWORD || "Student@123";
         const existingStudent = await User.findOne({ where: { Email: studentEmail } });
         if (!existingStudent) {
-            const studentPasswordHash = await AuthService.hashPassword("Student@123");
+            const studentPasswordHash = await AuthService.hashPassword(studentPassword);
             const user = await User.create({
                 Email: studentEmail,
                 FullName: "Test Student",
@@ -95,10 +97,11 @@ export async function seedTestUsers() {
         // The invigilator dashboard controller resolves the faculty profile by
         // looking up the Faculty table using StaffCode = user email. We must
         // ensure a Faculty row exists with StaffCode matching the email.
-        const invigilatorEmail = "invigilator@sjcetpalai.ac.in";
+        const invigilatorEmail = process.env.TEST_INVIGILATOR_EMAIL || `invigilator@${collegeDomain}`;
+        const invigilatorPassword = process.env.TEST_INVIGILATOR_PASSWORD || "Invigilator@123";
         const existingInvigilator = await User.findOne({ where: { Email: invigilatorEmail } });
         if (!existingInvigilator) {
-            const invigilatorPasswordHash = await AuthService.hashPassword("Invigilator@123");
+            const invigilatorPasswordHash = await AuthService.hashPassword(invigilatorPassword);
             const user = await User.create({
                 Email: invigilatorEmail,
                 FullName: "Test Invigilator",

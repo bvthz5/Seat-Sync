@@ -206,7 +206,8 @@ export class AuthService {
         });
 
         // 4. Send Email
-        const resetLink = `http://localhost:5173/admin/reset-password?token=${resetToken}`;
+        const frontendBaseUrl = process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:5173';
+        const resetLink = `${frontendBaseUrl.replace(/\/+$/, '')}/admin/reset-password?token=${resetToken}`;
 
         try {
             await emailService.sendPasswordResetEmail(email, resetLink);

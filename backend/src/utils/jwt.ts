@@ -10,11 +10,11 @@ export const signAccessToken = (payload: JWTPayload): string => {
     throw new Error("JWT_ACCESS_SECRET environment variable is not set");
   }
 
-  return jwt.sign(payload, secret, { expiresIn: "15m" });
+  return jwt.sign(payload, secret, { expiresIn: (process.env.JWT_ACCESS_EXPIRY || "15m") as any });
 };
 
 /**
- * Sign a refresh token with 7 days expiry
+ * Sign a refresh token with configurable expiry (default 7 days)
  */
 export const signRefreshToken = (payload: RefreshTokenPayload): string => {
   const secret = process.env.JWT_REFRESH_SECRET;
@@ -22,7 +22,7 @@ export const signRefreshToken = (payload: RefreshTokenPayload): string => {
     throw new Error("JWT_REFRESH_SECRET environment variable is not set");
   }
 
-  return jwt.sign(payload, secret, { expiresIn: "7d" });
+  return jwt.sign(payload, secret, { expiresIn: (process.env.JWT_REFRESH_EXPIRY || "7d") as any });
 };
 
 /**

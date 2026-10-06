@@ -30,9 +30,10 @@ import SwapRequestsModal from '../components/invigilators/SwapRequestsModal';
 /* ─── helpers ─────────────────────────────────────────────── */
 const staffId = (id: number) => `#IV-${String(id).padStart(4, '0')}`;
 const mockEmail = (name?: string) => {
-    if (!name) return 'user@sjcetpalai.ac.in';
+    const defaultDomain = import.meta.env.VITE_COLLEGE_EMAIL_DOMAIN || 'sjcetpalai.ac.in';
+    if (!name) return `user@${defaultDomain}`;
     const nameForEmail = name.toLowerCase().replace(/[^a-z]/g, '');
-    return `${nameForEmail}@sjcetpalai.ac.in`;
+    return `${nameForEmail}@${defaultDomain}`;
 };
 const mockPhone = (id?: number) => {
     if (!id) return '+91 98000 00234';

@@ -152,7 +152,8 @@ export const createInvigilator = async (req: Request, res: Response) => {
         let emailStr = Email ? String(Email).trim().toLowerCase() : null;
         if (!emailStr) {
             const nameForEmail = Name.toLowerCase().replace(/[^a-z]/g, '');
-            emailStr = `${nameForEmail}@sjcetpalai.ac.in`;
+            const collegeDomain = process.env.COLLEGE_EMAIL_DOMAIN || 'sjcetpalai.ac.in';
+            emailStr = `${nameForEmail}@${collegeDomain}`;
         }
 
         const staffCodeStr = (StaffCode || FacultyID) ? String(StaffCode || FacultyID).trim() : emailStr;
@@ -334,7 +335,8 @@ export const bulkImportInvigilators = async (req: Request, res: Response) => {
 
                 if (!emailStr) {
                     const nameForEmail = nameStr.toLowerCase().replace(/[^a-z]/g, '');
-                    emailStr = `${nameForEmail}@sjcetpalai.ac.in`;
+                    const collegeDomain = process.env.COLLEGE_EMAIL_DOMAIN || 'sjcetpalai.ac.in';
+                    emailStr = `${nameForEmail}@${collegeDomain}`;
                 }
 
                 // 1. Handle User (Upsert)

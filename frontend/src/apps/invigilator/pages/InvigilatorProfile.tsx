@@ -131,7 +131,7 @@ export default function InvigilatorProfile() {
         name: authUser?.FullName || "Invigilator",
         role: "Faculty Invigilator",
         department: "General",
-        email: authUser?.Email || "email@sjcetpalai.ac.in",
+        email: authUser?.Email || `email@${import.meta.env.VITE_COLLEGE_EMAIL_DOMAIN || 'sjcetpalai.ac.in'}`,
         status: "Active",
         totalDuties: 0,
         lastLogin: "Just now"
