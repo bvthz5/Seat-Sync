@@ -52,22 +52,62 @@ export const isOriginAllowed = (origin: string | undefined): boolean => {
         }
     }
 
-    // Localhost & dev tunnel origins
+    // Localhost, LAN & dev tunnel origins
     const isDev = process.env.NODE_ENV !== "production";
     const allowLocal = process.env.ALLOW_LOCALHOST === "true" || (isDev && process.env.ALLOW_LOCALHOST !== "false");
 
     if (allowLocal) {
-        if (
-            origin.startsWith("http://localhost") ||
-            origin.startsWith("https://localhost") ||
-            origin.startsWith("http://127.0.0.1") ||
-            origin.startsWith("https://127.0.0.1") ||
-            origin.startsWith("http://[::1]") ||
-            origin.includes("serveousercontent.com") ||
-            origin.includes("serveo.net") ||
-            origin.includes("localtunnel.me")
-        ) {
-            return true;
+        try {
+            const url = new URL(origin);
+            const host = url.hostname.toLowerCase();
+
+            // Loopback addresses
+            if (host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]") {
+                return true;
+            }
+
+            // Private Local Area Network (LAN) IPv4 ranges (RFC 1918)
+            // - 192.168.0.0 - 192.168.255.255 (e.g. mobile testing on Wi-Fi)
+            // - 10.0.0.0 - 10.255.255.255
+            // - 172.16.0.0 - 172.31.255.255
+            if (
+                /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
+                /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
+                /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(host)
+            ) {
+                return true;
+            }
+
+            // mDNS local domain (.local)
+            if (host.endsWith(".local")) {
+                return true;
+            }
+
+            // Known dev tunnel services
+            if (
+                host.endsWith("serveousercontent.com") ||
+                host.endsWith("serveo.net") ||
+                host.endsWith("localtunnel.me") ||
+                host.endsWith("ngrok-free.app") ||
+                host.endsWith("ngrok.io")
+            ) {
+                return true;
+            }
+        } catch {
+            // Fallback string matching for non-standard origin values
+            if (
+                origin.startsWith("http://localhost") ||
+                origin.startsWith("https://localhost") ||
+                origin.startsWith("http://127.0.0.1") ||
+                origin.startsWith("https://127.0.0.1") ||
+                origin.startsWith("http://[::1]") ||
+                origin.startsWith("http://192.168.") ||
+                origin.startsWith("https://192.168.") ||
+                origin.startsWith("http://10.") ||
+                origin.startsWith("https://10.")
+            ) {
+                return true;
+            }
         }
     }
 

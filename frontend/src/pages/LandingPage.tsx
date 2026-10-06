@@ -247,7 +247,7 @@ const LandingPage: React.FC = () => {
     const backgroundSpotlight = useMotionTemplate`radial-gradient(800px circle at ${mouseX}px ${mouseY}px, rgba(99, 102, 241, 0.05), transparent 80%)`;
 
     return (
-        <div role="main" className="relative min-h-screen w-full overflow-hidden font-sans text-slate-900 bg-[#f8f9fa] selection:bg-indigo-500/20 selection:text-indigo-900 cursor-auto lg:cursor-none">
+        <div role="main" className="relative min-h-screen w-full overflow-x-hidden font-sans text-slate-900 bg-[#f8f9fa] selection:bg-indigo-500/20 selection:text-indigo-900 cursor-auto lg:cursor-none flex flex-col justify-between">
             <CustomCursor />
             <MeshBackground />
 
@@ -257,21 +257,21 @@ const LandingPage: React.FC = () => {
                 style={{ background: backgroundSpotlight }}
             />
 
-            <div className="relative z-10 max-w-[85rem] mx-auto px-6 flex flex-col items-center justify-center min-h-screen py-20">
+            <div className="relative z-10 max-w-[85rem] w-full mx-auto px-6 flex-1 flex flex-col items-center justify-center pt-16 pb-6">
 
                 {/* Hero Header */}
-                <div className="text-center mb-24 max-w-4xl flex flex-col items-center">
+                <div className="text-center mb-16 md:mb-20 max-w-4xl flex flex-col items-center">
                     <motion.div
                         initial={{ opacity: 0, scale: 0.9, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-                        className="inline-flex items-center justify-center space-x-2 px-4 py-2 mb-10 bg-white/60 backdrop-blur-xl rounded-full shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07)] border border-white/60 ring-1 ring-slate-900/5"
+                        className="inline-flex items-center justify-center space-x-2 px-4 py-2 mb-8 md:mb-10 bg-white/60 backdrop-blur-xl rounded-full shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07)] border border-white/60 ring-1 ring-slate-900/5"
                     >
                         <Sparkles className="w-4 h-4 text-indigo-500" />
                         <span className="text-sm font-semibold text-slate-700 tracking-wide uppercase">ERP System Evolution</span>
                     </motion.div>
 
-                    <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight text-slate-900 mb-8 drop-shadow-sm leading-tight">
+                    <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight text-slate-900 mb-6 md:mb-8 drop-shadow-sm leading-tight">
                         <motion.span
                             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.8, ease: "easeOut" }}
                             className="block text-slate-800"
@@ -296,7 +296,7 @@ const LandingPage: React.FC = () => {
                 </div>
 
                 {/* Cards Section */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 xl:gap-12 w-full px-4 lg:px-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 xl:gap-12 w-full px-4 lg:px-8 mb-16 md:mb-24">
 
                     {/* Admin Card */}
                     <TiltCard
@@ -330,19 +330,20 @@ const LandingPage: React.FC = () => {
 
                 </div>
 
-                {/* Footer */}
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 1, duration: 1.5 }}
-                    className="absolute bottom-10 left-0 right-0 text-center pointer-events-none"
-                >
-                    <p className="text-xs font-semibold text-slate-400/80 uppercase tracking-[0.2em]">
-                         {new Date().getFullYear()} SeatSync Systems • Secure Identity Server v2.4
-                    </p>
-                </motion.div>
-
             </div>
+
+            {/* Footer */}
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1, duration: 1.5 }}
+                className="relative z-10 w-full text-center pb-8 pt-2 pointer-events-none"
+            >
+                <p className="text-xs font-semibold text-slate-400/80 uppercase tracking-[0.2em]">
+                     {new Date().getFullYear()} SeatSync Systems • Secure Identity Server v2.4
+                </p>
+            </motion.div>
+
         </div>
     );
 };

@@ -31,7 +31,17 @@ export interface NotificationStats {
 
 // --- Socket Service ---
 let socket: Socket | null = null;
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000'; // Adjust for production
+const getSocketUrl = (): string => {
+    const configured = import.meta.env.VITE_SOCKET_URL;
+    if (typeof window !== 'undefined') {
+        const isLanOrExternal = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+        if (isLanOrExternal && (!configured || configured.includes('localhost') || configured.includes('127.0.0.1'))) {
+            return `${window.location.protocol}//${window.location.hostname}:5000`;
+        }
+    }
+    return configured || 'http://localhost:5000';
+};
+const SOCKET_URL = getSocketUrl();
 const listeners = new Set<(n: Notification) => void>();
 
 // Helper to ensure socket is connected proactively

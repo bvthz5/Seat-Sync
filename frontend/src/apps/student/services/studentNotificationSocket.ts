@@ -55,7 +55,14 @@ export const initStudentNotificationSocket = (
         return socket;
     }
 
-    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+    const configuredUrl = import.meta.env.VITE_SOCKET_URL;
+    let socketUrl = configuredUrl || 'http://localhost:5000';
+    if (typeof window !== 'undefined') {
+        const isLanOrExternal = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+        if (isLanOrExternal && (!configuredUrl || configuredUrl.includes('localhost') || configuredUrl.includes('127.0.0.1'))) {
+            socketUrl = `${window.location.protocol}//${window.location.hostname}:5000`;
+        }
+    }
     socket = io(socketUrl, {
         withCredentials: true,
         reconnection: true,

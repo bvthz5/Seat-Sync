@@ -20,7 +20,9 @@ export const getRefreshTokenCookieOptions = (): CookieOptions => {
         ? secureEnv === "true"
         : (isProd || sameSite === "none");
 
-    const domain = process.env.COOKIE_DOMAIN?.trim() || undefined;
+    const configuredDomain = process.env.COOKIE_DOMAIN?.trim();
+    // Only apply the domain attribute in production to prevent browsers rejecting cookies on localhost and LAN IPs (RFC 6265)
+    const domain = isProd && configuredDomain ? configuredDomain : undefined;
 
     return {
         httpOnly: true,

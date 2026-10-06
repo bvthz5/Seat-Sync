@@ -40,7 +40,7 @@ import seriesRoutes from "./routes/series.routes.js";
 import internalSeatingRoutes from "./routes/internal/internalSeating.routes.js";
 import internalReportsRoutes from "./routes/internal/internalReports.routes.js";
 import { httpLogger } from "./middlewares/httpLogger.middleware.js";
-
+import { Logger } from "./utils/logger.js";
 import { isOriginAllowed } from "./utils/corsConfig.js";
 
 const app = express();
@@ -65,7 +65,8 @@ app.use(cors({
         if (isOriginAllowed(origin)) {
             return callback(null, true);
         }
-        callback(new Error(`Not allowed by CORS: ${origin}`));
+        Logger.warn(`[CORS] Blocked request from unauthorized origin: ${origin}`);
+        callback(null, false);
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],

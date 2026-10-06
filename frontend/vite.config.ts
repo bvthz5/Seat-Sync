@@ -1,21 +1,79 @@
-import { defineConfig, loadEnv } from 'vite'
+import os from 'node:os'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/postcss'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
+
+function getPrimaryLanIp(): string | null {
+  const interfaces = os.networkInterfaces();
+  const virtualRegex = /vmware|virtual|vbox|vethernet|hyper-?v|wsl|docker|tap|tun|tailscale|zerotier|loopback/i;
+  const preferredRegex = /wi-?fi|wlan|wireless|ethernet|eth|en\d/i;
+
+  const nonVirtual: { name: string; address: string }[] = [];
+  const allIpv4: string[] = [];
+
+  for (const [name, addrs] of Object.entries(interfaces)) {
+    const isVirtual = virtualRegex.test(name);
+    for (const addr of addrs || []) {
+      if (addr.family === 'IPv4' && !addr.internal) {
+        allIpv4.push(addr.address);
+        if (!isVirtual) {
+          nonVirtual.push({ name, address: addr.address });
+        }
+      }
+    }
+  }
+
+  nonVirtual.sort((a, b) => {
+    const aPref = preferredRegex.test(a.name) ? 1 : 0;
+    const bPref = preferredRegex.test(b.name) ? 1 : 0;
+    return bPref - aPref;
+  });
+
+  return nonVirtual[0]?.address || allIpv4[allIpv4.length - 1] || null;
+}
+
+function singleNetworkUrlPlugin(): Plugin {
+  return {
+    name: 'single-network-url',
+    configureServer(server) {
+      const originalPrintUrls = server.printUrls.bind(server);
+      server.printUrls = () => {
+        if (server.resolvedUrls && Array.isArray(server.resolvedUrls.network)) {
+          const primaryIp = getPrimaryLanIp();
+          if (primaryIp) {
+            const matched = server.resolvedUrls.network.find((url) => url.includes(primaryIp));
+            if (matched) {
+              server.resolvedUrls.network = [matched];
+            } else if (server.resolvedUrls.network.length > 0) {
+              server.resolvedUrls.network = [server.resolvedUrls.network[server.resolvedUrls.network.length - 1]];
+            }
+          } else if (server.resolvedUrls.network.length > 0) {
+            server.resolvedUrls.network = [server.resolvedUrls.network[0]];
+          }
+        }
+        originalPrintUrls();
+      };
+    },
+  };
+}
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const targetUrl = env.VITE_API_URL || 'http://localhost:5000';
   const serverPort = Number(env.VITE_PORT) || 5173;
-  const serverHost = env.VITE_HOST === 'true' ? true : (env.VITE_HOST === 'false' ? false : (env.VITE_HOST || true));
-  const allowedHostsConfig = env.VITE_ALLOWED_HOSTS
-    ? (env.VITE_ALLOWED_HOSTS === 'true' ? true : env.VITE_ALLOWED_HOSTS.split(',').map((h: string) => h.trim()).filter(Boolean))
-    : true;
+  const serverHost = env.VITE_HOST === 'false' ? false : (env.VITE_HOST === 'true' ? '0.0.0.0' : (env.VITE_HOST || '0.0.0.0'));
+  const allowedHostsConfig = env.VITE_ALLOWED_HOSTS === 'true'
+    ? true
+    : env.VITE_ALLOWED_HOSTS
+      ? env.VITE_ALLOWED_HOSTS.split(',').map((h: string) => h.trim()).filter(Boolean)
+      : true;
 
   return {
   base: './',
   plugins: [
+    singleNetworkUrlPlugin(),
     react(),
     nodePolyfills({
       include: ['stream', 'fs', 'path', 'util'],
@@ -76,6 +134,12 @@ export default defineConfig(({ mode }) => {
             }
           });
         }
+      },
+      '/socket.io': {
+        target: targetUrl,
+        ws: true,
+        changeOrigin: true,
+        secure: false,
       },
     },
   },

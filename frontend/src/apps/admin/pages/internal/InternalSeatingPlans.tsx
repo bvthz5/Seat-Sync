@@ -838,11 +838,13 @@ const InternalSeatingPlans: React.FC = () => {
     };
 
     const getStudentRollNumber = (student: any): number | null => {
-        if (student?.RollNumber != null && !isNaN(Number(student.RollNumber))) {
-            return Number(student.RollNumber);
+        const rawRoll = student?.RollNumber ?? student?.rollNumber;
+        if (rawRoll != null && !isNaN(Number(rawRoll))) {
+            return Number(rawRoll);
         }
-        if (student?.RegisterNumber) {
-            const match = String(student.RegisterNumber).trim().match(/(\d+)$/);
+        const rawReg = student?.RegisterNumber ?? student?.registerNumber;
+        if (rawReg) {
+            const match = String(rawReg).trim().match(/(\d+)$/);
             if (match) {
                 return parseInt(match[1], 10);
             }
@@ -878,8 +880,9 @@ const InternalSeatingPlans: React.FC = () => {
             const roll = getStudentRollNumber(s);
             if (roll !== null && !isNaN(roll)) {
                 rollNumbers.push(roll);
-            } else if (s?.RegisterNumber) {
-                unparsedRegs.push(s.RegisterNumber);
+            } else {
+                const reg = s?.RegisterNumber ?? s?.registerNumber;
+                if (reg) unparsedRegs.push(reg);
             }
         });
 
@@ -1272,6 +1275,7 @@ const InternalSeatingPlans: React.FC = () => {
                     subjectCode: string;
                     displaySubject: string;
                     count: number;
+                    students: any[];
                 }
 
                 const roomSummaryMap = new Map<string, RoomSummaryItem>();
@@ -1288,10 +1292,22 @@ const InternalSeatingPlans: React.FC = () => {
                             classLabel,
                             subjectCode: sCode,
                             displaySubject,
-                            count: 0
+                            count: 0,
+                            students: []
                         });
                     }
-                    roomSummaryMap.get(key)!.count += 1;
+                    const item = roomSummaryMap.get(key)!;
+                    item.count += 1;
+                    if (alloc.Student) {
+                        item.students.push({
+                            ...alloc.Student,
+                            RollNumber: alloc.Student.RollNumber ?? alloc.rollNumber
+                        });
+                    } else if (alloc.rollNumber !== null && alloc.rollNumber !== undefined) {
+                        item.students.push({ RollNumber: alloc.rollNumber, RegisterNumber: alloc.registerNumber });
+                    } else if (alloc.registerNumber) {
+                        item.students.push({ RegisterNumber: alloc.registerNumber });
+                    }
                 });
 
                 // Fallback from rowsData if hallAllocs had no entries
@@ -1317,10 +1333,22 @@ const InternalSeatingPlans: React.FC = () => {
                                             classLabel,
                                             subjectCode: sCode,
                                             displaySubject,
-                                            count: 0
+                                            count: 0,
+                                            students: []
                                         });
                                     }
-                                    roomSummaryMap.get(key)!.count += 1;
+                                    const item = roomSummaryMap.get(key)!;
+                                    item.count += 1;
+                                    if (matchedAlloc?.Student) {
+                                        item.students.push({
+                                            ...matchedAlloc.Student,
+                                            RollNumber: matchedAlloc.Student.RollNumber ?? seat.rollNumber
+                                        });
+                                    } else if (seat.rollNumber !== null && seat.rollNumber !== undefined) {
+                                        item.students.push({ RollNumber: seat.rollNumber, RegisterNumber: seat.registerNumber });
+                                    } else if (seat.registerNumber) {
+                                        item.students.push({ RegisterNumber: seat.registerNumber });
+                                    }
                                 }
                             });
                         });
@@ -1461,19 +1489,26 @@ const InternalSeatingPlans: React.FC = () => {
                 DATA[currentY][2] = { v: "", s: summaryHeadStyle };
                 DATA[currentY][3] = { v: "Subjects", s: summaryHeadStyle };
                 DATA[currentY][4] = { v: "", s: summaryHeadStyle };
-                DATA[currentY][5] = { v: "Count", s: summaryHeadStyle };
+                DATA[currentY][5] = { v: "Roll Numbers", s: summaryHeadStyle };
+                DATA[currentY][6] = { v: "", s: summaryHeadStyle };
+                DATA[currentY][7] = { v: "Count", s: summaryHeadStyle };
                 merges.push({ s: { r: currentY, c: 1 }, e: { r: currentY, c: 2 } });
                 merges.push({ s: { r: currentY, c: 3 }, e: { r: currentY, c: 4 } });
+                merges.push({ s: { r: currentY, c: 5 }, e: { r: currentY, c: 6 } });
 
                 roomSummaryRows.forEach((r, idx) => {
                     const row = currentY + 1 + idx;
+                    const rollRange = buildBatchStudentRanges(r.students) || '—';
                     DATA[row][1] = { v: r.classLabel, s: { ...summaryBodyStyle, alignment: { horizontal: 'left', vertical: 'center', wrapText: true }, font: { bold: true, sz: 8.5 } } };
                     DATA[row][2] = { v: "", s: summaryBodyStyle };
                     DATA[row][3] = { v: r.displaySubject, s: { ...summaryBodyStyle, alignment: { horizontal: 'left', vertical: 'center', wrapText: true } } };
                     DATA[row][4] = { v: "", s: summaryBodyStyle };
-                    DATA[row][5] = { v: r.count, s: { ...summaryBodyStyle, font: { bold: true } } };
+                    DATA[row][5] = { v: rollRange, s: { ...summaryBodyStyle, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, font: { bold: true, sz: 8.5 } } };
+                    DATA[row][6] = { v: "", s: summaryBodyStyle };
+                    DATA[row][7] = { v: r.count, s: { ...summaryBodyStyle, font: { bold: true } } };
                     merges.push({ s: { r: row, c: 1 }, e: { r: row, c: 2 } });
                     merges.push({ s: { r: row, c: 3 }, e: { r: row, c: 4 } });
+                    merges.push({ s: { r: row, c: 5 }, e: { r: row, c: 6 } });
                 });
 
                 const totalRow = currentY + 1 + roomSummaryRows.length;
@@ -1481,11 +1516,13 @@ const InternalSeatingPlans: React.FC = () => {
                 DATA[totalRow][2] = { v: "", s: summaryBodyStyle };
                 DATA[totalRow][3] = { v: "", s: summaryBodyStyle };
                 DATA[totalRow][4] = { v: "", s: summaryBodyStyle };
-                DATA[totalRow][5] = { v: totalRoomStudents, s: { ...summaryBodyStyle, font: { bold: true } } };
-                merges.push({ s: { r: totalRow, c: 1 }, e: { r: totalRow, c: 4 } });
+                DATA[totalRow][5] = { v: "", s: summaryBodyStyle };
+                DATA[totalRow][6] = { v: "", s: summaryBodyStyle };
+                DATA[totalRow][7] = { v: totalRoomStudents, s: { ...summaryBodyStyle, font: { bold: true } } };
+                merges.push({ s: { r: totalRow, c: 1 }, e: { r: totalRow, c: 6 } });
 
                 const ws = XLSXStyle.utils.aoa_to_sheet(DATA);
-                ws['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }];
+                ws['!cols'] = [{ wch: 5 }, { wch: 18 }, { wch: 18 }, { wch: 22 }, { wch: 22 }, { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
 
                 const rowHeights: any[] = [];
                 for (let i = 0; i < DATA.length; i++) {
@@ -1616,6 +1653,7 @@ const InternalSeatingPlans: React.FC = () => {
                     subjectCode: string;
                     displaySubject: string;
                     count: number;
+                    students: any[];
                 }
 
                 const roomSummaryMap = new Map<string, RoomSummaryItem>();
@@ -1632,10 +1670,22 @@ const InternalSeatingPlans: React.FC = () => {
                             classLabel,
                             subjectCode: sCode,
                             displaySubject,
-                            count: 0
+                            count: 0,
+                            students: []
                         });
                     }
-                    roomSummaryMap.get(key)!.count += 1;
+                    const item = roomSummaryMap.get(key)!;
+                    item.count += 1;
+                    if (alloc.Student) {
+                        item.students.push({
+                            ...alloc.Student,
+                            RollNumber: alloc.Student.RollNumber ?? alloc.rollNumber
+                        });
+                    } else if (alloc.rollNumber !== null && alloc.rollNumber !== undefined) {
+                        item.students.push({ RollNumber: alloc.rollNumber, RegisterNumber: alloc.registerNumber });
+                    } else if (alloc.registerNumber) {
+                        item.students.push({ RegisterNumber: alloc.registerNumber });
+                    }
                 });
 
                 // Fallback from rowsData if hallAllocs had no entries
@@ -1661,10 +1711,22 @@ const InternalSeatingPlans: React.FC = () => {
                                             classLabel,
                                             subjectCode: sCode,
                                             displaySubject,
-                                            count: 0
+                                            count: 0,
+                                            students: []
                                         });
                                     }
-                                    roomSummaryMap.get(key)!.count += 1;
+                                    const item = roomSummaryMap.get(key)!;
+                                    item.count += 1;
+                                    if (matchedAlloc?.Student) {
+                                        item.students.push({
+                                            ...matchedAlloc.Student,
+                                            RollNumber: matchedAlloc.Student.RollNumber ?? seat.rollNumber
+                                        });
+                                    } else if (seat.rollNumber !== null && seat.rollNumber !== undefined) {
+                                        item.students.push({ RollNumber: seat.rollNumber, RegisterNumber: seat.registerNumber });
+                                    } else if (seat.registerNumber) {
+                                        item.students.push({ RegisterNumber: seat.registerNumber });
+                                    }
                                 }
                             });
                         });
@@ -1718,29 +1780,33 @@ const InternalSeatingPlans: React.FC = () => {
                 let benchLabelFont = 6.5;
                 let emptyFont = 7;
 
-                let tableFontSize = 8.5;
-                let tablePadding = 1.5;
+                let tableFontSize = 8;
+                let tablePadding = 1.2;
 
-                if (rowsNeeded > 12) {
+                if (rowsNeeded > 12 || roomSummaryRows.length > 5) {
                     maxCardH = 12;
                     regFont = 7.5;
                     nameFont = 5.5;
                     gapY = 1.2;
-                } else if (rowsNeeded >= 8) {
+                    tableFontSize = 7;
+                    tablePadding = 0.9;
+                } else if (rowsNeeded >= 8 || roomSummaryRows.length >= 4) {
                     maxCardH = 14;
                     regFont = 8.5;
                     nameFont = 6.5;
                     gapY = 1.5;
+                    tableFontSize = 7.5;
+                    tablePadding = 1.0;
                 }
 
                 const startY = 58;
-                const bottomMargin = 10;
+                const bottomMargin = 8;
 
                 const summaryRows = Math.max(roomSummaryRows.length + 1, subjectCounts.size + 1);
-                const summaryRowHeight = tablePadding * 2 + tableFontSize * 0.35;
-                const summaryHeight = 10 + (summaryRows * summaryRowHeight) + 10;
+                const summaryRowHeight = (tablePadding * 2) + (tableFontSize * 0.7) + 2;
+                const summaryHeight = 8 + (summaryRows * summaryRowHeight) + 6;
 
-                const gridTableGap = 10;
+                const gridTableGap = 8;
                 const availableH = pageH - startY - summaryHeight - bottomMargin - gridTableGap;
                 const maxGridH = pageH * 0.70;
                 const allowedH = Math.min(availableH, maxGridH);
@@ -1888,26 +1954,28 @@ const InternalSeatingPlans: React.FC = () => {
                 const tableBody: any[][] = roomSummaryRows.map(r => [
                     r.classLabel,
                     r.displaySubject,
+                    buildBatchStudentRanges(r.students) || '—',
                     r.count
                 ]);
                 tableBody.push([
-                    { content: 'Total', colSpan: 2, styles: { fontStyle: 'bold', fillColor: [245, 245, 245], halign: 'right' } },
+                    { content: 'Total', colSpan: 3, styles: { fontStyle: 'bold', fillColor: [245, 245, 245], halign: 'right' } },
                     { content: totalRoomStudents, styles: { fontStyle: 'bold', fillColor: [245, 245, 245], halign: 'center' } }
                 ]);
 
-                const tableW = Math.min(pageW - 30, 165);
+                const tableW = Math.min(pageW - 26, 182);
                 autoTable(doc, {
                     startY: currentY,
-                    head: [['Batch / Class', 'Subjects', 'Count']],
+                    head: [['Batch / Class', 'Subjects', 'Roll Numbers', 'Count']],
                     body: tableBody,
                     theme: 'grid',
-                    styles: { fontSize: tableFontSize, cellPadding: tablePadding + 0.5, textColor: [30, 41, 59], font: 'helvetica', valign: 'middle' },
-                    headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, halign: 'center' },
+                    styles: { fontSize: tableFontSize, cellPadding: tablePadding, textColor: [30, 41, 59], font: 'helvetica', valign: 'middle' },
+                    headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: tableFontSize + 0.5, halign: 'center' },
                     bodyStyles: { lineWidth: 0.15, lineColor: [203, 213, 225] },
                     columnStyles: {
-                        0: { cellWidth: 55, halign: 'left', fontStyle: 'bold' },
-                        1: { cellWidth: tableW - 80, halign: 'left' },
-                        2: { cellWidth: 25, halign: 'center', fontStyle: 'bold' }
+                        0: { cellWidth: 44, halign: 'left', fontStyle: 'bold' },
+                        1: { cellWidth: 70, halign: 'left' },
+                        2: { cellWidth: 50, halign: 'center', fontStyle: 'bold' },
+                        3: { cellWidth: 18, halign: 'center', fontStyle: 'bold' }
                     },
                     margin: { left: (pageW - tableW) / 2 },
                     tableWidth: tableW
