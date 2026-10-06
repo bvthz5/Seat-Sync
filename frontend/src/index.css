@@ -188,10 +188,12 @@ p {
 }
 
 /* Premium Accessible Inputs (Global Application, excluding transparent/borderless utility classes) */
-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(.bg-transparent):not(.border-none),
-textarea:not(.bg-transparent):not(.border-none),
-select:not(.bg-transparent):not(.border-none) {
-  @apply w-full h-11 px-4 rounded-xl border border-slate-200 bg-white text-slate-800 text-sm font-medium transition-all duration-300 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20 placeholder:text-slate-400 shadow-sm hover:border-slate-300 disabled:opacity-50 disabled:bg-slate-50;
+@layer base {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(.bg-transparent):not(.border-none),
+  textarea:not(.bg-transparent):not(.border-none),
+  select:not(.bg-transparent):not(.border-none) {
+    @apply w-full h-11 px-4 rounded-xl border border-slate-200 bg-white text-slate-800 text-sm font-medium transition-all duration-300 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20 placeholder:text-slate-400 shadow-sm hover:border-slate-300 disabled:opacity-50 disabled:bg-slate-50;
+  }
 }
 
 .btn-premium:hover, .btn-primary:hover {

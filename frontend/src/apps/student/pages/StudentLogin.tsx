@@ -14,6 +14,7 @@ const StudentLogin: React.FC = () => {
     const [shake, setShake] = useState(false);
     const [loginMethod, setLoginMethod] = useState<'email' | 'register'>('register');
     const [authError, setAuthError] = useState<string | null>(null);
+    const collegeDomain = import.meta.env.VITE_COLLEGE_EMAIL_DOMAIN || 'sjcetpalai.ac.in';
 
     useEffect(() => {
         if (identifierRef.current) {
@@ -38,7 +39,6 @@ const StudentLogin: React.FC = () => {
             return;
         }
 
-        const collegeDomain = import.meta.env.VITE_COLLEGE_EMAIL_DOMAIN || 'sjcetpalai.ac.in';
         const domainRegex = new RegExp(`@([a-zA-Z0-9-]+\\.)*${collegeDomain.replace(/\\./g, '\\.')}$`, 'i');
         if (loginMethod === 'email' && !domainRegex.test(trimmedIdentifier)) {
             toast.error(`Please use your official @${collegeDomain} email`);
@@ -239,12 +239,16 @@ const StudentLogin: React.FC = () => {
 
                         <div className="space-y-5">
                             <div className="group">
-                                <div className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                                <label htmlFor="student-identifier" className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1 cursor-pointer">
                                     {loginMethod === 'email' ? 'Official Student Email' : 'Register Number'}
-                                </div>
+                                </label>
                                 <div className="relative flex items-center transition-all duration-300">
-                                    <div className="absolute left-4 text-slate-400 group-focus-within:text-blue-600 transition-colors">
-                                        {loginMethod === 'email' ? <Mail className="w-5 h-5" /> : <User className="w-5 h-5" />}
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-focus-within:text-blue-600 transition-colors flex items-center justify-center z-10">
+                                        {loginMethod === 'email' ? (
+                                            <Mail className="w-5 h-5" aria-hidden="true" />
+                                        ) : (
+                                            <User className="w-5 h-5" aria-hidden="true" />
+                                        )}
                                     </div>
                                     <input
                                         ref={identifierRef}
@@ -255,28 +259,31 @@ const StudentLogin: React.FC = () => {
                                             const val = e.target.value;
                                             setIdentifier(loginMethod === 'register' ? val.toUpperCase() : val);
                                         }}
-                                        className="w-full bg-white border border-slate-200 text-slate-900 text-[15px] font-medium rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 block pl-12 pr-4 py-4 transition-all shadow-sm placeholder:text-slate-400"
-                                        placeholder={loginMethod === 'email' ? "name@mca.sjcetpalai.ac.in" : "SJC24MCA021"}
+                                        style={{ paddingLeft: '3rem', paddingRight: '1rem' }}
+                                        className="w-full h-12 bg-white border border-slate-200 text-slate-900 text-[15px] font-semibold rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 block !pl-12 !pr-4 py-3 transition-all shadow-xs placeholder:text-slate-400 placeholder:font-normal"
+                                        placeholder={loginMethod === 'email' ? `name@${collegeDomain}` : "SJC24MCA021"}
                                         disabled={isLoading}
                                         autoComplete={loginMethod === 'email' ? 'email' : 'username'}
+                                        spellCheck={false}
                                     />
                                 </div>
                             </div>
 
                             <div className="group">
-                                <div className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                                <label htmlFor="student-password" className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1 cursor-pointer">
                                     Access Password
-                                </div>
+                                </label>
                                 <div className="relative flex items-center transition-all duration-300">
-                                    <div className="absolute left-4 text-slate-400 group-focus-within:text-blue-600 transition-colors">
-                                        <Lock className="w-5 h-5" />
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-focus-within:text-blue-600 transition-colors flex items-center justify-center z-10">
+                                        <Lock className="w-5 h-5" aria-hidden="true" />
                                     </div>
                                     <input
                                         id="student-password"
                                         type={showPassword ? 'text' : 'password'}
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
-                                        className="w-full bg-white border border-slate-200 text-slate-900 text-[15px] font-medium rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 block pl-12 pr-12 py-4 transition-all shadow-sm placeholder:text-slate-400"
+                                        style={{ paddingLeft: '3rem', paddingRight: '3rem' }}
+                                        className="w-full h-12 bg-white border border-slate-200 text-slate-900 text-[15px] font-semibold rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 block !pl-12 !pr-12 py-3 transition-all shadow-xs placeholder:text-slate-400 placeholder:font-normal"
                                         placeholder="••••••••"
                                         disabled={isLoading}
                                         autoComplete="current-password"
@@ -285,7 +292,7 @@ const StudentLogin: React.FC = () => {
                                         type="button"
                                         aria-label={showPassword ? "Hide password" : "Show password"}
                                         onClick={() => setShowPassword(!showPassword)}
-                                        className="absolute right-4 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:rounded transition-colors"
+                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:rounded transition-colors z-10 flex items-center justify-center p-1"
                                     >
                                         {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                     </button>
