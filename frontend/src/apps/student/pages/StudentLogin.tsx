@@ -38,15 +38,17 @@ const StudentLogin: React.FC = () => {
             return;
         }
 
-        if (loginMethod === 'email' && !/@([a-zA-Z0-9-]+\.)*sjcetpalai\.ac\.in$/i.test(trimmedIdentifier)) {
-            toast.error("Please use your official @sjcetpalai.ac.in email");
+        const collegeDomain = import.meta.env.VITE_COLLEGE_EMAIL_DOMAIN || 'sjcetpalai.ac.in';
+        const domainRegex = new RegExp(`@([a-zA-Z0-9-]+\\.)*${collegeDomain.replace(/\\./g, '\\.')}$`, 'i');
+        if (loginMethod === 'email' && !domainRegex.test(trimmedIdentifier)) {
+            toast.error(`Please use your official @${collegeDomain} email`);
             triggerShake();
             return;
         }
 
         setIsLoading(true);
         try {
-            const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+            const apiBase = import.meta.env.VITE_API_BASE_URL || '/api';
             const response = await fetch(`${apiBase}/auth/student/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

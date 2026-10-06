@@ -5,7 +5,8 @@ import { connectDB } from "./config/database.js";
 import { startDependencyWatcher } from "./utils/autoDependencyInstaller.js";
 // import open from "open";
 
-const PORT = Number(process.env.PORT) || 5970;
+const PORT = Number(process.env.PORT) || 5000;
+const HOST = process.env.HOST || '0.0.0.0';
 
 // Global handlers improve stability in development
 process.on("unhandledRejection", (reason) => {
@@ -59,12 +60,13 @@ const startServer = async () => {
     const RETRY_DELAY = 1000; // 1 second
 
     const listen = () => {
-        httpServer.listen(PORT, '0.0.0.0');
+        httpServer.listen(PORT, HOST);
     };
 
     httpServer.on("listening", () => {
-        console.log(`SeatSync API running at http://localhost:${PORT}`);
-        console.log(`Swagger UI available at http://localhost:${PORT}/api-docs`);
+        const backendUrl = process.env.BACKEND_URL || `http://localhost:${PORT}`;
+        console.log(`SeatSync API running at ${backendUrl} (${HOST}:${PORT})`);
+        console.log(`Swagger UI available at ${backendUrl}/api-docs`);
     });
 
     httpServer.on("error", async (err: NodeJS.ErrnoException) => {

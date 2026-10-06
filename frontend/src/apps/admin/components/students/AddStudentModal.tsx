@@ -122,8 +122,12 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
             newErrors.Email = "College Email is required";
         } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.Email)) {
             newErrors.Email = "Please enter a valid email address";
-        } else if (!/@([a-zA-Z0-9-]+\.)*sjcetpalai\.ac\.in$/i.test(formData.Email.trim())) {
-            newErrors.Email = "Email must be from the college domain (@sjcetpalai.ac.in or subdomains)";
+        } else {
+            const collegeDomain = import.meta.env.VITE_COLLEGE_EMAIL_DOMAIN || 'sjcetpalai.ac.in';
+            const domainRegex = new RegExp(`@([a-zA-Z0-9-]+\\.)*${collegeDomain.replace(/\\./g, '\\.')}$`, 'i');
+            if (!domainRegex.test(formData.Email.trim())) {
+                newErrors.Email = `Email must be from the college domain (@${collegeDomain} or subdomains)`;
+            }
         }
 
         // Validate Register Number

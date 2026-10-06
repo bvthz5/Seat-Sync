@@ -1,15 +1,9 @@
 
 import { Server as SocketIOServer } from "socket.io";
 import { Server as HTTPServer } from "http";
+import { isOriginAllowed } from "../utils/corsConfig.js";
 
 let io: SocketIOServer;
-
-const allowedOrigins = new Set([
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]);
 
 export const initSocket = (httpServer: HTTPServer) => {
     io = new SocketIOServer(httpServer, {
@@ -19,20 +13,10 @@ export const initSocket = (httpServer: HTTPServer) => {
         allowEIO3: true,
         cors: {
             origin: (origin, callback) => {
-                if (!origin) return callback(null, true);
-
-                if (
-                    allowedOrigins.has(origin) ||
-                    origin.startsWith("http://localhost:") ||
-                    origin.startsWith("http://127.0.0.1:") ||
-                    origin.includes("serveousercontent.com") ||
-                    origin.includes("serveo.net") ||
-                    origin.includes("localtunnel.me")
-                ) {
+                if (isOriginAllowed(origin)) {
                     return callback(null, true);
                 }
-
-                callback(new Error("Socket.IO CORS blocked"));
+                callback(new Error(`Socket.IO CORS blocked: ${origin}`));
             },
             credentials: true,
             methods: ["GET", "POST"],

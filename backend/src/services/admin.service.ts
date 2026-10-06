@@ -98,9 +98,11 @@ export class AdminService {
         const { email, fullName } = data;
 
         // 1. Validate Email Domain
-        const domainRegex = /@([a-zA-Z0-9-]+\.)*sjcetpalai\.ac\.in$/;
+        const collegeDomain = process.env.COLLEGE_EMAIL_DOMAIN || "sjcetpalai.ac.in";
+        const escapedDomain = collegeDomain.replace(/\./g, "\\.");
+        const domainRegex = new RegExp(`@([a-zA-Z0-9-]+\\.)*${escapedDomain}$`, "i");
         if (!domainRegex.test(email)) {
-            throw new Error("Email must end with @sjcetpalai.ac.in or its subdomains");
+            throw new Error(`Email must end with @${collegeDomain} or its subdomains`);
         }
 
         // 2. Check Duplicates

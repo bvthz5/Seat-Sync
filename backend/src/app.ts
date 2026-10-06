@@ -41,30 +41,31 @@ import internalSeatingRoutes from "./routes/internal/internalSeating.routes.js";
 import internalReportsRoutes from "./routes/internal/internalReports.routes.js";
 import { httpLogger } from "./middlewares/httpLogger.middleware.js";
 
+import { isOriginAllowed } from "./utils/corsConfig.js";
+
 const app = express();
 
-app.use(httpLogger);
+// Trust reverse proxy if specified (e.g. Nginx, Traefik, Cloudflare)
+if (process.env.TRUST_PROXY) {
+    const tp = process.env.TRUST_PROXY.trim();
+    if (tp === "true" || tp === "1") {
+        app.set("trust proxy", 1);
+    } else if (tp === "false" || tp === "0") {
+        app.set("trust proxy", false);
+    } else {
+        app.set("trust proxy", Number(tp) || tp);
+    }
+}
 
+app.use(httpLogger);
 
 // --- CORS Configuration ---
 app.use(cors({
     origin: (origin, callback) => {
-        // Allow same-origin (origin is undefined)
-        if (!origin) return callback(null, true);
-
-        // Allow any localhost or loopback origin during development
-        if (
-            origin.startsWith('http://localhost') ||
-            origin.startsWith('http://127.0.0.1') ||
-            origin.startsWith('http://[::1]') ||
-            origin.includes('serveousercontent.com') ||
-            origin.includes('serveo.net') ||
-            origin.includes('localtunnel.me')
-        ) {
+        if (isOriginAllowed(origin)) {
             return callback(null, true);
         }
-
-        callback(new Error('Not allowed by CORS'));
+        callback(new Error(`Not allowed by CORS: ${origin}`));
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
@@ -98,7 +99,7 @@ app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 // --- Security Middleware: Rate Limiter ---
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 1000, // Increased for development
+    max: Number(process.env.RATE_LIMIT_MAX) || 1000,
     standardHeaders: true,
     legacyHeaders: false,
     message: "Too many requests from this IP, please try again later."
@@ -115,8 +116,8 @@ const swaggerDefinition = {
     },
     servers: [
         {
-            url: "http://localhost:5970",
-            description: "Development server",
+            url: process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5000}`,
+            description: process.env.NODE_ENV === "production" ? "Production server" : "Development server",
         },
     ],
     components: {

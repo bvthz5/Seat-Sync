@@ -50,7 +50,7 @@ const StudentResetPassword: React.FC = () => {
 
         setIsLoading(true);
         try {
-            const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+            const apiBase = import.meta.env.VITE_API_BASE_URL || '/api';
             const response = await fetch(`${apiBase}/auth/student/reset-password`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

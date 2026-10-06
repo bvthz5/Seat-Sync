@@ -166,8 +166,12 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                 newErrors.Email = "College Email is required";
             } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.Email)) {
                 newErrors.Email = "Please enter a valid email address";
-            } else if (!/@([a-zA-Z0-9-]+\.)*sjcetpalai\.ac\.in$/i.test(formData.Email.trim())) {
-                newErrors.Email = "Email must be from @sjcetpalai.ac.in (or subdomains like @ce.sjcetpalai.ac.in)";
+            } else {
+                const collegeDomain = import.meta.env.VITE_COLLEGE_EMAIL_DOMAIN || 'sjcetpalai.ac.in';
+                const domainRegex = new RegExp(`@([a-zA-Z0-9-]+\\.)*${collegeDomain.replace(/\\./g, '\\.')}$`, 'i');
+                if (!domainRegex.test(formData.Email.trim())) {
+                    newErrors.Email = `Email must be from @${collegeDomain} (or subdomains like @ce.${collegeDomain})`;
+                }
             }
         }
 
@@ -392,7 +396,7 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
                                         <input
                                             type="email"
                                             autoComplete="email"
-                                            placeholder="student@sjcetpalai.ac.in"
+                                            placeholder={`student@${import.meta.env.VITE_COLLEGE_EMAIL_DOMAIN || 'sjcetpalai.ac.in'}`}
                                             value={formData.Email}
                                             onChange={(e) => handleChange("Email", e.target.value)}
                                             className="w-full h-full px-3.5 text-xs font-semibold text-slate-800 placeholder:text-slate-400 bg-transparent outline-none border-none ring-0 focus:ring-0"

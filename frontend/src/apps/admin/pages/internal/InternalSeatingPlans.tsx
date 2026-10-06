@@ -465,7 +465,7 @@ const InternalSeatingPlans: React.FC = () => {
 
         const divRaw = String(student?.Division || '').toUpperCase().trim();
         let batchDetail = '';
-        if (isMultiDiv && divRaw && !['ALL', 'NONE', 'NULL', 'UNDEFINED', ''].includes(divRaw)) {
+        if ((isMultiDiv || ['A', 'B', 'C', 'D'].includes(divRaw)) && divRaw && !['ALL', 'NONE', 'NULL', 'UNDEFINED', ''].includes(divRaw)) {
             batchDetail = `Batch ${divRaw}`;
         }
 
@@ -682,12 +682,12 @@ const InternalSeatingPlans: React.FC = () => {
             ws['!merges'] = merges;
 
             const wb = XLSXStyle.utils.book_new();
-            XLSXStyle.utils.book_append_sheet(wb, ws, 'Subject Seating');
-            downloadExcelFile(XLSXStyle, wb, `SubjectWise_Seating_${selectedDate}_${selectedSession}.xlsx`);
-            toast.success('Subject Wise Seating downloaded');
+            XLSXStyle.utils.book_append_sheet(wb, ws, 'Consolidated Seating');
+            downloadExcelFile(XLSXStyle, wb, `Consolidated_Seating_${selectedDate}_${selectedSession}.xlsx`);
+            toast.success('Consolidated Seating downloaded');
         } catch (e) {
             console.error(e);
-            toast.error('Failed to export Subject Wise Seating');
+            toast.error('Failed to export Consolidated Seating');
         } finally {
             setConsolidatedDownloading(false);
         }
@@ -697,7 +697,7 @@ const InternalSeatingPlans: React.FC = () => {
     const downloadConsolidatedPDF = async () => {
         if (!selectedDate || !selectedSession || !selectedSeries) return;
         setConsolidatedDownloading(true);
-        const tid = toast.loading('Generating Subject Wise PDF report...');
+        const tid = toast.loading('Generating Consolidated Seating PDF report...');
         try {
             const { default: jsPDF } = await import('jspdf');
             const { default: autoTable } = await import('jspdf-autotable');
@@ -782,11 +782,11 @@ const InternalSeatingPlans: React.FC = () => {
                 }
             });
 
-            doc.save(`SubjectWise_Seating_${selectedDate}_${selectedSession}.pdf`);
-            toast.success('Subject Wise Seating PDF downloaded', { id: tid });
+            doc.save(`Consolidated_Seating_${selectedDate}_${selectedSession}.pdf`);
+            toast.success('Consolidated Seating PDF downloaded', { id: tid });
         } catch (e: any) {
             console.error(e);
-            toast.error(e.message || 'Failed to export Subject Wise PDF', { id: tid });
+            toast.error(e.message || 'Failed to export Consolidated Seating PDF', { id: tid });
         } finally {
             setConsolidatedDownloading(false);
         }
@@ -1220,6 +1220,7 @@ const InternalSeatingPlans: React.FC = () => {
             ];
 
             const usedSheetNames = new Set<string>();
+            const multiDivBranches = getMultiDivisionBranches(data);
 
             for (const [hallCode, hallId] of roomIdsMap.entries()) {
                 let layoutDetail: any = null;
@@ -1259,13 +1260,88 @@ const InternalSeatingPlans: React.FC = () => {
                     });
                 });
 
+                // Group by Batch / Class and Subject for this hall
+                const hallAllocs = data.filter((alloc: any) => {
+                    const rCode = alloc.Seat?.Room?.RoomCode || 'Unknown';
+                    const rId = alloc.Seat?.Room?.RoomID || alloc.Seat?.RoomID;
+                    return rCode === hallCode || (hallId && rId === hallId);
+                });
+
+                interface RoomSummaryItem {
+                    classLabel: string;
+                    subjectCode: string;
+                    displaySubject: string;
+                    count: number;
+                }
+
+                const roomSummaryMap = new Map<string, RoomSummaryItem>();
+
+                hallAllocs.forEach((alloc: any) => {
+                    const sCode = alloc.Exam?.SubjectCode || alloc.SubjectCode || 'N/A';
+                    const sName = alloc.Exam?.SubjectName || alloc.SubjectName || subjectNamesMap.get(sCode) || '';
+                    const classLabel = formatSeatingBatchLabel(alloc.Student, multiDivBranches);
+                    const key = `${classLabel}____${sCode}`;
+
+                    if (!roomSummaryMap.has(key)) {
+                        const displaySubject = sName ? `${sCode} - ${sName}` : sCode;
+                        roomSummaryMap.set(key, {
+                            classLabel,
+                            subjectCode: sCode,
+                            displaySubject,
+                            count: 0
+                        });
+                    }
+                    roomSummaryMap.get(key)!.count += 1;
+                });
+
+                // Fallback from rowsData if hallAllocs had no entries
+                if (roomSummaryMap.size === 0 && rowsData.length > 0) {
+                    rowsData.forEach(row => {
+                        row.benches.forEach((bench: any) => {
+                            [bench.left, bench.right].forEach(seat => {
+                                if (seat?.subjectCode) {
+                                    const matchedAlloc = data.find((a: any) =>
+                                        (seat.studentId && a.InternalStudentID === seat.studentId) ||
+                                        (seat.registerNumber && a.Student?.RegisterNumber === seat.registerNumber)
+                                    );
+                                    const classLabel = matchedAlloc
+                                        ? formatSeatingBatchLabel(matchedAlloc.Student, multiDivBranches)
+                                        : `${seat.semester ? (String(seat.semester).startsWith('S') ? seat.semester : `S${seat.semester}`) : 'S3'} ${seat.deptCode || 'Branch'}${seat.division ? ` (Batch ${seat.division})` : ''}`;
+                                    const sCode = seat.subjectCode;
+                                    const sName = seat.subjectName || subjectNamesMap.get(sCode) || '';
+                                    const key = `${classLabel}____${sCode}`;
+
+                                    if (!roomSummaryMap.has(key)) {
+                                        const displaySubject = sName ? `${sCode} - ${sName}` : sCode;
+                                        roomSummaryMap.set(key, {
+                                            classLabel,
+                                            subjectCode: sCode,
+                                            displaySubject,
+                                            count: 0
+                                        });
+                                    }
+                                    roomSummaryMap.get(key)!.count += 1;
+                                }
+                            });
+                        });
+                    });
+                }
+
+                const roomSummaryRows = Array.from(roomSummaryMap.values()).sort((a, b) => {
+                    const cSort = sortBatchLabels(a.classLabel, b.classLabel);
+                    if (cSort !== 0) return cSort;
+                    return a.subjectCode.localeCompare(b.subjectCode);
+                });
+
+                const totalRoomStudents = roomSummaryRows.reduce((acc, r) => acc + r.count, 0);
+
                 const subjectCodesString = Array.from(roomSubjectCodes).sort().join(', ');
                 const subjectColors = new Map<string, any>();
                 Array.from(roomSubjectCodes).sort().forEach((code, idx) => {
                     subjectColors.set(code, subjectColorPalette[idx % subjectColorPalette.length]);
                 });
 
-                const DATA: any[][] = Array.from({ length: 11 + maxBenches * 2 + 10 }, () => Array(11).fill({ v: '', s: {} }));
+                const DATA: any[][] = Array.from({ length: 11 + maxBenches * 2 + Math.max(14, roomSummaryRows.length + 8) }, () => Array(11).fill({ v: '', s: {} }));
                 const merges: any[] = [];
 
                 DATA[0][0] = { v: "ST. JOSEPH'S COLLEGE OF ENGINEERING & TECHNOLOGY, PALAI", s: headStyle };
@@ -1381,25 +1457,32 @@ const InternalSeatingPlans: React.FC = () => {
                 });
 
                 let currentY = gridStartRow + maxBenches * 2 + 2;
+                DATA[currentY][1] = { v: "Batch / Class", s: summaryHeadStyle };
+                DATA[currentY][2] = { v: "", s: summaryHeadStyle };
                 DATA[currentY][3] = { v: "Subjects", s: summaryHeadStyle };
+                DATA[currentY][4] = { v: "", s: summaryHeadStyle };
                 DATA[currentY][5] = { v: "Count", s: summaryHeadStyle };
+                merges.push({ s: { r: currentY, c: 1 }, e: { r: currentY, c: 2 } });
                 merges.push({ s: { r: currentY, c: 3 }, e: { r: currentY, c: 4 } });
 
-                const subjEntries = Array.from(subjectCounts.entries());
-                subjEntries.forEach(([code, count], idx) => {
+                roomSummaryRows.forEach((r, idx) => {
                     const row = currentY + 1 + idx;
-                    const name = subjectNamesMap.get(code) || '';
-                    const displayLabel = name ? `${code} - ${name}` : code;
-                    DATA[row][3] = { v: displayLabel, s: { ...summaryBodyStyle, alignment: { horizontal: 'left', vertical: 'center', wrapText: true } } };
-                    DATA[row][5] = { v: count, s: summaryBodyStyle };
+                    DATA[row][1] = { v: r.classLabel, s: { ...summaryBodyStyle, alignment: { horizontal: 'left', vertical: 'center', wrapText: true }, font: { bold: true, sz: 8.5 } } };
+                    DATA[row][2] = { v: "", s: summaryBodyStyle };
+                    DATA[row][3] = { v: r.displaySubject, s: { ...summaryBodyStyle, alignment: { horizontal: 'left', vertical: 'center', wrapText: true } } };
+                    DATA[row][4] = { v: "", s: summaryBodyStyle };
+                    DATA[row][5] = { v: r.count, s: { ...summaryBodyStyle, font: { bold: true } } };
+                    merges.push({ s: { r: row, c: 1 }, e: { r: row, c: 2 } });
                     merges.push({ s: { r: row, c: 3 }, e: { r: row, c: 4 } });
                 });
 
-                const totalRow = currentY + 1 + subjEntries.length;
-                const totalCount = Array.from(subjectCounts.values()).reduce((a, b) => a + b, 0);
-                DATA[totalRow][3] = { v: "Total", s: { ...summaryBodyStyle, font: { bold: true }, alignment: { horizontal: 'right', vertical: 'center' } } };
-                DATA[totalRow][5] = { v: totalCount, s: { ...summaryBodyStyle, font: { bold: true } } };
-                merges.push({ s: { r: totalRow, c: 3 }, e: { r: totalRow, c: 4 } });
+                const totalRow = currentY + 1 + roomSummaryRows.length;
+                DATA[totalRow][1] = { v: "Total", s: { ...summaryBodyStyle, font: { bold: true }, alignment: { horizontal: 'right', vertical: 'center' } } };
+                DATA[totalRow][2] = { v: "", s: summaryBodyStyle };
+                DATA[totalRow][3] = { v: "", s: summaryBodyStyle };
+                DATA[totalRow][4] = { v: "", s: summaryBodyStyle };
+                DATA[totalRow][5] = { v: totalRoomStudents, s: { ...summaryBodyStyle, font: { bold: true } } };
+                merges.push({ s: { r: totalRow, c: 1 }, e: { r: totalRow, c: 4 } });
 
                 const ws = XLSXStyle.utils.aoa_to_sheet(DATA);
                 ws['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }];
@@ -1473,6 +1556,8 @@ const InternalSeatingPlans: React.FC = () => {
                 { fill: [224, 242, 254], text: [12, 74, 110] }   // Sky
             ];
 
+            const multiDivBranches = getMultiDivisionBranches(data);
+
             for (const [hallCode, hallId] of roomIdsMap.entries()) {
                 let layoutDetail: any = null;
                 try {
@@ -1518,6 +1603,81 @@ const InternalSeatingPlans: React.FC = () => {
                         });
                     });
                 });
+
+                // Group by Batch / Class and Subject for this hall
+                const hallAllocs = data.filter((alloc: any) => {
+                    const rCode = alloc.Seat?.Room?.RoomCode || 'Unknown';
+                    const rId = alloc.Seat?.Room?.RoomID || alloc.Seat?.RoomID;
+                    return rCode === hallCode || (hallId && rId === hallId);
+                });
+
+                interface RoomSummaryItem {
+                    classLabel: string;
+                    subjectCode: string;
+                    displaySubject: string;
+                    count: number;
+                }
+
+                const roomSummaryMap = new Map<string, RoomSummaryItem>();
+
+                hallAllocs.forEach((alloc: any) => {
+                    const sCode = alloc.Exam?.SubjectCode || alloc.SubjectCode || 'N/A';
+                    const sName = alloc.Exam?.SubjectName || alloc.SubjectName || subjectNamesMap.get(sCode) || '';
+                    const classLabel = formatSeatingBatchLabel(alloc.Student, multiDivBranches);
+                    const key = `${classLabel}____${sCode}`;
+
+                    if (!roomSummaryMap.has(key)) {
+                        const displaySubject = sName ? `${sCode} - ${sName}` : sCode;
+                        roomSummaryMap.set(key, {
+                            classLabel,
+                            subjectCode: sCode,
+                            displaySubject,
+                            count: 0
+                        });
+                    }
+                    roomSummaryMap.get(key)!.count += 1;
+                });
+
+                // Fallback from rowsData if hallAllocs had no entries
+                if (roomSummaryMap.size === 0 && rowsData.length > 0) {
+                    rowsData.forEach(row => {
+                        row.benches.forEach((bench: any) => {
+                            [bench.left, bench.right].forEach(seat => {
+                                if (seat?.subjectCode) {
+                                    const matchedAlloc = data.find((a: any) =>
+                                        (seat.studentId && a.InternalStudentID === seat.studentId) ||
+                                        (seat.registerNumber && a.Student?.RegisterNumber === seat.registerNumber)
+                                    );
+                                    const classLabel = matchedAlloc
+                                        ? formatSeatingBatchLabel(matchedAlloc.Student, multiDivBranches)
+                                        : `${seat.semester ? (String(seat.semester).startsWith('S') ? seat.semester : `S${seat.semester}`) : 'S3'} ${seat.deptCode || 'Branch'}${seat.division ? ` (Batch ${seat.division})` : ''}`;
+                                    const sCode = seat.subjectCode;
+                                    const sName = seat.subjectName || subjectNamesMap.get(sCode) || '';
+                                    const key = `${classLabel}____${sCode}`;
+
+                                    if (!roomSummaryMap.has(key)) {
+                                        const displaySubject = sName ? `${sCode} - ${sName}` : sCode;
+                                        roomSummaryMap.set(key, {
+                                            classLabel,
+                                            subjectCode: sCode,
+                                            displaySubject,
+                                            count: 0
+                                        });
+                                    }
+                                    roomSummaryMap.get(key)!.count += 1;
+                                }
+                            });
+                        });
+                    });
+                }
+
+                const roomSummaryRows = Array.from(roomSummaryMap.values()).sort((a, b) => {
+                    const cSort = sortBatchLabels(a.classLabel, b.classLabel);
+                    if (cSort !== 0) return cSort;
+                    return a.subjectCode.localeCompare(b.subjectCode);
+                });
+
+                const totalRoomStudents = roomSummaryRows.reduce((acc, r) => acc + r.count, 0);
 
                 const subjectCodesString = Array.from(roomSubjectCodes).sort().join(', ');
                 const subjectColors = new Map<string, any>();
@@ -1576,7 +1736,7 @@ const InternalSeatingPlans: React.FC = () => {
                 const startY = 58;
                 const bottomMargin = 10;
 
-                const summaryRows = subjectCounts.size + 1;
+                const summaryRows = Math.max(roomSummaryRows.length + 1, subjectCounts.size + 1);
                 const summaryRowHeight = tablePadding * 2 + tableFontSize * 0.35;
                 const summaryHeight = 10 + (summaryRows * summaryRowHeight) + 10;
 
@@ -1725,29 +1885,29 @@ const InternalSeatingPlans: React.FC = () => {
                 });
 
                 let currentY = startY + rowsNeeded * (cardH + gapY) + gridTableGap;
-                const subjData: any[][] = Array.from(subjectCounts.entries()).map(([code, count]) => {
-                    const name = subjectNamesMap.get(code) || '';
-                    const displayLabel = name ? `${code} - ${name}` : code;
-                    return [displayLabel, count];
-                });
-                const totalStudents = Array.from(subjectCounts.values()).reduce((a, b) => a + b, 0);
-                subjData.push([
-                    { content: 'Total', styles: { fontStyle: 'bold', fillColor: [245, 245, 245], halign: 'right' } },
-                    { content: totalStudents, styles: { fontStyle: 'bold', fillColor: [245, 245, 245], halign: 'center' } }
+                const tableBody: any[][] = roomSummaryRows.map(r => [
+                    r.classLabel,
+                    r.displaySubject,
+                    r.count
+                ]);
+                tableBody.push([
+                    { content: 'Total', colSpan: 2, styles: { fontStyle: 'bold', fillColor: [245, 245, 245], halign: 'right' } },
+                    { content: totalRoomStudents, styles: { fontStyle: 'bold', fillColor: [245, 245, 245], halign: 'center' } }
                 ]);
 
-                const tableW = Math.min(pageW - 40, 130);
+                const tableW = Math.min(pageW - 30, 165);
                 autoTable(doc, {
                     startY: currentY,
-                    head: [['Subjects', 'Count']],
-                    body: subjData,
+                    head: [['Batch / Class', 'Subjects', 'Count']],
+                    body: tableBody,
                     theme: 'grid',
                     styles: { fontSize: tableFontSize, cellPadding: tablePadding + 0.5, textColor: [30, 41, 59], font: 'helvetica', valign: 'middle' },
                     headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9, halign: 'center' },
                     bodyStyles: { lineWidth: 0.15, lineColor: [203, 213, 225] },
                     columnStyles: {
-                        0: { cellWidth: tableW - 25, halign: 'left' },
-                        1: { cellWidth: 25, halign: 'center', fontStyle: 'bold' }
+                        0: { cellWidth: 55, halign: 'left', fontStyle: 'bold' },
+                        1: { cellWidth: tableW - 80, halign: 'left' },
+                        2: { cellWidth: 25, halign: 'center', fontStyle: 'bold' }
                     },
                     margin: { left: (pageW - tableW) / 2 },
                     tableWidth: tableW
@@ -1942,7 +2102,7 @@ const InternalSeatingPlans: React.FC = () => {
                                             </DropdownMenu>
                                         </Dropdown>
 
-                                        {/* Subject Wise Dropdown */}
+                                        {/* Consolidated Seating Dropdown */}
                                         <Dropdown
                                             placement="bottom-start"
                                             classNames={{
@@ -1955,12 +2115,12 @@ const InternalSeatingPlans: React.FC = () => {
                                                     className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-indigo-50/80 border border-indigo-200/80 text-indigo-700 text-[12px] font-extrabold hover:bg-indigo-100/80 hover:border-indigo-300 transition-all shadow-2xs disabled:opacity-60 active:scale-[0.98] select-none cursor-pointer"
                                                 >
                                                     <FileDown size={14} className="text-indigo-600 shrink-0" />
-                                                    <span className="select-none leading-none">{consolidatedDownloading ? 'Exporting...' : 'Subject Wise'}</span>
+                                                    <span className="select-none leading-none">{consolidatedDownloading ? 'Exporting...' : 'Consolidated Seating'}</span>
                                                     <ChevronDown size={13} className="text-indigo-500 shrink-0" />
                                                 </button>
                                             </DropdownTrigger>
                                             <DropdownMenu
-                                                aria-label="Subject Wise Export Options"
+                                                aria-label="Consolidated Seating Export Options"
                                                 className="p-1 min-w-[240px] bg-white rounded-xl"
                                                 itemClasses={{
                                                     base: "data-[hover=true]:bg-slate-100/80 rounded-xl p-2.5 transition-all text-slate-800",
@@ -1983,53 +2143,6 @@ const InternalSeatingPlans: React.FC = () => {
                                                     key="pdf"
                                                     startContent={<FileDown className="w-4.5 h-4.5 text-rose-600 shrink-0" />}
                                                     description="Download official consolidated PDF report"
-                                                >
-                                                    PDF Document (.pdf)
-                                                </DropdownItem>
-                                            </DropdownMenu>
-                                        </Dropdown>
-
-                                        {/* Batch Wise Dropdown */}
-                                        <Dropdown
-                                            placement="bottom-start"
-                                            classNames={{
-                                                content: "!bg-white !bg-opacity-100 bg-white border border-slate-200/90 shadow-2xl shadow-slate-300/40 rounded-2xl p-1 z-50 overflow-hidden"
-                                            }}
-                                        >
-                                            <DropdownTrigger>
-                                                <button
-                                                    disabled={subjectDownloading}
-                                                    className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl bg-purple-50/80 border border-purple-200/80 text-purple-700 text-[12px] font-extrabold hover:bg-purple-100/80 hover:border-purple-300 transition-all shadow-2xs disabled:opacity-60 active:scale-[0.98] select-none cursor-pointer"
-                                                >
-                                                    <FileDown size={14} className="text-purple-600 shrink-0" />
-                                                    <span className="select-none leading-none">{subjectDownloading ? 'Exporting...' : 'Batch Wise'}</span>
-                                                    <ChevronDown size={13} className="text-purple-500 shrink-0" />
-                                                </button>
-                                            </DropdownTrigger>
-                                            <DropdownMenu
-                                                aria-label="Batch Wise Export Options"
-                                                className="p-1 min-w-[240px] bg-white rounded-xl"
-                                                itemClasses={{
-                                                    base: "data-[hover=true]:bg-slate-100/80 rounded-xl p-2.5 transition-all text-slate-800",
-                                                    title: "text-[13px] font-bold text-slate-800",
-                                                    description: "text-[11px] text-slate-500 font-medium"
-                                                }}
-                                                onAction={(key) => {
-                                                    if (key === 'excel') downloadSubjectWiseExcel();
-                                                    if (key === 'pdf') downloadSubjectWisePDF();
-                                                }}
-                                            >
-                                                <DropdownItem
-                                                    key="excel"
-                                                    startContent={<FileSpreadsheet className="w-4.5 h-4.5 text-purple-600 shrink-0" />}
-                                                    description="Download batch/branch seating as Excel sheet"
-                                                >
-                                                    Excel Spreadsheet (.xlsx)
-                                                </DropdownItem>
-                                                <DropdownItem
-                                                    key="pdf"
-                                                    startContent={<FileDown className="w-4.5 h-4.5 text-rose-600 shrink-0" />}
-                                                    description="Download official batch wise PDF report"
                                                 >
                                                     PDF Document (.pdf)
                                                 </DropdownItem>

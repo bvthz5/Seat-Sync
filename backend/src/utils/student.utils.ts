@@ -4,8 +4,8 @@
  * Example: SJCET@123
  */
 export const generateDefaultPassword = (_fullName: string, _registerNumber: string): string => {
-    // Standardized universal password for all students as requested
-    return "SJCET@123";
+    // Institutional default password configurable via .env
+    return process.env.STUDENT_DEFAULT_PASSWORD || "SJCET@123";
 };
 
 /**
@@ -97,6 +97,7 @@ export const generateStudentEmail = (fullName: string, joiningYear: number | str
     // We'll keep it as the program code for now as it's the standard.
     
     const integratedSuffix = isIntegrated ? 'i' : '';
+    const collegeDomain = process.env.COLLEGE_EMAIL_DOMAIN || 'sjcetpalai.ac.in';
     
-    return `${cleanName}${emailYear}${integratedSuffix}@${emailProgramCode}.sjcetpalai.ac.in`;
+    return `${cleanName}${emailYear}${integratedSuffix}@${emailProgramCode}.${collegeDomain}`;
 };

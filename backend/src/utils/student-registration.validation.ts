@@ -9,9 +9,9 @@ export interface StudentRegistrationValidation {
 }
 
 /**
- * College email domain constant
+ * College email domain helper
  */
-const COLLEGE_EMAIL_DOMAIN = "sjcetpalai.ac.in";
+const getCollegeEmailDomain = (): string => process.env.COLLEGE_EMAIL_DOMAIN || "sjcetpalai.ac.in";
 
 /**
  * Validates full name
@@ -62,11 +62,13 @@ export const validateEmail = (email: any): { valid: boolean; error?: string } =>
     }
 
     // Check for college domain (supports subdomains like @ce.sjcetpalai.ac.in)
-    const domainRegex = /@([a-zA-Z0-9-]+\.)*sjcetpalai\.ac\.in$/i;
+    const collegeDomain = getCollegeEmailDomain();
+    const escapedDomain = collegeDomain.replace(/\./g, "\\.");
+    const domainRegex = new RegExp(`@([a-zA-Z0-9-]+\\.)*${escapedDomain}$`, "i");
     if (!domainRegex.test(trimmed)) {
         return {
             valid: false,
-            error: `Email must be from the college domain (@${COLLEGE_EMAIL_DOMAIN})`
+            error: `Email must be from the college domain (@${collegeDomain})`
         };
     }
 
