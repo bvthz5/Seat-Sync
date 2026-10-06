@@ -61,7 +61,9 @@ function singleNetworkUrlPlugin(): Plugin {
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const targetUrl = env.VITE_API_URL || 'http://localhost:5000';
+  const rawTarget = env.VITE_API_URL || 'http://127.0.0.1:5000';
+  // Normalize localhost to 127.0.0.1 to prevent Node.js IPv6 (::1) AggregateError [ECONNREFUSED]
+  const targetUrl = rawTarget.replace('//localhost:', '//127.0.0.1:');
   const serverPort = Number(env.VITE_PORT) || 5173;
   const serverHost = env.VITE_HOST === 'false' ? false : (env.VITE_HOST === 'true' ? '0.0.0.0' : (env.VITE_HOST || '0.0.0.0'));
   const allowedHostsConfig = env.VITE_ALLOWED_HOSTS === 'true'
@@ -105,10 +107,11 @@ export default defineConfig(({ mode }) => {
         secure: false,
         configure: (proxy, _options) => {
           let lastRefusalLoggedAt = 0;
-          proxy.on('error', (err, req, res) => {
+          proxy.on('error', (err, _req, res) => {
             const time = new Date().toLocaleTimeString();
             const code = (err as any).code || '';
-            const isRefused = code === 'ECONNREFUSED' || err.message.includes('ECONNREFUSED');
+            const msg = err.message || '';
+            const isRefused = code === 'ECONNREFUSED' || msg.includes('ECONNREFUSED') || code === 'ENOTFOUND';
             
             if (isRefused) {
               const now = Date.now();
@@ -119,17 +122,19 @@ export default defineConfig(({ mode }) => {
                 );
                 lastRefusalLoggedAt = now;
               }
-              if ('writeHead' in res) {
-                res.writeHead(502, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'Backend server is offline (ECONNREFUSED)' }));
+              const httpRes = res as any;
+              if (httpRes && !httpRes.headersSent && typeof httpRes.writeHead === 'function') {
+                httpRes.writeHead(502, { 'Content-Type': 'application/json' });
+                httpRes.end(JSON.stringify({ error: 'Backend server is offline (ECONNREFUSED)' }));
               }
             } else {
               console.log(
-                `\x1b[90m[${time}]\x1b[0m \x1b[36m[vite:proxy]\x1b[0m \x1b[31mERROR\x1b[0m Proxy error: ${err.message}`
+                `\x1b[90m[${time}]\x1b[0m \x1b[36m[vite:proxy]\x1b[0m \x1b[31mERROR\x1b[0m Proxy error: ${msg}`
               );
-              if ('writeHead' in res) {
-                res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'Proxy error: ' + err.message }));
+              const httpRes = res as any;
+              if (httpRes && !httpRes.headersSent && typeof httpRes.writeHead === 'function') {
+                httpRes.writeHead(500, { 'Content-Type': 'application/json' });
+                httpRes.end(JSON.stringify({ error: 'Proxy error: ' + msg }));
               }
             }
           });
