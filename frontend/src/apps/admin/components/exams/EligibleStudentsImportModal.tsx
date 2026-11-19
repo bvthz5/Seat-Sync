@@ -16,6 +16,8 @@ interface ImportResultState {
     message?: string;
     isError?: boolean;
     total?: number;
+    parsedRows?: number;
+    duplicateCount?: number;
     eligibleCount?: number;
     ineligibleCount?: number;
     createdStudents: number;
@@ -108,6 +110,8 @@ const EligibleStudentsImportModal: React.FC<EligibleStudentsImportModalProps> = 
                 message: response?.message,
                 isError: mappedCount === 0,
                 total: Number(response?.total ?? mappedCount),
+                parsedRows: Number(response?.parsedRows ?? mappedCount),
+                duplicateCount: Number(response?.duplicateCount || 0),
                 eligibleCount: Number(response?.eligibleCount || 0),
                 ineligibleCount: Number(response?.ineligibleCount || 0),
                 createdStudents: Number(response?.createdStudents || 0),
@@ -323,6 +327,9 @@ const EligibleStudentsImportModal: React.FC<EligibleStudentsImportModalProps> = 
                                         <p>Updated / Existing: <span className="text-slate-800 font-extrabold">{(result.registrationsUpdated || 0) + result.registrationsSkipped}</span></p>
                                         <p>Eligible / Ineligible: <span className="text-emerald-700 font-extrabold">{result.eligibleCount || 0}</span> / <span className="text-rose-600 font-extrabold">{result.ineligibleCount || 0}</span></p>
                                         <p>Errors / Skipped: <span className={result.errorCount > 0 ? "text-rose-600 font-extrabold" : "text-emerald-600 font-extrabold"}>{result.errorCount}</span></p>
+                                        {typeof result.duplicateCount === 'number' && result.duplicateCount > 0 && (
+                                            <p className="col-span-2 text-amber-700">Duplicate Reg. Nos. in File: <span className="font-extrabold">{result.duplicateCount}</span></p>
+                                        )}
                                     </div>
                                     {result.detectedHeaders && result.detectedHeaders.length > 0 && (result.isError || result.errorCount > 0) && (
                                         <p className="text-[11px] text-slate-500 font-semibold pt-1">

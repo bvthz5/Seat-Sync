@@ -2102,6 +2102,7 @@ export class ExamController {
         let registrationsCreated = 0;
         let registrationsUpdated = 0;
         let registrationsSkipped = 0;
+        let duplicateCount = 0;
         let eligibleCount = 0;
         let ineligibleCount = 0;
 
@@ -2170,8 +2171,16 @@ export class ExamController {
                 isEligible = isEligibleRaw === '' ? true : !INELIGIBLE_VALUES.has(isEligibleRaw);
             }
 
-            const safeFullName = extractedName.replace(/\s+/g, ' ').trim().slice(0, 100);
-            const rawRegTrimmed = extractedRegNo.trim();
+            const safeFullName = extractedName
+                .replace(/[\u200B-\u200D\uFEFF\u00AD]/g, '')
+                .replace(/\u00A0/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, 100);
+            const rawRegTrimmed = extractedRegNo
+                .replace(/[\u200B-\u200D\uFEFF\u00AD]/g, '')
+                .replace(/\u00A0/g, ' ')
+                .trim();
             const safeRegNo = rawRegTrimmed.toUpperCase().replace(/\s+/g, '').slice(0, 50);
 
             if (!safeFullName || !safeRegNo) {
@@ -2180,6 +2189,7 @@ export class ExamController {
             }
 
             if (seenRegNos.has(safeRegNo)) {
+                duplicateCount++;
                 continue;
             }
             seenRegNos.add(safeRegNo);
@@ -2444,6 +2454,8 @@ export class ExamController {
             registrationsCreated,
             registrationsUpdated,
             registrationsSkipped,
+            duplicateCount,
+            parsedRows: rows.length,
             errorCount: errors.length,
             errors
         };
@@ -2968,11 +2980,9 @@ export class ExamController {
             // Compute batch-wise counts for eligible students
             const batchCounts: Record<string, number> = {};
             eligibleStudents.forEach(s => {
-                // Extract batch prefix (e.g., SJ24CS001 -> SJ24CS, SJ24MCAAD001 -> SJ24MCAAD)
-                // We take everything before the last 3 digits if they are numeric, 
-                // or just some reasonable prefix logic.
-                const reg = s.RegisterNumber || '';
-                const match = reg.match(/^([A-Z0-9]+?)\d{3}$/i) || reg.match(/^([A-Z0-9]+)/i);
+                // Extract batch prefix (e.g., SJC24CS001 -> sjc24cs, LSJC23CS218 -> lsjc23cs)
+                const cleanReg = (s.RegisterNumber || '').replace(/[^A-Z0-9]/gi, '');
+                const match = cleanReg.match(/^([A-Z0-9]+?)\d{3}$/i) || cleanReg.match(/^([A-Z0-9]+)/i);
                 const batch = match ? match[1].toLowerCase() : 'Unknown';
                 batchCounts[batch] = (batchCounts[batch] || 0) + 1;
             });

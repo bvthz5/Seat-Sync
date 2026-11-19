@@ -304,8 +304,8 @@ export const importStudents = async (req: Request, res: Response) => {
 
         for (let rowIdx = 0; rowIdx < rawRows.length; rowIdx++) {
             const row = rawRows[rowIdx];
-            if (!row || row.length === 0) {
-                isCollecting = false; // Stop on empty row
+            if (!row || row.length === 0 || !row.some((c: any) => c !== undefined && c !== null && String(c).trim() !== '')) {
+                // Preserve currentHeaders/isCollecting across blank separator rows so rows after a gap (e.g. lateral entry students) are NEVER dropped
                 continue;
             }
 
@@ -316,10 +316,14 @@ export const importStudents = async (req: Request, res: Response) => {
                 continue;
             }
 
-            // Detect headers (checking if it contains typical header keywords)
+            // Detect headers (only when row has NO digit-bearing register-number values, preventing real student rows from being swallowed)
+            const hasDigitIdCell = row.some((c: any) => {
+                const s = String(c || '').trim().replace(/\s+/g, '');
+                return s.length >= 4 && /\d/.test(s) && !/^\d{1,3}$/.test(s) && !s.includes('@');
+            });
             const rowStr = row.map(c => String(c || '').toLowerCase()).join('|');
             const rowStrClean = row.map(c => String(c || '').toLowerCase().replace(/[^a-z0-9]/g, '')).join('|');
-            if ((rowStr.includes('name') || rowStrClean.includes('name')) && (rowStr.includes('batch') || rowStr.includes('reg') || rowStr.includes('sl') || rowStr.includes('register') || rowStr.includes('roll') || rowStrClean.includes('regno') || rowStrClean.includes('slno') || rowStrClean.includes('sno') || rowStrClean.includes('admno') || rowStrClean.includes('usn') || rowStrClean.includes('urn'))) {
+            if (!hasDigitIdCell && (rowStr.includes('name') || rowStrClean.includes('name')) && (rowStr.includes('batch') || rowStr.includes('reg') || rowStr.includes('sl') || rowStr.includes('register') || rowStr.includes('roll') || rowStrClean.includes('regno') || rowStrClean.includes('slno') || rowStrClean.includes('sno') || rowStrClean.includes('admno') || rowStrClean.includes('usn') || rowStrClean.includes('urn'))) {
                 currentHeaders = row.map(h => String(h || '').trim());
                 isCollecting = true;
                 continue;
