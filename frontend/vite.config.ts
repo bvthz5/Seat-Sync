@@ -73,7 +73,7 @@ export default defineConfig(({ mode }) => {
       : true;
 
   return {
-  base: './',
+  base: '/',
   plugins: [
     singleNetworkUrlPlugin(),
     react(),
@@ -140,12 +140,6 @@ export default defineConfig(({ mode }) => {
           });
         }
       },
-      '/socket.io': {
-        target: targetUrl,
-        ws: true,
-        changeOrigin: true,
-        secure: false,
-      },
     },
   },
   build: {
@@ -174,10 +168,6 @@ export default defineConfig(({ mode }) => {
           // ── Recharts ────────────────────────────────────────────
           if (id.includes('node_modules/recharts') || id.includes('node_modules/d3-') || id.includes('node_modules/victory-')) {
             return 'charts-vendor';
-          }
-          // ── Socket.io ───────────────────────────────────────────
-          if (id.includes('node_modules/socket.io-client') || id.includes('node_modules/engine.io-client')) {
-            return 'socket-vendor';
           }
           // ── PDF / Canvas (lazily used) ───────────────────────────
           if (id.includes('node_modules/jspdf') || id.includes('node_modules/html2canvas')) {

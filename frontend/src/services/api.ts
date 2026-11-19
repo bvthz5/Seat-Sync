@@ -155,8 +155,9 @@ api.interceptors.response.use(
 
             try {
                 const storedRefreshToken = AccessTokenStore.refreshToken;
+                const refreshBaseUrl = (api.defaults.baseURL || '/api').replace(/\/+$/, '');
                 const res = await axios.post(
-                    `${api.defaults.baseURL}/auth/refresh`,
+                    `${refreshBaseUrl}/auth/refresh`,
                     { refreshToken: storedRefreshToken },
                     { 
                         withCredentials: true,

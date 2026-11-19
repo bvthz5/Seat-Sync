@@ -2,13 +2,12 @@
 import { Notification } from "../models/Notification.js";
 import { NotificationRecipient } from "../models/NotificationRecipient.js";
 import { User } from "../models/User.js";
-import { getIO } from "../config/socket.js";
 import { Op } from "sequelize";
 import { sequelize } from "../config/database.js";
 
 class NotificationService {
     /**
-     * Create a notification and broadcast it via Socket.IO
+     * Create a notification and store recipient records
      */
     async createNotification(data: any, senderId: number) {
         const {
@@ -65,45 +64,6 @@ class NotificationService {
                 IsRead: false
             }));
             await NotificationRecipient.bulkCreate(recipientData);
-        }
-
-        // 4. Broadcast via Socket.IO
-        try {
-            const io = getIO();
-            const payload = {
-                id: notification.NotificationID,
-                title: notification.Title,
-                message: notification.Message,
-                type: notification.Type,
-                priority: notification.Priority,
-                category: notification.Category,
-                createdAt: notification.SentAt,
-                metadata: notification.Metadata
-            };
-
-            if (TargetType === "ALL") {
-                io.emit("notification", payload);
-            } else if (TargetType === "ROLE") {
-                // Assuming users join rooms named after their role e.g. "role_student"
-                // io.to(`role_${TargetId}`).emit("notification", payload);
-                // For now, simpler to loop if rooms aren't set up, or just emit to all if volume is low.
-                // Better: Emit to individual user rooms.
-                recipientIds.forEach(uid => {
-                    io.to(`user_${uid}`).emit("notification", payload);
-                });
-            } else {
-                recipientIds.forEach(uid => {
-                    io.to(`user_${uid}`).emit("notification", payload);
-                });
-            }
-
-            // Emergency Override
-            if (Type === "EMERGENCY" || Priority === "CRITICAL") {
-                io.emit("emergency_alert", payload);
-            }
-
-        } catch (err) {
-            console.error("Socket broadcast failed:", err);
         }
 
         return notification;

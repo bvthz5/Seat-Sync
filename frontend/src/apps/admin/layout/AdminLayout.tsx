@@ -41,8 +41,6 @@ const AdminLayout: React.FC = () => {
     React.useEffect(() => {
         if (user && AccessTokenStore.token) {
             fetchCounts();
-            const interval = setInterval(fetchCounts, 60000); // Check every minute
-            return () => clearInterval(interval);
         }
     }, [user, notificationOpen]);
 

@@ -48,12 +48,10 @@ const startServer = async () => {
 
     const { default: app } = await import("./app.js");
 
-    // Create HTTP server explicitly to attach Socket.IO
+    // Create HTTP server
     const { createServer } = await import("http");
-    const { initSocket } = await import("./config/socket.js");
 
     const httpServer = createServer(app);
-    initSocket(httpServer);
 
     let retryCount = 0;
     const MAX_RETRIES = 3;

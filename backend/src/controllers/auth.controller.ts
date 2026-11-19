@@ -70,7 +70,7 @@ export class AuthController {
      */
     static async refresh(req: Request, res: Response): Promise<void> {
         try {
-            const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken || (req.headers['x-refresh-token'] as string);
+            const refreshToken = (req.headers['x-refresh-token'] as string) || req.body?.refreshToken || req.cookies?.refreshToken;
 
             if (!refreshToken) {
                 res.status(401).json({
