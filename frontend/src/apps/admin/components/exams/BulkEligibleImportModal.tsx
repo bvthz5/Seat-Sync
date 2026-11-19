@@ -8,17 +8,35 @@ interface BulkEligibleImportModalProps {
     isOpen: boolean;
     onClose: () => void;
     date?: string;
+    seriesId?: string | number;
     onSuccess: () => void;
 }
 
-const BulkEligibleImportModal: React.FC<BulkEligibleImportModalProps> = ({ isOpen, onClose, date, onSuccess }) => {
-    const [selectedDate, setSelectedDate] = useState<string>(date || '');
+const formatLocalDateLabel = (isoDate?: string): string => {
+    if (!isoDate) return '';
+    const datePart = String(isoDate).split('T')[0];
+    const [y, m, d] = datePart.split('-').map(Number);
+    if (y && m && d) {
+        return new Date(y, m - 1, d).toLocaleDateString();
+    }
+    const parsed = new Date(isoDate);
+    return isNaN(parsed.getTime()) ? isoDate : parsed.toLocaleDateString();
+};
+
+const BulkEligibleImportModal: React.FC<BulkEligibleImportModalProps> = ({ isOpen, onClose, date, seriesId, onSuccess }) => {
+    const [selectedDate, setSelectedDate] = useState<string>(date ? String(date).split('T')[0] : '');
     const [files, setFiles] = useState<File[]>([]);
     const [isUploading, setIsUploading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [result, setResult] = useState<any>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    useEffect(() => {
+        if (date) {
+            setSelectedDate(String(date).split('T')[0]);
+        }
+    }, [date, isOpen]);
 
     // Cleanup interval on unmount
     useEffect(() => {
@@ -29,14 +47,15 @@ const BulkEligibleImportModal: React.FC<BulkEligibleImportModalProps> = ({ isOpe
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
-            const newFiles = Array.from(e.target.files).filter(
-                file => file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.csv')
-            );
-            
+            const newFiles = Array.from(e.target.files).filter((file) => {
+                const lower = file.name.toLowerCase();
+                return lower.endsWith('.xlsx') || lower.endsWith('.xls') || lower.endsWith('.csv') || lower.endsWith('.tsv');
+            });
+
             if (newFiles.length !== e.target.files.length) {
-                toast.error('Only Excel/CSV files are allowed');
+                toast.error('Only Excel/CSV files (.xlsx, .xls, .csv) are allowed');
             }
-            
+
             setFiles(prev => [...prev, ...newFiles]);
         }
         if (fileInputRef.current) {
@@ -60,40 +79,48 @@ const BulkEligibleImportModal: React.FC<BulkEligibleImportModalProps> = ({ isOpe
 
         setIsUploading(true);
         setProgress(0);
-        
+
         // Simulate processing progress
         progressIntervalRef.current = setInterval(() => {
             setProgress(prev => {
                 if (prev >= 95) return prev;
-                // Start fast, then slow down
                 const increment = prev < 40 ? 15 : prev < 70 ? 8 : prev < 90 ? 3 : 1;
                 return prev + increment;
             });
         }, 400);
 
         try {
-            const response = await ExamService.bulkImportEligibility(selectedDate, files);
-            
+            const response = await ExamService.bulkImportEligibility(selectedDate, files, seriesId);
+
             if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
             setProgress(100);
-            
+
             // Wait a tiny bit for the 100% animation to show before displaying results
             setTimeout(() => {
-                onSuccess();
+                const successList = Array.isArray(response?.success) ? response.success : [];
+                const errorList = Array.isArray(response?.errors) ? response.errors : [];
+                const skippedList = Array.isArray(response?.skipped) ? response.skipped : [];
 
-                const hasErrors = response.errors && response.errors.length > 0;
-                const hasSkipped = response.skipped && response.skipped.length > 0;
+                if (successList.length > 0) {
+                    onSuccess();
+                }
 
-                if (hasErrors || hasSkipped) {
+                const hasErrors = errorList.length > 0;
+                const hasSkipped = skippedList.length > 0;
+                const hasRowWarnings = successList.some((item: any) => Number(item?.errorCount || 0) > 0);
+
+                if (hasErrors || hasSkipped || hasRowWarnings || successList.length === 0) {
                     setResult(response);
-                    if (response.success && response.success.length > 0) {
-                        toast.success(`Successfully imported ${response.success.length} files`);
+                    if (successList.length > 0) {
+                        toast.success(`Imported ${successList.length} exam batch(es)`);
                     }
-                    toast.error('Some files could not be imported. Please check the summary.');
+                    if (hasErrors || hasSkipped || successList.length === 0) {
+                        toast.error('Some files could not be imported. Please check the summary.');
+                    }
                     setIsUploading(false);
                 } else {
-                    toast.success(`Successfully imported ${response.success.length} files`);
-                    
+                    toast.success(`Successfully imported ${successList.length} exam batch(es)`);
+
                     // If 100% successful, hold the green completion screen for 1 second, then auto-close
                     setTimeout(() => {
                         setIsUploading(false);
@@ -128,7 +155,7 @@ const BulkEligibleImportModal: React.FC<BulkEligibleImportModalProps> = ({ isOpe
     return (
         <Modal isOpen={isOpen} onClose={resetAndClose} isDismissable={!isUploading} hideCloseButton={isUploading} size="4xl" scrollBehavior="inside" className="bg-white rounded-[32px] overflow-hidden">
             <ModalContent>
-                {(onClose) => (
+                {() => (
                     <>
                         <ModalHeader className="flex flex-col gap-1 border-b border-slate-100 bg-slate-50/50 p-6 sm:px-8">
                             <div className="flex items-center gap-4">
@@ -138,12 +165,12 @@ const BulkEligibleImportModal: React.FC<BulkEligibleImportModalProps> = ({ isOpe
                                 <div>
                                     <h2 className="text-2xl font-black text-slate-800 tracking-tight">Bulk Import Eligibility</h2>
                                     <p className="text-slate-500 text-sm mt-1 font-medium">
-                                        Upload multiple Excel files to auto-map and import students to exams{date ? ` on ${new Date(date).toLocaleDateString()}` : ''}.
+                                        Upload multiple Excel/CSV files to auto-map and import students to exams{date ? ` on ${formatLocalDateLabel(date)}` : ''}.
                                     </p>
                                 </div>
                             </div>
                         </ModalHeader>
-                        
+
                         <ModalBody className="p-6 sm:px-8 bg-slate-50/30 relative">
                             {isUploading && (
                                 <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-8 rounded-b-[32px]">
@@ -160,19 +187,19 @@ const BulkEligibleImportModal: React.FC<BulkEligibleImportModalProps> = ({ isOpe
                                             {progress === 100 ? 'Import Complete!' : 'Processing Files...'}
                                         </h3>
                                         <p className="text-slate-500 font-medium text-sm mb-8">
-                                            {progress === 100 
-                                                ? 'Generating summary report' 
+                                            {progress === 100
+                                                ? 'Generating summary report'
                                                 : `Mapping ${files.length} file${files.length > 1 ? 's' : ''} to exam database`}
                                         </p>
-                                        
+
                                         <div className="w-full space-y-2">
                                             <div className="flex justify-between text-xs font-bold text-slate-600">
                                                 <span>Progress</span>
                                                 <span className="text-indigo-600">{Math.round(progress)}%</span>
                                             </div>
-                                            <Progress 
-                                                aria-label="Import Progress" 
-                                                value={progress} 
+                                            <Progress
+                                                aria-label="Import Progress"
+                                                value={progress}
                                                 className="w-full h-3"
                                                 color={progress === 100 ? "success" : "primary"}
                                                 radius="full"
@@ -190,8 +217,8 @@ const BulkEligibleImportModal: React.FC<BulkEligibleImportModalProps> = ({ isOpe
                                     {!date && (
                                         <div className="bg-white rounded-[24px] border border-slate-200/60 p-6 shadow-sm">
                                             <h3 className="text-sm font-bold text-slate-800 uppercase tracking-widest mb-4">1. Select Date</h3>
-                                            <input 
-                                                type="date" 
+                                            <input
+                                                type="date"
                                                 value={selectedDate}
                                                 onChange={(e) => setSelectedDate(e.target.value)}
                                                 className="w-full sm:w-64 h-12 px-4 rounded-xl border border-slate-200 text-slate-800 font-semibold focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-sm transition-colors bg-white hover:border-slate-300"
@@ -204,25 +231,25 @@ const BulkEligibleImportModal: React.FC<BulkEligibleImportModalProps> = ({ isOpe
                                             <span>{!date ? '2' : '1'}. Upload Files</span>
                                             <span className="text-xs font-semibold text-slate-400 bg-slate-100 px-2 py-1 rounded-lg">{files.length} selected</span>
                                         </h3>
-                                        
-                                        <div 
+
+                                        <div
                                             className="border-2 border-dashed border-indigo-200 rounded-2xl p-8 text-center cursor-pointer hover:bg-indigo-50/50 hover:border-indigo-400 transition-all group relative overflow-hidden"
                                             onClick={() => fileInputRef.current?.click()}
                                         >
                                             <div className="absolute inset-0 bg-gradient-to-b from-white/50 to-transparent pointer-events-none"></div>
-                                            <input 
-                                                type="file" 
-                                                ref={fileInputRef} 
-                                                onChange={handleFileSelect} 
-                                                className="hidden" 
-                                                accept=".xlsx,.xls,.csv" 
+                                            <input
+                                                type="file"
+                                                ref={fileInputRef}
+                                                onChange={handleFileSelect}
+                                                className="hidden"
+                                                accept=".xlsx,.xls,.csv,.tsv"
                                                 multiple
                                             />
                                             <div className="w-16 h-16 bg-white shadow-sm border border-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
                                                 <FileSpreadsheet size={28} className="text-indigo-500 stroke-[2.5]" />
                                             </div>
                                             <p className="font-bold text-slate-700 text-lg mb-1">Click to browse or drag files here</p>
-                                            <p className="text-slate-400 font-medium text-sm">Support for multiple .xlsx, .xls, .csv files</p>
+                                            <p className="text-slate-400 font-medium text-sm">Support for multiple .xlsx, .xls, .csv files (any column order)</p>
                                         </div>
 
                                         {files.length > 0 && (
@@ -235,11 +262,11 @@ const BulkEligibleImportModal: React.FC<BulkEligibleImportModalProps> = ({ isOpe
                                                             </div>
                                                             <span className="font-semibold text-slate-700 truncate text-sm">{file.name}</span>
                                                         </div>
-                                                        <Button 
-                                                            isIconOnly 
-                                                            size="sm" 
-                                                            variant="light" 
-                                                            color="danger" 
+                                                        <Button
+                                                            isIconOnly
+                                                            size="sm"
+                                                            variant="light"
+                                                            color="danger"
                                                             className="opacity-0 group-hover:opacity-100 transition-opacity"
                                                             onPress={() => removeFile(idx)}
                                                         >
@@ -250,15 +277,15 @@ const BulkEligibleImportModal: React.FC<BulkEligibleImportModalProps> = ({ isOpe
                                             </div>
                                         )}
                                     </div>
-                                    
+
                                     <div className="bg-blue-50/80 border border-blue-100 rounded-[20px] p-5">
                                         <div className="flex gap-3">
                                             <Info size={20} className="text-blue-500 shrink-0 mt-0.5" />
                                             <div>
                                                 <h4 className="font-bold text-blue-900 text-sm mb-1">How auto-mapping works</h4>
                                                 <p className="text-blue-700/80 text-xs font-medium leading-relaxed">
-                                                    The system parses the subject name from the file name (e.g., <strong>EligibleList-COMPUTER NETWORKS.xlsx</strong> maps to <strong>Computer Networks</strong>). 
-                                                    It strictly checks if the departments of the students inside match the exam's designated departments. Any mismatch or ambiguity will safely reject the file to prevent mixing data.
+                                                    Files are matched to exams on the selected date by <strong>Subject Code</strong> or <strong>Subject Name</strong> (e.g. <strong>CST301.xlsx</strong> or <strong>EligibleList-COMPUTER NETWORKS.xlsx</strong>).
+                                                    For multi-department exams, students are automatically routed to their department exam using the filename or student register numbers/department column. Any column order and header style for Name &amp; Register Number is supported.
                                                 </p>
                                             </div>
                                         </div>
@@ -270,7 +297,7 @@ const BulkEligibleImportModal: React.FC<BulkEligibleImportModalProps> = ({ isOpe
                                         <h3 className="text-lg font-black text-slate-800 mb-6 flex items-center gap-2">
                                             Result Summary
                                         </h3>
-                                        
+
                                         <div className="space-y-8">
                                             {result.success && result.success.length > 0 && (
                                                 <div>
@@ -282,17 +309,22 @@ const BulkEligibleImportModal: React.FC<BulkEligibleImportModalProps> = ({ isOpe
                                                             <div key={i} className="flex items-center justify-between p-4 rounded-2xl bg-green-50/50 border border-green-100">
                                                                 <div className="flex-1 min-w-0 pr-4">
                                                                     <p className="font-bold text-slate-800 truncate text-sm mb-1">{item.file}</p>
-                                                                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                                                                    <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
                                                                         <span>Mapped to:</span>
                                                                         <span className="text-slate-700 bg-white px-2 py-0.5 rounded-md border border-slate-200">{item.exam}</span>
                                                                         <span className={`px-2 py-0.5 rounded-md border text-[11px] font-bold ${item.session === 'FN' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-indigo-50 text-indigo-600 border-indigo-100'}`}>
                                                                             {item.session === 'FN' ? 'Forenoon (FN)' : item.session === 'AN' ? 'Afternoon (AN)' : item.session}
                                                                         </span>
+                                                                        {Number(item.errorCount || 0) > 0 && (
+                                                                            <span className="px-2 py-0.5 rounded-md border bg-amber-50 text-amber-700 border-amber-200 text-[11px] font-bold">
+                                                                                {item.errorCount} row(s) skipped
+                                                                            </span>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                                 <div className="shrink-0 flex items-center gap-2">
                                                                     <span className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-xs font-extrabold uppercase tracking-wide">
-                                                                        {item.imported} Rows
+                                                                        {item.imported} Students
                                                                     </span>
                                                                 </div>
                                                             </div>
@@ -309,10 +341,17 @@ const BulkEligibleImportModal: React.FC<BulkEligibleImportModalProps> = ({ isOpe
                                                     <div className="space-y-3">
                                                         {result.errors.map((item: any, i: number) => (
                                                             <div key={i} className="flex flex-col p-4 rounded-2xl bg-red-50 border border-red-100">
-                                                                <p className="font-bold text-slate-800 truncate text-sm mb-1.5">{item.file}</p>
+                                                                <p className="font-bold text-slate-800 truncate text-sm mb-1.5">
+                                                                    {item.file}{item.exam ? ` → ${item.exam}` : ''}
+                                                                </p>
                                                                 <p className="text-xs font-bold text-red-600 bg-red-100/50 px-2.5 py-1 rounded-md self-start">
                                                                     {item.reason}
                                                                 </p>
+                                                                {Array.isArray(item.detectedHeaders) && item.detectedHeaders.length > 0 && (
+                                                                    <p className="text-[11px] text-slate-500 font-medium mt-1.5">
+                                                                        Detected headers: <span className="font-mono">{item.detectedHeaders.join(', ')}</span>
+                                                                    </p>
+                                                                )}
                                                             </div>
                                                         ))}
                                                     </div>
@@ -341,16 +380,16 @@ const BulkEligibleImportModal: React.FC<BulkEligibleImportModalProps> = ({ isOpe
                                 </div>
                             )}
                         </ModalBody>
-                        
+
                         <ModalFooter className="border-t border-slate-100 bg-white p-6 sm:px-8">
                             {!result ? (
                                 <>
                                     <Button variant="light" onPress={resetAndClose} className="font-bold text-slate-500 px-6 rounded-xl">
                                         Cancel
                                     </Button>
-                                    <Button 
-                                        color="primary" 
-                                        onPress={handleImport} 
+                                    <Button
+                                        color="primary"
+                                        onPress={handleImport}
                                         isLoading={isUploading}
                                         className="font-bold bg-indigo-600 shadow-md px-8 rounded-xl hover:-translate-y-0.5 transition-all"
                                         isDisabled={files.length === 0 || !selectedDate}
@@ -359,12 +398,12 @@ const BulkEligibleImportModal: React.FC<BulkEligibleImportModalProps> = ({ isOpe
                                     </Button>
                                 </>
                             ) : (
-                                <Button 
-                                    color="primary" 
+                                <Button
+                                    color="primary"
                                     onPress={resetAndClose}
                                     className="font-bold bg-slate-900 shadow-md px-8 rounded-xl hover:-translate-y-0.5 transition-all"
                                 >
-                                    Close & Return
+                                    Close &amp; Return
                                 </Button>
                             )}
                         </ModalFooter>

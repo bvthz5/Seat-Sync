@@ -83,9 +83,12 @@ export const ExamService = {
         return response.data;
     },
 
-    bulkImportEligibility: async (date: string, files: File[]) => {
+    bulkImportEligibility: async (date: string, files: File[], seriesId?: number | string) => {
         const formData = new FormData();
         formData.append('date', date);
+        if (seriesId !== undefined && seriesId !== null && String(seriesId).trim() !== '') {
+            formData.append('seriesId', String(seriesId));
+        }
         files.forEach(file => {
             formData.append('files', file);
         });

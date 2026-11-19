@@ -1,16 +1,38 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Card, Button, Select, SelectItem, Input, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/react";
+import { Button, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/react";
 import { ArrowLeft, Filter, CalendarCheck, CalendarDays, ArrowRight, Search, X, Trash2, AlertTriangle, Upload } from "lucide-react";
 import { toast } from 'react-hot-toast';
 import { ExamService } from '../services/examService';
 import { SeriesService } from '../services/seriesService';
 import BulkEligibleImportModal from '../components/exams/BulkEligibleImportModal';
 
+const parseLocalDate = (ymd: string): Date => {
+    const datePart = String(ymd || '').split('T')[0];
+    const [y, m, d] = datePart.split('-').map(Number);
+    if (y && m && d) {
+        return new Date(y, m - 1, d);
+    }
+    return new Date(ymd);
+};
+
+const extractIsoDateKey = (raw: unknown): string => {
+    const text = String(raw || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(text)) {
+        return text.slice(0, 10);
+    }
+    const parsed = new Date(text);
+    if (isNaN(parsed.getTime())) return text;
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, '0');
+    const d = String(parsed.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+};
+
 const ExamDates: React.FC = () => {
     const navigate = useNavigate();
     const { seriesId } = useParams<{ seriesId: string }>();
-    const [dates, setDates] = useState<{ date: string; count: number; hasRegistrations: boolean; subjects: { name: string; code: string }[] }[]>([]);
+    const [dates, setDates] = useState<{ date: string; count: number; hasRegistrations: boolean; totalRegistrations: number; subjects: { name: string; code: string }[] }[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedMonth, setSelectedMonth] = useState<string>('All');
     const [exactDate, setExactDate] = useState<string>('');
@@ -44,16 +66,21 @@ const ExamDates: React.FC = () => {
         setLoading(true);
         try {
             const response = await ExamService.getAll({ seriesId });
-            const exams = response || [];
-            const groups: Record<string, { sessions: Set<string>; subjects: Map<string, string>; hasReg: boolean }> = {};
+            const exams = Array.isArray(response) ? response : [];
+            const groups: Record<string, { sessions: Set<string>; subjects: Map<string, string>; hasReg: boolean; totalReg: number }> = {};
             exams.forEach((ex: any) => {
-                const d = new Date(ex.ExamDate).toISOString().split('T')[0];
-                if (!groups[d]) groups[d] = { sessions: new Set(), subjects: new Map(), hasReg: false };
+                const d = extractIsoDateKey(ex.ExamDate);
+                if (!d) return;
+                if (!groups[d]) groups[d] = { sessions: new Set(), subjects: new Map(), hasReg: false, totalReg: 0 };
                 groups[d].sessions.add(`${String(ex.ExamName || '').trim()}::${String(ex.Session || '').trim().toUpperCase()}`);
-                const code = String(ex.SubjectCode || ex.ExamCode || '').trim();
-                const name = String(ex.ExamName || ex.SubjectName || '').trim();
+                const code = String(ex.Subject?.SubjectCode || ex.SubjectCode || ex.ExamCode || '').trim();
+                const name = String(ex.Subject?.SubjectName || ex.ExamName || ex.SubjectName || '').trim();
                 if (name) groups[d].subjects.set(code || name, name);
-                if (ex.registrationCount > 0) groups[d].hasReg = true;
+                const regCount = Number(ex.registrationCount || 0);
+                if (regCount > 0) {
+                    groups[d].hasReg = true;
+                    groups[d].totalReg += regCount;
+                }
             });
             const entries = Object.keys(groups)
                 .sort()
@@ -61,6 +88,7 @@ const ExamDates: React.FC = () => {
                     date: k,
                     count: groups[k].sessions.size,
                     hasRegistrations: groups[k].hasReg,
+                    totalRegistrations: groups[k].totalReg,
                     subjects: Array.from(groups[k].subjects.entries()).map(([code, name]) => ({ code, name }))
                 }));
             setDates(entries);
@@ -77,7 +105,7 @@ const ExamDates: React.FC = () => {
         try {
             await ExamService.clearEligibility(Number(seriesId));
             toast.success('Successfully cleared all eligibility data');
-            fetchDates(); // Refresh to update any necessary state
+            fetchDates();
             setIsClearConfirmOpen(false);
         } catch (error: any) {
             console.error('Failed to clear eligibility', error);
@@ -88,20 +116,24 @@ const ExamDates: React.FC = () => {
     };
 
     const availableMonths = useMemo(() => {
-        const months = new Set<string>();
+        const monthMap = new Map<string, number>();
         dates.forEach(d => {
-            const dateObj = new Date(d.date);
-            const m = dateObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-            months.add(m);
+            const dateObj = parseLocalDate(d.date);
+            if (isNaN(dateObj.getTime())) return;
+            const label = dateObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            const sortKey = dateObj.getFullYear() * 100 + dateObj.getMonth();
+            if (!monthMap.has(label)) monthMap.set(label, sortKey);
         });
-        return Array.from(months).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+        return Array.from(monthMap.entries())
+            .sort((a, b) => a[1] - b[1])
+            .map(([label]) => label);
     }, [dates]);
 
     const filteredDates = useMemo(() => {
         let result = dates;
         if (selectedMonth !== 'All') {
             result = result.filter(d => {
-                const m = new Date(d.date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                const m = parseLocalDate(d.date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
                 return m === selectedMonth;
             });
         }
@@ -120,23 +152,22 @@ const ExamDates: React.FC = () => {
     }, [dates, selectedMonth, exactDate, subjectSearch]);
 
     const getLoadInfo = (count: number) => {
-        // Updated colors for a softer, more ultra-premium enterprise appearance
-        if (count <= 3) return { 
-            bg: 'bg-emerald-50 text-emerald-600', 
-            text: 'text-emerald-500', 
-            border: 'border-emerald-100', 
+        if (count <= 3) return {
+            bg: 'bg-emerald-50 text-emerald-600',
+            text: 'text-emerald-500',
+            border: 'border-emerald-100',
             hoverBorder: 'group-hover:border-emerald-300'
         };
-        if (count <= 8) return { 
-            bg: 'bg-amber-50 text-amber-600', 
-            text: 'text-amber-500', 
-            border: 'border-amber-100', 
+        if (count <= 8) return {
+            bg: 'bg-amber-50 text-amber-600',
+            text: 'text-amber-500',
+            border: 'border-amber-100',
             hoverBorder: 'group-hover:border-amber-300'
         };
-        return { 
-            bg: 'bg-rose-50 text-rose-600', 
-            text: 'text-rose-500', 
-            border: 'border-rose-100', 
+        return {
+            bg: 'bg-rose-50 text-rose-600',
+            text: 'text-rose-500',
+            border: 'border-rose-100',
             hoverBorder: 'group-hover:border-rose-300'
         };
     };
@@ -280,8 +311,8 @@ const ExamDates: React.FC = () => {
                         </div>
                         <h2 className="text-slate-900 font-extrabold text-lg mb-1 tracking-tight">No matching dates found</h2>
                         <p className="text-slate-500 font-medium text-xs mb-4">Try adjusting your search criteria or month filter.</p>
-                        <Button 
-                            color="primary" variant="flat" size="sm" className="font-bold rounded-xl" 
+                        <Button
+                            color="primary" variant="flat" size="sm" className="font-bold rounded-xl"
                             onPress={() => { setSelectedMonth('All'); setExactDate(''); setSubjectSearch(''); }}
                         >
                             Reset Filters
@@ -291,20 +322,20 @@ const ExamDates: React.FC = () => {
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
                         {filteredDates.map(d => {
                             const load = getLoadInfo(d.count);
-                            const dateObj = new Date(d.date);
-                            
+                            const dateObj = parseLocalDate(d.date);
+
                             return (
                                 <div
                                     key={d.date}
                                     onClick={() => navigate(`/admin/exams/series/${seriesId}/dates/${d.date}`)}
-                                    className={`cursor-pointer bg-white border border-slate-200/90 hover:border-indigo-400 shadow-xs hover:shadow-md hover:-translate-y-1 transition-all duration-200 rounded-3xl p-6 group flex flex-col justify-between relative overflow-hidden`}
+                                    className="cursor-pointer bg-white border border-slate-200/90 hover:border-indigo-400 shadow-xs hover:shadow-md hover:-translate-y-1 transition-all duration-200 rounded-3xl p-6 group flex flex-col justify-between relative overflow-hidden"
                                 >
                                     {/* Top Info */}
                                     <div className="flex justify-between items-center mb-4">
                                         <div>
                                             {d.hasRegistrations ? (
                                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/80 text-[10px] font-black tracking-wider uppercase">
-                                                    <CalendarCheck size={12} className="stroke-[2.5]" /> Registered
+                                                    <CalendarCheck size={12} className="stroke-[2.5]" /> Registered ({d.totalRegistrations})
                                                 </span>
                                             ) : (
                                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-[10px] font-extrabold tracking-wider uppercase">
@@ -353,9 +384,9 @@ const ExamDates: React.FC = () => {
                 )}
             </div>
 
-            <Modal 
-                isOpen={isClearConfirmOpen} 
-                onClose={() => setIsClearConfirmOpen(false)} 
+            <Modal
+                isOpen={isClearConfirmOpen}
+                onClose={() => setIsClearConfirmOpen(false)}
                 size="md"
                 backdrop="blur"
                 classNames={{
@@ -384,10 +415,10 @@ const ExamDates: React.FC = () => {
                         <Button variant="light" onPress={() => setIsClearConfirmOpen(false)} className="font-bold text-slate-500">
                             Cancel
                         </Button>
-                        <Button 
-                            color="danger" 
-                            onPress={handleClearEligibility} 
-                            isLoading={isClearing} 
+                        <Button
+                            color="danger"
+                            onPress={handleClearEligibility}
+                            isLoading={isClearing}
                             className="font-bold shadow-md shadow-red-200"
                         >
                             Yes, Clear All
@@ -399,6 +430,7 @@ const ExamDates: React.FC = () => {
             <BulkEligibleImportModal
                 isOpen={isBulkImportOpen}
                 onClose={() => setIsBulkImportOpen(false)}
+                seriesId={seriesId}
                 onSuccess={fetchDates}
             />
         </div>

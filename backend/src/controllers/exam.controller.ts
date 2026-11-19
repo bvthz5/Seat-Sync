@@ -22,6 +22,7 @@ import mammoth from 'mammoth';
 import { sequelize } from '../config/database.js';
 import { generateDefaultPassword, generateStudentEmail, extractBatchYearFromRegisterNumber, extractProgramCodeFromRegisterNumber } from '../utils/student.utils.js';
 import { normalizeProgramme, getProgrammeLabel } from '../services/academicNormalizer.service.js';
+import { parseEligibleStudentsWorkbook, ParsedEligibleStudentRow, normalizeEligibleHeader, compactEligibleHeader } from '../utils/eligibleStudentParser.js';
 
 const require = createRequire(import.meta.url);
 
@@ -426,12 +427,6 @@ const extractRowsFromPdf = async (buffer: Buffer) => {
     }
 };
 
-const normalizeEligibleHeader = (value: unknown) =>
-    String(value ?? '')
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, ' ');
-
 const getEligibleCellValue = (row: any, keys: string[]) => {
     const rowKeys = Object.keys(row || {});
     for (const key of keys) {
@@ -440,7 +435,11 @@ const getEligibleCellValue = (row: any, keys: string[]) => {
         }
 
         const normalizedKey = normalizeEligibleHeader(key);
-        const matchKey = rowKeys.find((existingKey) => normalizeEligibleHeader(existingKey) === normalizedKey);
+        const compactKey = compactEligibleHeader(key);
+        const matchKey = rowKeys.find((existingKey) => {
+            const normExisting = normalizeEligibleHeader(existingKey);
+            return normExisting === normalizedKey || (compactKey !== '' && normExisting.replace(/\s+/g, '') === compactKey);
+        });
         if (matchKey && row[matchKey] !== undefined && row[matchKey] !== null && String(row[matchKey]).trim() !== '') {
             return row[matchKey];
         }
@@ -448,23 +447,19 @@ const getEligibleCellValue = (row: any, keys: string[]) => {
     return undefined;
 };
 
-const parseEligibleWorkbook = (buffer: Buffer, filename: string) => {
-    const lowerName = String(filename || '').toLowerCase();
-    const workbook = lowerName.endsWith('.csv')
-        ? XLSX.read(buffer.toString('utf8'), { type: 'string' })
-        : XLSX.read(buffer, { type: 'buffer' });
-
-    const sheetName = workbook.SheetNames[0];
-    if (!sheetName) {
-        throw new Error('Invalid file: No sheets found');
+const parseDbBoolean = (val: unknown, defaultValue = true): boolean => {
+    if (val === null || val === undefined) return defaultValue;
+    if (typeof val === 'boolean') return val;
+    if (typeof val === 'number') return val !== 0;
+    if (typeof val === 'string') {
+        const lower = val.trim().toLowerCase();
+        if (!lower) return defaultValue;
+        return !['0', 'false', 'no', 'n'].includes(lower);
     }
-
-    const sheet = workbook.Sheets[sheetName];
-    if (!sheet) {
-        throw new Error('Invalid file: Sheet not found');
+    if (Buffer.isBuffer(val)) {
+        return val.length > 0 && val[0] !== 0;
     }
-
-    return XLSX.utils.sheet_to_json(sheet, { defval: '' }) as Record<string, any>[];
+    return Boolean(val);
 };
 
 const sanitizeEmailToken = (value: string) =>
@@ -473,19 +468,65 @@ const sanitizeEmailToken = (value: string) =>
         .replace(/[^a-z0-9]/g, '')
         .trim();
 
-const buildEligibleStudentEmail = (fullName: string, registerNumber: string) => {
-    const joiningYear = extractBatchYearFromRegisterNumber(registerNumber) || new Date().getFullYear();
-    const programCode = extractProgramCodeFromRegisterNumber(registerNumber) || 'student';
-    return generateStudentEmail(fullName, joiningYear, programCode);
+const ensureSafeEmailLength = (email: string): string => {
+    const trimmed = email.trim().toLowerCase();
+    if (trimmed.length <= 150) return trimmed;
+    const atIndex = trimmed.lastIndexOf('@');
+    if (atIndex === -1) return trimmed.slice(0, 150);
+    const domain = trimmed.slice(atIndex);
+    const maxLocal = Math.max(1, 150 - domain.length);
+    return `${trimmed.slice(0, maxLocal)}${domain}`;
+};
+
+const resolveUniqueStudentEmail = async (
+    baseEmail: string,
+    registerNumber: string,
+    excludeUserId: number | null,
+    transaction: any
+): Promise<string> => {
+    const candidate = ensureSafeEmailLength(baseEmail);
+    const buildWhere = (email: string) =>
+        excludeUserId !== null
+            ? { Email: email, UserID: { [Op.ne]: excludeUserId } }
+            : { Email: email };
+
+    const existing = await User.findOne({ where: buildWhere(candidate), transaction });
+    if (!existing) return candidate;
+
+    const atIndex = candidate.lastIndexOf('@');
+    const localPart = atIndex > 0 ? candidate.slice(0, atIndex) : 'student';
+    const domain = atIndex > 0 ? candidate.slice(atIndex) : `@student.${process.env.COLLEGE_EMAIL_DOMAIN || 'sjcetpalai.ac.in'}`;
+    const regToken = sanitizeEmailToken(registerNumber) || `${Date.now()}`;
+
+    const disambiguated = ensureSafeEmailLength(`${localPart.slice(0, 60)}.${regToken}${domain}`);
+    const existingDisambiguated = await User.findOne({ where: buildWhere(disambiguated), transaction });
+    if (!existingDisambiguated) return disambiguated;
+
+    for (let attempt = 1; attempt <= 20; attempt++) {
+        const fallback = ensureSafeEmailLength(`${regToken}.${attempt}${domain}`);
+        const taken = await User.findOne({ where: buildWhere(fallback), transaction });
+        if (!taken) return fallback;
+    }
+
+    return ensureSafeEmailLength(`${regToken}.${Date.now()}${domain}`);
 };
 
 const resolveProgramForEligibleImport = async (
     departmentId: number,
     row: any,
-    transaction: any
+    transaction: any,
+    parsedRow?: ParsedEligibleStudentRow
 ) => {
-    const programValue = String(getEligibleCellValue(row, ['Program', 'Program Name', 'Programme', 'Course', 'Branch', 'Stream']) ?? '').trim();
-    const programCodeValue = String(getEligibleCellValue(row, ['Program Code', 'Programme Code']) ?? '').trim();
+    const programValue = String(
+        parsedRow?.program ??
+        getEligibleCellValue(row, ['Program', 'Program Name', 'Programme', 'Programme Name', 'Degree', 'Stream']) ??
+        ''
+    ).trim().slice(0, 100);
+    const programCodeValue = String(
+        parsedRow?.programCode ??
+        getEligibleCellValue(row, ['Program Code', 'Programme Code', 'Degree Code']) ??
+        ''
+    ).trim().slice(0, 20);
 
     if (programValue || programCodeValue) {
         const programWhere: any = { DepartmentID: departmentId };
@@ -502,12 +543,25 @@ const resolveProgramForEligibleImport = async (
         });
         if (program) return program;
 
-        return Program.create({
-            ProgramName: programValue || programCodeValue || `Program-${Date.now()}`,
-            ProgramCode: programCodeValue || `PRG-${departmentId}-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`,
+        // ProgramCode is globally UNIQUE across Programs table — check globally before inserting
+        if (programCodeValue) {
+            const globalByCode = await Program.findOne({
+                where: { ProgramCode: programCodeValue },
+                transaction
+            });
+            if (globalByCode) return globalByCode;
+        }
+
+        const createPayload: any = {
+            ProgramName: programValue || programCodeValue || `Program-${departmentId}`,
             DepartmentID: departmentId,
             IsActive: true
-        } as any, { transaction });
+        };
+        if (programCodeValue) {
+            createPayload.ProgramCode = programCodeValue;
+        }
+
+        return Program.create(createPayload, { transaction });
     }
 
     const fallbackProgram = await Program.findOne({
@@ -525,11 +579,16 @@ const resolveProgramForEligibleImport = async (
     } as any, { transaction });
 };
 
-const resolveSemesterForEligibleImport = async (programId: number, row: any, transaction: any) => {
-    const semesterRaw = getEligibleCellValue(row, ['Semester', 'Sem', 'Term', 'Semester Number']);
+const resolveSemesterForEligibleImport = async (
+    programId: number,
+    row: any,
+    transaction: any,
+    parsedRow?: ParsedEligibleStudentRow
+) => {
+    const semesterRaw = parsedRow?.semester ?? getEligibleCellValue(row, ['Semester', 'Sem', 'Term', 'Semester Number', 'Sem No']);
     const semesterNumber = semesterRaw !== undefined ? parseInt(String(semesterRaw).match(/\d+/)?.[0] || '', 10) : NaN;
 
-    if (Number.isFinite(semesterNumber) && semesterNumber > 0) {
+    if (Number.isFinite(semesterNumber) && semesterNumber >= 1 && semesterNumber <= 12) {
         const existingSemester = await Semester.findOne({
             where: { ProgramID: programId, SemesterNumber: semesterNumber },
             transaction
@@ -759,7 +818,8 @@ export class ExamController {
             const now = new Date();
             const examsWithStatus = exams.map(exam => {
                 const examData = exam.toJSON() as any;
-                const examDate = new Date(examData.ExamDate);
+                examData.registrationCount = Number(examData.registrationCount || 0);
+                const examDate = parseExamDateValue(examData.ExamDate) || new Date(examData.ExamDate);
 
                 // Session start times: FN = 10:00 AM, AN = 2:00 PM
                 const startHour = examData.Session === 'FN' ? 10 : 14;
@@ -1913,12 +1973,12 @@ export class ExamController {
 
     static async importEligibleStudents(req: Request, res: Response) {
         const examId = Number(req.params.id);
-        if (!Number.isFinite(examId)) {
+        if (!Number.isFinite(examId) || examId <= 0) {
             return res.status(400).json({ message: 'Invalid exam id' });
         }
 
-        if (!req.file) {
-            return res.status(400).json({ message: 'No file uploaded' });
+        if (!req.file || !req.file.buffer || req.file.buffer.length === 0) {
+            return res.status(400).json({ message: 'No file uploaded or uploaded file is empty' });
         }
 
         try {
@@ -1939,38 +1999,81 @@ export class ExamController {
 
             const subject: any = (exam as any).Subject;
             const department: any = subject?.Department;
-            if (!subject || !department) {
-                return res.status(400).json({ message: 'Exam branch information is missing' });
+            if (!subject) {
+                return res.status(400).json({ message: 'Exam subject information is missing' });
             }
 
-            const rows = parseEligibleWorkbook(req.file.buffer, req.file.originalname);
-            if (!rows.length) {
-                return res.status(400).json({ message: 'No student rows found in uploaded file' });
+            const defaultDepartmentId = department?.DepartmentID ?? subject?.DepartmentID ?? undefined;
+
+            let parsed;
+            try {
+                parsed = parseEligibleStudentsWorkbook(req.file.buffer, req.file.originalname);
+            } catch (parseErr: any) {
+                return res.status(400).json({
+                    message: parseErr?.message || 'Unable to parse uploaded file. Please upload a valid .xlsx, .xls, or .csv file.',
+                    error: parseErr?.message
+                });
+            }
+
+            if (!parsed.rows.length) {
+                return res.status(400).json({
+                    message: 'No valid student rows could be mapped from the uploaded file. Ensure the file contains student names and register numbers.',
+                    detectedHeaders: parsed.detectedHeaders,
+                    total: 0,
+                    registrationsCreated: 0,
+                    registrationsUpdated: 0,
+                    registrationsSkipped: 0,
+                    errorCount: parsed.skippedInvalidRows.length,
+                    errors: parsed.skippedInvalidRows.slice(0, 100)
+                });
             }
 
             const transaction = await sequelize.transaction();
             try {
                 const result = await ExamController._processEligibleStudentsRows(
                     examId,
-                    rows,
+                    parsed.rows,
                     transaction,
-                    department.DepartmentID
+                    defaultDepartmentId,
+                    parsed.skippedInvalidRows
                 );
+
+                const mappedCount =
+                    result.registrationsCreated +
+                    result.registrationsUpdated +
+                    result.registrationsSkipped;
+
+                if (mappedCount === 0) {
+                    await transaction.rollback();
+                    return res.status(400).json({
+                        message: 'No students were mapped to this exam. Please review the row errors below.',
+                        examId,
+                        detectedHeaders: parsed.detectedHeaders,
+                        ...result
+                    });
+                }
+
                 await transaction.commit();
 
-                // ── STEP 4: Return enriched summary ──
                 return res.json({
-                    message: 'Students imported successfully',
+                    message: result.errorCount > 0
+                        ? `Mapped ${mappedCount} student(s) with ${result.errorCount} skipped row(s)`
+                        : 'Students imported successfully',
                     examId,
-                    branch: {
+                    branch: department ? {
                         DepartmentID: department.DepartmentID,
                         DepartmentCode: department.DepartmentCode,
                         DepartmentName: department.DepartmentName
-                    },
+                    } : null,
+                    detectedHeaders: parsed.detectedHeaders,
                     ...result
                 });
             } catch (error: any) {
-                await transaction.rollback();
+                try {
+                    await transaction.rollback();
+                } catch {
+                    // ignore rollback failure if already rolled back
+                }
                 throw error;
             }
         } catch (error: any) {
@@ -1983,9 +2086,15 @@ export class ExamController {
         }
     }
 
-    static async _processEligibleStudentsRows(examId: number, rows: any[], transaction: any, defaultDepartmentId?: number) {
+    static async _processEligibleStudentsRows(
+        examId: number,
+        rows: Array<ParsedEligibleStudentRow | Record<string, any>>,
+        transaction: any,
+        defaultDepartmentId?: number,
+        preParsedErrors: Array<{ row: number; reason: string }> = []
+    ) {
         const seenRegNos = new Set<string>();
-        const errors: Array<{ row: number; reason: string }> = [];
+        const errors: Array<{ row: number; reason: string }> = [...preParsedErrors];
         let createdUsers = 0;
         let updatedUsers = 0;
         let createdStudents = 0;
@@ -1996,217 +2105,331 @@ export class ExamController {
         let eligibleCount = 0;
         let ineligibleCount = 0;
 
-        const INELIGIBLE_VALUES = new Set(['no', 'not eligible', '0', 'false', 'ineligible']);
+        const INELIGIBLE_VALUES = new Set([
+            'no', 'n', 'not eligible', 'noteligible', '0', 'false', 'ineligible',
+            'barred', 'detained', 'debarred', 'disqualified', 'withheld'
+        ]);
+
+        // Cache bcrypt hash per unique default password so large sheets don't time out under reverse proxies
+        const passwordHashCache = new Map<string, string>();
+        const getHashedPassword = async (plainPassword: string): Promise<string> => {
+            let cached = passwordHashCache.get(plainPassword);
+            if (!cached) {
+                cached = await bcrypt.hash(plainPassword, 12);
+                passwordHashCache.set(plainPassword, cached);
+            }
+            return cached;
+        };
+
+        const isParsedRow = (r: any): r is ParsedEligibleStudentRow =>
+            Boolean(
+                r &&
+                typeof r === 'object' &&
+                typeof r.rowNumber === 'number' &&
+                typeof r.fullName === 'string' &&
+                typeof r.registerNumber === 'string' &&
+                typeof r.isEligible === 'boolean'
+            );
 
         // ── PRE-STEP: Fetch current exam details for session conflict check ──
         const currentExam = await Exam.findByPk(examId, { transaction });
-        if (!currentExam) throw new Error("Exam not found during import");
+        if (!currentExam) throw new Error('Exam not found during import');
 
         for (let index = 0; index < rows.length; index++) {
-            const row = rows[index];
-            const rowNumber = index + 2;
+            const rawItem = rows[index];
+            const parsedItem = isParsedRow(rawItem) ? rawItem : undefined;
+            const rawRow = parsedItem ? parsedItem.rawRow : (rawItem as Record<string, any>);
+            const rowNumber = parsedItem ? parsedItem.rowNumber : index + 2;
 
-            const fullName = String(getEligibleCellValue(row, ['Name', 'Student Name', 'Full Name', 'FullName']) ?? '').trim();
-            const registerNumber = String(getEligibleCellValue(row, ['Register Number', 'RegisterNumber', 'Reg No', 'RegNo', 'University RegNo', 'University Registration No']) ?? '').trim();
+            const extractedName = parsedItem
+                ? parsedItem.fullName
+                : String(
+                    getEligibleCellValue(rawRow, [
+                        'Name', 'Student Name', 'Full Name', 'FullName',
+                        'Name of Student', 'Name of the Student', 'Candidate Name', 'Student'
+                    ]) ?? ''
+                ).trim();
 
-            const isEligibleRaw = String(
-                getEligibleCellValue(row, ['Is Eligible', 'IsEligible', 'Eligible', 'isEligible', 'Eligibility', 'Status']) ?? ''
-            ).trim().toLowerCase();
-            const isEligible: boolean = isEligibleRaw === ''
-                ? true
-                : !INELIGIBLE_VALUES.has(isEligibleRaw);
+            const extractedRegNo = parsedItem
+                ? parsedItem.registerNumber
+                : String(
+                    getEligibleCellValue(rawRow, [
+                        'Register Number', 'RegisterNumber', 'Register No', 'Registration Number', 'Registration No',
+                        'Reg No', 'Reg. No.', 'RegNo', 'University Reg No', 'University RegNo',
+                        'University Registration No', 'KTU ID', 'USN', 'Hall Ticket No', 'Admission No', 'Roll No'
+                    ]) ?? ''
+                ).trim();
 
-            if (!fullName || !registerNumber) {
+            let isEligible: boolean;
+            if (parsedItem) {
+                isEligible = parsedItem.isEligible;
+            } else {
+                const isEligibleRaw = String(
+                    getEligibleCellValue(rawRow, ['Is Eligible', 'IsEligible', 'Eligible', 'isEligible', 'Eligibility', 'Status']) ?? ''
+                ).trim().toLowerCase();
+                isEligible = isEligibleRaw === '' ? true : !INELIGIBLE_VALUES.has(isEligibleRaw);
+            }
+
+            const safeFullName = extractedName.replace(/\s+/g, ' ').trim().slice(0, 100);
+            const rawRegTrimmed = extractedRegNo.trim();
+            const safeRegNo = rawRegTrimmed.toUpperCase().replace(/\s+/g, '').slice(0, 50);
+
+            if (!safeFullName || !safeRegNo) {
                 errors.push({ row: rowNumber, reason: 'Missing required Name or Register Number' });
                 continue;
             }
 
-            const normalizedRegNo = registerNumber.toUpperCase();
-            if (seenRegNos.has(normalizedRegNo)) {
+            if (seenRegNos.has(safeRegNo)) {
                 continue;
             }
-            seenRegNos.add(normalizedRegNo);
+            seenRegNos.add(safeRegNo);
 
-            if (isEligible) { eligibleCount++; } else { ineligibleCount++; }
+            // Isolate each row in a nested savepoint so 1 bad row never rolls back valid students
+            const rowTx = await sequelize.transaction({ transaction });
+            try {
+                let rowCreatedUsers = 0;
+                let rowUpdatedUsers = 0;
+                let rowCreatedStudents = 0;
+                let rowUpdatedStudents = 0;
+                let rowRegsCreated = 0;
+                let rowRegsUpdated = 0;
+                let rowRegsSkipped = 0;
 
-            // ── STEP 1: FIND OR CREATE STUDENT (SMART UPSERT) ──
-            let student = await Student.findOne({
-                where: { RegisterNumber: normalizedRegNo },
-                include: [{ model: User }],
-                transaction
-            });
+                // ── STEP 1: FIND OR CREATE STUDENT (SMART UPSERT) ──
+                const regCandidates = Array.from(new Set([
+                    safeRegNo,
+                    safeRegNo.replace(/[^A-Z0-9]/g, ''),
+                    rawRegTrimmed
+                ].filter(Boolean)));
 
-            if (!student) {
-                // NEW STUDENT: Create User first
-                const plainPassword = generateDefaultPassword(fullName, normalizedRegNo);
-                const hashedPassword = await bcrypt.hash(plainPassword, 12);
+                let student = await Student.findOne({
+                    where: { RegisterNumber: regCandidates.length === 1 ? safeRegNo : { [Op.in]: regCandidates } },
+                    include: [{ model: User }],
+                    transaction: rowTx
+                });
 
-                // Extract email or generate a fallback
-                const emailRaw = String(getEligibleCellValue(row, ['Email', 'Email Address', 'EmailAddress']) ?? '').trim();
-                let studentEmail = (emailRaw && emailRaw.includes('@'))
-                    ? emailRaw.toLowerCase()
-                    : null;
+                if (!student) {
+                    const plainPassword = generateDefaultPassword(safeFullName, safeRegNo);
+                    const hashedPassword = await getHashedPassword(plainPassword);
 
-                if (!studentEmail) {
-                    const joiningYear = extractBatchYearFromRegisterNumber(normalizedRegNo) || new Date().getFullYear();
-                    const programCode = extractProgramCodeFromRegisterNumber(normalizedRegNo) || 'student';
-                    studentEmail = generateStudentEmail(fullName, joiningYear, programCode);
-                }
+                    const emailRaw = String(
+                        parsedItem?.email ??
+                        getEligibleCellValue(rawRow, ['Email', 'Email ID', 'Email Address', 'EmailAddress', 'Mail']) ??
+                        ''
+                    ).trim();
 
-                let user = await User.findOne({ where: { Email: studentEmail }, transaction });
+                    const extractedBatchYear = extractBatchYearFromRegisterNumber(safeRegNo);
+                    const batchYearForEmail =
+                        extractedBatchYear && extractedBatchYear >= 1990 && extractedBatchYear <= 2100
+                            ? extractedBatchYear
+                            : new Date().getFullYear();
+                    const programCodeForEmail = extractProgramCodeFromRegisterNumber(safeRegNo) || 'student';
 
-                if (!user) {
-                    user = await User.create({
-                        Email: studentEmail,
-                        FullName: fullName,
-                        PasswordHash: hashedPassword,
-                        Role: 'student',
-                        IsActive: true,
-                        IsPasswordChanged: false,
-                        IsActivated: false,
-                        FailedLoginAttempts: 0,
-                        AccountLockedUntil: null
-                    } as any, { transaction });
-                    createdUsers++;
-                } else {
-                    // Update user's name if needed
-                    if (user.FullName !== fullName) {
-                        await user.update({ FullName: fullName }, { transaction });
-                        updatedUsers++;
-                    }
-                    
-                    // Force update password to default if it's not changed yet
-                    if (!user.IsPasswordChanged) {
-                        const plainPassword = generateDefaultPassword(fullName, normalizedRegNo);
-                        const hashedPassword = await bcrypt.hash(plainPassword, 12);
-                        await user.update({ PasswordHash: hashedPassword }, { transaction });
-                        console.log(`[Import] Updated default password for user: ${user.Email}`);
-                    }
-                }
+                    const hasExplicitEmail = Boolean(emailRaw && emailRaw.includes('@') && emailRaw.includes('.'));
+                    const initialEmail = ensureSafeEmailLength(
+                        hasExplicitEmail
+                            ? emailRaw.toLowerCase()
+                            : generateStudentEmail(safeFullName, batchYearForEmail, programCodeForEmail)
+                    );
 
-                // Resolve Department, Program, Semester for the NEW student
-                const deptId = defaultDepartmentId;
-                let progId = undefined;
-                let semId = undefined;
-                let batchYearForEmail = extractBatchYearFromRegisterNumber(normalizedRegNo) || new Date().getFullYear();
-                let programCodeForEmail = extractProgramCodeFromRegisterNumber(normalizedRegNo) || 'STUDENT';
+                    let user = await User.findOne({ where: { Email: initialEmail }, transaction: rowTx });
 
-                if (deptId) {
-                    try {
-                        const program = await resolveProgramForEligibleImport(deptId, row, transaction);
-                        progId = program.ProgramID;
-                        const semester = await resolveSemesterForEligibleImport(progId, row, transaction);
-                        semId = semester.SemesterID;
-
-                        // Update user email with proper institutional email if not provided in import
-                        if (!emailRaw || !emailRaw.includes('@')) {
-                            try {
-                                const generatedEmail = generateStudentEmail(
-                                    fullName,
-                                    batchYearForEmail,
-                                    programCodeForEmail,
-                                    program.DurationYears || 2
-                                );
-
-                                // Check if this email is already taken by ANOTHER user
-                                const existingEmailUser = await User.findOne({
-                                    where: {
-                                        Email: generatedEmail,
-                                        UserID: { [Op.ne]: user.UserID }
-                                    },
-                                    transaction
-                                });
-
-                                if (!existingEmailUser) {
-                                    await user.update({ Email: generatedEmail }, { transaction });
-                                } else {
-                                    console.warn(`[Import] Institutional email ${generatedEmail} already taken, keeping fallback ${user.Email}`);
-                                }
-                            } catch (emailErr: any) {
-                                console.warn('[Import] Failed to update institutional email:', emailErr.message);
-                            }
+                    // Guard against UNIQUE(Students.UserID) violation:
+                    // NEVER reuse a User account already linked to a different Student or non-student role
+                    if (user) {
+                        const linkedStudent = await Student.findOne({
+                            where: { UserID: user.UserID },
+                            transaction: rowTx
+                        });
+                        if (linkedStudent || user.Role !== 'student') {
+                            user = null;
                         }
-                    } catch (e) {
-                        console.warn('Error resolving academic details for row:', rowNumber);
                     }
-                }
 
-                student = await Student.create({
-                    RegisterNumber: normalizedRegNo,
-                    FullName: fullName,
-                    UserID: user.UserID,
-                    Status: 'ACTIVE',
-                    DepartmentID: deptId,
-                    ProgramID: progId,
-                    SemesterID: semId,
-                    BatchYear: batchYearForEmail
-                } as any, { transaction });
+                    if (!user) {
+                        const uniqueEmail = await resolveUniqueStudentEmail(
+                            initialEmail,
+                            safeRegNo,
+                            null,
+                            rowTx
+                        );
+                        user = await User.create({
+                            Email: uniqueEmail,
+                            FullName: safeFullName,
+                            PasswordHash: hashedPassword,
+                            Role: 'student',
+                            IsActive: true,
+                            IsPasswordChanged: false,
+                            IsActivated: false,
+                            FailedLoginAttempts: 0,
+                            AccountLockedUntil: null
+                        } as any, { transaction: rowTx });
+                        rowCreatedUsers++;
+                    } else {
+                        if (user.FullName !== safeFullName) {
+                            await user.update({ FullName: safeFullName }, { transaction: rowTx });
+                            rowUpdatedUsers++;
+                        }
 
-                createdStudents++;
-            } else {
-                // EXISTING STUDENT: Update details if they have changed (Case 2/3)
-                const updates: any = { Status: 'ACTIVE' };
-                if (student.FullName !== fullName) updates.FullName = fullName;
-
-                // Only update academic details if the row provides them or they are currently missing
-                const deptId = defaultDepartmentId;
-                if (deptId && !student.DepartmentID) updates.DepartmentID = deptId;
-
-                await student.update(updates, { transaction });
-
-                // Also update user's full name if it changed
-                if (student.User && student.User.FullName !== fullName) {
-                    await student.User.update({ FullName: fullName }, { transaction });
-                    updatedUsers++;
-                }
-
-                updatedStudents++;
-            }
-
-            // ── STEP 2: SESSION CONFLICT CHECK (LOG WARNING) ──
-            const sessionConflict = await ExamRegistration.findOne({
-                include: [{
-                    model: Exam,
-                    where: {
-                        ExamDate: currentExam.ExamDate,
-                        Session: currentExam.Session,
-                        ExamID: { [Op.ne]: examId } // Different exam
+                        if (!user.IsPasswordChanged) {
+                            await user.update({ PasswordHash: hashedPassword }, { transaction: rowTx });
+                        }
                     }
-                }],
-                where: { StudentID: student.StudentID },
-                transaction
-            });
 
-            if (sessionConflict) {
-                const conflictingExamName = (sessionConflict as any).Exam?.ExamName || 'another exam';
-                console.warn(`[Import] Student ${normalizedRegNo} already has ${conflictingExamName} in the same session (${currentExam.ExamDate} ${currentExam.Session})`);
-                // Note: We don't block the import, just log it as per requirement.
-            }
+                    // Resolve Department, Program, Semester inside a sub-savepoint so metadata issues never abort student creation
+                    const deptId = defaultDepartmentId;
+                    let progId: number | undefined = undefined;
+                    let semId: number | undefined = undefined;
 
-            // ── STEP 3: UPSERT EXAM REGISTRATION ──
-            const [registration, created] = await ExamRegistration.findOrCreate({
-                where: {
-                    ExamID: examId,
-                    StudentID: student.StudentID
-                },
-                defaults: {
-                    ExamID: examId,
-                    StudentID: student.StudentID,
-                    IsEligible: isEligible
-                } as any,
-                transaction
-            });
+                    if (deptId) {
+                        const metaTx = await sequelize.transaction({ transaction: rowTx });
+                        try {
+                            const program = await resolveProgramForEligibleImport(deptId, rawRow, metaTx, parsedItem);
+                            progId = program.ProgramID;
+                            const semester = await resolveSemesterForEligibleImport(progId, rawRow, metaTx, parsedItem);
+                            semId = semester.SemesterID;
 
-            if (created) {
-                registrationsCreated++;
-            } else {
-                // UPDATE if exists (Case 3)
-                if ((registration as any).IsEligible !== isEligible) {
-                    await (registration as any).update({ IsEligible: isEligible }, { transaction });
-                    registrationsUpdated++;
+                            if (!hasExplicitEmail) {
+                                const generatedEmail = ensureSafeEmailLength(
+                                    generateStudentEmail(
+                                        safeFullName,
+                                        batchYearForEmail,
+                                        programCodeForEmail,
+                                        program.DurationYears || undefined
+                                    )
+                                );
+                                if (generatedEmail !== user.Email) {
+                                    const existingEmailUser = await User.findOne({
+                                        where: {
+                                            Email: generatedEmail,
+                                            UserID: { [Op.ne]: user.UserID }
+                                        },
+                                        transaction: metaTx
+                                    });
+                                    if (!existingEmailUser) {
+                                        await user.update({ Email: generatedEmail }, { transaction: metaTx });
+                                    }
+                                }
+                            }
+                            await metaTx.commit();
+                        } catch (metaErr: any) {
+                            try {
+                                await metaTx.rollback();
+                            } catch {
+                                // ignore
+                            }
+                            console.warn(`[Import] Academic metadata fallback on row ${rowNumber}:`, metaErr?.message);
+                        }
+                    }
+
+                    student = await Student.create({
+                        RegisterNumber: safeRegNo,
+                        FullName: safeFullName,
+                        UserID: user.UserID,
+                        Status: 'ACTIVE',
+                        DepartmentID: deptId,
+                        ProgramID: progId,
+                        SemesterID: semId,
+                        BatchYear: batchYearForEmail
+                    } as any, { transaction: rowTx });
+
+                    rowCreatedStudents++;
                 } else {
-                    registrationsSkipped++;
+                    const updates: any = { Status: 'ACTIVE' };
+                    if (student.FullName !== safeFullName) updates.FullName = safeFullName;
+
+                    const deptId = defaultDepartmentId;
+                    if (deptId && !student.DepartmentID) updates.DepartmentID = deptId;
+
+                    await student.update(updates, { transaction: rowTx });
+
+                    if (student.User && student.User.FullName !== safeFullName) {
+                        await student.User.update({ FullName: safeFullName }, { transaction: rowTx });
+                        rowUpdatedUsers++;
+                    }
+
+                    rowUpdatedStudents++;
                 }
+
+                // ── STEP 2: SESSION CONFLICT CHECK (NON-BLOCKING WARNING) ──
+                try {
+                    const sessionConflict = await ExamRegistration.findOne({
+                        include: [{
+                            model: Exam,
+                            where: {
+                                ExamDate: currentExam.ExamDate,
+                                Session: currentExam.Session,
+                                ExamID: { [Op.ne]: examId }
+                            }
+                        }],
+                        where: { StudentID: student.StudentID },
+                        transaction: rowTx
+                    });
+
+                    if (sessionConflict) {
+                        const conflictingExamName = (sessionConflict as any).Exam?.ExamName || 'another exam';
+                        console.warn(`[Import] Student ${safeRegNo} already has ${conflictingExamName} in the same session (${currentExam.ExamDate} ${currentExam.Session})`);
+                    }
+                } catch (conflictErr: any) {
+                    console.warn(`[Import] Session conflict check skipped for ${safeRegNo}:`, conflictErr?.message);
+                }
+
+                // ── STEP 3: UPSERT EXAM REGISTRATION ──
+                const [registration, created] = await ExamRegistration.findOrCreate({
+                    where: {
+                        ExamID: examId,
+                        StudentID: student.StudentID
+                    },
+                    defaults: {
+                        ExamID: examId,
+                        StudentID: student.StudentID,
+                        IsEligible: isEligible
+                    } as any,
+                    transaction: rowTx
+                });
+
+                if (created) {
+                    rowRegsCreated++;
+                } else {
+                    const existingEligible = parseDbBoolean((registration as any).IsEligible, true);
+                    if (existingEligible !== isEligible) {
+                        await (registration as any).update({ IsEligible: isEligible }, { transaction: rowTx });
+                        rowRegsUpdated++;
+                    } else {
+                        rowRegsSkipped++;
+                    }
+                }
+
+                await rowTx.commit();
+
+                createdUsers += rowCreatedUsers;
+                updatedUsers += rowUpdatedUsers;
+                createdStudents += rowCreatedStudents;
+                updatedStudents += rowUpdatedStudents;
+                registrationsCreated += rowRegsCreated;
+                registrationsUpdated += rowRegsUpdated;
+                registrationsSkipped += rowRegsSkipped;
+                if (isEligible) {
+                    eligibleCount++;
+                } else {
+                    ineligibleCount++;
+                }
+            } catch (rowErr: any) {
+                try {
+                    await rowTx.rollback();
+                } catch {
+                    // ignore rollback failure
+                }
+                const detail =
+                    rowErr?.parent?.sqlMessage ||
+                    rowErr?.errors?.[0]?.message ||
+                    rowErr?.message ||
+                    'Unexpected database error';
+                console.error(`[Import] Row ${rowNumber} (${safeRegNo}) failed:`, detail);
+                errors.push({
+                    row: rowNumber,
+                    reason: `${safeRegNo}: ${detail}`
+                });
             }
         }
 
@@ -2228,20 +2451,30 @@ export class ExamController {
 
     static async bulkImportEligibility(req: Request, res: Response) {
         try {
-            const { date } = req.body;
+            const { date, seriesId } = req.body;
             const files = req.files as Express.Multer.File[];
 
             if (!date || !files || files.length === 0) {
                 return res.status(400).json({ message: 'Missing date or files' });
             }
 
-            const parsedDate = formatDateForDb(new Date(date));
+            const parsedDateObj = parseExamDateValue(date);
+            if (!parsedDateObj) {
+                return res.status(400).json({ message: `Invalid exam date: ${date}` });
+            }
+            const parsedDate = formatDateForDb(parsedDateObj);
 
-            // Fetch ALL exams for the entire day, regardless of session
+            const examWhere: any = { ExamDate: parsedDate };
+            if (seriesId !== undefined && seriesId !== null && String(seriesId).trim() !== '') {
+                const parsedSeriesId = Number(seriesId);
+                if (Number.isFinite(parsedSeriesId) && parsedSeriesId > 0) {
+                    examWhere.ExamSeriesID = parsedSeriesId;
+                }
+            }
+
+            // Fetch scheduled exams for this date (scoped to seriesId when provided)
             const exams = await Exam.findAll({
-                where: {
-                    ExamDate: parsedDate
-                },
+                where: examWhere,
                 include: [{
                     model: Subject,
                     attributes: ['SubjectID', 'SubjectCode', 'SubjectName', 'DepartmentID'],
@@ -2252,14 +2485,16 @@ export class ExamController {
                 }]
             });
 
-            const normalizeStr = (str: string) => {
-                return (str || '')
+            const normalizeStr = (str: unknown) =>
+                String(str || '')
                     .replace(/[—–]/g, '-')
-                    .replace(/[^a-zA-Z0-9 -]/g, '')
+                    .replace(/[^a-zA-Z0-9 -]/g, ' ')
                     .replace(/\s+/g, ' ')
                     .trim()
                     .toUpperCase();
-            };
+
+            const compactStr = (str: unknown) =>
+                normalizeStr(str).replace(/[^A-Z0-9]/g, '');
 
             const result = {
                 success: [] as any[],
@@ -2267,80 +2502,261 @@ export class ExamController {
                 errors: [] as any[]
             };
 
+            if (exams.length === 0) {
+                for (const file of files) {
+                    result.skipped.push({
+                        file: file.originalname,
+                        reason: `No exams scheduled on ${parsedDate}`
+                    });
+                }
+                return res.json(result);
+            }
+
+            const inferBranchCodeForRow = (row: ParsedEligibleStudentRow): string => {
+                if (row.department) {
+                    const deptCompact = compactStr(row.department);
+                    if (deptCompact) return deptCompact;
+                }
+                const fromReg = extractProgramCodeFromRegisterNumber(row.registerNumber);
+                return fromReg ? compactStr(fromReg) : '';
+            };
+
+            const matchExamDepartment = (exam: any, token: string): boolean => {
+                if (!token) return false;
+                const dCode = compactStr(exam.Subject?.Department?.DepartmentCode);
+                const dName = compactStr(exam.Subject?.Department?.DepartmentName);
+                if (!dCode && !dName) return false;
+                if (dCode && (token === dCode || token.startsWith(dCode) || dCode.startsWith(token))) return true;
+                if (dName && (token === dName || dName.includes(token) || token.includes(dName))) return true;
+                return false;
+            };
+
             for (const file of files) {
                 const originalName = file.originalname;
-                let rawSubject = originalName.replace(/\.[^/.]+$/, ''); // remove extension
-                rawSubject = rawSubject.replace(/^EligibleList[-_ ]?/i, ''); // remove prefix
+                let rawSubject = originalName.replace(/\.[^/.]+$/, '');
+                rawSubject = rawSubject.replace(/^(?:EligibleList|Eligibility|StudentList|Students|List)[-_ ]+/i, '');
                 const fileSubject = normalizeStr(rawSubject);
+                const fileCompact = compactStr(rawSubject);
+                const fileTokens = new Set(fileSubject.split(/[\s-]+/).filter(Boolean));
 
-                const exactMatches = exams.filter(exam => {
-                    const examSubject = normalizeStr((exam as any).Subject?.SubjectName);
-                    return fileSubject === examSubject;
+                // Step 1: Exact match via SubjectCode, SubjectName, or ExamName
+                let matchedExams = exams.filter((exam: any) => {
+                    const subCode = normalizeStr(exam.Subject?.SubjectCode);
+                    const subCodeCompact = compactStr(exam.Subject?.SubjectCode);
+                    const subName = normalizeStr(exam.Subject?.SubjectName);
+                    const subNameCompact = compactStr(exam.Subject?.SubjectName);
+                    const examName = normalizeStr(exam.ExamName);
+                    const examNameCompact = compactStr(exam.ExamName);
+
+                    return (
+                        (subCode && (fileSubject === subCode || fileCompact === subCodeCompact)) ||
+                        (subName && (fileSubject === subName || fileCompact === subNameCompact)) ||
+                        (examName && (fileSubject === examName || fileCompact === examNameCompact))
+                    );
                 });
 
-                let finalExam = null;
-
-                if (exactMatches.length > 0) {
-                    // If there's 1 or more exact matches, just pick the first one.
-                    // This handles cases where the same subject has multiple rows (e.g., for different departments)
-                    finalExam = exactMatches[0];
-                } else {
-                    // Fallback Matching
-                    let partialMatches = exams.filter(exam => {
-                        const examSubject = normalizeStr((exam as any).Subject?.SubjectName);
-                        return fileSubject.includes(examSubject) || examSubject.includes(fileSubject);
-                    }).sort((a, b) => {
-                        const aLen = normalizeStr((a as any).Subject?.SubjectName).length;
-                        const bLen = normalizeStr((b as any).Subject?.SubjectName).length;
-                        return bLen - aLen;
+                // Step 2: Filename contains SubjectCode (e.g. "CST301_Eligible.xlsx" or "20MCA101 - DSA.xlsx")
+                if (matchedExams.length === 0) {
+                    matchedExams = exams.filter((exam: any) => {
+                        const subCodeCompact = compactStr(exam.Subject?.SubjectCode);
+                        return subCodeCompact.length >= 4 && fileCompact.includes(subCodeCompact);
                     });
+                }
 
-                    if (partialMatches.length > 0) {
-                        const maxLen = normalizeStr((partialMatches[0] as any).Subject?.SubjectName).length;
-                        partialMatches = partialMatches.filter(exam => normalizeStr((exam as any).Subject?.SubjectName).length === maxLen);
-                    }
+                // Step 3: Longest partial match on SubjectName / ExamName (guarding empty/short strings)
+                if (matchedExams.length === 0) {
+                    const scored = exams
+                        .map((exam: any) => {
+                            const candidates = [
+                                normalizeStr(exam.Subject?.SubjectName),
+                                normalizeStr(exam.ExamName)
+                            ].filter((s) => s.length >= 3);
 
-                    if (partialMatches.length === 0) {
-                        result.skipped.push({ file: originalName, reason: 'No matching exam scheduled for this date' });
-                        continue;
-                    } else if (partialMatches.length > 1) {
-                        result.errors.push({ file: originalName, reason: 'Ambiguous: Multiple partial matches found' });
-                        continue;
-                    } else {
-                        finalExam = partialMatches[0];
+                            let bestLen = 0;
+                            for (const cand of candidates) {
+                                const candCompact = compactStr(cand);
+                                if (
+                                    (fileSubject.length >= 3 && (fileSubject.includes(cand) || cand.includes(fileSubject))) ||
+                                    (fileCompact.length >= 3 && (fileCompact.includes(candCompact) || candCompact.includes(fileCompact)))
+                                ) {
+                                    bestLen = Math.max(bestLen, cand.length);
+                                }
+                            }
+                            return { exam, bestLen };
+                        })
+                        .filter((item) => item.bestLen > 0)
+                        .sort((a, b) => b.bestLen - a.bestLen);
+
+                    if (scored.length > 0 && scored[0]) {
+                        const maxLen = scored[0].bestLen;
+                        matchedExams = scored.filter((item) => item.bestLen === maxLen).map((item) => item.exam);
                     }
                 }
 
-                try {
-                    const rows = parseEligibleWorkbook(file.buffer, originalName);
-                    if (!rows.length) {
-                        result.skipped.push({ file: originalName, reason: 'Empty file' });
-                        continue;
-                    }
+                if (matchedExams.length === 0) {
+                    result.skipped.push({
+                        file: originalName,
+                        reason: 'No matching exam scheduled for this date (name the file with the subject code or subject name)'
+                    });
+                    continue;
+                }
 
-                    // Execution
+                // Parse the uploaded workbook once
+                let parsed;
+                try {
+                    parsed = parseEligibleStudentsWorkbook(file.buffer, originalName);
+                } catch (err: any) {
+                    result.errors.push({ file: originalName, reason: 'File parse error: ' + err.message });
+                    continue;
+                }
+
+                if (!parsed.rows.length) {
+                    result.errors.push({
+                        file: originalName,
+                        reason: 'No valid student rows found (could not detect Name and Register Number)',
+                        detectedHeaders: parsed.detectedHeaders
+                    });
+                    continue;
+                }
+
+                // Disambiguate when multiple exams matched
+                const importBatches: Array<{ exam: any; rows: ParsedEligibleStudentRow[]; includePreErrors: boolean }> = [];
+
+                if (matchedExams.length === 1) {
+                    importBatches.push({ exam: matchedExams[0], rows: parsed.rows, includePreErrors: true });
+                } else {
+                    const distinctSubjects = new Set(
+                        matchedExams.map((e: any) =>
+                            compactStr(e.Subject?.SubjectCode || e.Subject?.SubjectName || e.ExamName)
+                        )
+                    );
+
+                    // First check if filename explicitly mentions one of the candidate department codes
+                    const filenameDeptMatches = matchedExams.filter((e: any) => {
+                        const dCode = normalizeStr(e.Subject?.Department?.DepartmentCode);
+                        return dCode && fileTokens.has(dCode);
+                    });
+
+                    if (filenameDeptMatches.length === 1) {
+                        importBatches.push({ exam: filenameDeptMatches[0], rows: parsed.rows, includePreErrors: true });
+                    } else if (distinctSubjects.size > 1) {
+                        const subjectLabels = matchedExams
+                            .map((e: any) => e.Subject?.SubjectCode || e.Subject?.SubjectName || e.ExamName)
+                            .join(', ');
+                        result.errors.push({
+                            file: originalName,
+                            reason: `Ambiguous: Multiple different subjects matched (${subjectLabels})`
+                        });
+                        continue;
+                    } else {
+                        // Same subject scheduled across multiple branches -> bucket students by branch code / regno
+                        const buckets = new Map<number, ParsedEligibleStudentRow[]>();
+                        const unmatchedRows: ParsedEligibleStudentRow[] = [];
+
+                        for (const row of parsed.rows) {
+                            const rowToken = inferBranchCodeForRow(row);
+                            const deptMatch = rowToken
+                                ? matchedExams.find((e: any) => matchExamDepartment(e, rowToken))
+                                : undefined;
+
+                            if (deptMatch) {
+                                const eId = (deptMatch as any).ExamID;
+                                if (!buckets.has(eId)) buckets.set(eId, []);
+                                buckets.get(eId)!.push(row);
+                            } else {
+                                unmatchedRows.push(row);
+                            }
+                        }
+
+                        if (buckets.size === 0) {
+                            importBatches.push({ exam: matchedExams[0], rows: parsed.rows, includePreErrors: true });
+                        } else {
+                            let dominantExamId = Array.from(buckets.keys())[0];
+                            let dominantCount = -1;
+                            for (const [eId, list] of buckets.entries()) {
+                                if (list.length > dominantCount) {
+                                    dominantCount = list.length;
+                                    dominantExamId = eId;
+                                }
+                            }
+                            if (unmatchedRows.length > 0 && dominantExamId !== undefined) {
+                                buckets.get(dominantExamId)!.push(...unmatchedRows);
+                            }
+
+                            let firstBatch = true;
+                            for (const [eId, bucketRows] of buckets.entries()) {
+                                const examObj = matchedExams.find((e: any) => e.ExamID === eId);
+                                if (examObj && bucketRows.length > 0) {
+                                    importBatches.push({
+                                        exam: examObj,
+                                        rows: bucketRows,
+                                        includePreErrors: firstBatch
+                                    });
+                                    firstBatch = false;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Execute each matched exam batch in its own transaction
+                for (const batch of importBatches) {
+                    const targetExam = batch.exam;
+                    const deptCode = targetExam.Subject?.Department?.DepartmentCode;
+                    const examLabel = deptCode
+                        ? `${targetExam.ExamName} (${deptCode})`
+                        : targetExam.ExamName;
+
                     const transaction = await sequelize.transaction();
                     try {
                         const importResult = await ExamController._processEligibleStudentsRows(
-                            (finalExam as any).ExamID,
-                            rows,
+                            targetExam.ExamID,
+                            batch.rows,
                             transaction,
-                            (finalExam as any).Subject?.DepartmentID
+                            targetExam.Subject?.DepartmentID,
+                            batch.includePreErrors ? parsed.skippedInvalidRows : []
                         );
+
+                        const mappedCount =
+                            importResult.registrationsCreated +
+                            importResult.registrationsUpdated +
+                            importResult.registrationsSkipped;
+
+                        if (mappedCount === 0) {
+                            await transaction.rollback();
+                            const sampleReason = importResult.errors[0]?.reason || 'No students could be mapped';
+                            result.errors.push({
+                                file: originalName,
+                                exam: examLabel,
+                                reason: `0 students mapped: ${sampleReason}`
+                            });
+                            continue;
+                        }
+
                         await transaction.commit();
 
                         result.success.push({
                             file: originalName,
-                            exam: (finalExam as any).ExamName,
-                            session: (finalExam as any).Session,
-                            imported: importResult.total
+                            exam: examLabel,
+                            branch: deptCode || null,
+                            session: targetExam.Session,
+                            imported: mappedCount,
+                            eligibleCount: importResult.eligibleCount,
+                            ineligibleCount: importResult.ineligibleCount,
+                            errorCount: importResult.errorCount
                         });
                     } catch (err: any) {
-                        await transaction.rollback();
-                        result.errors.push({ file: originalName, reason: 'Database error during import: ' + err.message });
+                        try {
+                            await transaction.rollback();
+                        } catch {
+                            // ignore
+                        }
+                        result.errors.push({
+                            file: originalName,
+                            exam: examLabel,
+                            reason: 'Database error during import: ' + err.message
+                        });
                     }
-                } catch (err: any) {
-                    result.errors.push({ file: originalName, reason: 'File parse error: ' + err.message });
                 }
             }
 
@@ -2543,7 +2959,7 @@ export class ExamController {
                 FullName: row.FullName,
                 Email: row.Email || 'N/A',
                 Status: row.Status,
-                IsEligible: row.IsEligible === 1 || row.IsEligible === true,
+                IsEligible: parseDbBoolean(row.IsEligible, true),
             }));
 
             const eligibleStudents = allStudents.filter(s => s.IsEligible);

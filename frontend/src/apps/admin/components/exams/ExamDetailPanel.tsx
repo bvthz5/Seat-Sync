@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button, Chip, Spinner } from "@heroui/react";
 import { X, Calendar, Clock, FileText, BookOpen, Users, UserX, Trash2 } from "lucide-react";
@@ -6,11 +5,21 @@ import { ExamService } from '../../services/examService';
 import { toast } from 'react-hot-toast';
 import ConfirmationModal from '../ConfirmationModal';
 
+export interface ExamDetailBranchOption {
+    examId: number;
+    departmentId: number;
+    departmentCode: string;
+    departmentName: string;
+    registrationCount?: number;
+}
+
 interface ExamDetailPanelProps {
     exam: any;
+    branches?: ExamDetailBranchOption[];
     isOpen: boolean;
     onClose: () => void;
     onEdit: (exam: any) => void;
+    onDataChanged?: () => void;
 }
 
 interface StudentRow {
@@ -21,7 +30,19 @@ interface StudentRow {
     IsEligible: boolean;
 }
 
-const ExamDetailPanel: React.FC<ExamDetailPanelProps> = ({ exam, isOpen, onClose, onEdit }) => {
+const formatExamDateLocal = (rawDate: string): string => {
+    if (!rawDate) return 'N/A';
+    const datePart = String(rawDate).split('T')[0];
+    const [y, m, d] = datePart.split('-').map(Number);
+    const parsed = (y && m && d) ? new Date(y, m - 1, d) : new Date(rawDate);
+    if (isNaN(parsed.getTime())) return rawDate;
+    return parsed.toLocaleDateString('en-IN', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+};
+
+const ExamDetailPanel: React.FC<ExamDetailPanelProps> = ({ exam, branches, isOpen, onClose, onEdit, onDataChanged }) => {
+    const [activeExamId, setActiveExamId] = useState<number | null>(exam?.ExamID ? Number(exam.ExamID) : null);
     const [eligibleStudents,   setEligibleStudents]   = useState<StudentRow[]>([]);
     const [ineligibleStudents, setIneligibleStudents] = useState<StudentRow[]>([]);
     const [batchCounts, setBatchCounts] = useState<Record<string, number>>({});
@@ -40,20 +61,31 @@ const ExamDetailPanel: React.FC<ExamDetailPanelProps> = ({ exam, isOpen, onClose
 
     useEffect(() => {
         if (isOpen && exam?.ExamID) {
-            fetchStudents();
+            setActiveExamId(Number(exam.ExamID));
         }
     }, [isOpen, exam?.ExamID]);
 
+    const currentExamId = activeExamId ?? (exam?.ExamID ? Number(exam.ExamID) : null);
+    const activeBranch = branches?.find(b => b.examId === currentExamId) || null;
+
+    useEffect(() => {
+        if (isOpen && currentExamId) {
+            fetchStudents(currentExamId);
+        }
+    }, [isOpen, currentExamId]);
+
     const handleDeleteEligibility = (studentId: number, studentName: string) => {
+        if (!currentExamId) return;
         setConfirmModal({
             isOpen: true,
             title: 'Remove Student',
             message: `Are you sure you want to remove ${studentName} from this exam's eligibility list?`,
             onConfirm: async () => {
                 try {
-                    await ExamService.deleteEligibility(exam.ExamID, studentId);
+                    await ExamService.deleteEligibility(currentExamId, studentId);
                     toast.success(`Removed ${studentName} from eligibility`);
-                    fetchStudents();
+                    await fetchStudents(currentExamId);
+                    onDataChanged?.();
                 } catch (error: any) {
                     console.error('Failed to delete eligibility:', error);
                     toast.error(error.response?.data?.message || 'Failed to remove student');
@@ -64,15 +96,17 @@ const ExamDetailPanel: React.FC<ExamDetailPanelProps> = ({ exam, isOpen, onClose
     };
 
     const handleClearAll = () => {
+        if (!currentExamId) return;
         setConfirmModal({
             isOpen: true,
             title: 'Clear All Eligibility',
             message: `Are you sure you want to clear ALL eligibility records for this exam? This will also remove any seat allocations.`,
             onConfirm: async () => {
                 try {
-                    await ExamService.clearSingleExamEligibility(exam.ExamID);
+                    await ExamService.clearSingleExamEligibility(currentExamId);
                     toast.success('Eligibility cleared successfully');
-                    fetchStudents();
+                    await fetchStudents(currentExamId);
+                    onDataChanged?.();
                 } catch (error: any) {
                     console.error('Failed to clear eligibility:', error);
                     toast.error('Failed to clear eligibility');
@@ -82,10 +116,10 @@ const ExamDetailPanel: React.FC<ExamDetailPanelProps> = ({ exam, isOpen, onClose
         });
     };
 
-    const fetchStudents = async () => {
+    const fetchStudents = async (targetExamId: number) => {
         setLoading(true);
         try {
-            const data = await ExamService.getEligibleStudents(exam.ExamID);
+            const data = await ExamService.getEligibleStudents(targetExamId);
             // New shape: eligibleStudents + ineligibleStudents arrays
             setEligibleStudents(data.eligibleStudents ?? data.students ?? []);
             setIneligibleStudents(data.ineligibleStudents ?? []);
@@ -102,9 +136,8 @@ const ExamDetailPanel: React.FC<ExamDetailPanelProps> = ({ exam, isOpen, onClose
 
     if (!isOpen || !exam) return null;
 
-    const formattedDate = new Date(exam.ExamDate).toLocaleDateString('en-IN', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-    });
+    const formattedDate = formatExamDateLocal(exam.ExamDate);
+    const activeDepartmentName = activeBranch?.departmentName || exam.Subject?.Department?.DepartmentName || 'General';
 
     const sessionLabel = exam.Session === 'FN' ? 'Forenoon' : 'Afternoon';
     const sessionTime  = exam.Session === 'FN' ? '10:00 AM – 1:00 PM' : '2:00 PM – 5:00 PM';
@@ -134,7 +167,7 @@ const ExamDetailPanel: React.FC<ExamDetailPanelProps> = ({ exam, isOpen, onClose
             <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>
                 {students.map((student, idx) => (
                     <div
-                        key={idx}
+                        key={student.StudentID ?? idx}
                         className={`group flex items-center justify-between text-sm p-2.5 rounded-lg border transition-colors ${rowBg} ${rowBorder}`}
                     >
                         <div className="flex-1 min-w-0">
@@ -184,12 +217,51 @@ const ExamDetailPanel: React.FC<ExamDetailPanelProps> = ({ exam, isOpen, onClose
                                     {exam.Status}
                                 </Chip>
                             </div>
-                            <p className="text-sm text-gray-500">ID: #{exam.ExamID}</p>
+                            <p className="text-sm text-gray-500">ID: #{currentExamId ?? exam.ExamID}</p>
                         </div>
                         <Button isIconOnly variant="light" onPress={onClose} className="text-gray-400 hover:text-gray-600">
                             <X size={24} />
                         </Button>
                     </div>
+
+                    {/* Branch Switcher (when subject spans multiple departments) */}
+                    {branches && branches.length > 1 && (
+                        <div className="px-6 py-3 border-b border-gray-100 bg-indigo-50/40">
+                            <p className="text-[10px] font-extrabold text-indigo-500 uppercase tracking-widest mb-2">
+                                Switch Branch / Department
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                                {branches.map((branch) => {
+                                    const isActive = branch.examId === currentExamId;
+                                    return (
+                                        <button
+                                            key={branch.examId}
+                                            type="button"
+                                            onClick={() => setActiveExamId(branch.examId)}
+                                            className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all border flex items-center gap-1.5 ${
+                                                isActive
+                                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                                                    : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'
+                                            }`}
+                                        >
+                                            <span>{branch.departmentCode}</span>
+                                            {typeof branch.registrationCount === 'number' && (
+                                                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                                                    isActive
+                                                        ? 'bg-white/20 text-white'
+                                                        : branch.registrationCount > 0
+                                                            ? 'bg-emerald-100 text-emerald-700'
+                                                            : 'bg-slate-100 text-slate-400'
+                                                }`}>
+                                                    {branch.registrationCount}
+                                                </span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Scrollable Content */}
                     <div className="flex-1 overflow-y-auto p-6 space-y-5">
@@ -236,7 +308,7 @@ const ExamDetailPanel: React.FC<ExamDetailPanelProps> = ({ exam, isOpen, onClose
                                 <div className="flex justify-between">
                                     <span className="text-sm text-gray-500">Department</span>
                                     <span className="text-sm font-medium text-gray-800">
-                                        {exam.Subject?.Department?.DepartmentName || 'General'}
+                                        {activeDepartmentName}
                                     </span>
                                 </div>
                             </div>
@@ -348,7 +420,7 @@ const ExamDetailPanel: React.FC<ExamDetailPanelProps> = ({ exam, isOpen, onClose
                             </Button>
                             <Button
                                 className="bg-blue-600 text-white font-semibold shadow-md px-6 hover:bg-blue-700 rounded-xl"
-                                onPress={() => onEdit(exam)}
+                                onPress={() => onEdit({ ...exam, ExamID: currentExamId ?? exam.ExamID })}
                             >
                                 Edit Details
                             </Button>

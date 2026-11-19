@@ -9,6 +9,22 @@ interface BranchOption {
     departmentId: number;
     departmentCode: string;
     departmentName: string;
+    registrationCount?: number;
+}
+
+interface ImportResultState {
+    message?: string;
+    isError?: boolean;
+    total?: number;
+    eligibleCount?: number;
+    ineligibleCount?: number;
+    createdStudents: number;
+    registrationsCreated: number;
+    registrationsUpdated?: number;
+    registrationsSkipped: number;
+    errorCount: number;
+    errors: Array<{ row: number; reason: string }>;
+    detectedHeaders?: string[];
 }
 
 interface EligibleStudentsImportModalProps {
@@ -32,13 +48,7 @@ const EligibleStudentsImportModal: React.FC<EligibleStudentsImportModalProps> = 
     const [isUploading, setIsUploading] = useState(false);
     const [importProgress, setImportProgress] = useState(0);
     const [importLabel, setImportLabel] = useState('');
-    const [result, setResult] = useState<{
-        createdStudents: number;
-        registrationsCreated: number;
-        registrationsSkipped: number;
-        errorCount: number;
-        errors: Array<{ row: number; reason: string }>;
-    } | null>(null);
+    const [result, setResult] = useState<ImportResultState | null>(null);
 
     useEffect(() => {
         if (!isOpen) {
@@ -49,8 +59,11 @@ const EligibleStudentsImportModal: React.FC<EligibleStudentsImportModalProps> = 
             setImportLabel('');
             setResult(null);
             if (fileInputRef.current) fileInputRef.current.value = '';
-        } else if (!selectedExamId && branches.length > 0) {
-            setSelectedExamId(String(branches[0].examId));
+        } else if (branches.length > 0) {
+            const existsInBranches = branches.some(b => String(b.examId) === selectedExamId);
+            if (!selectedExamId || !existsInBranches) {
+                setSelectedExamId(String(branches[0].examId));
+            }
         }
     }, [isOpen, branches, selectedExamId]);
 
@@ -83,18 +96,68 @@ const EligibleStudentsImportModal: React.FC<EligibleStudentsImportModalProps> = 
             const response = await ExamService.importEligibleStudents(selectedBranch.examId, file);
             clearInterval(progressInterval);
             setImportProgress(100);
-            setImportLabel('Import complete!');
-            await new Promise(r => setTimeout(r, 1000)); // show green bar briefly
-            setResult(response);
-            toast.success('Eligible students imported successfully');
-            onSuccess();
-            onClose();
+            setImportLabel('Import finished!');
+
+            const mappedCount =
+                Number(response?.registrationsCreated || 0) +
+                Number(response?.registrationsUpdated || 0) +
+                Number(response?.registrationsSkipped || 0);
+            const errorCount = Number(response?.errorCount || 0);
+
+            const normalizedResult: ImportResultState = {
+                message: response?.message,
+                isError: mappedCount === 0,
+                total: Number(response?.total ?? mappedCount),
+                eligibleCount: Number(response?.eligibleCount || 0),
+                ineligibleCount: Number(response?.ineligibleCount || 0),
+                createdStudents: Number(response?.createdStudents || 0),
+                registrationsCreated: Number(response?.registrationsCreated || 0),
+                registrationsUpdated: Number(response?.registrationsUpdated || 0),
+                registrationsSkipped: Number(response?.registrationsSkipped || 0),
+                errorCount,
+                errors: Array.isArray(response?.errors) ? response.errors : [],
+                detectedHeaders: Array.isArray(response?.detectedHeaders) ? response.detectedHeaders : undefined
+            };
+
+            setResult(normalizedResult);
+
+            if (mappedCount > 0) {
+                onSuccess();
+            }
+
+            if (mappedCount === 0) {
+                toast.error(response?.message || 'No students could be mapped from this file. Check the details below.');
+            } else if (errorCount > 0) {
+                toast.success(`Mapped ${mappedCount} student(s) with ${errorCount} skipped row(s). Review details below.`);
+            } else {
+                await new Promise(r => setTimeout(r, 700));
+                toast.success(`Mapped ${mappedCount} student(s) to ${selectedBranch.departmentCode} successfully`);
+                onClose();
+            }
         } catch (error: any) {
             clearInterval(progressInterval);
             setImportProgress(0);
             setImportLabel('');
             console.error(error);
-            toast.error(error.response?.data?.message || 'Failed to import eligible students');
+            const errData = error?.response?.data;
+            const errMsg = errData?.message || 'Failed to import eligible students';
+            toast.error(errMsg);
+            if (errData) {
+                setResult({
+                    message: errMsg,
+                    isError: true,
+                    total: 0,
+                    eligibleCount: 0,
+                    ineligibleCount: 0,
+                    createdStudents: Number(errData.createdStudents || 0),
+                    registrationsCreated: Number(errData.registrationsCreated || 0),
+                    registrationsUpdated: Number(errData.registrationsUpdated || 0),
+                    registrationsSkipped: Number(errData.registrationsSkipped || 0),
+                    errorCount: Number(errData.errorCount || (Array.isArray(errData.errors) ? errData.errors.length : 1)),
+                    errors: Array.isArray(errData.errors) ? errData.errors : [{ row: 0, reason: errMsg }],
+                    detectedHeaders: Array.isArray(errData.detectedHeaders) ? errData.detectedHeaders : undefined
+                });
+            }
         } finally {
             setIsUploading(false);
         }
@@ -104,7 +167,7 @@ const EligibleStudentsImportModal: React.FC<EligibleStudentsImportModalProps> = 
 
     return (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
-            <div className="bg-white border border-slate-200/80 shadow-2xl w-full max-w-xl rounded-[24px] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-white border border-slate-200/80 shadow-2xl w-full max-w-xl max-h-[90vh] rounded-[24px] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
 
                 {/* Header */}
                 <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
@@ -125,7 +188,7 @@ const EligibleStudentsImportModal: React.FC<EligibleStudentsImportModalProps> = 
                 {/* Body */}
                 <div className="p-6 space-y-5 overflow-y-auto">
                     <div className="p-4 rounded-2xl bg-indigo-50/50 border border-indigo-100/30 text-xs font-semibold text-indigo-700/80 leading-relaxed text-left">
-                        Upload a file containing full student details. Only branches for this exam are available here.
+                        Upload any Excel or CSV student list containing names and register numbers in any column order. Title headers, blank rows, and alternate header names are detected automatically.
                     </div>
 
                     {/* Branch Selection Dropdown (Only if there are multiple branches) */}
@@ -141,6 +204,7 @@ const EligibleStudentsImportModal: React.FC<EligibleStudentsImportModalProps> = 
                                 {branches.map(b => (
                                     <option key={b.examId} value={String(b.examId)}>
                                         {b.departmentCode} - {b.departmentName}
+                                        {typeof b.registrationCount === 'number' && b.registrationCount > 0 ? ` (${b.registrationCount} mapped)` : ''}
                                     </option>
                                 ))}
                             </select>
@@ -150,8 +214,8 @@ const EligibleStudentsImportModal: React.FC<EligibleStudentsImportModalProps> = 
                     {/* File upload zone */}
                     <div
                         className={`border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center text-center transition-all cursor-pointer ${
-                            file 
-                                ? 'border-indigo-400 bg-indigo-50/20 shadow-inner' 
+                            file
+                                ? 'border-indigo-400 bg-indigo-50/20 shadow-inner'
                                 : 'border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/10 group'
                         }`}
                         onClick={() => fileInputRef.current?.click()}
@@ -159,7 +223,7 @@ const EligibleStudentsImportModal: React.FC<EligibleStudentsImportModalProps> = 
                         <input
                             ref={fileInputRef}
                             type="file"
-                            accept=".xlsx,.xls,.csv"
+                            accept=".xlsx,.xls,.csv,.tsv"
                             className="hidden"
                             onChange={(e) => {
                                 const nextFile = e.target.files?.[0] || null;
@@ -180,9 +244,15 @@ const EligibleStudentsImportModal: React.FC<EligibleStudentsImportModalProps> = 
 
                     {/* Expected Columns Badge Container */}
                     <div className="space-y-2 text-left">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Expected CSV/Excel Columns</span>
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Supported Columns (Any Order or Format)</span>
                         <div className="flex flex-wrap gap-1.5 p-3 rounded-2xl bg-slate-50 border border-slate-100">
-                            {['Name', 'Register Number', 'Email', 'Program', 'Semester', 'Batch', 'Department'].map((col) => (
+                            {[
+                                'Name / Student Name / Candidate',
+                                'Reg. No. / Register Number / KTU ID / Roll No',
+                                'Eligibility (optional)',
+                                'Email (optional)',
+                                'Department / Program / Semester (optional)'
+                            ].map((col) => (
                                 <span key={col} className="px-2.5 py-1 text-[10px] font-bold text-slate-600 bg-white border border-slate-200/60 rounded-lg shadow-sm">
                                     {col}
                                 </span>
@@ -225,28 +295,52 @@ const EligibleStudentsImportModal: React.FC<EligibleStudentsImportModalProps> = 
 
                     {/* Result block */}
                     {result && !isUploading && (
-                        <div className={`p-5 rounded-2xl border ${result.errorCount > 0 ? 'bg-amber-50/50 border-amber-200' : 'bg-emerald-50/30 border-emerald-200'}`}>
+                        <div className={`p-5 rounded-2xl border ${
+                            result.isError
+                                ? 'bg-rose-50/70 border-rose-200'
+                                : result.errorCount > 0
+                                    ? 'bg-amber-50/50 border-amber-200'
+                                    : 'bg-emerald-50/30 border-emerald-200'
+                        }`}>
                             <div className="flex items-start gap-3">
-                                {result.errorCount > 0 ? (
+                                {result.isError ? (
+                                    <AlertCircle className="w-5 h-5 text-rose-600 mt-0.5 shrink-0" />
+                                ) : result.errorCount > 0 ? (
                                     <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
                                 ) : (
                                     <CheckCircle className="w-5 h-5 text-emerald-600 mt-0.5 shrink-0" />
                                 )}
                                 <div className="text-xs space-y-2 text-left w-full">
-                                    <p className="font-extrabold text-[14px] text-slate-800">Import Finished Successfully</p>
+                                    <p className={`font-extrabold text-[14px] ${result.isError ? 'text-rose-800' : 'text-slate-800'}`}>
+                                        {result.isError
+                                            ? (result.message || 'No Students Were Mapped')
+                                            : result.errorCount > 0
+                                                ? (result.message || 'Import Completed With Warnings')
+                                                : 'Import Finished Successfully'}
+                                    </p>
                                     <div className="grid grid-cols-2 gap-x-6 gap-y-2 mt-2 font-bold text-slate-500">
-                                        <p>Created Students: <span className="text-slate-800 font-extrabold">{result.createdStudents}</span></p>
-                                        <p>Registrations Created: <span className="text-slate-800 font-extrabold">{result.registrationsCreated}</span></p>
-                                        <p>Registrations Skipped: <span className="text-slate-800 font-extrabold">{result.registrationsSkipped}</span></p>
-                                        <p>Errors: <span className={result.errorCount > 0 ? "text-rose-600 font-extrabold" : "text-emerald-600 font-extrabold"}>{result.errorCount}</span></p>
+                                        <p>Mapped (New): <span className="text-slate-800 font-extrabold">{result.registrationsCreated}</span></p>
+                                        <p>Updated / Existing: <span className="text-slate-800 font-extrabold">{(result.registrationsUpdated || 0) + result.registrationsSkipped}</span></p>
+                                        <p>Eligible / Ineligible: <span className="text-emerald-700 font-extrabold">{result.eligibleCount || 0}</span> / <span className="text-rose-600 font-extrabold">{result.ineligibleCount || 0}</span></p>
+                                        <p>Errors / Skipped: <span className={result.errorCount > 0 ? "text-rose-600 font-extrabold" : "text-emerald-600 font-extrabold"}>{result.errorCount}</span></p>
                                     </div>
+                                    {result.detectedHeaders && result.detectedHeaders.length > 0 && (result.isError || result.errorCount > 0) && (
+                                        <p className="text-[11px] text-slate-500 font-semibold pt-1">
+                                            Detected headers: <span className="font-mono text-slate-700">{result.detectedHeaders.join(', ')}</span>
+                                        </p>
+                                    )}
                                     {result.errors && result.errors.length > 0 && (
-                                        <div className="mt-3 max-h-[100px] overflow-y-auto border-t border-slate-200/50 pt-2 space-y-1">
-                                            {result.errors.map((err, i) => (
-                                                <p key={i} className="text-[10px] text-rose-500 font-semibold leading-normal">
-                                                    Row {err.row}: {err.reason}
+                                        <div className="mt-3 max-h-[140px] overflow-y-auto border-t border-slate-200/60 pt-2 space-y-1">
+                                            {result.errors.slice(0, 50).map((err, i) => (
+                                                <p key={i} className="text-[11px] text-rose-600 font-semibold leading-normal">
+                                                    {err.row > 0 ? `Row ${err.row}: ` : ''}{err.reason}
                                                 </p>
                                             ))}
+                                            {result.errors.length > 50 && (
+                                                <p className="text-[10px] text-slate-400 font-bold">
+                                                    …and {result.errors.length - 50} more row error(s)
+                                                </p>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -257,9 +351,9 @@ const EligibleStudentsImportModal: React.FC<EligibleStudentsImportModalProps> = 
 
                 {/* Footer */}
                 <div className="p-5 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 shrink-0">
-                    <Button 
-                        variant="flat" 
-                        onPress={onClose} 
+                    <Button
+                        variant="flat"
+                        onPress={onClose}
                         isDisabled={isUploading}
                         className="h-10 px-5 font-bold rounded-xl border border-slate-200 text-slate-500 bg-white hover:bg-slate-50 hover:text-slate-700 transition-all active:scale-[0.98]"
                     >

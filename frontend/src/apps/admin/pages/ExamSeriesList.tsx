@@ -15,6 +15,9 @@ import { SemesterStudentImportModal } from '../components/internal-structure/Sem
 import EditExamModal from '../components/exams/EditExamModal';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { BulkAutoRegisterModal } from '../components/exams/BulkAutoRegisterModal';
+import EligibleStudentsImportModal from '../components/exams/EligibleStudentsImportModal';
+import BulkEligibleImportModal from '../components/exams/BulkEligibleImportModal';
+import ExamDetailPanel from '../components/exams/ExamDetailPanel';
 
 const isMissingDepartment = (code: string, name: string) => {
     return !code || code === 'GEN' || code === 'GENERAL' || name === 'GENERAL';
@@ -27,6 +30,7 @@ type BranchOption = {
     departmentName: string;
     /** Raw timetable Branches value – source of truth for card display */
     branchScope: string;
+    registrationCount: number;
 };
 
 type GroupedExam = {
@@ -41,6 +45,29 @@ type GroupedExam = {
     semester: string;
     branches: BranchOption[];
     hasRegistrations: boolean;
+    totalRegistrations: number;
+};
+
+const parseLocalDate = (raw: string): Date => {
+    const datePart = String(raw || '').split('T')[0];
+    const [y, m, d] = datePart.split('-').map(Number);
+    if (y && m && d) return new Date(y, m - 1, d);
+    return new Date(raw);
+};
+
+const extractSemesterLabel = (exam: any): string => {
+    if (typeof exam?.Semester === 'string' && exam.Semester.trim()) {
+        return exam.Semester.trim().toUpperCase();
+    }
+    const subjSem = exam?.Subject?.Semester;
+    if (typeof subjSem === 'string' && subjSem.trim()) {
+        return subjSem.trim().toUpperCase();
+    }
+    if (subjSem && typeof subjSem === 'object') {
+        if (subjSem.SemesterName) return String(subjSem.SemesterName).trim().toUpperCase();
+        if (subjSem.SemesterNumber) return `S${subjSem.SemesterNumber}`;
+    }
+    return 'S3';
 };
 
 const formatExamCardTitle = (examName: string, subjectCode: string): string => {
@@ -86,10 +113,11 @@ const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
         const examName = String(exam?.ExamName || '').trim();
         const session = String(exam?.Session || '').trim().toUpperCase();
         const duration = Number(exam?.Duration || 0);
-        const semRaw = String(exam?.Semester || exam?.Subject?.Semester || 'S3').toUpperCase().trim();
+        const semRaw = extractSemesterLabel(exam);
         const semester = semRaw.startsWith('S') ? semRaw : (semRaw ? `S${semRaw}` : 'S3');
         const rawCode = String(exam?.Subject?.SubjectCode || exam?.SubjectCode || '').trim().toUpperCase();
-        const programme = String(exam?.Programme || '').trim();
+        const programme = String(exam?.Programme || exam?.Subject?.Semester?.Program?.ProgramName || '').trim();
+        const regCount = Number(exam?.registrationCount || 0);
 
         const titleNorm = normalizeExamTitle(examName);
         const codeNorm = rawCode.replace(/[^A-Z0-9]/g, '');
@@ -101,9 +129,9 @@ const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
         const department = exam?.Subject?.Department || {};
         const deptCode = String(department.DepartmentCode || exam?.BranchScope || 'GEN');
         const deptName = String(department.DepartmentName || exam?.BranchScope || 'General');
-        // Use the raw timetable BranchScope value directly from the database record/imported timetable
-        // NEVER fall back to DepartmentID or Department table data
-        const branchScope = String(exam?.BranchScope || '').trim();
+        // Prefer raw timetable BranchScope for Internal exams; fall back to Subject DepartmentCode for End-Semester exams
+        const rawBranchScope = String(exam?.BranchScope || '').trim();
+        const branchScope = rawBranchScope || (!isMissingDepartment(deptCode, deptName) ? deptCode : '');
         const branchKey = String(exam.ExamID);
 
         if (!groups.has(groupKey)) {
@@ -120,7 +148,8 @@ const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
                 branches: [],
                 branchKeys: new Set<string>(),
                 subjectCodes: new Set<string>(),
-                hasRegistrations: false
+                hasRegistrations: false,
+                totalRegistrations: 0
             });
         }
 
@@ -138,11 +167,13 @@ const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
                 departmentCode: deptCode,
                 departmentName: deptName,
                 branchScope: branchScope,
+                registrationCount: regCount
             });
         }
 
-        if (Number(exam.registrationCount || 0) > 0) {
+        if (regCount > 0) {
             group.hasRegistrations = true;
+            group.totalRegistrations += regCount;
         }
     });
 
@@ -183,12 +214,18 @@ const ExamSeriesList: React.FC = () => {
     const [selectedExam, setSelectedExam] = useState<any>(null);
     const [activeImportSemester, setActiveImportSemester] = useState<string | null>(null);
     const [seriesName, setSeriesName] = useState<string>(locationState?.seriesName || '');
-    const [examType, setExamType] = useState<'Internal' | 'EndSemester'>(locationState?.examType || 'Internal');
+    const [examType, setExamType] = useState<'Internal' | 'EndSemester' | null>(locationState?.examType || null);
+    const [endSemImportExam, setEndSemImportExam] = useState<GroupedExam | null>(null);
+    const [isEndSemBulkImportOpen, setIsEndSemBulkImportOpen] = useState(false);
+    const [endSemDetailExam, setEndSemDetailExam] = useState<any>(null);
+    const [endSemDetailBranches, setEndSemDetailBranches] = useState<BranchOption[]>([]);
 
     useEffect(() => {
         if (locationState?.seriesName) {
             setSeriesName(locationState.seriesName);
-            if (locationState.examType) setExamType(locationState.examType);
+        }
+        if (locationState?.examType) {
+            setExamType(locationState.examType);
         } else if (seriesId && AccessTokenStore.hasAnySession()) {
             fetchSeriesDetails();
         }
@@ -213,25 +250,49 @@ const ExamSeriesList: React.FC = () => {
         }
     };
 
-    const [batches, setBatches] = useState<any[]>([]);
     const [selectedProgrammes, setSelectedProgrammes] = useState<Record<string, string>>({});
 
     const fetchExams = async () => {
         if (!AccessTokenStore.hasAnySession()) return;
         setLoading(true);
         try {
-            const [examsRes, batchesRes] = await Promise.all([
-                ExamService.getAll({ seriesId }),
-                InternalStudentService.getBatches().catch(() => ({ batches: [] }))
-            ]);
-            setExams(examsRes || []);
-            setBatches(batchesRes?.batches || []);
+            const examsRes = await ExamService.getAll({ seriesId });
+            const examList = Array.isArray(examsRes) ? examsRes : [];
+            setExams(examList);
+            if (examList.length > 0 && examList[0]?.ExamSeries?.ExamType) {
+                setExamType(prev => prev || examList[0].ExamSeries.ExamType);
+            }
         } catch (error) {
             console.error("Failed to fetch exams", error);
             toast.error("Failed to load exams");
         } finally {
             setLoading(false);
         }
+    };
+
+    const openEndSemDetailPanel = (examGroup: GroupedExam) => {
+        const preferredBranch =
+            examGroup.branches.find(b => b.registrationCount > 0) ||
+            examGroup.branches[0];
+        if (!preferredBranch) return;
+        setEndSemDetailExam({
+            ExamID: preferredBranch.examId,
+            ExamName: examGroup.examName,
+            ExamDate: examGroup.date,
+            Session: examGroup.session,
+            Status: examGroup.status,
+            Duration: examGroup.duration,
+            Subject: {
+                SubjectName: examGroup.examName,
+                SubjectCode: examGroup.subjectCode,
+                Department: {
+                    DepartmentCode: preferredBranch.departmentCode,
+                    DepartmentName: preferredBranch.departmentName,
+                    DepartmentID: preferredBranch.departmentId
+                }
+            }
+        });
+        setEndSemDetailBranches(examGroup.branches);
     };
 
     const handleCreateExam = () => {
@@ -458,14 +519,24 @@ const ExamSeriesList: React.FC = () => {
                             Import Timetable
                         </Button>
                         {examType !== 'Internal' && (
-                            <Button
-                                onPress={() => navigate(`/admin/exams/series/${seriesId}/dates`)}
-                                variant="flat"
-                                className="bg-white text-slate-700 border border-slate-200 font-bold hover:bg-slate-50 transition-all px-5 rounded-2xl h-12 w-full sm:w-auto shadow-sm"
-                                startContent={<CalendarDays size={16} />}
-                            >
-                                Date View
-                            </Button>
+                            <>
+                                <Button
+                                    onPress={() => setIsEndSemBulkImportOpen(true)}
+                                    variant="flat"
+                                    className="bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold hover:bg-emerald-100 transition-all px-5 rounded-2xl h-12 w-full sm:w-auto shadow-sm"
+                                    startContent={<UserPlus size={16} />}
+                                >
+                                    Bulk Import Students
+                                </Button>
+                                <Button
+                                    onPress={() => navigate(`/admin/exams/series/${seriesId}/dates`)}
+                                    variant="flat"
+                                    className="bg-white text-slate-700 border border-slate-200 font-bold hover:bg-slate-50 transition-all px-5 rounded-2xl h-12 w-full sm:w-auto shadow-sm"
+                                    startContent={<CalendarDays size={16} />}
+                                >
+                                    Date View
+                                </Button>
+                            </>
                         )}
                         <Button
                             onPress={() => setIsDeleteAllOpen(true)}
@@ -567,46 +638,62 @@ const ExamSeriesList: React.FC = () => {
                                                 Branches: {branchesStr || 'All'}
                                             </span>
                                             <div className="flex items-center gap-1.5 shrink-0 ml-auto">
-                                                <Button
-                                                    size="sm"
-                                                    onPress={(e) => {
-                                                        e.stopPropagation();
-                                                        setActiveImportSemester(semKey);
-                                                    }}
-                                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[11px] h-7.5 px-2.5 rounded-xl shadow-xs transition-all flex items-center gap-1"
-                                                >
-                                                    <UserPlus size={12} />
-                                                    Import
-                                                </Button>
-                                                {semExams.some(e => e.hasRegistrations) && (
+                                                {examType === 'Internal' ? (
                                                     <>
                                                         <Button
                                                             size="sm"
-                                                            variant="flat"
                                                             onPress={(e) => {
                                                                 e.stopPropagation();
-                                                                openBulkDeptRemove(semKey);
+                                                                setActiveImportSemester(semKey);
                                                             }}
-                                                            className="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/70 font-extrabold text-[11px] h-7.5 px-2 rounded-xl transition-all flex items-center gap-1"
-                                                            title={`Remove specific departments from Semester ${semKey}`}
+                                                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[11px] h-7.5 px-2.5 rounded-xl shadow-xs transition-all flex items-center gap-1"
                                                         >
-                                                            <Building2 size={12} />
-                                                            Dept
+                                                            <UserPlus size={12} />
+                                                            Import
                                                         </Button>
-                                                        <Button
-                                                            size="sm"
-                                                            variant="flat"
-                                                            onPress={(e) => {
-                                                                e.stopPropagation();
-                                                                setClearSemesterTarget(semKey);
-                                                            }}
-                                                            className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/60 font-extrabold text-[11px] h-7.5 px-2 rounded-xl transition-all flex items-center gap-1"
-                                                            title={`Clear all student mappings for Semester ${semKey}`}
-                                                        >
-                                                            <Trash2 size={12} />
-                                                            Clear
-                                                        </Button>
+                                                        {semExams.some(e => e.hasRegistrations) && (
+                                                            <>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="flat"
+                                                                    onPress={(e) => {
+                                                                        e.stopPropagation();
+                                                                        openBulkDeptRemove(semKey);
+                                                                    }}
+                                                                    className="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/70 font-extrabold text-[11px] h-7.5 px-2 rounded-xl transition-all flex items-center gap-1"
+                                                                    title={`Remove specific departments from Semester ${semKey}`}
+                                                                >
+                                                                    <Building2 size={12} />
+                                                                    Dept
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="flat"
+                                                                    onPress={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setClearSemesterTarget(semKey);
+                                                                    }}
+                                                                    className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/60 font-extrabold text-[11px] h-7.5 px-2 rounded-xl transition-all flex items-center gap-1"
+                                                                    title={`Clear all student mappings for Semester ${semKey}`}
+                                                                >
+                                                                    <Trash2 size={12} />
+                                                                    Clear
+                                                                </Button>
+                                                            </>
+                                                        )}
                                                     </>
+                                                ) : (
+                                                    <Button
+                                                        size="sm"
+                                                        onPress={(e) => {
+                                                            e.stopPropagation();
+                                                            setIsEndSemBulkImportOpen(true);
+                                                        }}
+                                                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[11px] h-7.5 px-2.5 rounded-xl shadow-xs transition-all flex items-center gap-1"
+                                                    >
+                                                        <Upload size={12} />
+                                                        Bulk Import
+                                                    </Button>
                                                 )}
                                                 <span className={`px-2.5 py-1 rounded-xl font-extrabold text-[11px] transition-colors ${
                                                     isOpen ? 'bg-indigo-600 text-white shadow-xs' : 'bg-indigo-50 text-indigo-700'
@@ -654,35 +741,48 @@ const ExamSeriesList: React.FC = () => {
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <Button
-                                                    size="sm"
-                                                    onPress={() => setActiveImportSemester(semesterKey)}
-                                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs h-9 px-4 rounded-xl shadow-sm transition-all flex items-center gap-2"
-                                                >
-                                                    <UserPlus size={15} />
-                                                    Import {semesterKey} Student List
-                                                </Button>
-                                                {hasSemesterMappings && (
+                                                {examType === 'Internal' ? (
                                                     <>
                                                         <Button
                                                             size="sm"
-                                                            variant="flat"
-                                                            onPress={() => openBulkDeptRemove(semesterKey)}
-                                                            className="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/70 font-extrabold text-xs h-9 px-3.5 rounded-xl transition-all flex items-center gap-1.5"
+                                                            onPress={() => setActiveImportSemester(semesterKey)}
+                                                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs h-9 px-4 rounded-xl shadow-sm transition-all flex items-center gap-2"
                                                         >
-                                                            <Building2 size={15} />
-                                                            Remove Dept
+                                                            <UserPlus size={15} />
+                                                            Import {semesterKey} Student List
                                                         </Button>
-                                                        <Button
-                                                            size="sm"
-                                                            variant="flat"
-                                                            onPress={() => setClearSemesterTarget(semesterKey)}
-                                                            className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/70 font-extrabold text-xs h-9 px-3.5 rounded-xl transition-all flex items-center gap-1.5"
-                                                        >
-                                                            <Trash2 size={15} />
-                                                            Clear {semesterKey} Mappings
-                                                        </Button>
+                                                        {hasSemesterMappings && (
+                                                            <>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="flat"
+                                                                    onPress={() => openBulkDeptRemove(semesterKey)}
+                                                                    className="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/70 font-extrabold text-xs h-9 px-3.5 rounded-xl transition-all flex items-center gap-1.5"
+                                                                >
+                                                                    <Building2 size={15} />
+                                                                    Remove Dept
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="flat"
+                                                                    onPress={() => setClearSemesterTarget(semesterKey)}
+                                                                    className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/70 font-extrabold text-xs h-9 px-3.5 rounded-xl transition-all flex items-center gap-1.5"
+                                                                >
+                                                                    <Trash2 size={15} />
+                                                                    Clear {semesterKey} Mappings
+                                                                </Button>
+                                                            </>
+                                                        )}
                                                     </>
+                                                ) : (
+                                                    <Button
+                                                        size="sm"
+                                                        onPress={() => navigate(`/admin/exams/series/${seriesId}/dates`)}
+                                                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs h-9 px-4 rounded-xl shadow-sm transition-all flex items-center gap-2"
+                                                    >
+                                                        <CalendarDays size={15} />
+                                                        Open Date-wise Schedule
+                                                    </Button>
                                                 )}
                                             </div>
                                         </div>
@@ -822,7 +922,7 @@ const ExamSeriesList: React.FC = () => {
                                                                                         <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
                                                                                             !examGroup.hasRegistrations ? 'bg-rose-50 text-rose-700 border-rose-200/60' : 'bg-emerald-50 text-emerald-700 border-emerald-200/60'
                                                                                         }`}>
-                                                                                            {!examGroup.hasRegistrations ? 'NOT MAPPED' : 'FULLY MAPPED'}
+                                                                                            {!examGroup.hasRegistrations ? 'NOT MAPPED' : `${examGroup.totalRegistrations} MAPPED`}
                                                                                         </span>
                                                                                     </div>
 
@@ -860,15 +960,15 @@ const ExamSeriesList: React.FC = () => {
                                                                                     <div className="bg-slate-50/80 rounded-xl p-2.5 border border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-600">
                                                                                         <div className="flex items-center gap-1.5 text-slate-700">
                                                                                             <CalendarDays size={14} className="text-slate-400 shrink-0" />
-                                                                                            <span>{new Date(examGroup.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                                                                            <span>{parseLocalDate(examGroup.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
                                                                                         </div>
                                                                                         <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-500 shrink-0">
                                                                                             {examGroup.session === 'FN' ? 'Morning (FN)' : 'Afternoon (AN)'}
                                                                                         </span>
                                                                                     </div>
 
-                                                                                    <div className="flex items-center gap-2 pt-1">
-                                                                                        {examType === 'Internal' && (
+                                                                                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                                                                                        {examType === 'Internal' ? (
                                                                                             <Button
                                                                                                 size="sm"
                                                                                                 variant="flat"
@@ -878,6 +978,27 @@ const ExamSeriesList: React.FC = () => {
                                                                                             >
                                                                                                 Students
                                                                                             </Button>
+                                                                                        ) : (
+                                                                                            <>
+                                                                                                <Button
+                                                                                                    size="sm"
+                                                                                                    variant="flat"
+                                                                                                    className="flex-1 bg-indigo-50 hover:bg-indigo-600 text-indigo-600 hover:text-white font-bold rounded-xl text-xs h-9 transition-all border border-indigo-100 flex items-center justify-center gap-1"
+                                                                                                    startContent={<Users size={13} />}
+                                                                                                    onPress={() => openEndSemDetailPanel(examGroup)}
+                                                                                                >
+                                                                                                    Students
+                                                                                                </Button>
+                                                                                                <Button
+                                                                                                    size="sm"
+                                                                                                    variant="flat"
+                                                                                                    className="flex-1 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white font-bold rounded-xl text-xs h-9 transition-all border border-emerald-200/80 flex items-center justify-center gap-1"
+                                                                                                    startContent={<Upload size={13} />}
+                                                                                                    onPress={() => setEndSemImportExam(examGroup)}
+                                                                                                >
+                                                                                                    Import
+                                                                                                </Button>
+                                                                                            </>
                                                                                         )}
                                                                                         <Button
                                                                                             size="sm"
@@ -982,8 +1103,8 @@ const ExamSeriesList: React.FC = () => {
                 type="danger"
             />
 
-            {/* Semester Student Import Modal */}
-            {activeImportSemester && (
+            {/* Semester Student Import Modal (Internal Exams only) */}
+            {examType === 'Internal' && activeImportSemester && (
                 <SemesterStudentImportModal
                     isOpen={!!activeImportSemester}
                     onClose={() => setActiveImportSemester(null)}
@@ -993,6 +1114,40 @@ const ExamSeriesList: React.FC = () => {
                     }}
                     seriesId={seriesId}
                     semesterKey={activeImportSemester}
+                />
+            )}
+
+            {/* End-Semester Subject Eligible Student Import Modal */}
+            {endSemImportExam && (
+                <EligibleStudentsImportModal
+                    isOpen={!!endSemImportExam}
+                    onClose={() => setEndSemImportExam(null)}
+                    examName={endSemImportExam.examName}
+                    branches={endSemImportExam.branches}
+                    onSuccess={fetchExams}
+                />
+            )}
+
+            {/* End-Semester Bulk Eligible Student Import Modal */}
+            <BulkEligibleImportModal
+                isOpen={isEndSemBulkImportOpen}
+                onClose={() => setIsEndSemBulkImportOpen(false)}
+                seriesId={seriesId}
+                onSuccess={fetchExams}
+            />
+
+            {/* End-Semester Exam Detail & Mapped Students Slide-over */}
+            {endSemDetailExam && (
+                <ExamDetailPanel
+                    isOpen={!!endSemDetailExam}
+                    exam={endSemDetailExam}
+                    branches={endSemDetailBranches}
+                    onClose={() => setEndSemDetailExam(null)}
+                    onEdit={(ex) => {
+                        setEndSemDetailExam(null);
+                        handleEdit(exams.find(e => e.ExamID === ex.ExamID) || ex);
+                    }}
+                    onDataChanged={fetchExams}
                 />
             )}
 

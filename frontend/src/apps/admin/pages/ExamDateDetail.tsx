@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button, Card, CardBody } from '@heroui/react';
-import { ArrowLeft, Upload, Sun, Moon, Info, CalendarClock, CalendarCheck, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Upload, Sun, Moon, Info, CalendarClock, CalendarCheck, Trash2, X, Users } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { ExamService } from '../services/examService';
 import EligibleStudentsImportModal from '../components/exams/EligibleStudentsImportModal';
+import BulkEligibleImportModal from '../components/exams/BulkEligibleImportModal';
 import ExamDetailPanel from '../components/exams/ExamDetailPanel';
 import ConfirmationModal from '../components/ConfirmationModal';
 
@@ -13,6 +14,7 @@ type BranchOption = {
     departmentId: number;
     departmentCode: string;
     departmentName: string;
+    registrationCount: number;
 };
 
 type GroupedExam = {
@@ -28,6 +30,33 @@ type GroupedExam = {
     semesterName: string;
     branches: BranchOption[];
     hasRegistrations: boolean;
+    totalRegistrations: number;
+};
+
+const parseLocalDate = (raw?: string): Date | null => {
+    if (!raw) return null;
+    const datePart = String(raw).split('T')[0];
+    const [y, m, d] = datePart.split('-').map(Number);
+    if (y && m && d) {
+        return new Date(y, m - 1, d);
+    }
+    const fallback = new Date(raw);
+    return isNaN(fallback.getTime()) ? null : fallback;
+};
+
+const extractSemesterLabel = (exam: any): string => {
+    if (typeof exam?.Semester === 'string' && exam.Semester.trim()) {
+        return exam.Semester.trim().toUpperCase();
+    }
+    const subjSem = exam?.Subject?.Semester;
+    if (typeof subjSem === 'string' && subjSem.trim()) {
+        return subjSem.trim().toUpperCase();
+    }
+    if (subjSem && typeof subjSem === 'object') {
+        if (subjSem.SemesterName) return String(subjSem.SemesterName).trim().toUpperCase();
+        if (subjSem.SemesterNumber) return `S${subjSem.SemesterNumber}`;
+    }
+    return '';
 };
 
 const normalizeExamTitle = (name: string): string => {
@@ -45,8 +74,9 @@ const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
         const examName = String(exam?.ExamName || '').trim();
         const session = String(exam?.Session || '').trim().toUpperCase();
         const duration = Number(exam?.Duration || 0);
-        const semRaw = String(exam?.Semester || exam?.Subject?.Semester || '').toUpperCase().trim();
+        const semRaw = extractSemesterLabel(exam);
         const rawCode = String(exam?.Subject?.SubjectCode || exam?.SubjectCode || '').trim().toUpperCase();
+        const regCount = Number(exam?.registrationCount || 0);
 
         const titleNorm = normalizeExamTitle(examName);
         const codeNorm = rawCode.replace(/[^A-Z0-9]/g, '');
@@ -55,7 +85,8 @@ const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
         const department = exam?.Subject?.Department || {};
         const deptCode = String(department.DepartmentCode || exam?.BranchScope || 'GEN');
         const deptName = String(department.DepartmentName || exam?.BranchScope || 'General');
-        const branchKey = String(department.DepartmentID || deptCode || exam.ExamID);
+        // Key by ExamID so duplicate exams in the same department are never silently dropped
+        const branchKey = String(exam.ExamID);
 
         if (!groups.has(groupKey)) {
             groups.set(groupKey, {
@@ -66,13 +97,14 @@ const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
                 status: String(exam?.Status || 'Scheduled'),
                 duration,
                 subjectCode: rawCode,
-                examType: String(exam?.ExamSeries?.ExamType || 'Internal'),
+                examType: String(exam?.ExamSeries?.ExamType || 'EndSemester'),
                 programName: String(exam?.Subject?.Semester?.Program?.ProgramName || 'Program'),
-                semesterName: String(exam?.Subject?.Semester?.SemesterName || semRaw),
+                semesterName: semRaw,
                 branches: [],
                 branchKeys: new Set<string>(),
                 subjectCodes: new Set<string>(),
-                hasRegistrations: false
+                hasRegistrations: false,
+                totalRegistrations: 0
             });
         }
 
@@ -88,12 +120,14 @@ const groupExamsByPaper = (exams: any[]): GroupedExam[] => {
                 examId: Number(exam.ExamID),
                 departmentId: Number(department.DepartmentID || 0),
                 departmentCode: deptCode,
-                departmentName: deptName
+                departmentName: deptName,
+                registrationCount: regCount
             });
         }
 
-        if (Number(exam.registrationCount || 0) > 0) {
+        if (regCount > 0) {
             group.hasRegistrations = true;
+            group.totalRegistrations += regCount;
         }
     });
 
@@ -116,7 +150,9 @@ const ExamDateDetail: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [selectedExam, setSelectedExam] = useState<GroupedExam | null>(null);
     const [isImportOpen, setIsImportOpen] = useState(false);
+    const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
     const [selectedExamForDetail, setSelectedExamForDetail] = useState<any>(null);
+    const [selectedExamBranchesForDetail, setSelectedExamBranchesForDetail] = useState<BranchOption[]>([]);
     const [isDetailPanelOpen, setIsDetailPanelOpen] = useState(false);
     const [confirmModal, setConfirmModal] = useState<{
         isOpen: boolean;
@@ -138,7 +174,7 @@ const ExamDateDetail: React.FC = () => {
         setLoading(true);
         try {
             const response = await ExamService.getAll({ seriesId, startDate: date, endDate: date });
-            setExams(groupExamsByPaper(response || []));
+            setExams(groupExamsByPaper(Array.isArray(response) ? response : []));
         } catch (e: any) {
             console.error('Failed to fetch exams for date', e);
             toast.error('Failed to load exams for selected date');
@@ -147,21 +183,18 @@ const ExamDateDetail: React.FC = () => {
         }
     };
 
+    const parsedDateObj = useMemo(() => parseLocalDate(date), [date]);
+
     const selectedDateLabel = useMemo(() => {
         if (!date) return '';
-        try {
-            const d = new Date(date);
-            if (isNaN(d.getTime())) return date;
-            return d.toLocaleDateString(undefined, {
-                weekday: 'long',
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric'
-            });
-        } catch (e) {
-            return date;
-        }
-    }, [date]);
+        if (!parsedDateObj) return date;
+        return parsedDateObj.toLocaleDateString(undefined, {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric'
+        });
+    }, [date, parsedDateObj]);
 
     const handleClearExamEligibility = (branch: BranchOption, examName: string) => {
         setConfirmModal({
@@ -185,11 +218,11 @@ const ExamDateDetail: React.FC = () => {
     const handleClearGroupEligibility = (exam: GroupedExam) => {
         const branchNames = exam.branches.map(b => b.departmentCode).join(', ');
         const isMulti = exam.branches.length > 1;
-        
+
         setConfirmModal({
             isOpen: true,
             title: isMulti ? 'Clear Group Eligibility' : 'Clear Subject Eligibility',
-            message: isMulti 
+            message: isMulti
                 ? `Are you sure you want to clear ALL eligibility records for ${exam.examName} across ALL departments (${branchNames})? This will also remove any seat allocations.`
                 : `Are you sure you want to clear ALL eligibility records for ${exam.examName} (${branchNames})? This will also remove any seat allocations.`,
             onConfirm: async () => {
@@ -211,9 +244,15 @@ const ExamDateDetail: React.FC = () => {
         setIsImportOpen(true);
     };
 
-    const openDetailPanel = (exam: GroupedExam, branch: BranchOption) => {
+    const openDetailPanel = (exam: GroupedExam, preferredBranch?: BranchOption) => {
+        const targetBranch =
+            preferredBranch ||
+            exam.branches.find(b => b.registrationCount > 0) ||
+            exam.branches[0];
+        if (!targetBranch) return;
+
         setSelectedExamForDetail({
-            ExamID: branch.examId,
+            ExamID: targetBranch.examId,
             ExamName: exam.examName,
             ExamDate: exam.date,
             Session: exam.session,
@@ -223,12 +262,13 @@ const ExamDateDetail: React.FC = () => {
                 SubjectName: exam.examName,
                 SubjectCode: exam.subjectCode,
                 Department: {
-                    DepartmentCode: branch.departmentCode,
-                    DepartmentName: branch.departmentName,
-                    DepartmentID: branch.departmentId
+                    DepartmentCode: targetBranch.departmentCode,
+                    DepartmentName: targetBranch.departmentName,
+                    DepartmentID: targetBranch.departmentId
                 }
             }
         });
+        setSelectedExamBranchesForDetail(exam.branches);
         setIsDetailPanelOpen(true);
     };
 
@@ -243,14 +283,21 @@ const ExamDateDetail: React.FC = () => {
                 <div className="flex flex-col h-full justify-between">
                     <div>
                         <div className="flex justify-between items-start gap-4 mb-5">
-                            <h3 className="text-xl font-black text-slate-800 leading-tight flex items-center gap-2">
-                                {exam.examName}
-                                {exam.hasRegistrations && (
-                                    <div className="w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center shrink-0 shadow-sm" title="Eligibility Imported">
-                                        <CalendarCheck size={12} className="stroke-[3]" />
-                                    </div>
+                            <div>
+                                {exam.subjectCode && (
+                                    <span className="inline-block mb-2 px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-600 border border-indigo-100">
+                                        {exam.subjectCode}
+                                    </span>
                                 )}
-                            </h3>
+                                <h3 className="text-xl font-black text-slate-800 leading-tight flex items-center gap-2">
+                                    {exam.examName}
+                                    {exam.hasRegistrations && (
+                                        <div className="w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center shrink-0 shadow-sm" title={`${exam.totalRegistrations} Students Mapped`}>
+                                            <CalendarCheck size={12} className="stroke-[3]" />
+                                        </div>
+                                    )}
+                                </h3>
+                            </div>
                             <div className="flex shrink-0 gap-2">
                                 <span className="px-3 py-1.5 rounded-xl text-[10px] font-extrabold uppercase tracking-widest bg-slate-100 text-slate-500 border border-slate-200/60 shadow-sm leading-none flex items-center justify-center">
                                     <CalendarClock size={12} className="mr-1.5 stroke-[2.5]" /> {exam.duration}m
@@ -263,12 +310,19 @@ const ExamDateDetail: React.FC = () => {
                                 {exam.branches.map((branch) => (
                                     <div
                                         key={`${exam.groupKey}-${branch.examId}`}
-                                        className="relative flex items-center bg-indigo-50/80 border border-indigo-100 rounded-[10px] shadow-sm"
+                                        onClick={() => openDetailPanel(exam, branch)}
+                                        className="relative flex items-center bg-indigo-50/80 hover:bg-indigo-100/80 border border-indigo-100 rounded-[10px] shadow-sm cursor-pointer transition-colors"
+                                        title={`Click to view students for ${branch.departmentCode} (${branch.registrationCount} mapped)`}
                                     >
-                                        <span className={`py-1.5 text-[11px] font-extrabold tracking-wide uppercase text-indigo-700 ${exam.hasRegistrations ? 'pl-3 pr-1' : 'px-3'}`}>
+                                        <span className={`py-1.5 text-[11px] font-extrabold tracking-wide uppercase text-indigo-700 flex items-center gap-1.5 ${branch.registrationCount > 0 ? 'pl-3 pr-1' : 'px-3'}`}>
                                             {branch.departmentCode}
+                                            {branch.registrationCount > 0 && (
+                                                <span className="px-1.5 py-0.2 rounded-full bg-emerald-600 text-white text-[9px] font-black">
+                                                    {branch.registrationCount}
+                                                </span>
+                                            )}
                                         </span>
-                                        {exam.hasRegistrations && (
+                                        {branch.registrationCount > 0 && (
                                             <button
                                                 className="p-1 mr-1 text-indigo-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
                                                 onClick={(e) => {
@@ -287,21 +341,26 @@ const ExamDateDetail: React.FC = () => {
                     </div>
 
                     <div className="flex items-center justify-between gap-3 mt-4 pt-5 border-t border-slate-100">
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5">
                             <span className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                                {exam.branches.length} Department{exam.branches.length !== 1 ? 's' : ''}
+                                {exam.branches.length} Dept{exam.branches.length !== 1 ? 's' : ''}
                             </span>
                             {exam.hasRegistrations && (
-                                <button
-                                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleClearGroupEligibility(exam);
-                                    }}
-                                    title="Clear All Eligibility"
-                                >
-                                    <Trash2 size={14} strokeWidth={2.5} />
-                                </button>
+                                <>
+                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200/70 flex items-center gap-1">
+                                        <Users size={11} /> {exam.totalRegistrations}
+                                    </span>
+                                    <button
+                                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleClearGroupEligibility(exam);
+                                        }}
+                                        title="Clear All Eligibility"
+                                    >
+                                        <Trash2 size={14} strokeWidth={2.5} />
+                                    </button>
+                                </>
                             )}
                         </div>
                         <div className="flex gap-2">
@@ -310,7 +369,7 @@ const ExamDateDetail: React.FC = () => {
                                 variant="flat"
                                 className="font-bold bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl px-4"
                                 startContent={<Info size={14} className="stroke-[2.5] font-black" />}
-                                onPress={() => openDetailPanel(exam, exam.branches[0])}
+                                onPress={() => openDetailPanel(exam)}
                             >
                                 Details
                             </Button>
@@ -346,12 +405,22 @@ const ExamDateDetail: React.FC = () => {
                         <div>
                             <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-baseline gap-3">
                                 <span className="text-indigo-600 text-xl font-extrabold uppercase tracking-widest">
-                                    {new Date(date || '').getDate().toString().padStart(2, '0')}
+                                    {parsedDateObj ? parsedDateObj.getDate().toString().padStart(2, '0') : ''}
                                 </span>
                                 {selectedDateLabel}
                             </h1>
                             <p className="text-slate-500 mt-1.5 font-medium text-sm">Managing explicit subjects scheduled for this day.</p>
                         </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0">
+                        <Button
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl h-11 px-5 text-xs shadow-md shadow-indigo-200 transition-all"
+                            startContent={<Upload size={15} className="stroke-[2.5]" />}
+                            onPress={() => setIsBulkImportOpen(true)}
+                        >
+                            Bulk Import for This Date
+                        </Button>
                     </div>
                 </div>
             </div>
@@ -438,12 +507,22 @@ const ExamDateDetail: React.FC = () => {
                 />
             )}
 
+            <BulkEligibleImportModal
+                isOpen={isBulkImportOpen}
+                onClose={() => setIsBulkImportOpen(false)}
+                date={date}
+                seriesId={seriesId}
+                onSuccess={fetchExams}
+            />
+
             {selectedExamForDetail && (
                 <ExamDetailPanel
                     isOpen={isDetailPanelOpen}
                     exam={selectedExamForDetail}
+                    branches={selectedExamBranchesForDetail}
                     onClose={() => setIsDetailPanelOpen(false)}
                     onEdit={() => { }}
+                    onDataChanged={fetchExams}
                 />
             )}
 
